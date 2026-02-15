@@ -191,14 +191,17 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
       )}
 
       {/* Interactive Node Map */}
-      <NodeMapWidget
-        nodes={nodes.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cotaTerreno }))}
-        connections={mapConnections}
-        onConnectionsChange={setMapConnections}
-        title="Mapa da Rede de Esgoto"
-        accentColor="#22c55e"
-        editable
-      />
+      {nodes.length > 0 && (
+        <NodeMapWidget
+          nodes={nodes.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cotaTerreno, demanda: n.demanda }))}
+          connections={mapConnections}
+          onConnectionsChange={setMapConnections}
+          onNodeDemandChange={(nodeId, demanda) => setNodes(nodes.map(n => n.id === nodeId ? { ...n, demanda } : n))}
+          title="Mapa da Rede de Esgoto"
+          accentColor="#22c55e"
+          editable
+        />
+      )}
 
       {calculated && results.length > 0 && summary && (
         <>

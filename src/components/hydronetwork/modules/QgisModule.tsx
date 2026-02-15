@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,15 +12,14 @@ import { toast } from "sonner";
 import { Upload, Download, Trash2, Map, MapPin, GitBranch, Tag, Layers, Crosshair, Maximize, Search, Package, Eye, Edit3, Ruler, FileText } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
+import { NodeMapWidget, ConnectionData } from "@/components/hydronetwork/NodeMapWidget";
 
 interface QgisModuleProps {
   pontos?: PontoTopografico[];
   trechos?: Trecho[];
 }
 
-type MapMode = "view" | "editNodes" | "editVertices" | "measure";
-
-// UTM to approximate lat/lng conversion (Zone 23S)
+// UTM to approximate lat/lng conversion (Zone 23S) - used in GeoJSON export
 const utmToLatLng = (x: number, y: number): [number, number] => {
   const lat = -((10000000 - y) / 110540);
   const lng = -45 + ((x - 500000) / (111320 * Math.cos(lat * Math.PI / 180)));
@@ -87,12 +86,10 @@ const downloadFile = (content: string, filename: string, type: string) => {
 };
 
 export const QgisModule = ({ pontos = [], trechos = [] }: QgisModuleProps) => {
-  const [mapMode, setMapMode] = useState<MapMode>("view");
   const [crsInput, setCrsInput] = useState("auto");
   const [crsExport, setCrsExport] = useState("sirgas23s");
   const [classNodes, setClassNodes] = useState("single");
   const [classLinks, setClassLinks] = useState("single");
-  const [mapStyle, setMapStyle] = useState("default");
   const [nodeColor, setNodeColor] = useState("#3b82f6");
   const [linkColor, setLinkColor] = useState("#22c55e");
   const [linkWidth, setLinkWidth] = useState([3]);
@@ -107,9 +104,7 @@ export const QgisModule = ({ pontos = [], trechos = [] }: QgisModuleProps) => {
 
   const [localPontos, setLocalPontos] = useState<PontoTopografico[]>([]);
   const [localTrechos, setLocalTrechos] = useState<Trecho[]>([]);
-  const mapRef = useRef<any>(null);
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapConnections, setMapConnections] = useState<ConnectionData[]>([]);
 
   // GIS Report state
   const [reportLayers, setReportLayers] = useState({ nodes: true, links: true, areas: false });
@@ -118,81 +113,24 @@ export const QgisModule = ({ pontos = [], trechos = [] }: QgisModuleProps) => {
 
   const totalExtension = useMemo(() => localTrechos.reduce((s, t) => s + t.comprimento, 0), [localTrechos]);
 
+  const mapNodes = useMemo(() => localPontos.map(p => ({ id: p.id, x: p.x, y: p.y, cota: p.cota })), [localPontos]);
+
   const loadPlatformData = () => {
     if (pontos.length === 0) { toast.error("Carregue topografia primeiro na aba Topografia."); return; }
     setLocalPontos([...pontos]);
     setLocalTrechos([...trechos]);
+    // Auto-generate map connections from trechos
+    const conns: ConnectionData[] = trechos.map((t, i) => ({
+      from: t.idInicio, to: t.idFim, color: linkColor, label: `T${String(i + 1).padStart(2, "0")}`,
+    }));
+    setMapConnections(conns);
     toast.success(`${pontos.length} nós e ${trechos.length} trechos carregados.`);
   };
 
   const clearData = () => {
-    setLocalPontos([]); setLocalTrechos([]);
-    if (mapRef.current) { mapRef.current.eachLayer((layer: any) => { if (!(layer as any)._url) mapRef.current.removeLayer(layer); }); }
+    setLocalPontos([]); setLocalTrechos([]); setMapConnections([]);
     toast.info("Dados limpos.");
   };
-
-  // Initialize Leaflet map
-  useEffect(() => {
-    if (!mapContainerRef.current || mapLoaded) return;
-    const loadLeaflet = async () => {
-      const L = await import("leaflet");
-      await import("leaflet/dist/leaflet.css");
-      if (mapRef.current) return;
-      const map = L.map(mapContainerRef.current!, { center: [-23.55, -46.63], zoom: 13, zoomControl: true });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: '&copy; OpenStreetMap' }).addTo(map);
-      mapRef.current = map; setMapLoaded(true);
-    };
-    loadLeaflet();
-    return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; setMapLoaded(false); } };
-  }, []);
-
-  // Render network on map
-  useEffect(() => {
-    if (!mapRef.current || localPontos.length === 0) return;
-    const renderNetwork = async () => {
-      const L = await import("leaflet");
-      const map = mapRef.current;
-      map.eachLayer((layer: any) => { if (!(layer as any)._url) map.removeLayer(layer); });
-      const bounds: [number, number][] = [];
-
-      if (layerLinks) {
-        localTrechos.forEach((t, idx) => {
-          const pStart = localPontos.find(p => p.id === t.idInicio);
-          const pEnd = localPontos.find(p => p.id === t.idFim);
-          if (!pStart || !pEnd) return;
-          const [lat1, lng1] = utmToLatLng(pStart.x, pStart.y);
-          const [lat2, lng2] = utmToLatLng(pEnd.x, pEnd.y);
-          let color = linkColor;
-          if (classLinks === "diameter") color = t.diametroMm <= 200 ? "#22c55e" : t.diametroMm <= 400 ? "#f59e0b" : "#a855f7";
-          else if (mapStyle === "diameter") color = t.diametroMm <= 200 ? "#22c55e" : t.diametroMm <= 400 ? "#f59e0b" : "#a855f7";
-
-          L.polyline([[lat1, lng1], [lat2, lng2]], { color, weight: linkWidth[0], opacity: 0.8 })
-            .addTo(map)
-            .bindPopup(`<b>Trecho ${t.idInicio}→${t.idFim}</b><br/>DN${t.diametroMm} | ${t.comprimento.toFixed(1)}m<br/>Decl: ${(t.declividade * 100).toFixed(2)}%<br/>Material: ${t.material}`);
-        });
-      }
-
-      if (layerNodes) {
-        localPontos.forEach(p => {
-          const [lat, lng] = utmToLatLng(p.x, p.y);
-          bounds.push([lat, lng]);
-          const isReservoir = p.id.startsWith("R");
-          const markerColor = isReservoir ? "#f59e0b" : nodeColor;
-          L.circleMarker([lat, lng], { radius: 6, fillColor: markerColor, color: "#fff", weight: 2, fillOpacity: 0.9 })
-            .addTo(map)
-            .bindPopup(`<b>${p.id}</b><br/>Cota: ${p.cota.toFixed(3)}m<br/>X: ${p.x.toFixed(2)}<br/>Y: ${p.y.toFixed(2)}`);
-          if (showLabels) {
-            L.marker([lat, lng], {
-              icon: L.divIcon({ className: "leaflet-label", html: `<span style="font-size:10px;font-weight:bold;color:#333;background:rgba(255,255,255,0.8);padding:1px 3px;border-radius:2px;">${p.id}</span>`, iconSize: [0, 0], iconAnchor: [-8, 8] }),
-            }).addTo(map);
-          }
-        });
-      }
-
-      if (bounds.length > 0) map.fitBounds(bounds as any, { padding: [30, 30] });
-    };
-    renderNetwork();
-  }, [localPontos, localTrechos, layerNodes, layerLinks, nodeColor, linkColor, linkWidth, classLinks, showLabels, mapStyle]);
 
   // Export functions
   const handleExportGeoJSON = () => {
@@ -246,21 +184,6 @@ export const QgisModule = ({ pontos = [], trechos = [] }: QgisModuleProps) => {
     toast.success("Relatório GIS exportado!");
   };
 
-  const modeButtons: { mode: MapMode; label: string; icon: any }[] = [
-    { mode: "view", label: "Visualizar", icon: Eye },
-    { mode: "editNodes", label: "Editar Nós", icon: Edit3 },
-    { mode: "editVertices", label: "Editar Vértices", icon: Edit3 },
-    { mode: "measure", label: "Medir", icon: Ruler },
-  ];
-
-  const toolbarRight = [
-    { id: "fit", label: "Ajustar", icon: Maximize },
-    { id: "nodes", label: "Nós", icon: MapPin },
-    { id: "links", label: "Trechos", icon: GitBranch },
-    { id: "labels", label: "Rótulos", icon: Tag },
-    { id: "base", label: "Base", icon: Layers },
-    { id: "snap", label: "Captura", icon: Crosshair },
-  ];
 
   return (
     <div className="space-y-4">
@@ -347,71 +270,18 @@ export const QgisModule = ({ pontos = [], trechos = [] }: QgisModuleProps) => {
         </CardContent>
       </Card>
 
-      {/* Interactive Map */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Map className="h-5 w-5" /> Mapa Interativo da Rede</CardTitle>
-          <CardDescription>Visualize e interaja com a rede georreferenciada.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex gap-1 border-b border-border pb-2">
-            {modeButtons.map(mb => (
-              <Button key={mb.mode} size="sm" variant={mapMode === mb.mode ? "default" : "ghost"} onClick={() => setMapMode(mb.mode)}>
-                <mb.icon className="h-4 w-4 mr-1" /> {mb.label}
-              </Button>
-            ))}
-          </div>
-
-          <div className="relative">
-            <div ref={mapContainerRef} className="w-full h-[450px] rounded-lg border border-border z-0" />
-            <div className="absolute top-2 right-2 z-[1000] flex flex-col gap-1">
-              {toolbarRight.map(t => (
-                <Button key={t.id} size="sm" variant="outline" className="bg-white/90 dark:bg-card/90 shadow-sm text-xs" onClick={() => {
-                  if (t.id === "fit" && mapRef.current && localPontos.length > 0) {
-                    const bounds = localPontos.map(p => utmToLatLng(p.x, p.y));
-                    mapRef.current.fitBounds(bounds, { padding: [30, 30] });
-                  } else if (t.id === "labels") setShowLabels(!showLabels);
-                  else if (t.id === "nodes") setLayerNodes(!layerNodes);
-                  else if (t.id === "links") setLayerLinks(!layerLinks);
-                }}>
-                  <t.icon className="h-3 w-3 mr-1" /> {t.label}
-                </Button>
-              ))}
-            </div>
-
-            {localPontos.length > 0 && (
-              <div className="absolute bottom-4 left-4 z-[1000] bg-white/90 dark:bg-card/90 rounded-lg p-3 shadow-md text-sm">
-                <div className="font-semibold mb-1">Legenda</div>
-                <div className="flex items-center gap-2 text-xs"><span className="w-3 h-3 rounded-full bg-blue-500 inline-block" /> Nó / PV</div>
-                <div className="flex items-center gap-2 text-xs"><span className="w-3 h-3 rounded-full bg-amber-500 inline-block" /> Reservatório</div>
-                <div className="flex items-center gap-2 text-xs"><span className="w-6 h-0.5 bg-green-500 inline-block" /> DN ≤ 200</div>
-                <div className="flex items-center gap-2 text-xs"><span className="w-6 h-0.5 bg-amber-500 inline-block" /> DN 200-400</div>
-                <div className="flex items-center gap-2 text-xs"><span className="w-6 h-0.5 bg-purple-500 inline-block" /> DN &gt; 400</div>
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-2 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Label className="text-sm">Estilo:</Label>
-              <Select value={mapStyle} onValueChange={setMapStyle}>
-                <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="default">Padrão</SelectItem>
-                  <SelectItem value="diameter">Por Diâmetro</SelectItem>
-                  <SelectItem value="depth">Profundidade</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button variant="outline" onClick={() => {
-              if (mapRef.current && localPontos.length > 0) {
-                const bounds = localPontos.map(p => utmToLatLng(p.x, p.y));
-                mapRef.current.fitBounds(bounds, { padding: [30, 30] });
-              }
-            }}><Maximize className="h-4 w-4 mr-1" /> Centralizar</Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Interactive Map using NodeMapWidget */}
+      {mapNodes.length > 0 && (
+        <NodeMapWidget
+          nodes={mapNodes}
+          connections={mapConnections}
+          onConnectionsChange={setMapConnections}
+          title="Mapa Interativo QGIS"
+          accentColor={nodeColor}
+          height={450}
+          editable
+        />
+      )}
 
       {/* Exportable GIS Report */}
       <Card className="border-blue-300 bg-blue-50/30 dark:bg-blue-950/10">
