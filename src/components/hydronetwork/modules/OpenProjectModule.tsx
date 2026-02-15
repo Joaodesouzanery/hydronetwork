@@ -235,7 +235,8 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
                     <div className="w-[200px] shrink-0 p-2 text-xs font-semibold text-muted-foreground">Tarefa</div>
                     <div className="w-[60px] shrink-0 p-2 text-xs font-semibold text-muted-foreground text-center">Dias</div>
                     <div className="w-[90px] shrink-0 p-2 text-xs font-semibold text-muted-foreground">Início</div>
-                    <div className="w-[90px] shrink-0 p-2 text-xs font-semibold text-muted-foreground">Fim</div>
+                    <div className="w-[50px] shrink-0 p-2 text-xs font-semibold text-muted-foreground">%</div>
+                    <div className="w-[40px] shrink-0 p-2 text-xs font-semibold text-muted-foreground"></div>
                     <div className="flex-1 p-2 relative">
                       {/* Timeline header */}
                       {ganttData && (
@@ -252,7 +253,7 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
 
                   {/* Task rows */}
                   {ganttData?.tasks.map((t, i) => (
-                    <div key={i} className="flex items-center border-b border-border/50 hover:bg-muted/30 transition-colors">
+                    <div key={i} className="flex items-center border-b border-border/50 hover:bg-muted/30 transition-colors group">
                       <div className="w-[40px] shrink-0 p-2 text-xs font-mono">{t.id}</div>
                       <div className="w-[200px] shrink-0 p-2">
                         <Input
@@ -263,11 +264,30 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
                       <div className="w-[60px] shrink-0 p-2">
                         <Input
                           type="number" value={t.duration} className="h-7 text-xs w-14"
-                          onChange={e => { const u = [...tasks]; u[i].duration = Number(e.target.value); setTasks(u); }}
+                          onChange={e => { const u = [...tasks]; u[i].duration = Math.max(1, Number(e.target.value)); setTasks(u); }}
                         />
                       </div>
-                      <div className="w-[90px] shrink-0 p-2 text-xs">{t.start}</div>
-                      <div className="w-[90px] shrink-0 p-2 text-xs">{addDays(t.start, t.duration)}</div>
+                      <div className="w-[90px] shrink-0 p-2">
+                        <Input
+                          type="date" value={t.start} className="h-7 text-xs"
+                          onChange={e => { const u = [...tasks]; u[i].start = e.target.value; setTasks(u); }}
+                        />
+                      </div>
+                      <div className="w-[50px] shrink-0 p-2">
+                        <Input
+                          type="number" value={t.progress} className="h-7 text-xs w-12" min={0} max={100}
+                          onChange={e => { const u = [...tasks]; u[i].progress = Math.min(100, Math.max(0, Number(e.target.value))); setTasks(u); }}
+                          title="Progresso %"
+                        />
+                      </div>
+                      <div className="w-[40px] shrink-0 p-1">
+                        <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => {
+                          setTasks(tasks.filter((_, j) => j !== i));
+                          toast.info(`Tarefa ${t.id} removida.`);
+                        }}>
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      </div>
                       <div className="flex-1 p-2 relative h-10">
                         {/* Bar background grid */}
                         <div className="absolute inset-0 flex">
@@ -283,7 +303,7 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
                             width: `${Math.max(t.widthPct, 1.5)}%`,
                             backgroundColor: t.color,
                           }}
-                          title={`${t.name} (${t.duration}d)`}
+                          title={`${t.name} (${t.duration}d, ${t.progress}%)`}
                         >
                           {t.widthPct > 5 && <span className="truncate px-1">{t.duration}d</span>}
                         </div>

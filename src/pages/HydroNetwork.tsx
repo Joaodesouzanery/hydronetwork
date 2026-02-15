@@ -8,13 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
   Upload, Download, Calculator, MapPin, Droplets, Calendar, Plus, Trash2,
-  AlertTriangle, FileText, Users, Settings2
+  AlertTriangle, FileText, Users, Settings2, Info, X
 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { parseTopographyFile, parseTopographyCSV, validateTopographySequence, PontoTopografico } from "@/engine/reader";
+import { parseDxfFile, parseDxfToPoints } from "@/engine/dxfReader";
 import { createTrechosFromTopography, summarizeNetwork, Trecho, NetworkSummary, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from "@/engine/domain";
 import { parseCostBaseFile, applyBudget, createBudgetSummary, exportBudgetExcel, BudgetRow, BudgetSummary, CostBase } from "@/engine/budget";
 import { criarParametrosExecucao, ParametrosExecucao, TipoSolo, TipoEscavacao, TipoPavimento, TipoMaterial } from "@/engine/construction";
@@ -38,7 +40,6 @@ import { ProjectLibreModule } from "@/components/hydronetwork/modules/ProjectLib
 import { QgisModule } from "@/components/hydronetwork/modules/QgisModule";
 import { PeerReviewModule } from "@/components/hydronetwork/modules/PeerReviewModule";
 import { BudgetCostModule } from "@/components/hydronetwork/modules/BudgetCostModule";
-
 // Shared state context - in a real app, use React Context or Zustand
 const useHydroState = () => {
   const [pontos, setPontos] = useState<PontoTopografico[]>([]);
@@ -97,8 +98,10 @@ const HydroNetwork = () => {
     if (!file) return;
     try {
       const ext = file.name.split(".").pop()?.toLowerCase();
-      if (ext === "txt" || ext === "csv") {
-        // Read as text and use our enhanced parser that handles headerless files
+      if (ext === "dxf") {
+        const pts = await parseDxfFile(file);
+        processPoints(pts);
+      } else if (ext === "txt" || ext === "csv") {
         const text = await file.text();
         const pts = parseTopographyCSV(text);
         processPoints(pts);
@@ -108,6 +111,16 @@ const HydroNetwork = () => {
       }
     } catch (err: any) { toast.error(err.message || "Erro ao processar arquivo."); }
   }, [processPoints]);
+
+  const handleClearTopography = useCallback(() => {
+    setPontos([]);
+    setTrechos([]);
+    setNetworkSummary(null);
+    setBudgetRows([]);
+    setBudgetSummary(null);
+    setScheduleResult(null);
+    toast.success("Dados de topografia limpos.");
+  }, []);
 
   const handlePasteData = useCallback(() => {
     if (!pasteData.trim()) { toast.error("Cole dados primeiro."); return; }
@@ -169,7 +182,7 @@ const HydroNetwork = () => {
       case "openproject":
         return <OpenProjectModule pontos={pontos} trechos={trechos} />;
       case "projectlibre":
-        return <ProjectLibreModule />;
+        return <ProjectLibreModule pontos={pontos} trechos={trechos} />;
       case "qgis":
         return <QgisModule pontos={pontos} trechos={trechos} />;
       case "revisao":
@@ -188,6 +201,8 @@ const HydroNetwork = () => {
   };
 
   // ── TOPOGRAFIA MODULE ──
+  const [summaryFilter, setSummaryFilter] = useState<string>("todos");
+
   function TopografiaModule() {
     return (
       <div className="space-y-4">
@@ -195,15 +210,31 @@ const HydroNetwork = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" /> Carregar Topografia</CardTitle>
-              <CardDescription>CSV, TXT, XLSX, XLS, DXF, SHP, GeoJSON, LandXML</CardDescription>
+              <CardDescription>CSV, TXT, XLSX, XLS, DXF</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                <Upload className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground mb-2">Arraste ou clique para selecionar</p>
-                <p className="text-xs text-muted-foreground mb-3">Aceita arquivos TXT com X,Y,Z (sem cabeçalho)</p>
-                <Input type="file" accept=".csv,.txt,.xlsx,.xls,.dxf,.shp,.geojson,.xml" onChange={handleTopographyUpload} className="mt-2" />
-              </div>
+              {pontos.length > 0 ? (
+                <div className="border border-border rounded-lg p-4 bg-card">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="default" className="bg-green-600">{pontos.length} pontos</Badge>
+                      <Badge variant="secondary">{trechos.length} trechos</Badge>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={handleClearTopography}>
+                      <X className="h-4 w-4 mr-1" /> Limpar
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Dados processados. Clique em "Limpar" para substituir.</p>
+                </div>
+              ) : (
+                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer">
+                  <Upload className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground mb-2">Arraste ou clique para selecionar</p>
+                  <p className="text-xs text-muted-foreground mb-1">Aceita: CSV, TXT, XLSX, XLS, <strong>DXF</strong></p>
+                  <p className="text-xs text-muted-foreground mb-3">TXT com X,Y,Z (sem cabeçalho) ou DXF com entidades POINT/LINE</p>
+                  <Input type="file" accept=".csv,.txt,.xlsx,.xls,.dxf" onChange={handleTopographyUpload} className="mt-2" />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Colar dados manualmente</Label>
                 <Textarea placeholder={"358129.1978,7353581.4981,-0.8630\n358132.1686,7353618.8114,-0.7250\n\nou com cabeçalho:\nid;x;y;cota"} value={pasteData} onChange={e => setPasteData(e.target.value)} rows={4} />
@@ -267,28 +298,60 @@ const HydroNetwork = () => {
           </Card>
           {networkSummary && (
             <Card>
-              <CardHeader><CardTitle>Resumo da Rede</CardTitle></CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: "Pontos", value: pontos.length, color: "text-blue-600" },
-                    { label: "Trechos", value: networkSummary.totalTrechos, color: "text-green-600" },
-                    { label: "Comprimento", value: `${fmt(networkSummary.comprimentoTotal, 1)}m`, color: "text-orange-600" },
-                    { label: "Gravidade", value: networkSummary.trechosGravidade, color: "text-green-600" },
-                    { label: "Elevatória", value: networkSummary.trechosElevatoria, color: "text-orange-600" },
-                    { label: "Decliv. Média", value: `${(networkSummary.declividadeMedia * 100).toFixed(2)}%`, color: "text-purple-600" },
-                  ].map((item, i) => (
-                    <div key={i} className="bg-muted/50 rounded-lg p-3 text-center">
-                      <div className={`text-xl font-bold ${item.color}`}>{item.value}</div>
-                      <div className="text-xs text-muted-foreground">{item.label}</div>
-                    </div>
-                  ))}
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Resumo da Rede</CardTitle>
+                  <Select value={summaryFilter} onValueChange={setSummaryFilter}>
+                    <SelectTrigger className="w-[160px] h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos os Tipos</SelectItem>
+                      <SelectItem value="esgoto">Rede de Esgoto</SelectItem>
+                      <SelectItem value="agua">Rede de Água</SelectItem>
+                      <SelectItem value="drenagem">Drenagem Pluvial</SelectItem>
+                      <SelectItem value="elevatoria">Elevatória</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const filteredTrechos = summaryFilter === "todos" ? trechos :
+                    summaryFilter === "esgoto" ? trechos.filter(t => t.tipoRede === "Esgoto por Gravidade") :
+                    summaryFilter === "elevatoria" ? trechos.filter(t => t.tipoRede !== "Esgoto por Gravidade") :
+                    trechos; // agua/drenagem use all for now (type is determined by module)
+                  const summary = summarizeNetwork(filteredTrechos);
+                  return (
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: "Pontos", value: pontos.length, color: "text-blue-600", desc: "Total de pontos topográficos carregados" },
+                        { label: "Trechos", value: summary.totalTrechos, color: "text-green-600", desc: "Segmentos de tubulação entre pontos" },
+                        { label: "Comprimento", value: `${fmt(summary.comprimentoTotal, 1)}m`, color: "text-orange-600", desc: "Extensão total da rede" },
+                        { label: "Gravidade", value: summary.trechosGravidade, color: "text-green-600", desc: "Trechos com escoamento por gravidade (decliv. positiva)" },
+                        { label: "Elevatória", value: summary.trechosElevatoria, color: "text-orange-600", desc: "Trechos que necessitam bombeamento (decliv. negativa)" },
+                        { label: "Decliv. Média", value: `${(summary.declividadeMedia * 100).toFixed(2)}%`, color: "text-purple-600", desc: "Declividade média ponderada da rede" },
+                      ].map((item, i) => (
+                        <TooltipProvider key={i}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="bg-muted/50 rounded-lg p-3 text-center cursor-help">
+                                <div className={`text-xl font-bold ${item.color}`}>{item.value}</div>
+                                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                                  {item.label} <Info className="h-3 w-3" />
+                                </div>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent><p className="max-w-[200px] text-xs">{item.desc}</p></TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      ))}
+                    </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           )}
         </div>
-        <TopographyMap pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />
+        <TopographyMap pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} onClearAll={handleClearTopography} />
         {pontos.length > 0 && (
           <Card>
             <CardHeader><CardTitle>Pontos ({pontos.length})</CardTitle></CardHeader>
@@ -306,10 +369,65 @@ const HydroNetwork = () => {
           <Card>
             <CardHeader><CardTitle>Trechos ({trechos.length})</CardTitle></CardHeader>
             <CardContent>
-              <div className="max-h-[300px] overflow-auto">
+              <div className="max-h-[400px] overflow-auto">
                 <Table>
-                  <TableHeader><TableRow><TableHead>Início</TableHead><TableHead>Fim</TableHead><TableHead>Comp.</TableHead><TableHead>Decliv.</TableHead><TableHead>Tipo</TableHead><TableHead>Ø</TableHead></TableRow></TableHeader>
-                  <TableBody>{trechos.map((t, i) => (<TableRow key={i}><TableCell>{t.idInicio}</TableCell><TableCell>{t.idFim}</TableCell><TableCell>{fmt(t.comprimento, 2)}m</TableCell><TableCell>{(t.declividade * 100).toFixed(2)}%</TableCell><TableCell><Badge variant={t.tipoRede === "Esgoto por Gravidade" ? "default" : "destructive"}>{t.tipoRede === "Esgoto por Gravidade" ? "Grav." : "Elev."}</Badge></TableCell><TableCell>DN{t.diametroMm}</TableCell></TableRow>))}</TableBody>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>
+                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Início <Info className="h-3 w-3" /></TooltipTrigger>
+                        <TooltipContent>ID do ponto de montante (origem)</TooltipContent></Tooltip></TooltipProvider>
+                      </TableHead>
+                      <TableHead>
+                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Fim <Info className="h-3 w-3" /></TooltipTrigger>
+                        <TooltipContent>ID do ponto de jusante (destino)</TooltipContent></Tooltip></TooltipProvider>
+                      </TableHead>
+                      <TableHead>
+                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Comp. <Info className="h-3 w-3" /></TooltipTrigger>
+                        <TooltipContent>Comprimento horizontal do trecho em metros</TooltipContent></Tooltip></TooltipProvider>
+                      </TableHead>
+                      <TableHead>
+                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Decliv. <Info className="h-3 w-3" /></TooltipTrigger>
+                        <TooltipContent>Declividade = (Cota início - Cota fim) / Comprimento. Positiva = gravidade, Negativa = recalque</TooltipContent></Tooltip></TooltipProvider>
+                      </TableHead>
+                      <TableHead>
+                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Tipo <Info className="h-3 w-3" /></TooltipTrigger>
+                        <TooltipContent>Classificação: Gravidade (declividade ≥ 0) ou Elevatória (declividade negativa)</TooltipContent></Tooltip></TooltipProvider>
+                      </TableHead>
+                      <TableHead>
+                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Ø <Info className="h-3 w-3" /></TooltipTrigger>
+                        <TooltipContent>Diâmetro nominal da tubulação em milímetros</TooltipContent></Tooltip></TooltipProvider>
+                      </TableHead>
+                      <TableHead>
+                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Desnível <Info className="h-3 w-3" /></TooltipTrigger>
+                        <TooltipContent>Diferença de cota entre início e fim (metros)</TooltipContent></Tooltip></TooltipProvider>
+                      </TableHead>
+                      <TableHead>Material</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>{trechos.map((t, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <TooltipProvider><Tooltip><TooltipTrigger className="font-medium cursor-help">{t.idInicio}</TooltipTrigger>
+                        <TooltipContent><p className="text-xs">X: {t.xInicio.toFixed(3)}<br/>Y: {t.yInicio.toFixed(3)}<br/>Cota: {t.cotaInicio.toFixed(3)}m</p></TooltipContent></Tooltip></TooltipProvider>
+                      </TableCell>
+                      <TableCell>
+                        <TooltipProvider><Tooltip><TooltipTrigger className="font-medium cursor-help">{t.idFim}</TooltipTrigger>
+                        <TooltipContent><p className="text-xs">X: {t.xFim.toFixed(3)}<br/>Y: {t.yFim.toFixed(3)}<br/>Cota: {t.cotaFim.toFixed(3)}m</p></TooltipContent></Tooltip></TooltipProvider>
+                      </TableCell>
+                      <TableCell>{fmt(t.comprimento, 2)}m</TableCell>
+                      <TableCell className={t.declividade < 0 ? "text-destructive font-medium" : ""}>{(t.declividade * 100).toFixed(2)}%</TableCell>
+                      <TableCell>
+                        <Badge variant={t.tipoRede === "Esgoto por Gravidade" ? "default" : "destructive"}>
+                          {t.tipoRede === "Esgoto por Gravidade" ? "Gravidade" : "Elevatória"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>DN{t.diametroMm}</TableCell>
+                      <TableCell className={t.cotaInicio - t.cotaFim < 0 ? "text-destructive" : "text-green-600"}>
+                        {(t.cotaInicio - t.cotaFim).toFixed(3)}m
+                      </TableCell>
+                      <TableCell><Badge variant="outline">{t.material}</Badge></TableCell>
+                    </TableRow>
+                  ))}</TableBody>
                 </Table>
               </div>
             </CardContent>
@@ -362,7 +480,7 @@ const HydroNetwork = () => {
     );
   }
 
-  // ── ORÇAMENTO MODULE ── (now using dedicated component)
+  // ── ORÇAMENTO MODULE ──
   function OrcamentoModule() {
     return <BudgetCostModule trechos={trechos} pontos={pontos} />;
   }

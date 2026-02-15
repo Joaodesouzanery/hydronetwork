@@ -11,6 +11,7 @@ import { Plus, Trash2, Calculator, Upload, Droplets, AlertTriangle, Link, Ruler,
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
 import { manningVelocity, raioHidraulico, areaCircular } from "@/engine/hydraulics";
+import { NodeMapWidget } from "@/components/hydronetwork/NodeMapWidget";
 
 interface SewerModuleProps {
   pontos: PontoTopografico[];
@@ -240,6 +241,19 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
           </CardContent>
         </Card>
       )}
+
+      {/* Interactive Node Map */}
+      <NodeMapWidget
+        nodes={nodes.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cotaTerreno }))}
+        connections={nodes.slice(0, -1).map((n, i) => ({
+          from: n.id,
+          to: nodes[i + 1].id,
+          color: "#22c55e",
+          label: `${n.id} → ${nodes[i + 1].id}`,
+        }))}
+        title="Mapa da Rede de Esgoto"
+        accentColor="#22c55e"
+      />
 
       {/* ── RESULTS SECTION ── */}
       {calculated && results.length > 0 && summary && (
