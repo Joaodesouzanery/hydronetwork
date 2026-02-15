@@ -372,62 +372,48 @@ const HydroNetwork = () => {
               <div className="max-h-[400px] overflow-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>
-                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Início <Info className="h-3 w-3" /></TooltipTrigger>
-                        <TooltipContent>ID do ponto de montante (origem)</TooltipContent></Tooltip></TooltipProvider>
-                      </TableHead>
-                      <TableHead>
-                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Fim <Info className="h-3 w-3" /></TooltipTrigger>
-                        <TooltipContent>ID do ponto de jusante (destino)</TooltipContent></Tooltip></TooltipProvider>
-                      </TableHead>
-                      <TableHead>
-                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Comp. <Info className="h-3 w-3" /></TooltipTrigger>
-                        <TooltipContent>Comprimento horizontal do trecho em metros</TooltipContent></Tooltip></TooltipProvider>
-                      </TableHead>
-                      <TableHead>
-                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Decliv. <Info className="h-3 w-3" /></TooltipTrigger>
-                        <TooltipContent>Declividade = (Cota início - Cota fim) / Comprimento. Positiva = gravidade, Negativa = recalque</TooltipContent></Tooltip></TooltipProvider>
-                      </TableHead>
-                      <TableHead>
-                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Tipo <Info className="h-3 w-3" /></TooltipTrigger>
-                        <TooltipContent>Classificação: Gravidade (declividade ≥ 0) ou Elevatória (declividade negativa)</TooltipContent></Tooltip></TooltipProvider>
-                      </TableHead>
-                      <TableHead>
-                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Ø <Info className="h-3 w-3" /></TooltipTrigger>
-                        <TooltipContent>Diâmetro nominal da tubulação em milímetros</TooltipContent></Tooltip></TooltipProvider>
-                      </TableHead>
-                      <TableHead>
-                        <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Desnível <Info className="h-3 w-3" /></TooltipTrigger>
-                        <TooltipContent>Diferença de cota entre início e fim (metros)</TooltipContent></Tooltip></TooltipProvider>
-                      </TableHead>
-                      <TableHead>Material</TableHead>
-                    </TableRow>
+                     <TableRow>
+                       <TableHead>
+                         <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Início <Info className="h-3 w-3" /></TooltipTrigger>
+                         <TooltipContent>ID do ponto de montante (origem)</TooltipContent></Tooltip></TooltipProvider>
+                       </TableHead>
+                       <TableHead>
+                         <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Fim <Info className="h-3 w-3" /></TooltipTrigger>
+                         <TooltipContent>ID do ponto de jusante (destino)</TooltipContent></Tooltip></TooltipProvider>
+                       </TableHead>
+                       <TableHead>
+                         <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Comp. <Info className="h-3 w-3" /></TooltipTrigger>
+                         <TooltipContent>Comprimento horizontal do trecho em metros</TooltipContent></Tooltip></TooltipProvider>
+                       </TableHead>
+                       <TableHead>
+                         <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Decliv. <Info className="h-3 w-3" /></TooltipTrigger>
+                         <TooltipContent>Declividade = (Cota início - Cota fim) / Comprimento. Positiva = gravidade, Negativa = recalque</TooltipContent></Tooltip></TooltipProvider>
+                       </TableHead>
+                       <TableHead>
+                         <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Desnível <Info className="h-3 w-3" /></TooltipTrigger>
+                         <TooltipContent>Diferença de cota entre início e fim (metros)</TooltipContent></Tooltip></TooltipProvider>
+                       </TableHead>
+                       <TableHead>Material</TableHead>
+                     </TableRow>
                   </TableHeader>
                   <TableBody>{trechos.map((t, i) => (
-                    <TableRow key={i}>
-                      <TableCell>
-                        <TooltipProvider><Tooltip><TooltipTrigger className="font-medium cursor-help">{t.idInicio}</TooltipTrigger>
-                        <TooltipContent><p className="text-xs">X: {t.xInicio.toFixed(3)}<br/>Y: {t.yInicio.toFixed(3)}<br/>Cota: {t.cotaInicio.toFixed(3)}m</p></TooltipContent></Tooltip></TooltipProvider>
-                      </TableCell>
-                      <TableCell>
-                        <TooltipProvider><Tooltip><TooltipTrigger className="font-medium cursor-help">{t.idFim}</TooltipTrigger>
-                        <TooltipContent><p className="text-xs">X: {t.xFim.toFixed(3)}<br/>Y: {t.yFim.toFixed(3)}<br/>Cota: {t.cotaFim.toFixed(3)}m</p></TooltipContent></Tooltip></TooltipProvider>
-                      </TableCell>
-                      <TableCell>{fmt(t.comprimento, 2)}m</TableCell>
-                      <TableCell className={t.declividade < 0 ? "text-destructive font-medium" : ""}>{(t.declividade * 100).toFixed(2)}%</TableCell>
-                      <TableCell>
-                        <Badge variant={t.tipoRede === "Esgoto por Gravidade" ? "default" : "destructive"}>
-                          {t.tipoRede === "Esgoto por Gravidade" ? "Gravidade" : "Elevatória"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>DN{t.diametroMm}</TableCell>
-                      <TableCell className={t.cotaInicio - t.cotaFim < 0 ? "text-destructive" : "text-green-600"}>
-                        {(t.cotaInicio - t.cotaFim).toFixed(3)}m
-                      </TableCell>
-                      <TableCell><Badge variant="outline">{t.material}</Badge></TableCell>
-                    </TableRow>
-                  ))}</TableBody>
+                     <TableRow key={i}>
+                       <TableCell>
+                         <TooltipProvider><Tooltip><TooltipTrigger className="font-medium cursor-help">{t.idInicio}</TooltipTrigger>
+                         <TooltipContent><p className="text-xs">X: {t.xInicio.toFixed(3)}<br/>Y: {t.yInicio.toFixed(3)}<br/>Cota: {t.cotaInicio.toFixed(3)}m</p></TooltipContent></Tooltip></TooltipProvider>
+                       </TableCell>
+                       <TableCell>
+                         <TooltipProvider><Tooltip><TooltipTrigger className="font-medium cursor-help">{t.idFim}</TooltipTrigger>
+                         <TooltipContent><p className="text-xs">X: {t.xFim.toFixed(3)}<br/>Y: {t.yFim.toFixed(3)}<br/>Cota: {t.cotaFim.toFixed(3)}m</p></TooltipContent></Tooltip></TooltipProvider>
+                       </TableCell>
+                       <TableCell>{fmt(t.comprimento, 2)}m</TableCell>
+                       <TableCell className={t.declividade < 0 ? "text-destructive font-medium" : ""}>{(t.declividade * 100).toFixed(2)}%</TableCell>
+                       <TableCell className={t.cotaInicio - t.cotaFim < 0 ? "text-destructive" : "text-green-600"}>
+                         {(t.cotaInicio - t.cotaFim).toFixed(3)}m
+                       </TableCell>
+                       <TableCell><Badge variant="outline">{t.material}</Badge></TableCell>
+                     </TableRow>
+                   ))}</TableBody>
                 </Table>
               </div>
             </CardContent>
