@@ -29,6 +29,7 @@ const hydroModules = [
   { title: "Orçamento", url: "/hydronetwork/orcamento", icon: Calculator },
   { title: "Planejamento", url: "/hydronetwork/planejamento", icon: Calendar },
   { title: "EPANET", url: "/hydronetwork/epanet", icon: Beaker },
+  { title: "EPANET PRO", url: "/hydronetwork/epanet-pro", icon: Beaker },
   { title: "SWMM", url: "/hydronetwork/swmm", icon: Waves },
   { title: "OpenProject", url: "/hydronetwork/openproject", icon: Layers },
   { title: "ProjectLibre", url: "/hydronetwork/projectlibre", icon: FileText },
