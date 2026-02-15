@@ -27,6 +27,7 @@ import NotFound from "./pages/NotFound";
 import Onboarding from "./pages/Onboarding";
 import HydroNetwork from "./pages/HydroNetwork";
 import HydroNetworkLanding from "./pages/HydroNetworkLanding";
+import ModulesCatalog from "./pages/ModulesCatalog";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +59,7 @@ const AppContent = () => {
         <Route path="/hydronetwork" element={<HydroNetwork />} />
         <Route path="/hydronetwork/:module" element={<HydroNetwork />} />
         <Route path="/hydronetwork-landing" element={<HydroNetworkLanding />} />
+        <Route path="/modules" element={<ModulesCatalog />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
