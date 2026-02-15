@@ -1,6 +1,7 @@
 /**
- * Fully interactive map widget for network modules (Sewer, Water, Drainage, EPANET, SWMM, QGIS).
- * Supports: manual point linking, node dragging, demand editing, layer switching, clear map only.
+ * Fully interactive map widget for network modules.
+ * Supports: manual point linking (one-by-one), node dragging, demand editing, layer switching.
+ * Improved UX: click origin then destination with visual feedback, auto-continue linking mode.
  */
 import { useEffect, useRef, useCallback, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { MapPin, Plus, Minus, Maximize, MousePointer2, Layers, Link2, Trash2, Undo2, Save, Edit3 } from "lucide-react";
+import { MapPin, Plus, Minus, Maximize, Layers, Link2, Trash2, Undo2, Save, Edit3, X } from "lucide-react";
 import { getMapCoordinates } from "@/engine/hydraulics";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -77,10 +78,7 @@ export const NodeMapWidget = ({
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [editDemanda, setEditDemanda] = useState<number>(0);
 
-  // Sync connections from parent
-  useEffect(() => {
-    setLocalConnections(connections);
-  }, [connections]);
+  useEffect(() => { setLocalConnections(connections); }, [connections]);
 
   const getCoords = useCallback((x: number, y: number): [number, number] => {
     return getMapCoordinates(x, y);
@@ -105,26 +103,18 @@ export const NodeMapWidget = ({
     tileLayerRef.current = L.tileLayer(cfg.url, { attribution: cfg.attribution, maxZoom: 19 }).addTo(map);
   }, [tileKey]);
 
-  // Handle link mode click
+  // Handle link mode click - improved: auto-continue after linking
   const handleNodeClickInternal = useCallback((nodeId: string) => {
     if (linkMode) {
       if (!linkOrigin) {
         setLinkOrigin(nodeId);
-        toast.info(`Origem: ${nodeId}. Clique no ponto de destino.`);
+        toast.info(`Origem: ${nodeId} — clique no destino`);
       } else {
-        if (nodeId === linkOrigin) {
-          toast.error("Selecione um ponto diferente.");
-          return;
-        }
-        // Check if connection already exists
+        if (nodeId === linkOrigin) { toast.error("Selecione um ponto diferente."); return; }
         const exists = localConnections.some(c =>
           (c.from === linkOrigin && c.to === nodeId) || (c.from === nodeId && c.to === linkOrigin)
         );
-        if (exists) {
-          toast.warning("Conexão já existe.");
-          setLinkOrigin(null);
-          return;
-        }
+        if (exists) { toast.warning("Conexão já existe."); setLinkOrigin(null); return; }
         const newConn: ConnectionData = {
           from: linkOrigin, to: nodeId,
           color: accentColor, label: `${linkOrigin} → ${nodeId}`
@@ -133,7 +123,9 @@ export const NodeMapWidget = ({
         setLocalConnections(updated);
         onConnectionsChange?.(updated);
         toast.success(`Trecho ${linkOrigin} → ${nodeId} criado!`);
-        setLinkOrigin(null);
+        // Auto-continue: the destination becomes the next origin for quick chaining
+        setLinkOrigin(nodeId);
+        toast.info(`Continuando de ${nodeId} — clique no próximo destino ou ESC para parar`);
       }
     } else {
       setSelectedNode(nodeId);
@@ -142,6 +134,19 @@ export const NodeMapWidget = ({
       onNodeClick?.(nodeId);
     }
   }, [linkMode, linkOrigin, localConnections, accentColor, onConnectionsChange, onNodeClick, nodes]);
+
+  // ESC key to exit link mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && linkMode) {
+        setLinkMode(false);
+        setLinkOrigin(null);
+        toast.info("Modo de ligação desativado");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [linkMode]);
 
   // Draw nodes and connections
   useEffect(() => {
@@ -162,9 +167,11 @@ export const NodeMapWidget = ({
       if (idx === 0) color = "#22c55e";
       else if (idx === nodes.length - 1) color = "#ef4444";
       if (selectedNode === n.id) color = "#f59e0b";
+      if (linkMode && linkOrigin === n.id) color = "#f97316"; // highlight origin in link mode
 
+      const radius = linkMode ? 10 : 8; // bigger targets in link mode
       const marker = L.circleMarker(coords, {
-        radius: 8, fillColor: color, color: "#fff", weight: 2, fillOpacity: 0.9,
+        radius, fillColor: color, color: "#fff", weight: 2, fillOpacity: 0.9,
       }).addTo(map);
 
       const demandaInfo = n.demanda !== undefined ? `<br><b>Demanda:</b> ${n.demanda} L/s` : "";
@@ -197,7 +204,7 @@ export const NodeMapWidget = ({
     });
 
     if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { padding: [25, 25] });
-  }, [nodes, localConnections, getCoords, accentColor, handleNodeClickInternal, selectedNode]);
+  }, [nodes, localConnections, getCoords, accentColor, handleNodeClickInternal, selectedNode, linkMode, linkOrigin]);
 
   const handleUndo = () => {
     if (localConnections.length === 0) return;
@@ -208,13 +215,11 @@ export const NodeMapWidget = ({
   };
 
   const handleClearMap = () => {
-    // Only clear map visual connections, NOT the project data
     setLocalConnections([]);
     onConnectionsChange?.([]);
     setLinkOrigin(null);
     setLinkMode(false);
     setSelectedNode(null);
-    // Clear visual elements
     markersRef.current.forEach(m => m.remove());
     linesRef.current.forEach(l => l.remove());
     markersRef.current = [];
@@ -227,6 +232,14 @@ export const NodeMapWidget = ({
       onNodeDemandChange(selectedNode, editDemanda);
       toast.success(`Demanda de ${selectedNode} atualizada para ${editDemanda} L/s`);
     }
+  };
+
+  const toggleLinkMode = () => {
+    const newMode = !linkMode;
+    setLinkMode(newMode);
+    setLinkOrigin(null);
+    if (newMode) toast.info("Modo ligar pontos ativo: clique no ponto de origem, depois no destino. Encadeie quantos quiser! ESC para sair.");
+    else toast.info("Modo ligar pontos desativado.");
   };
 
   if (nodes.length === 0) return null;
@@ -251,14 +264,11 @@ export const NodeMapWidget = ({
           </Button>
           {editable && (
             <>
-              <Button size="sm" variant={linkMode ? "default" : "outline"} onClick={() => {
-                setLinkMode(!linkMode);
-                setLinkOrigin(null);
-                if (!linkMode) toast.info("Modo ligar pontos: clique origem, depois destino.");
-              }}>
-                <Link2 className="h-3 w-3 mr-1" /> Ligar Pontos
+              <Button size="sm" variant={linkMode ? "default" : "outline"} onClick={toggleLinkMode}
+                className={linkMode ? "bg-orange-500 hover:bg-orange-600 text-white" : ""}>
+                <Link2 className="h-3 w-3 mr-1" /> {linkMode ? "Ligando..." : "Ligar Pontos"}
               </Button>
-              <Button size="sm" variant="outline" onClick={handleUndo}>
+              <Button size="sm" variant="outline" onClick={handleUndo} disabled={localConnections.length === 0}>
                 <Undo2 className="h-3 w-3 mr-1" /> Desfazer
               </Button>
               <Button size="sm" variant="destructive" onClick={handleClearMap}>
@@ -283,13 +293,19 @@ export const NodeMapWidget = ({
 
         {/* Link mode status */}
         {linkMode && (
-          <div className="flex items-center gap-2">
-            <Badge variant={linkOrigin ? "default" : "secondary"}>
-              {linkOrigin ? `Origem: ${linkOrigin} — clique no destino` : "Clique no ponto de origem"}
-            </Badge>
-            {linkOrigin && (
-              <Button size="sm" variant="ghost" onClick={() => setLinkOrigin(null)}>Cancelar</Button>
-            )}
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200">
+            <Link2 className="h-4 w-4 text-orange-600" />
+            <span className="text-sm font-medium text-orange-700 dark:text-orange-400">
+              {linkOrigin ? `Origem: ${linkOrigin} — clique no destino (encadeamento automático)` : "Clique no ponto de origem"}
+            </span>
+            <div className="ml-auto flex gap-1">
+              {linkOrigin && (
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setLinkOrigin(null)}>Resetar Origem</Button>
+              )}
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setLinkMode(false); setLinkOrigin(null); }}>
+                <X className="h-3 w-3 mr-1" /> Sair
+              </Button>
+            </div>
           </div>
         )}
 
@@ -297,7 +313,7 @@ export const NodeMapWidget = ({
         <div ref={containerRef} className="w-full rounded-lg border border-border overflow-hidden" style={{ height }} />
 
         {/* Selected node editor */}
-        {editable && selectedNode && onNodeDemandChange && (
+        {editable && selectedNode && onNodeDemandChange && !linkMode && (
           <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
             <Edit3 className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">{selectedNode}</span>
@@ -316,6 +332,7 @@ export const NodeMapWidget = ({
           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500" /> Fim</div>
           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: accentColor }} /> Intermediário</div>
           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500" /> Selecionado</div>
+          {linkMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-orange-500" /> Origem (ligação)</div>}
         </div>
       </CardContent>
     </Card>
