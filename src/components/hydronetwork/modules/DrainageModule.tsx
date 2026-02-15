@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Plus, Trash2, Calculator, CloudRain, Upload, AlertTriangle, CheckCircle } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
+import { NodeMapWidget } from "@/components/hydronetwork/NodeMapWidget";
 
 // === Interfaces ===
 interface DrainageNode {
@@ -343,6 +344,19 @@ export const DrainageModule = ({ pontos }: DrainageModuleProps) => {
               </CardContent>
             </Card>
           )}
+
+          {/* Interactive Node Map */}
+          <NodeMapWidget
+            nodes={nodes.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cota }))}
+            connections={nodes.slice(0, -1).map((n, i) => ({
+              from: n.id,
+              to: nodes[i + 1].id,
+              color: "#10b981",
+              label: `${n.id} → ${nodes[i + 1].id}`,
+            }))}
+            title="Mapa da Rede de Drenagem"
+            accentColor="#10b981"
+          />
 
           <Button onClick={calcularDrenagem} className="w-full"><Calculator className="h-4 w-4 mr-1" /> Calcular Drenagem</Button>
         </TabsContent>

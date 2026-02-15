@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Calculator, Upload, Droplets, AlertTriangle, Link, Ruler } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { hazenWilliamsHeadloss, hazenWilliamsVelocity } from "@/engine/hydraulics";
+import { NodeMapWidget } from "@/components/hydronetwork/NodeMapWidget";
 
 interface WaterNode {
   id: string; x: number; y: number; cota: number; demanda: number;
@@ -206,7 +207,18 @@ export const WaterModule = ({ pontos }: WaterModuleProps) => {
         </Card>
       )}
 
-      {/* ── RESULTS SECTION ── */}
+      {/* Interactive Node Map */}
+      <NodeMapWidget
+        nodes={nodes.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cota }))}
+        connections={nodes.slice(0, -1).map((n, i) => ({
+          from: n.id,
+          to: nodes[i + 1].id,
+          color: "#06b6d4",
+          label: `${n.id} → ${nodes[i + 1].id}`,
+        }))}
+        title="Mapa da Rede de Água"
+        accentColor="#06b6d4"
+      />
       {calculated && results.length > 0 && summary && (
         <>
           <Card className="border-cyan-500/30">
