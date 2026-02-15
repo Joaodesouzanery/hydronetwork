@@ -34,6 +34,7 @@ import { WaterModule } from "@/components/hydronetwork/modules/WaterModule";
 import { DrainageModule } from "@/components/hydronetwork/modules/DrainageModule";
 import { QuantitiesModule } from "@/components/hydronetwork/modules/QuantitiesModule";
 import { EpanetModule } from "@/components/hydronetwork/modules/EpanetModule";
+import { EpanetProModule } from "@/components/hydronetwork/modules/EpanetProModule";
 import { SwmmModule } from "@/components/hydronetwork/modules/SwmmModule";
 import { OpenProjectModule } from "@/components/hydronetwork/modules/OpenProjectModule";
 import { ProjectLibreModule } from "@/components/hydronetwork/modules/ProjectLibreModule";
@@ -177,6 +178,8 @@ const HydroNetwork = () => {
         return <PlanningModule pontos={pontos} trechos={trechos} networkSummary={networkSummary} scheduleResult={scheduleResult} setScheduleResult={setScheduleResult} />;
       case "epanet":
         return <EpanetModule pontos={pontos} trechos={trechos} />;
+      case "epanet-pro":
+        return <EpanetProModule />;
       case "swmm":
         return <SwmmModule pontos={pontos} trechos={trechos} />;
       case "openproject":
@@ -557,8 +560,8 @@ const HydroNetwork = () => {
   const moduleNames: Record<string, string> = {
     topografia: "Topografia", esgoto: "Rede de Esgoto", agua: "Rede de Água",
     drenagem: "Drenagem Pluvial", quantitativos: "Quantitativos", orcamento: "Orçamento e Custos",
-    planejamento: "Planejamento", epanet: "EPANET", swmm: "SWMM",
-    openproject: "OpenProject", projectlibre: "ProjectLibre", qgis: "QGIS",
+    planejamento: "Planejamento", epanet: "EPANET", "epanet-pro": "EPANET PRO",
+    swmm: "SWMM", openproject: "OpenProject", projectlibre: "ProjectLibre", qgis: "QGIS",
     revisao: "Revisão por Pares", rdo: "RDO", perfil: "Perfil Longitudinal",
     mapa: "Mapa Interativo", exportacao: "Exportação GIS",
   };
