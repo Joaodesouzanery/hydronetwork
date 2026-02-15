@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Plus, Trash2, Calculator, CloudRain, Upload, AlertTriangle, CheckCircle } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
-import { NodeMapWidget } from "@/components/hydronetwork/NodeMapWidget";
+import { NodeMapWidget, ConnectionData } from "@/components/hydronetwork/NodeMapWidget";
 
 // === Interfaces ===
 interface DrainageNode {
@@ -61,6 +61,7 @@ export const DrainageModule = ({ pontos }: DrainageModuleProps) => {
 
   // Results
   const [results, setResults] = useState<DrainageResult[]>([]);
+  const [mapConnections, setMapConnections] = useState<ConnectionData[]>([]);
 
   const addNode = () => {
     if (!newNode.id.trim()) { toast.error("ID obrigatório"); return; }
@@ -70,7 +71,9 @@ export const DrainageModule = ({ pontos }: DrainageModuleProps) => {
 
   const transferFromTopography = () => {
     if (pontos.length === 0) { toast.error("Nenhum ponto na topografia"); return; }
-    setNodes(pontos.map(p => ({ id: p.id, x: p.x, y: p.y, cota: p.cota, areaContrib: 0.5, tipoSuperficie: "Misto urbano" })));
+    const newNodes = pontos.map(p => ({ id: p.id, x: p.x, y: p.y, cota: p.cota, areaContrib: 0.5, tipoSuperficie: "Misto urbano" }));
+    setNodes(newNodes);
+    setMapConnections(newNodes.slice(0, -1).map((n, i) => ({ from: n.id, to: newNodes[i + 1].id, color: "#10b981", label: `${n.id} → ${newNodes[i + 1].id}` })));
     toast.success(`${pontos.length} nós transferidos da topografia`);
   };
 
@@ -348,14 +351,11 @@ export const DrainageModule = ({ pontos }: DrainageModuleProps) => {
           {/* Interactive Node Map */}
           <NodeMapWidget
             nodes={nodes.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cota }))}
-            connections={nodes.slice(0, -1).map((n, i) => ({
-              from: n.id,
-              to: nodes[i + 1].id,
-              color: "#10b981",
-              label: `${n.id} → ${nodes[i + 1].id}`,
-            }))}
+            connections={mapConnections}
+            onConnectionsChange={setMapConnections}
             title="Mapa da Rede de Drenagem"
             accentColor="#10b981"
+            editable
           />
 
           <Button onClick={calcularDrenagem} className="w-full"><Calculator className="h-4 w-4 mr-1" /> Calcular Drenagem</Button>
