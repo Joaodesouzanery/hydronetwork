@@ -26,6 +26,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from "recharts";
 import { TopographyMap } from "@/components/hydronetwork/TopographyMap";
+import { PerfilLongitudinal } from "@/components/hydronetwork/PerfilLongitudinal";
 import { RDOHydroModule } from "@/components/hydronetwork/RDOHydroModule";
 import { PlanningModule } from "@/components/hydronetwork/PlanningModule";
 import { downloadDXF } from "@/lib/dxfExporter";
@@ -179,7 +180,7 @@ const HydroNetwork = () => {
       case "epanet":
         return <EpanetModule pontos={pontos} trechos={trechos} />;
       case "epanet-pro":
-        return <EpanetProModule />;
+        return <EpanetProModule pontos={pontos} trechos={trechos} />;
       case "swmm":
         return <SwmmModule pontos={pontos} trechos={trechos} />;
       case "openproject":
@@ -193,7 +194,7 @@ const HydroNetwork = () => {
       case "rdo":
         return <RDOHydroModule pontos={pontos} trechos={trechos} rdos={rdos} setRdos={setRdos} />;
       case "perfil":
-        return <PerfilLongitudinalModule />;
+        return <PerfilLongitudinal pontos={pontos} trechos={trechos} />;
       case "mapa":
         return <MapaInterativoModule />;
       case "exportacao":
@@ -479,29 +480,7 @@ const HydroNetwork = () => {
   // RDO Module is now handled by RDOHydroModule component
 
   // ── PLACEHOLDER MODULES ──
-  function PerfilLongitudinalModule() {
-    return (
-      <Card>
-        <CardHeader><CardTitle>Perfil Longitudinal</CardTitle><CardDescription>Visualização do corte vertical da rede</CardDescription></CardHeader>
-        <CardContent>
-          {pontos.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">Carregue dados na aba Topografia primeiro.</p>
-          ) : (
-            <div className="space-y-4">
-              <div className="bg-muted rounded-lg p-4 h-[300px] flex items-center justify-center">
-                <p className="text-muted-foreground">Perfil longitudinal com {pontos.length} pontos e {trechos.length} trechos</p>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div><Label>Escala Horizontal</Label><Select defaultValue="1000"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="500">1:500</SelectItem><SelectItem value="1000">1:1000</SelectItem><SelectItem value="2000">1:2000</SelectItem></SelectContent></Select></div>
-                <div><Label>Escala Vertical</Label><Select defaultValue="100"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="50">1:50</SelectItem><SelectItem value="100">1:100</SelectItem><SelectItem value="200">1:200</SelectItem></SelectContent></Select></div>
-                <div><Label>Exagero Vertical</Label><Input type="number" defaultValue={10} /></div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
+  // PerfilLongitudinalModule now handled by PerfilLongitudinal component
 
   function MapaInterativoModule() {
     return (
