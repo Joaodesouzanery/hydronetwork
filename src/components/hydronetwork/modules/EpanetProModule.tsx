@@ -221,8 +221,13 @@ function statusBadge(s: string) {
   return <Badge className="bg-green-500 text-white text-[10px]">OK</Badge>;
 }
 
+interface EpanetProModuleProps {
+  pontos?: import("@/engine/reader").PontoTopografico[];
+  trechos?: import("@/engine/domain").Trecho[];
+}
+
 // ── Main Component ──
-export const EpanetProModule = () => {
+export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos = [] }: EpanetProModuleProps) => {
   const [junctions, setJunctions] = useState<Junction[]>([]);
   const [reservoirs, setReservoirs] = useState<Reservoir[]>([]);
   const [tanks, setTanks] = useState<Tank[]>([]);
@@ -451,6 +456,17 @@ export const EpanetProModule = () => {
             <input ref={fileInputRef} type="file" accept=".inp" className="hidden" onChange={handleFileUpload} />
             <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4 mr-1" /> Importar .INP</Button>
             <Button variant="outline" onClick={loadExample}>📂 Carregar Exemplo</Button>
+            <Button variant="outline" onClick={() => {
+              if (topoPontos.length === 0 || topoTrechos.length === 0) { toast.error("Carregue dados na Topografia primeiro"); return; }
+              const newJunctions: Junction[] = topoPontos.map(p => ({ id: p.id, elevation: p.cota, demand: 1.0, pattern: "Residencial" }));
+              const newCoords: Coord[] = topoPontos.map(p => ({ id: p.id, x: p.x / 1000, y: p.y / 1000 }));
+              const newPipes: Pipe[] = topoTrechos.map((t, i) => ({ id: `P${i + 1}`, node1: t.idInicio, node2: t.idFim, length: t.comprimento, diameter: t.diametroMm, roughness: 130, material: t.material, status: "Aberto" }));
+              setJunctions(newJunctions); setReservoirs([]); setTanks([]); setPipes(newPipes); setPumps([]); setValves([]); setCoords(newCoords);
+              setResults(null); rebuildMapConnections(newPipes, [], []);
+              toast.success(`Importado da Topografia: ${newJunctions.length} junções, ${newPipes.length} tubos`);
+            }} disabled={topoPontos.length === 0}>
+              <MapPin className="h-4 w-4 mr-1" /> Importar da Topografia
+            </Button>
             <Button onClick={runSimulation} disabled={totalNodes === 0 || isRunning} className="bg-green-600 hover:bg-green-700 text-white">
               {isRunning ? <><Pause className="h-4 w-4 mr-1" /> Simulando...</> : <><Play className="h-4 w-4 mr-1" /> Executar Simulação</>}
             </Button>
