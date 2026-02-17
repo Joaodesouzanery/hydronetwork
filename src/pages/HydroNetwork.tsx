@@ -42,6 +42,7 @@ import { ProjectLibreModule } from "@/components/hydronetwork/modules/ProjectLib
 import { QgisModule } from "@/components/hydronetwork/modules/QgisModule";
 import { PeerReviewModule } from "@/components/hydronetwork/modules/PeerReviewModule";
 import { BudgetCostModule } from "@/components/hydronetwork/modules/BudgetCostModule";
+import { BdiModule } from "@/components/hydronetwork/modules/BdiModule";
 // Shared state context - in a real app, use React Context or Zustand
 const useHydroState = () => {
   const [pontos, setPontos] = useState<PontoTopografico[]>([]);
@@ -177,6 +178,8 @@ const HydroNetwork = () => {
         return <OrcamentoModule />;
       case "planejamento":
         return <PlanningModule pontos={pontos} trechos={trechos} networkSummary={networkSummary} scheduleResult={scheduleResult} setScheduleResult={setScheduleResult} />;
+      case "bdi":
+        return <BdiModule />;
       case "epanet":
         return <EpanetModule pontos={pontos} trechos={trechos} />;
       case "epanet-pro":
@@ -539,7 +542,7 @@ const HydroNetwork = () => {
   const moduleNames: Record<string, string> = {
     topografia: "Topografia", esgoto: "Rede de Esgoto", agua: "Rede de Água",
     drenagem: "Drenagem Pluvial", quantitativos: "Quantitativos", orcamento: "Orçamento e Custos",
-    planejamento: "Planejamento", epanet: "EPANET", "epanet-pro": "EPANET PRO",
+    bdi: "BDI — Benefícios e Despesas Indiretas", planejamento: "Planejamento", epanet: "EPANET", "epanet-pro": "EPANET PRO",
     swmm: "SWMM", openproject: "OpenProject", projectlibre: "ProjectLibre", qgis: "QGIS",
     revisao: "Revisão por Pares", rdo: "RDO", perfil: "Perfil Longitudinal",
     mapa: "Mapa Interativo", exportacao: "Exportação GIS",
