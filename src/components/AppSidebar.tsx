@@ -3,7 +3,7 @@ import {
   Home, Palette, Upload, Droplets, CloudRain, FileSpreadsheet, Calculator,
   Calendar, Beaker, Waves, Layers, FileText, Map, Shield, ClipboardList,
   Plus, History, Image, AlertCircle, Archive, HeadphonesIcon, Settings,
-  BarChart3, ClipboardCheck, Activity
+  BarChart3, ClipboardCheck, Activity, DollarSign
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -27,6 +27,7 @@ const hydroModules = [
   { title: "Drenagem", url: "/hydronetwork/drenagem", icon: CloudRain },
   { title: "Quantitativos", url: "/hydronetwork/quantitativos", icon: FileSpreadsheet },
   { title: "Orçamento", url: "/hydronetwork/orcamento", icon: Calculator },
+  { title: "BDI", url: "/hydronetwork/bdi", icon: DollarSign },
   { title: "Planejamento", url: "/hydronetwork/planejamento", icon: Calendar },
   { title: "EPANET", url: "/hydronetwork/epanet", icon: Beaker },
   { title: "EPANET PRO", url: "/hydronetwork/epanet-pro", icon: Beaker },
