@@ -153,9 +153,9 @@ const Hero = () => {
       {/* ═══════════════ HERO ═══════════════ */}
       <section className="relative min-h-screen flex items-center pt-16 overflow-hidden">
         <div className="absolute inset-0">
-          <img src={heroSaneamento} alt="" className="w-full h-full object-cover opacity-30" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[hsl(222,47%,6%)] via-[hsl(222,47%,6%)/0.97] to-[hsl(222,47%,6%)/0.85]" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[hsl(222,47%,6%)] via-[hsl(222,47%,6%)/0.6] to-[hsl(222,47%,6%)/0.8]" />
+          <img src={heroSaneamento} alt="" className="w-full h-full object-cover opacity-20" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[hsl(222,47%,4%)] via-[hsl(222,47%,4%)/0.98] to-[hsl(222,47%,4%)/0.88]" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[hsl(222,47%,4%)] via-[hsl(222,47%,4%)/0.7] to-[hsl(222,47%,4%)/0.85]" />
         </div>
 
         <div className="container mx-auto px-4 z-10 py-12 md:py-0">

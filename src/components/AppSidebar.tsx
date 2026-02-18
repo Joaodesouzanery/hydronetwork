@@ -3,7 +3,8 @@ import {
   Home, Palette, Upload, Droplets, CloudRain, FileSpreadsheet, Calculator,
   Calendar, Beaker, Waves, Layers, FileText, Map, Shield, ClipboardList,
   Plus, History, Image, AlertCircle, Archive, HeadphonesIcon, Settings,
-  BarChart3, ClipboardCheck, Activity, DollarSign, Building2, Bell, Clock
+  BarChart3, ClipboardCheck, Activity, DollarSign, Building2, Bell, Clock,
+  BookOpen, Smile, Mail, Linkedin
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -58,8 +59,10 @@ const rdoItems = [
 ];
 
 const settingsItems = [
-  { title: "Backup", url: "/backup", icon: Archive },
+  { title: "Central de Ajuda", url: "/help-center", icon: BookOpen },
   { title: "Suporte", url: "/support", icon: HeadphonesIcon },
+  { title: "Sentimento", url: "/sentiment-dashboard", icon: Smile },
+  { title: "Backup", url: "/backup", icon: Archive },
   { title: "Configurações", url: "/settings", icon: Settings },
 ];
 
@@ -107,6 +110,18 @@ export function AppSidebar() {
         {renderSection("HydroNetwork", hydroModules)}
         {renderSection("Diário de Obra", rdoItems)}
         {renderSection("Sistema", settingsItems, false)}
+
+        {/* Support footer */}
+        <div className="mt-auto p-3 border-t border-sidebar-border">
+          <div className="flex items-center gap-2 justify-center">
+            <a href="mailto:construdata.contato@gmail.com" className="p-2 rounded-lg hover:bg-sidebar-accent transition-colors" title="Email">
+              <Mail className="w-4 h-4 text-muted-foreground" />
+            </a>
+            <a href="https://www.linkedin.com/company/construdatasoftware" target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-sidebar-accent transition-colors" title="LinkedIn">
+              <Linkedin className="w-4 h-4 text-muted-foreground" />
+            </a>
+          </div>
+        </div>
       </SidebarContent>
     </Sidebar>
   );

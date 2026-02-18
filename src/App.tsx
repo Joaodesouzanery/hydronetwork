@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useAlertNotifications } from "@/hooks/useAlertNotifications";
 import { useProductionUpdates } from "@/hooks/useProductionUpdates";
 import MaintenanceOverlay from "@/components/MaintenanceOverlay";
+import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -21,6 +22,8 @@ import Occurrences from "./pages/Occurrences";
 import Admin from "./pages/Admin";
 import Backup from "./pages/Backup";
 import Support from "./pages/Support";
+import HelpCenter from "./pages/HelpCenter";
+import SentimentDashboard from "./pages/SentimentDashboard";
 import UserMetrics from "./pages/UserMetrics";
 import CustomDashboard from "./pages/CustomDashboard";
 import NotFound from "./pages/NotFound";
@@ -59,6 +62,8 @@ const AppContent = () => {
         <Route path="/admin/metrics" element={<UserMetrics />} />
         <Route path="/backup" element={<Backup />} />
         <Route path="/support" element={<Support />} />
+        <Route path="/help-center" element={<HelpCenter />} />
+        <Route path="/sentiment-dashboard" element={<SentimentDashboard />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id/history" element={<ProjectHistory />} />
         <Route path="/project-delays" element={<ProjectDelays />} />
@@ -68,6 +73,7 @@ const AppContent = () => {
         <Route path="/modules" element={<ModulesCatalog />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      <FeedbackWidget />
     </BrowserRouter>
   );
 };
