@@ -15,6 +15,7 @@ import {
   AlertTriangle, FileText, Users, Settings2, Info, X
 } from "lucide-react";
 import { useParams } from "react-router-dom";
+import { FieldMappingDialog, SourceField, FieldMapping } from "@/components/hydronetwork/FieldMappingDialog";
 import { parseTopographyFile, parseTopographyCSV, validateTopographySequence, PontoTopografico } from "@/engine/reader";
 import { parseDxfFile, parseDxfToPoints } from "@/engine/dxfReader";
 import { createTrechosFromTopography, summarizeNetwork, Trecho, NetworkSummary, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from "@/engine/domain";
@@ -85,6 +86,13 @@ const HydroNetwork = () => {
   const [numEquipes, setNumEquipes] = useState(2);
   const [teamConfig, setTeamConfig] = useState<TeamConfig>(DEFAULT_TEAM_CONFIG);
   const [dataInicio, setDataInicio] = useState(new Date().toISOString().split("T")[0]);
+  
+  // Field mapping dialog state
+  const [showFieldMapping, setShowFieldMapping] = useState(false);
+  const [pendingSourceFields, setPendingSourceFields] = useState<SourceField[]>([]);
+  const [pendingFileName, setPendingFileName] = useState("");
+  const [pendingRowCount, setPendingRowCount] = useState(0);
+  const [pendingRawData, setPendingRawData] = useState<Record<string, string>[]>([]);
 
   const processPoints = useCallback((pts: PontoTopografico[]) => {
     validateTopographySequence(pts);
@@ -104,16 +112,66 @@ const HydroNetwork = () => {
       if (ext === "dxf") {
         const pts = await parseDxfFile(file);
         processPoints(pts);
-      } else if (ext === "txt" || ext === "csv") {
-        const text = await file.text();
-        const pts = parseTopographyCSV(text);
-        processPoints(pts);
+      } else if (ext === "csv" || ext === "txt" || ext === "xlsx" || ext === "xls") {
+        // Try to detect columns and show field mapping dialog
+        let rawRows: Record<string, string>[] = [];
+        if (ext === "xlsx" || ext === "xls") {
+          const ab = await file.arrayBuffer();
+          const wb = XLSX.read(ab);
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          rawRows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
+        } else {
+          const text = await file.text();
+          const lines = text.trim().split(/\r?\n/).filter(l => l.trim());
+          if (lines.length === 0) throw new Error("Arquivo vazio");
+          // Detect separator
+          const sep = lines[0].includes(";") ? ";" : lines[0].includes("\t") ? "\t" : ",";
+          const hasHeader = isNaN(Number(lines[0].split(sep)[0]?.trim()));
+          const headers = hasHeader ? lines[0].split(sep).map(h => h.trim()) : lines[0].split(sep).map((_, i) => `Col${i + 1}`);
+          const dataLines = hasHeader ? lines.slice(1) : lines;
+          rawRows = dataLines.map(line => {
+            const vals = line.split(sep);
+            const row: Record<string, string> = {};
+            headers.forEach((h, i) => { row[h] = vals[i]?.trim() ?? ""; });
+            return row;
+          });
+        }
+        if (rawRows.length === 0) throw new Error("Nenhum dado encontrado");
+        const headers = Object.keys(rawRows[0]);
+        const sourceFields: SourceField[] = headers.map(h => ({
+          name: h,
+          sampleValues: rawRows.slice(0, 5).map(r => String(r[h] ?? "")),
+          type: rawRows.slice(0, 5).every(r => !isNaN(Number(r[h])) && r[h] !== "") ? "number" : "text",
+        }));
+        setPendingSourceFields(sourceFields);
+        setPendingFileName(file.name);
+        setPendingRowCount(rawRows.length);
+        setPendingRawData(rawRows);
+        setShowFieldMapping(true);
       } else {
         const pts = await parseTopographyFile(file);
         processPoints(pts);
       }
     } catch (err: any) { toast.error(err.message || "Erro ao processar arquivo."); }
   }, [processPoints]);
+
+  const handleFieldMappingConfirm = useCallback((mappings: FieldMapping[]) => {
+    try {
+      const xField = mappings.find(m => m.targetField === "x")?.sourceField;
+      const yField = mappings.find(m => m.targetField === "y")?.sourceField;
+      const zField = mappings.find(m => m.targetField === "z_cota")?.sourceField;
+      const idField = mappings.find(m => m.targetField === "id")?.sourceField;
+      if (!xField || !yField) { toast.error("Campos X e Y são obrigatórios"); return; }
+      const pts: PontoTopografico[] = pendingRawData.map((row, i) => ({
+        id: idField ? String(row[idField]) : `P${i + 1}`,
+        x: Number(row[xField]) || 0,
+        y: Number(row[yField]) || 0,
+        cota: zField ? Number(row[zField]) || 0 : 0,
+      })).filter(p => p.x !== 0 && p.y !== 0);
+      processPoints(pts);
+      toast.success(`${pts.length} pontos importados com mapeamento personalizado`);
+    } catch (err: any) { toast.error(err.message); }
+  }, [pendingRawData, processPoints]);
 
   const handleClearTopography = useCallback(() => {
     setPontos([]);
@@ -260,9 +318,9 @@ const HydroNetwork = () => {
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer">
                   <Upload className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground mb-2">Arraste ou clique para selecionar</p>
-                  <p className="text-xs text-muted-foreground mb-1">Aceita: CSV, TXT, XLSX, XLS, <strong>DXF</strong></p>
-                  <p className="text-xs text-muted-foreground mb-3">TXT com X,Y,Z (sem cabeçalho) ou DXF com entidades POINT/LINE</p>
-                  <Input type="file" accept=".csv,.txt,.xlsx,.xls,.dxf" onChange={handleTopographyUpload} className="mt-2" />
+                  <p className="text-xs text-muted-foreground mb-1">Aceita: CSV, TXT, XLSX, XLS, <strong>DXF, SHP, IFC, GeoJSON</strong></p>
+                  <p className="text-xs text-muted-foreground mb-3">Arquivos tabulares abrem o mapeamento de campos para selecionar X, Y, Z manualmente</p>
+                  <Input type="file" accept=".csv,.txt,.xlsx,.xls,.dxf,.shp,.ifc,.geojson,.json" onChange={handleTopographyUpload} className="mt-2" />
                 </div>
               )}
               <div className="space-y-2">
@@ -591,6 +649,14 @@ const HydroNetwork = () => {
               </div>
             </div>
             {renderModule()}
+            <FieldMappingDialog
+              open={showFieldMapping}
+              onOpenChange={setShowFieldMapping}
+              sourceFields={pendingSourceFields}
+              fileName={pendingFileName}
+              rowCount={pendingRowCount}
+              onConfirm={handleFieldMappingConfirm}
+            />
           </div>
         </main>
       </div>
