@@ -46,9 +46,9 @@ const hydroModules = [
   { title: "Mapa Interativo", url: "/hydronetwork/mapa", icon: Map },
   { title: "Exportação GIS", url: "/hydronetwork/exportacao", icon: FileSpreadsheet },
 ];
-
 const rdoItems = [
   { title: "RDO Hydro", url: "/hydronetwork/rdo", icon: ClipboardList },
+  { title: "RDO × Planejamento", url: "/hydronetwork/rdo-planejamento", icon: BarChart3 },
   { title: "Novo RDO", url: "/rdo-new", icon: Plus },
   { title: "Histórico RDO", url: "/rdo-history", icon: History },
   { title: "Fotos de Validação", url: "/rdo-photos", icon: Image },
