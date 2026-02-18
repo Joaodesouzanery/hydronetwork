@@ -38,6 +38,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const [drawMode, setDrawMode] = useState(false);
   const [drawOrigin, setDrawOrigin] = useState<string | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<string | null>(null);
   const markersRef = useRef<L.CircleMarker[]>([]);
   const polylinesRef = useRef<L.Polyline[]>([]);
   const [tileKey, setTileKey] = useState("osm");
@@ -59,6 +60,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
     setTimeout(doInvalidate, 300);
     setTimeout(doInvalidate, 600);
     setTimeout(doInvalidate, 1000);
+    setTimeout(doInvalidate, 2000);
 
     const observer = new ResizeObserver(() => setTimeout(doInvalidate, 50));
     observer.observe(mapContainerRef.current);
@@ -88,37 +90,40 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [drawMode]);
 
-  // Handle draw mode - auto-chaining: destination becomes next origin
+  // Handle marker click - draw mode or select mode
   const handleMarkerClick = useCallback((pointId: string) => {
-    if (!drawMode) return;
-    if (!drawOrigin) {
-      setDrawOrigin(pointId);
-      toast.info(`Origem: ${pointId} — clique no destino`);
+    if (drawMode) {
+      if (!drawOrigin) {
+        setDrawOrigin(pointId);
+        toast.info(`Origem: ${pointId} — clique no destino`);
+      } else {
+        if (pointId === drawOrigin) {
+          toast.error("Selecione um ponto diferente para o destino.");
+          return;
+        }
+        const exists = trechos.some(t =>
+          (t.idInicio === drawOrigin && t.idFim === pointId) ||
+          (t.idInicio === pointId && t.idFim === drawOrigin)
+        );
+        if (exists) {
+          toast.warning("Trecho já existe entre esses pontos.");
+          setDrawOrigin(null);
+          return;
+        }
+        const pOrigem = pontos.find(p => p.id === drawOrigin);
+        const pDestino = pontos.find(p => p.id === pointId);
+        if (pOrigem && pDestino) {
+          const novoTrecho = createTrechoFromPoints(pOrigem, pDestino);
+          onTrechosChange?.([...trechos, novoTrecho]);
+          toast.success(`Trecho ${drawOrigin} → ${pointId} criado!`);
+        }
+        // Auto-chain: destination becomes next origin
+        setDrawOrigin(pointId);
+        toast.info(`Continuando de ${pointId} — clique no próximo destino ou ESC para parar`);
+      }
     } else {
-      if (pointId === drawOrigin) {
-        toast.error("Selecione um ponto diferente para o destino.");
-        return;
-      }
-      // Check if connection already exists
-      const exists = trechos.some(t =>
-        (t.idInicio === drawOrigin && t.idFim === pointId) ||
-        (t.idInicio === pointId && t.idFim === drawOrigin)
-      );
-      if (exists) {
-        toast.warning("Trecho já existe entre esses pontos.");
-        setDrawOrigin(null);
-        return;
-      }
-      const pOrigem = pontos.find(p => p.id === drawOrigin);
-      const pDestino = pontos.find(p => p.id === pointId);
-      if (pOrigem && pDestino) {
-        const novoTrecho = createTrechoFromPoints(pOrigem, pDestino);
-        onTrechosChange?.([...trechos, novoTrecho]);
-        toast.success(`Trecho ${drawOrigin} → ${pointId} criado!`);
-      }
-      // Auto-chain: destination becomes next origin
-      setDrawOrigin(pointId);
-      toast.info(`Continuando de ${pointId} — clique no próximo destino ou ESC para parar`);
+      // Select mode - toggle selection and show popup
+      setSelectedPoint(prev => prev === pointId ? null : pointId);
     }
   }, [drawMode, drawOrigin, pontos, trechos, onTrechosChange]);
 
@@ -147,24 +152,32 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
       else if (idx === pontos.length - 1) color = "#ef4444";
       // Highlight origin in draw mode
       if (drawMode && drawOrigin === p.id) color = "#f97316";
+      // Highlight selected point (yellow) outside draw mode
+      if (!drawMode && selectedPoint === p.id) color = "#f59e0b";
 
-      const radius = drawMode ? 11 : 8; // Bigger targets in draw mode for easier clicking
+      const radius = drawMode ? 11 : 8;
 
       const marker = L.circleMarker(coords, {
-        radius, fillColor: color, color: "#ffffff", weight: 2, fillOpacity: 0.9,
+        radius, fillColor: color, color: "#fff", weight: 2, fillOpacity: 0.9,
       }).addTo(map);
 
-      marker.bindPopup(`
-        <div style="font-family: sans-serif; min-width: 150px;">
-          <strong style="font-size: 14px;">${p.id}</strong>
-          <hr style="margin: 4px 0; border-color: #e2e8f0;">
-          <div style="font-size: 12px; line-height: 1.6;">
-            <b>X:</b> ${p.x.toFixed(3)}<br>
-            <b>Y:</b> ${p.y.toFixed(3)}<br>
-            <b>Cota:</b> ${p.cota.toFixed(3)}m
+      // Only bind popup if NOT in draw mode (popups block fast clicking)
+      if (!drawMode) {
+        marker.bindPopup(`
+          <div style="font-family:sans-serif;min-width:150px;">
+            <strong style="font-size:14px;">${p.id}</strong>
+            <hr style="margin:4px 0;border-color:#e2e8f0;">
+            <div style="font-size:12px;line-height:1.6;">
+              <b>X:</b> ${p.x.toFixed(3)}<br>
+              <b>Y:</b> ${p.y.toFixed(3)}<br>
+              <b>Cota:</b> ${p.cota.toFixed(3)}m
+            </div>
           </div>
-        </div>
-      `);
+        `);
+      } else {
+        // In draw mode, show tooltip instead (doesn't block clicks)
+        marker.bindTooltip(p.id, { permanent: false, direction: "top", offset: [0, -10] });
+      }
 
       marker.on("click", () => handleMarkerClick(p.id));
       markersRef.current.push(marker);
@@ -181,10 +194,10 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
       }).addTo(map);
 
       polyline.bindPopup(`
-        <div style="font-family: sans-serif; min-width: 180px;">
+        <div style="font-family:sans-serif;min-width:180px;">
           <strong>${t.idInicio} → ${t.idFim}</strong>
-          <hr style="margin: 4px 0;">
-          <div style="font-size: 12px; line-height: 1.6;">
+          <hr style="margin:4px 0;">
+          <div style="font-size:12px;line-height:1.6;">
             <b>Comprimento:</b> ${t.comprimento.toFixed(2)}m<br>
             <b>Declividade:</b> ${(t.declividade * 100).toFixed(2)}%<br>
             <b>Tipo:</b> ${isGravity ? "Gravidade" : "Elevatória"}<br>
@@ -203,11 +216,10 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
         map.setView(bounds[0] as L.LatLngExpression, 15);
       }
       setTimeout(() => map.invalidateSize(), 200);
+      setTimeout(() => map.invalidateSize(), 500);
     }
-  }, [pontos, trechos, getPointCoords, handleMarkerClick, drawMode, drawOrigin]);
+  }, [pontos, trechos, getPointCoords, handleMarkerClick, drawMode, drawOrigin, selectedPoint]);
 
-  const handleZoomIn = () => mapRef.current?.zoomIn();
-  const handleZoomOut = () => mapRef.current?.zoomOut();
   const handleFitBounds = () => {
     if (pontos.length === 0) return;
     const bounds = pontos.map(p => getPointCoords(p)).filter(c => isFinite(c[0]) && isFinite(c[1]));
@@ -241,6 +253,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
     polylinesRef.current.forEach(p => p.remove());
     polylinesRef.current = [];
     setDrawOrigin(null);
+    setSelectedPoint(null);
     toast.success("Trechos do mapa limpos. Pontos mantidos.");
   };
 
@@ -248,6 +261,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
     const newMode = !drawMode;
     setDrawMode(newMode);
     setDrawOrigin(null);
+    setSelectedPoint(null);
     if (newMode) toast.info("Modo ligar pontos ativo: clique origem → destino. Encadeamento automático! ESC para sair.");
     else toast.info("Modo ligação desativado.");
   };
@@ -256,36 +270,48 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <MapPin className="h-5 w-5" /> Mapa Interativo
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <MapPin className="h-4 w-4" /> Mapa Interativo
           <Badge variant="secondary" className="ml-auto">{pontos.length} pontos · {trechos.length} trechos</Badge>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {/* Toolbar */}
-        <div className="flex flex-wrap gap-2 items-center">
+      <CardContent className="space-y-2">
+        {/* Toolbar - inline like EPANET */}
+        <div className="flex gap-1.5 flex-wrap items-center">
           <Button size="sm" variant="outline" onClick={handleFitBounds}>
-            <Maximize className="h-4 w-4 mr-1" /> Ajustar
+            <Maximize className="h-3 w-3 mr-1" /> Ajustar
           </Button>
           <Button size="sm" variant={drawMode ? "default" : "outline"} onClick={toggleDrawMode}
             className={drawMode ? "bg-orange-500 hover:bg-orange-600 text-white" : ""}>
-            <Link2 className="h-4 w-4 mr-1" /> {drawMode ? "Ligando..." : "Ligar Pontos"}
+            <Link2 className="h-3 w-3 mr-1" /> {drawMode ? "Ligando..." : "Ligar Pontos"}
           </Button>
-          <Button size="sm" variant="outline" onClick={handleZoomIn}><Plus className="h-4 w-4" /></Button>
-          <Button size="sm" variant="outline" onClick={handleZoomOut}><Minus className="h-4 w-4" /></Button>
+          <Button size="sm" variant="outline" onClick={() => mapRef.current?.zoomIn()}><Plus className="h-3 w-3" /></Button>
+          <Button size="sm" variant="outline" onClick={() => mapRef.current?.zoomOut()}><Minus className="h-3 w-3" /></Button>
           <Button size="sm" variant="outline" onClick={handleUndo} disabled={trechos.length === 0}>
-            <Undo2 className="h-4 w-4 mr-1" /> Desfazer
+            <Undo2 className="h-3 w-3 mr-1" /> Desfazer
           </Button>
           <Button size="sm" variant="destructive" onClick={handleClearAll}>
-            <Trash2 className="h-4 w-4 mr-1" /> Limpar Tudo
+            <Trash2 className="h-3 w-3 mr-1" /> Limpar
           </Button>
           <Button size="sm" variant="outline" onClick={handleSave}>
-            <Save className="h-4 w-4 mr-1" /> Salvar
+            <Save className="h-3 w-3 mr-1" /> Salvar
           </Button>
           <Button size="sm" variant="outline" onClick={handleLoad}>
-            <FolderOpen className="h-4 w-4 mr-1" /> Carregar
+            <FolderOpen className="h-3 w-3 mr-1" /> Carregar
           </Button>
+          {/* Layer selector inline */}
+          <div className="flex items-center gap-1 ml-auto">
+            <Layers className="h-3 w-3 text-muted-foreground" />
+            <Select value={tileKey} onValueChange={setTileKey}>
+              <SelectTrigger className="h-7 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(TILE_LAYERS).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Draw mode status bar */}
@@ -315,21 +341,25 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
           style={{ height: 450 }}
         />
 
-        {/* Map Layer Selector */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Layers className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">Camada do mapa:</span>
-          <Select value={tileKey} onValueChange={setTileKey}>
-            <SelectTrigger className="w-[180px] h-8"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {Object.entries(TILE_LAYERS).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Selected point info (outside draw mode) */}
+        {!drawMode && selectedPoint && (() => {
+          const pt = pontos.find(p => p.id === selectedPoint);
+          if (!pt) return null;
+          return (
+            <div className="flex items-center gap-3 p-2 bg-muted/50 rounded-lg text-sm">
+              <MapPin className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium">{pt.id}</span>
+              <span className="text-muted-foreground">X: {pt.x.toFixed(3)}</span>
+              <span className="text-muted-foreground">Y: {pt.y.toFixed(3)}</span>
+              <span className="text-muted-foreground">Cota: {pt.cota.toFixed(3)}m</span>
+              <Button size="sm" variant="ghost" className="h-6 text-xs ml-auto" onClick={() => setSelectedPoint(null)}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          );
+        })()}
 
-        {/* Connections list */}
+        {/* Connections list with individual delete */}
         {trechos.length > 0 && (
           <div className="max-h-32 overflow-auto border border-border rounded-lg p-2">
             <p className="text-xs font-medium mb-1">Trechos ({trechos.length})</p>
@@ -351,10 +381,11 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
         )}
 
         {/* Legend */}
-        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500" /> Ponto Inicial</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500" /> Ponto Final</div>
+        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500" /> Início</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500" /> Fim</div>
           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-blue-500" /> Intermediário</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500" /> Selecionado</div>
           {drawMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-orange-500" /> Origem (ligação)</div>}
           <div className="flex items-center gap-1"><div className="w-4 h-1 bg-green-500 rounded" /> Gravidade</div>
           <div className="flex items-center gap-1"><div className="w-4 h-1 bg-orange-500 rounded" /> Elevatória</div>
