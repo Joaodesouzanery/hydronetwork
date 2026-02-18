@@ -10,10 +10,12 @@ import { useToast } from "@/hooks/use-toast";
 import { AddConnectionReportDialog } from "@/components/connection-reports/AddConnectionReportDialog";
 import { ConnectionReportsTable } from "@/components/connection-reports/ConnectionReportsTable";
 import { TutorialDialog } from "@/components/shared/TutorialDialog";
+import { UnifiedExportDialog } from "@/components/rdo/UnifiedExportDialog";
 
 export default function ConnectionReports() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showUnifiedExport, setShowUnifiedExport] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -84,6 +86,13 @@ export default function ConnectionReports() {
               <div className="flex gap-2">
               <Button
                 variant="outline"
+                onClick={() => setShowUnifiedExport(true)}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Exportação Unificada
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => setShowTutorial(true)}
               >
                 <HelpCircle className="mr-2 h-4 w-4" />
@@ -127,6 +136,11 @@ export default function ConnectionReports() {
             onOpenChange={setShowTutorial}
             title="Como usar Relatório de Ligações"
             steps={tutorialSteps}
+          />
+
+          <UnifiedExportDialog
+            open={showUnifiedExport}
+            onOpenChange={setShowUnifiedExport}
           />
         </main>
       </div>

@@ -44,6 +44,7 @@ import { QgisModule } from "@/components/hydronetwork/modules/QgisModule";
 import { PeerReviewModule } from "@/components/hydronetwork/modules/PeerReviewModule";
 import { BudgetCostModule } from "@/components/hydronetwork/modules/BudgetCostModule";
 import { BdiModule } from "@/components/hydronetwork/modules/BdiModule";
+import { RDOPlanningModule } from "@/components/hydronetwork/modules/RDOPlanningModule";
 // Shared state context - in a real app, use React Context or Zustand
 const useHydroState = () => {
   const [pontos, setPontos] = useState<PontoTopografico[]>([]);
@@ -133,10 +134,21 @@ const HydroNetwork = () => {
     try {
       const ext = file.name.split(".").pop()?.toLowerCase();
 
-      // DXF: direct parse (no tabular data)
+      // DXF: parse into rows and show field mapping
       if (ext === "dxf") {
-        const pts = await parseDxfFile(file);
-        processPoints(pts);
+        const text = await file.text();
+        const pts = parseDxfToPoints(text);
+        if (pts.length === 0) { toast.error("Nenhum ponto encontrado no DXF."); return; }
+        const headers = ["id", "x", "y", "cota", "layer"];
+        const rows = pts.map(p => ({ id: p.id, x: String(p.x), y: String(p.y), cota: String(p.cota), layer: (p as any).layer || "" }));
+        const fields: SourceField[] = headers.map(h => ({
+          name: h,
+          sampleValues: rows.slice(0, 3).map(r => String((r as any)[h] ?? "")),
+          type: ["x", "y", "cota"].includes(h) ? "number" as const : "text" as const,
+        }));
+        setDetectedFields(fields);
+        setPendingFileData({ rows, fileName: file.name });
+        setShowFieldMapping(true);
         return;
       }
 
@@ -190,9 +202,33 @@ const HydroNetwork = () => {
         return;
       }
 
-      // SHP, IFC, DWG: inform user
-      if (ext === "shp" || ext === "ifc" || ext === "dwg" || ext === "gpkg") {
-        toast.info(`Formato .${ext} detectado. Converta para CSV, DXF ou GeoJSON para importação.`);
+      // SHP, IFC, DWG, GPKG: try reading as text/binary and extract tabular attributes
+      if (ext === "shp" || ext === "ifc" || ext === "dwg" || ext === "gpkg" || ext === "geojson") {
+        if (ext === "geojson") {
+          const text = await file.text();
+          const geojson = JSON.parse(text);
+          const features = geojson.features || [];
+          if (features.length === 0) { toast.error("GeoJSON sem features."); return; }
+          const allProps = new Set<string>();
+          features.forEach((f: any) => { if (f.properties) Object.keys(f.properties).forEach(k => allProps.add(k)); });
+          allProps.add("_geom_x"); allProps.add("_geom_y"); allProps.add("_geom_z");
+          const headersList = Array.from(allProps);
+          const rows = features.map((f: any) => {
+            const row: Record<string, any> = { ...f.properties };
+            const coords = f.geometry?.coordinates || [];
+            row["_geom_x"] = String(coords[0] ?? ""); row["_geom_y"] = String(coords[1] ?? ""); row["_geom_z"] = String(coords[2] ?? "0");
+            return row;
+          });
+          const fields: SourceField[] = headersList.map(h => ({
+            name: h, sampleValues: rows.slice(0, 3).map((r: any) => String(r[h] ?? "")),
+            type: rows.slice(0, 5).every((r: any) => !isNaN(Number(r[h])) && r[h] !== "" && r[h] !== undefined) ? "number" as const : "text" as const,
+          }));
+          setDetectedFields(fields);
+          setPendingFileData({ rows, fileName: file.name });
+          setShowFieldMapping(true);
+          return;
+        }
+        toast.info(`Formato .${ext}: Converta para GeoJSON, CSV ou DXF usando QGIS para importar com mapeamento de campos.`);
         return;
       }
 
@@ -283,6 +319,8 @@ const HydroNetwork = () => {
         return <PeerReviewModule pontos={pontos} trechos={trechos} />;
       case "rdo":
         return <RDOHydroModule pontos={pontos} trechos={trechos} rdos={rdos} setRdos={setRdos} />;
+      case "rdo-planejamento":
+        return <RDOPlanningModule pontos={pontos} trechos={trechos} rdos={rdos} scheduleResult={scheduleResult} />;
       case "perfil":
         return <PerfilLongitudinal pontos={pontos} trechos={trechos} />;
       case "mapa":
@@ -638,8 +676,8 @@ const HydroNetwork = () => {
     drenagem: "Drenagem Pluvial", quantitativos: "Quantitativos", orcamento: "Orçamento e Custos",
     bdi: "BDI — Benefícios e Despesas Indiretas", planejamento: "Planejamento", epanet: "EPANET", "epanet-pro": "EPANET PRO",
     swmm: "SWMM", openproject: "OpenProject", projectlibre: "ProjectLibre", qgis: "QGIS",
-    revisao: "Revisão por Pares", rdo: "RDO", perfil: "Perfil Longitudinal",
-    mapa: "Mapa Interativo", exportacao: "Exportação GIS",
+    revisao: "Revisão por Pares", rdo: "RDO", "rdo-planejamento": "RDO × Planejamento",
+    perfil: "Perfil Longitudinal", mapa: "Mapa Interativo", exportacao: "Exportação GIS",
   };
 
   return (
