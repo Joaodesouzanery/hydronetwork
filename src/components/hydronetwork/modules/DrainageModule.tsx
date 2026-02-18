@@ -349,17 +349,15 @@ export const DrainageModule = ({ pontos }: DrainageModuleProps) => {
           )}
 
           {/* Interactive Node Map */}
-          {nodes.length > 0 && (
-            <NodeMapWidget
-              nodes={nodes.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cota, demanda: n.areaContrib }))}
-              connections={mapConnections}
-              onConnectionsChange={setMapConnections}
-              onNodeDemandChange={(nodeId, demanda) => setNodes(nodes.map(n => n.id === nodeId ? { ...n, areaContrib: demanda } : n))}
-              title="Mapa da Rede de Drenagem"
-              accentColor="#10b981"
-              editable
-            />
-          )}
+          <NodeMapWidget
+            nodes={nodes.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cota, demanda: n.areaContrib }))}
+            connections={mapConnections}
+            onConnectionsChange={setMapConnections}
+            onNodeDemandChange={(nodeId, demanda) => setNodes(nodes.map(n => n.id === nodeId ? { ...n, areaContrib: demanda } : n))}
+            title="Mapa da Rede de Drenagem"
+            accentColor="#10b981"
+            editable
+          />
 
           <Button onClick={calcularDrenagem} className="w-full"><Calculator className="h-4 w-4 mr-1" /> Calcular Drenagem</Button>
         </TabsContent>
