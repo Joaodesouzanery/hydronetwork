@@ -53,6 +53,8 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
     const tile = L.tileLayer(TILE_LAYERS.osm.url, { attribution: TILE_LAYERS.osm.attribution, maxZoom: 19 }).addTo(map);
     tileLayerRef.current = tile;
     mapRef.current = map;
+    setTimeout(() => map.invalidateSize(), 100);
+    setTimeout(() => map.invalidateSize(), 500);
     return () => { map.remove(); mapRef.current = null; };
   }, []);
 
@@ -92,6 +94,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    map.invalidateSize();
 
     markersRef.current.forEach(m => m.remove());
     polylinesRef.current.forEach(p => p.remove());

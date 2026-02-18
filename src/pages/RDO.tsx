@@ -11,12 +11,14 @@ import { Building2, MapPin, Camera, Cloud, Thermometer, Droplets, Wind, Plus, Ey
 import { toast } from "sonner";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeatherData } from "@/hooks/useWeatherData";
+import { AddProjectDialog } from "@/components/rdo/AddProjectDialog";
 
 const RDO = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
   const [obras, setObras] = useState<any[]>([]);
   const [selectedObra, setSelectedObra] = useState<string>("");
+  const [showAddProject, setShowAddProject] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [rdoData, setRdoData] = useState({
     data: new Date().toISOString().split('T')[0],
@@ -153,18 +155,23 @@ const RDO = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="obra">Obra *</Label>
-                      <Select value={selectedObra} onValueChange={setSelectedObra}>
-                        <SelectTrigger id="obra">
-                          <SelectValue placeholder="Selecione a obra" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {obras.map(obra => (
-                            <SelectItem key={obra.id} value={obra.id}>
-                              {obra.nome}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex gap-2">
+                        <Select value={selectedObra} onValueChange={setSelectedObra}>
+                          <SelectTrigger id="obra" className="flex-1">
+                            <SelectValue placeholder="Selecione a obra" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {obras.map(obra => (
+                              <SelectItem key={obra.id} value={obra.id}>
+                                {obra.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button type="button" variant="outline" size="icon" onClick={() => setShowAddProject(true)} title="Cadastrar nova obra">
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -338,6 +345,12 @@ const RDO = () => {
             </Card>
           </div>
         </div>
+
+        <AddProjectDialog
+          open={showAddProject}
+          onOpenChange={setShowAddProject}
+          onProjectCreated={loadObras}
+        />
       </main>
     </div>
   );
