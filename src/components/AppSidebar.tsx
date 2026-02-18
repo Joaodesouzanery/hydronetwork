@@ -3,7 +3,7 @@ import {
   Home, Palette, Upload, Droplets, CloudRain, FileSpreadsheet, Calculator,
   Calendar, Beaker, Waves, Layers, FileText, Map, Shield, ClipboardList,
   Plus, History, Image, AlertCircle, Archive, HeadphonesIcon, Settings,
-  BarChart3, ClipboardCheck, Activity, DollarSign
+  BarChart3, ClipboardCheck, Activity, DollarSign, Building2, Bell, Clock
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -18,6 +18,12 @@ import { Logo } from "@/components/shared/Logo";
 const dashboardItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
   { title: "Dashboard Personalizado", url: "/custom-dashboard", icon: Palette },
+  { title: "Projetos", url: "/projects", icon: Building2 },
+];
+
+const monitoringItems = [
+  { title: "Alertas", url: "/alerts", icon: Bell },
+  { title: "Atrasos de Projeto", url: "/project-delays", icon: Clock },
 ];
 
 const hydroModules = [
@@ -97,6 +103,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent>
         {renderSection("Menu Principal", dashboardItems)}
+        {renderSection("Monitoramento", monitoringItems)}
         {renderSection("HydroNetwork", hydroModules)}
         {renderSection("Diário de Obra", rdoItems)}
         {renderSection("Sistema", settingsItems, false)}

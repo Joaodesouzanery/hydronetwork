@@ -28,6 +28,9 @@ import Onboarding from "./pages/Onboarding";
 import HydroNetwork from "./pages/HydroNetwork";
 import HydroNetworkLanding from "./pages/HydroNetworkLanding";
 import ModulesCatalog from "./pages/ModulesCatalog";
+import Projects from "./pages/Projects";
+import ProjectHistory from "./pages/ProjectHistory";
+import ProjectDelays from "./pages/ProjectDelays";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +59,9 @@ const AppContent = () => {
         <Route path="/admin/metrics" element={<UserMetrics />} />
         <Route path="/backup" element={<Backup />} />
         <Route path="/support" element={<Support />} />
+        <Route path="/projects" element={<Projects />} />
+        <Route path="/projects/:id/history" element={<ProjectHistory />} />
+        <Route path="/project-delays" element={<ProjectDelays />} />
         <Route path="/hydronetwork" element={<HydroNetwork />} />
         <Route path="/hydronetwork/:module" element={<HydroNetwork />} />
         <Route path="/hydronetwork-landing" element={<HydroNetworkLanding />} />

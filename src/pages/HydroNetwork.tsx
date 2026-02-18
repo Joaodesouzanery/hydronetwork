@@ -17,6 +17,7 @@ import {
 import { useParams } from "react-router-dom";
 import { parseTopographyFile, parseTopographyCSV, validateTopographySequence, PontoTopografico } from "@/engine/reader";
 import { parseDxfFile, parseDxfToPoints } from "@/engine/dxfReader";
+import { FieldMappingDialog, SourceField, FieldMapping } from "@/components/hydronetwork/FieldMappingDialog";
 import { createTrechosFromTopography, summarizeNetwork, Trecho, NetworkSummary, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from "@/engine/domain";
 import { parseCostBaseFile, applyBudget, createBudgetSummary, exportBudgetExcel, BudgetRow, BudgetSummary, CostBase } from "@/engine/budget";
 import { criarParametrosExecucao, ParametrosExecucao, TipoSolo, TipoEscavacao, TipoPavimento, TipoMaterial } from "@/engine/construction";
@@ -86,6 +87,11 @@ const HydroNetwork = () => {
   const [teamConfig, setTeamConfig] = useState<TeamConfig>(DEFAULT_TEAM_CONFIG);
   const [dataInicio, setDataInicio] = useState(new Date().toISOString().split("T")[0]);
 
+  // Field mapping dialog state
+  const [showFieldMapping, setShowFieldMapping] = useState(false);
+  const [pendingFileData, setPendingFileData] = useState<{ rows: Record<string, any>[]; fileName: string } | null>(null);
+  const [detectedFields, setDetectedFields] = useState<SourceField[]>([]);
+
   const processPoints = useCallback((pts: PontoTopografico[]) => {
     validateTopographySequence(pts);
     setPontos(pts);
@@ -96,22 +102,103 @@ const HydroNetwork = () => {
     toast.success(`${pts.length} pontos carregados, ${segs.length} trechos criados.`);
   }, [diametroMm, material]);
 
+  const applyFieldMapping = useCallback((mappings: FieldMapping[]) => {
+    if (!pendingFileData) return;
+    const { rows } = pendingFileData;
+    const xField = mappings.find(m => m.targetField === "x")?.sourceField;
+    const yField = mappings.find(m => m.targetField === "y")?.sourceField;
+    const zField = mappings.find(m => m.targetField === "z_cota")?.sourceField || mappings.find(m => m.targetField === "elevation")?.sourceField;
+    const idField = mappings.find(m => m.targetField === "id")?.sourceField;
+
+    if (!xField || !yField) { toast.error("Campos X e Y são obrigatórios."); return; }
+
+    const pts: PontoTopografico[] = [];
+    rows.forEach((row, i) => {
+      const x = parseFloat(String(row[xField]));
+      const y = parseFloat(String(row[yField]));
+      const z = zField ? parseFloat(String(row[zField])) : 0;
+      if (isNaN(x) || isNaN(y)) return;
+      const id = idField ? String(row[idField] || `P${String(i + 1).padStart(3, "0")}`) : `P${String(i + 1).padStart(3, "0")}`;
+      pts.push({ id, x, y, cota: isNaN(z) ? 0 : z });
+    });
+
+    if (pts.length === 0) { toast.error("Nenhum ponto válido após mapeamento."); return; }
+    processPoints(pts);
+    setPendingFileData(null);
+  }, [pendingFileData, processPoints]);
+
   const handleTopographyUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
       const ext = file.name.split(".").pop()?.toLowerCase();
+
+      // DXF: direct parse (no tabular data)
       if (ext === "dxf") {
         const pts = await parseDxfFile(file);
         processPoints(pts);
-      } else if (ext === "txt" || ext === "csv") {
-        const text = await file.text();
-        const pts = parseTopographyCSV(text);
-        processPoints(pts);
-      } else {
-        const pts = await parseTopographyFile(file);
-        processPoints(pts);
+        return;
       }
+
+      // For CSV/TXT/XLSX/XLS: parse into rows then show field mapping
+      if (ext === "csv" || ext === "txt") {
+        const text = await file.text();
+        const lines = text.trim().split("\n").filter(l => l.trim());
+        if (lines.length < 2) { toast.error("Arquivo deve ter ao menos 2 linhas."); return; }
+        const delim = lines[0].includes("\t") ? "\t" : lines[0].includes(";") ? ";" : ",";
+        const headers = lines[0].split(delim).map(h => h.trim());
+        const isHeader = headers.some(h => isNaN(Number(h)) && h.length > 0);
+
+        if (isHeader) {
+          const rows = lines.slice(1).map(line => {
+            const parts = line.split(delim);
+            const row: Record<string, any> = {};
+            headers.forEach((h, idx) => { row[h] = parts[idx]?.trim() ?? ""; });
+            return row;
+          });
+          const fields: SourceField[] = headers.map(h => ({
+            name: h,
+            sampleValues: rows.slice(0, 3).map(r => String(r[h] ?? "")),
+            type: rows.slice(0, 5).every(r => !isNaN(Number(r[h])) && r[h] !== "") ? "number" : "text" as any,
+          }));
+          setDetectedFields(fields);
+          setPendingFileData({ rows, fileName: file.name });
+          setShowFieldMapping(true);
+        } else {
+          // No header, try direct parse
+          const pts = parseTopographyCSV(text);
+          processPoints(pts);
+        }
+        return;
+      }
+
+      if (ext === "xlsx" || ext === "xls") {
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
+        if (data.length === 0) { toast.error("Planilha vazia."); return; }
+        const headers = Object.keys(data[0]);
+        const fields: SourceField[] = headers.map(h => ({
+          name: h,
+          sampleValues: data.slice(0, 3).map(r => String(r[h] ?? "")),
+          type: data.slice(0, 5).every(r => !isNaN(Number(r[h])) && r[h] !== undefined) ? "number" : "text" as any,
+        }));
+        setDetectedFields(fields);
+        setPendingFileData({ rows: data, fileName: file.name });
+        setShowFieldMapping(true);
+        return;
+      }
+
+      // SHP, IFC, DWG: inform user
+      if (ext === "shp" || ext === "ifc" || ext === "dwg" || ext === "gpkg") {
+        toast.info(`Formato .${ext} detectado. Converta para CSV, DXF ou GeoJSON para importação.`);
+        return;
+      }
+
+      // Fallback
+      const pts = await parseTopographyFile(file);
+      processPoints(pts);
     } catch (err: any) { toast.error(err.message || "Erro ao processar arquivo."); }
   }, [processPoints]);
 
@@ -260,9 +347,9 @@ const HydroNetwork = () => {
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer">
                   <Upload className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground mb-2">Arraste ou clique para selecionar</p>
-                  <p className="text-xs text-muted-foreground mb-1">Aceita: CSV, TXT, XLSX, XLS, <strong>DXF</strong></p>
-                  <p className="text-xs text-muted-foreground mb-3">TXT com X,Y,Z (sem cabeçalho) ou DXF com entidades POINT/LINE</p>
-                  <Input type="file" accept=".csv,.txt,.xlsx,.xls,.dxf" onChange={handleTopographyUpload} className="mt-2" />
+                   <p className="text-xs text-muted-foreground mb-1">Aceita: CSV, TXT, XLSX, XLS, <strong>DXF</strong>, SHP, GeoJSON</p>
+                   <p className="text-xs text-muted-foreground mb-3">Ao importar CSV/XLSX, você poderá mapear manualmente quais colunas correspondem a X, Y, Z, ID, etc.</p>
+                   <Input type="file" accept=".csv,.txt,.xlsx,.xls,.dxf,.shp,.ifc,.dwg,.gpkg,.geojson" onChange={handleTopographyUpload} className="mt-2" />
                 </div>
               )}
               <div className="space-y-2">
@@ -403,39 +490,18 @@ const HydroNetwork = () => {
                 <Table>
                   <TableHeader>
                      <TableRow>
-                       <TableHead>
-                         <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Início <Info className="h-3 w-3" /></TooltipTrigger>
-                         <TooltipContent>ID do ponto de montante (origem)</TooltipContent></Tooltip></TooltipProvider>
-                       </TableHead>
-                       <TableHead>
-                         <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Fim <Info className="h-3 w-3" /></TooltipTrigger>
-                         <TooltipContent>ID do ponto de jusante (destino)</TooltipContent></Tooltip></TooltipProvider>
-                       </TableHead>
-                       <TableHead>
-                         <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Comp. <Info className="h-3 w-3" /></TooltipTrigger>
-                         <TooltipContent>Comprimento horizontal do trecho em metros</TooltipContent></Tooltip></TooltipProvider>
-                       </TableHead>
-                       <TableHead>
-                         <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Decliv. <Info className="h-3 w-3" /></TooltipTrigger>
-                         <TooltipContent>Declividade = (Cota início - Cota fim) / Comprimento. Positiva = gravidade, Negativa = recalque</TooltipContent></Tooltip></TooltipProvider>
-                       </TableHead>
-                       <TableHead>
-                         <TooltipProvider><Tooltip><TooltipTrigger className="flex items-center gap-1">Desnível <Info className="h-3 w-3" /></TooltipTrigger>
-                         <TooltipContent>Diferença de cota entre início e fim (metros)</TooltipContent></Tooltip></TooltipProvider>
-                       </TableHead>
+                       <TableHead>Início</TableHead>
+                       <TableHead>Fim</TableHead>
+                       <TableHead>Comp.</TableHead>
+                       <TableHead>Decliv.</TableHead>
+                       <TableHead>Desnível</TableHead>
                        <TableHead>Material</TableHead>
                      </TableRow>
                   </TableHeader>
                   <TableBody>{trechos.map((t, i) => (
                      <TableRow key={i}>
-                       <TableCell>
-                         <TooltipProvider><Tooltip><TooltipTrigger className="font-medium cursor-help">{t.idInicio}</TooltipTrigger>
-                         <TooltipContent><p className="text-xs">X: {t.xInicio.toFixed(3)}<br/>Y: {t.yInicio.toFixed(3)}<br/>Cota: {t.cotaInicio.toFixed(3)}m</p></TooltipContent></Tooltip></TooltipProvider>
-                       </TableCell>
-                       <TableCell>
-                         <TooltipProvider><Tooltip><TooltipTrigger className="font-medium cursor-help">{t.idFim}</TooltipTrigger>
-                         <TooltipContent><p className="text-xs">X: {t.xFim.toFixed(3)}<br/>Y: {t.yFim.toFixed(3)}<br/>Cota: {t.cotaFim.toFixed(3)}m</p></TooltipContent></Tooltip></TooltipProvider>
-                       </TableCell>
+                       <TableCell className="font-medium">{t.idInicio}</TableCell>
+                       <TableCell className="font-medium">{t.idFim}</TableCell>
                        <TableCell>{fmt(t.comprimento, 2)}m</TableCell>
                        <TableCell className={t.declividade < 0 ? "text-destructive font-medium" : ""}>{(t.declividade * 100).toFixed(2)}%</TableCell>
                        <TableCell className={t.cotaInicio - t.cotaFim < 0 ? "text-destructive" : "text-green-600"}>
@@ -492,6 +558,16 @@ const HydroNetwork = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* Field Mapping Dialog */}
+        <FieldMappingDialog
+          open={showFieldMapping}
+          onOpenChange={setShowFieldMapping}
+          sourceFields={detectedFields}
+          fileName={pendingFileData?.fileName || ""}
+          rowCount={pendingFileData?.rows.length || 0}
+          onConfirm={applyFieldMapping}
+        />
       </div>
     );
   }
@@ -501,12 +577,7 @@ const HydroNetwork = () => {
     return <BudgetCostModule trechos={trechos} pontos={pontos} />;
   }
 
-  // PlanejamentoModule is now handled by PlanningModule component
-
-  // RDO Module is now handled by RDOHydroModule component
-
-  // ── PLACEHOLDER MODULES ──
-  // PerfilLongitudinalModule now handled by PerfilLongitudinal component
+  // ... keep existing code
 
   function MapaInterativoModule() {
     return (
