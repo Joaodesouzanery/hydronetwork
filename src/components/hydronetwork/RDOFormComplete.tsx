@@ -18,10 +18,11 @@ type ClimaCond = "bom" | "nublado" | "chuva" | "impraticavel";
 interface RDOFormCompleteProps {
   rdos: RDO[];
   setRdos: (rdos: RDO[]) => void;
+  trechos?: import("@/engine/domain").Trecho[];
   onComplete: () => void;
 }
 
-export const RDOFormComplete = ({ rdos, setRdos, onComplete }: RDOFormCompleteProps) => {
+export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDOFormCompleteProps) => {
   const [form, setForm] = useState({
     date: new Date().toISOString().split("T")[0],
     projectName: "",
@@ -277,10 +278,34 @@ export const RDOFormComplete = ({ rdos, setRdos, onComplete }: RDOFormCompletePr
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>📏 6. Avanço por Trecho</CardTitle>
-          <Button size="sm" variant="outline" onClick={addSegment}><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={addSegment}><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
+            {trechos.length > 0 && form.segments.length === 0 && (
+              <Button size="sm" variant="secondary" onClick={() => {
+                const segs: SegmentProgress[] = trechos.map(t => ({
+                  id: generateId(),
+                  segmentName: `${t.idInicio}-${t.idFim}`,
+                  system: "esgoto" as SystemType,
+                  plannedTotal: t.comprimento,
+                  executedBefore: 0,
+                  executedToday: 0,
+                }));
+                setForm(p => ({ ...p, segments: segs }));
+                toast.success(`${segs.length} trechos carregados da rede!`);
+              }}>
+                <Plus className="h-4 w-4 mr-1" /> Carregar da Rede ({trechos.length} trechos)
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          {form.segments.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Nenhum trecho adicionado.</p>}
+          {form.segments.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              {trechos.length > 0
+                ? 'Clique em "Carregar da Rede" para preencher automaticamente os trechos, ou adicione manualmente.'
+                : "Nenhum trecho adicionado. Crie trechos na Topografia primeiro para auto-preencher."}
+            </p>
+          )}
           {form.segments.map((seg, idx) => (
             <div key={seg.id} className="grid grid-cols-6 gap-2 items-end">
               <Input placeholder="Trecho" value={seg.segmentName}

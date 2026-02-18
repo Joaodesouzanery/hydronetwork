@@ -194,6 +194,23 @@ export const RDOPlanningModule = ({ pontos, trechos, rdos, scheduleResult }: RDO
         </Card>
       )}
 
+      {rdos.length === 0 && (
+        <Card className="border-blue-300 bg-blue-50 dark:bg-blue-950/20">
+          <CardContent className="pt-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              <p className="text-sm font-medium">Como alimentar o "Executado" e "Progresso"?</p>
+            </div>
+            <ol className="text-sm text-muted-foreground list-decimal list-inside space-y-1 ml-7">
+              <li>Acesse o módulo <strong>RDO Hydro</strong> e clique em <strong>"Novo RDO"</strong></li>
+              <li>Na seção <strong>"Avanço por Trecho"</strong>, clique em <strong>"Carregar da Rede"</strong> para preencher os trechos automaticamente</li>
+              <li>Preencha o campo <strong>"Exec. Hoje"</strong> com os metros executados no dia</li>
+              <li>Salve o RDO — os dados aparecem aqui automaticamente</li>
+            </ol>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Dashboard */}
       {view === "dashboard" && (
         <div className="space-y-4">

@@ -558,7 +558,7 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos }: RDOHydroModul
       {view === "map" && <RDOProgressMap pontos={pontos} trechos={trechos} rdos={rdos} />}
 
       {/* NEW RDO FORM */}
-      {view === "new" && <RDOFormComplete rdos={rdos} setRdos={setRdos} onComplete={() => setView("list")} />}
+      {view === "new" && <RDOFormComplete rdos={rdos} setRdos={setRdos} trechos={trechos} onComplete={() => setView("list")} />}
     </div>
   );
 };
