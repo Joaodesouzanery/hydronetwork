@@ -77,6 +77,7 @@ export const NodeMapWidget = ({
   const [localConnections, setLocalConnections] = useState<ConnectionData[]>(connections);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [editDemanda, setEditDemanda] = useState<number>(0);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => { setLocalConnections(connections); }, [connections]);
 
@@ -84,17 +85,40 @@ export const NodeMapWidget = ({
     return getMapCoordinates(x, y);
   }, []);
 
-  // Init map
+  // Init map - always create even if no nodes
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const map = L.map(containerRef.current, { zoomControl: false }).setView([-23.55, -46.63], 14);
     const tile = L.tileLayer(TILE_LAYERS.osm.url, { attribution: TILE_LAYERS.osm.attribution, maxZoom: 19 }).addTo(map);
     tileLayerRef.current = tile;
     mapRef.current = map;
-    // Fix Leaflet rendering in dynamic containers
-    setTimeout(() => map.invalidateSize(), 100);
-    setTimeout(() => map.invalidateSize(), 500);
-    return () => { map.remove(); mapRef.current = null; };
+    
+    // Aggressive invalidateSize for dynamic containers/tabs
+    const doInvalidate = () => {
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
+    };
+    setTimeout(doInvalidate, 100);
+    setTimeout(doInvalidate, 300);
+    setTimeout(doInvalidate, 600);
+    setTimeout(doInvalidate, 1000);
+    setTimeout(doInvalidate, 2000);
+    
+    // ResizeObserver for container visibility changes
+    const observer = new ResizeObserver(() => {
+      setTimeout(doInvalidate, 50);
+    });
+    observer.observe(containerRef.current);
+    
+    setMapReady(true);
+    
+    return () => {
+      observer.disconnect();
+      map.remove();
+      mapRef.current = null;
+      setMapReady(false);
+    };
   }, []);
 
   // Change tile layer
@@ -155,8 +179,11 @@ export const NodeMapWidget = ({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    
     // Ensure map renders properly
     map.invalidateSize();
+    
+    // Clear previous markers and lines
     markersRef.current.forEach(m => m.remove());
     linesRef.current.forEach(l => l.remove());
     markersRef.current = [];
@@ -167,6 +194,10 @@ export const NodeMapWidget = ({
 
     nodes.forEach((n, idx) => {
       const coords = getCoords(n.x, n.y);
+      
+      // Validate coordinates
+      if (!isFinite(coords[0]) || !isFinite(coords[1])) return;
+      
       bounds.push(coords);
       let color = accentColor;
       if (idx === 0) color = "#22c55e";
@@ -183,6 +214,7 @@ export const NodeMapWidget = ({
       marker.bindPopup(`
         <div style="font-family:sans-serif;min-width:150px;">
           <strong style="font-size:13px;">${n.id}</strong>
+          ${n.label ? `<br><em style="font-size:11px;color:#888;">${n.label}</em>` : ""}
           <hr style="margin:4px 0;border-color:#e2e8f0;">
           <div style="font-size:11px;line-height:1.5;">
             <b>X:</b> ${n.x.toFixed(3)}<br>
@@ -201,7 +233,11 @@ export const NodeMapWidget = ({
       const from = nodes.find(n => n.id === c.from);
       const to = nodes.find(n => n.id === c.to);
       if (!from || !to) return;
-      const line = L.polyline([getCoords(from.x, from.y), getCoords(to.x, to.y)], {
+      const fromCoords = getCoords(from.x, from.y);
+      const toCoords = getCoords(to.x, to.y);
+      if (!isFinite(fromCoords[0]) || !isFinite(toCoords[0])) return;
+      
+      const line = L.polyline([fromCoords, toCoords], {
         color: c.color || accentColor, weight: 3, opacity: 0.8,
       }).addTo(map);
       if (c.label) line.bindPopup(`<b>${c.label}</b>`);
@@ -209,9 +245,15 @@ export const NodeMapWidget = ({
     });
 
     if (bounds.length > 0) {
-      map.fitBounds(L.latLngBounds(bounds), { padding: [25, 25] });
+      try {
+        map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30], maxZoom: 18 });
+      } catch (e) {
+        // Fallback if bounds are invalid
+        map.setView(bounds[0] as L.LatLngExpression, 15);
+      }
       // Ensure tiles load after bounds change
       setTimeout(() => map.invalidateSize(), 200);
+      setTimeout(() => map.invalidateSize(), 500);
     }
   }, [nodes, localConnections, getCoords, accentColor, handleNodeClickInternal, selectedNode, linkMode, linkOrigin]);
 
@@ -231,16 +273,16 @@ export const NodeMapWidget = ({
   };
 
   const handleClearMap = () => {
+    if (!confirm("Limpar todas as conexões do mapa? (Os pontos/nós serão mantidos)")) return;
     setLocalConnections([]);
     onConnectionsChange?.([]);
     setLinkOrigin(null);
     setLinkMode(false);
     setSelectedNode(null);
-    markersRef.current.forEach(m => m.remove());
+    // Only clear polylines, NOT markers (nodes stay visible)
     linesRef.current.forEach(l => l.remove());
-    markersRef.current = [];
     linesRef.current = [];
-    toast.success("Mapa limpo (conexões removidas).");
+    toast.success("Conexões do mapa limpas (nós mantidos).");
   };
 
   const handleSaveDemand = () => {
@@ -258,8 +300,6 @@ export const NodeMapWidget = ({
     else toast.info("Modo ligar pontos desativado.");
   };
 
-  if (nodes.length === 0) return null;
-
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -273,8 +313,10 @@ export const NodeMapWidget = ({
         <div className="flex gap-1.5 flex-wrap items-center">
           <Button size="sm" variant="outline" onClick={() => {
             if (nodes.length === 0) return;
-            const bounds = nodes.map(n => getCoords(n.x, n.y));
-            mapRef.current?.fitBounds(L.latLngBounds(bounds), { padding: [25, 25] });
+            const bounds = nodes.map(n => getCoords(n.x, n.y)).filter(c => isFinite(c[0]) && isFinite(c[1]));
+            if (bounds.length > 0) {
+              mapRef.current?.fitBounds(L.latLngBounds(bounds), { padding: [25, 25], maxZoom: 18 });
+            }
           }}>
             <Maximize className="h-3 w-3 mr-1" /> Ajustar
           </Button>
@@ -325,8 +367,14 @@ export const NodeMapWidget = ({
           </div>
         )}
 
-        {/* Map */}
+        {/* Map - always render the container */}
         <div ref={containerRef} className="w-full rounded-lg border border-border overflow-hidden" style={{ height }} />
+
+        {nodes.length === 0 && (
+          <div className="text-center text-sm text-muted-foreground py-2">
+            Carregue ou adicione nós para visualizar no mapa
+          </div>
+        )}
 
         {/* Selected node editor */}
         {editable && selectedNode && onNodeDemandChange && !linkMode && (

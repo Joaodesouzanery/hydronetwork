@@ -78,12 +78,12 @@ const EXAMPLE_PIPES: Pipe[] = [
 ];
 const EXAMPLE_PUMPS: Pump[] = [{ id: "B1", node1: "T1", node2: "J6", power: 15 }];
 const EXAMPLE_COORDS: Coord[] = [
-  { id: "R1", x: 0, y: 200 }, { id: "T1", x: 100, y: 300 },
-  { id: "J1", x: 100, y: 200 }, { id: "J2", x: 200, y: 200 },
-  { id: "J3", x: 300, y: 200 }, { id: "J4", x: 400, y: 200 },
-  { id: "J5", x: 500, y: 200 }, { id: "J6", x: 100, y: 100 },
-  { id: "J7", x: 200, y: 100 }, { id: "J8", x: 300, y: 100 },
-  { id: "J9", x: 500, y: 100 }, { id: "J10", x: 600, y: 100 },
+  { id: "R1", x: 0, y: 400 }, { id: "T1", x: 150, y: 500 },
+  { id: "J1", x: 150, y: 350 }, { id: "J2", x: 350, y: 350 },
+  { id: "J3", x: 550, y: 350 }, { id: "J4", x: 700, y: 450 },
+  { id: "J5", x: 850, y: 350 }, { id: "J6", x: 150, y: 100 },
+  { id: "J7", x: 400, y: 100 }, { id: "J8", x: 600, y: 50 },
+  { id: "J9", x: 850, y: 150 }, { id: "J10", x: 1000, y: 100 },
 ];
 
 const DEMAND_PATTERNS: Record<string, number[]> = {
@@ -406,7 +406,11 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
       const j = junctions.find(jj => jj.id === c.id);
       const r = reservoirs.find(rr => rr.id === c.id);
       const t = tanks.find(tt => tt.id === c.id);
-      return { id: c.id, x: c.x * 1000 + 350000, y: c.y * 1000 + 7400000, cota: j?.elevation ?? r?.head ?? t?.elevation ?? 0, demanda: j?.demand ?? 0, label: r ? "Reservatório" : t ? "Tanque" : "Junção" };
+      // Check if coords are already large (UTM from topography import) or small (relative EPANET coords)
+      const isLargeCoords = Math.abs(c.x) > 1000 || Math.abs(c.y) > 100000;
+      const x = isLargeCoords ? c.x : c.x * 10 + 350000;
+      const y = isLargeCoords ? c.y : c.y * 10 + 7400000;
+      return { id: c.id, x, y, cota: j?.elevation ?? r?.head ?? t?.elevation ?? 0, demanda: j?.demand ?? 0, label: r ? "Reservatório" : t ? "Tanque" : "Junção" };
     });
   }, [coords, junctions, reservoirs, tanks]);
 
@@ -459,7 +463,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
             <Button variant="outline" onClick={() => {
               if (topoPontos.length === 0 || topoTrechos.length === 0) { toast.error("Carregue dados na Topografia primeiro"); return; }
               const newJunctions: Junction[] = topoPontos.map(p => ({ id: p.id, elevation: p.cota, demand: 1.0, pattern: "Residencial" }));
-              const newCoords: Coord[] = topoPontos.map(p => ({ id: p.id, x: p.x / 1000, y: p.y / 1000 }));
+              const newCoords: Coord[] = topoPontos.map(p => ({ id: p.id, x: p.x, y: p.y }));
               const newPipes: Pipe[] = topoTrechos.map((t, i) => ({ id: `P${i + 1}`, node1: t.idInicio, node2: t.idFim, length: t.comprimento, diameter: t.diametroMm, roughness: 130, material: t.material, status: "Aberto" }));
               setJunctions(newJunctions); setReservoirs([]); setTanks([]); setPipes(newPipes); setPumps([]); setValves([]); setCoords(newCoords);
               setResults(null); rebuildMapConnections(newPipes, [], []);

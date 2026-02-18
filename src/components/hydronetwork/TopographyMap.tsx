@@ -197,10 +197,10 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
     if (!confirm("Limpar trechos e conexões do mapa? (Os pontos da topografia serão mantidos)")) return;
     // Only clear trechos/connections, NOT topography points
     onTrechosChange?.([]);
-    // Clear markers/polylines from the map immediately
+    // Clear only polylines from the map, keep markers
     polylinesRef.current.forEach(p => p.remove());
     polylinesRef.current = [];
-    toast.success("Trechos do mapa limpos.");
+    toast.success("Trechos do mapa limpos. Pontos mantidos.");
   };
 
   const toggleDrawMode = () => {
