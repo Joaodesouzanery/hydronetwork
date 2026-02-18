@@ -9,7 +9,8 @@ import {
   Globe, Cpu, LineChart, Layers, Clock, Star, Play, ChevronDown,
   Workflow, Gauge, Ruler, Upload, Settings2, GitBranch, CloudRain,
   Beaker, Waves, FileSpreadsheet, Activity, Eye, Calculator, Calendar,
-  Lock, Smartphone, Monitor, Server, ExternalLink, AlertTriangle, Lightbulb
+  Lock, Smartphone, Monitor, Server, ExternalLink, AlertTriangle, Lightbulb,
+  Linkedin, MessageSquare, Send
 } from "lucide-react";
 import { ContactDialog } from "@/components/ContactDialog";
 import { FAQ } from "@/components/FAQ";
@@ -22,6 +23,8 @@ const Hero = () => {
   const [dialogDismissed, setDialogDismissed] = useState(false);
   const [activeModule, setActiveModule] = useState(0);
   const [visibleSections, setVisibleSections] = useState<Set<string>>(new Set());
+  const [suggestionText, setSuggestionText] = useState("");
+  const [suggestionSent, setSuggestionSent] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowContactDialog(true), 8000);
@@ -122,6 +125,14 @@ const Hero = () => {
           <div className="flex items-center gap-3">
             <Logo size="md" />
             <span className="text-xs sm:text-sm font-bold text-primary hidden sm:inline">| HydroNetwork</span>
+            <div className="flex items-center gap-1 ml-2 border-l border-border/50 pl-2">
+              <a href="https://www.linkedin.com/company/construdatasoftware" target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-md hover:bg-muted transition-colors" title="LinkedIn">
+                <Linkedin className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors" />
+              </a>
+              <a href="mailto:construdata.contato@gmail.com" className="p-1.5 rounded-md hover:bg-muted transition-colors" title="Email">
+                <Mail className="w-4 h-4 text-muted-foreground hover:text-primary transition-colors" />
+              </a>
+            </div>
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
             <a href="#problemas" className="hover:text-foreground transition-colors">Soluções</a>
@@ -142,9 +153,9 @@ const Hero = () => {
       {/* ═══════════════ HERO ═══════════════ */}
       <section className="relative min-h-screen flex items-center pt-16 overflow-hidden">
         <div className="absolute inset-0">
-          <img src={heroSaneamento} alt="" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[hsl(222,47%,8%)] via-[hsl(222,47%,8%)/0.92] to-[hsl(222,47%,8%)/0.5]" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[hsl(222,47%,8%)] via-transparent to-[hsl(222,47%,8%)/0.4]" />
+          <img src={heroSaneamento} alt="" className="w-full h-full object-cover opacity-30" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[hsl(222,47%,6%)] via-[hsl(222,47%,6%)/0.97] to-[hsl(222,47%,6%)/0.85]" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[hsl(222,47%,6%)] via-[hsl(222,47%,6%)/0.6] to-[hsl(222,47%,6%)/0.8]" />
         </div>
 
         <div className="container mx-auto px-4 z-10 py-12 md:py-0">
@@ -528,6 +539,52 @@ const Hero = () => {
               <Button variant="outline" className="border-secondary/50 text-secondary hover:bg-secondary/10" onClick={() => navigate('/modules')}>
                 Ver Catálogo Completo <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════ SUGGESTION FORM ═══════════════ */}
+      <section className="py-20 bg-background">
+        <div className="container mx-auto px-4">
+          <div className="max-w-2xl mx-auto">
+            <div className="p-8 rounded-2xl border border-primary/20 bg-primary/5 text-center space-y-6">
+              <div className="w-14 h-14 rounded-full bg-primary/15 flex items-center justify-center mx-auto">
+                <Lightbulb className="w-7 h-7 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-2xl md:text-3xl font-black mb-2">
+                  Tem uma ideia de funcionalidade?
+                </h2>
+                <p className="text-muted-foreground">
+                  Tem alguma funcionalidade ou sistema que, se tivesse, otimizaria muito sua operação e seu tempo?{" "}
+                  <strong className="text-foreground">Conte pra gente e podemos criar pra você!</strong>
+                </p>
+              </div>
+              {suggestionSent ? (
+                <div className="flex items-center gap-2 justify-center text-emerald-600 font-bold">
+                  <Check className="w-5 h-5" /> Obrigado! Sua sugestão foi enviada com sucesso.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <textarea
+                    value={suggestionText}
+                    onChange={(e) => setSuggestionText(e.target.value)}
+                    placeholder="Descreva a funcionalidade que você gostaria de ter..."
+                    className="w-full p-4 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground resize-none h-28 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <Button
+                    className="w-full sm:w-auto px-8"
+                    disabled={!suggestionText.trim()}
+                    onClick={() => {
+                      window.open(`mailto:construdata.contato@gmail.com?subject=Sugestão de Funcionalidade&body=${encodeURIComponent(suggestionText)}`, '_blank');
+                      setSuggestionSent(true);
+                    }}
+                  >
+                    <Send className="w-4 h-4 mr-2" /> Enviar Sugestão
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>
