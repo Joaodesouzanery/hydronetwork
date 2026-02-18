@@ -3879,6 +3879,51 @@ export type Database = {
         }
         Relationships: []
       }
+      user_feedback: {
+        Row: {
+          created_at: string
+          emoji_rating: string | null
+          feedback_type: string
+          id: string
+          module_context: string | null
+          page_context: string | null
+          question: string | null
+          rating: number | null
+          screenshot_url: string | null
+          text_response: string | null
+          trigger_event: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          emoji_rating?: string | null
+          feedback_type?: string
+          id?: string
+          module_context?: string | null
+          page_context?: string | null
+          question?: string | null
+          rating?: number | null
+          screenshot_url?: string | null
+          text_response?: string | null
+          trigger_event?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          emoji_rating?: string | null
+          feedback_type?: string
+          id?: string
+          module_context?: string | null
+          page_context?: string | null
+          question?: string | null
+          rating?: number | null
+          screenshot_url?: string | null
+          text_response?: string | null
+          trigger_event?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_profiles: {
         Row: {
           company_name: string | null
@@ -3988,6 +4033,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_survey_tracker: {
+        Row: {
+          id: string
+          last_shown_at: string
+          show_count: number
+          survey_type: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          last_shown_at?: string
+          show_count?: number
+          survey_type: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          last_shown_at?: string
+          show_count?: number
+          survey_type?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       validacoes_clt: {
         Row: {
