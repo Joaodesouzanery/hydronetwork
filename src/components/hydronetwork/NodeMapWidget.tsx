@@ -91,6 +91,9 @@ export const NodeMapWidget = ({
     const tile = L.tileLayer(TILE_LAYERS.osm.url, { attribution: TILE_LAYERS.osm.attribution, maxZoom: 19 }).addTo(map);
     tileLayerRef.current = tile;
     mapRef.current = map;
+    // Fix Leaflet rendering in dynamic containers
+    setTimeout(() => map.invalidateSize(), 100);
+    setTimeout(() => map.invalidateSize(), 500);
     return () => { map.remove(); mapRef.current = null; };
   }, []);
 
@@ -152,6 +155,8 @@ export const NodeMapWidget = ({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    // Ensure map renders properly
+    map.invalidateSize();
     markersRef.current.forEach(m => m.remove());
     linesRef.current.forEach(l => l.remove());
     markersRef.current = [];
@@ -203,7 +208,11 @@ export const NodeMapWidget = ({
       linesRef.current.push(line);
     });
 
-    if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { padding: [25, 25] });
+    if (bounds.length > 0) {
+      map.fitBounds(L.latLngBounds(bounds), { padding: [25, 25] });
+      // Ensure tiles load after bounds change
+      setTimeout(() => map.invalidateSize(), 200);
+    }
   }, [nodes, localConnections, getCoords, accentColor, handleNodeClickInternal, selectedNode, linkMode, linkOrigin]);
 
   const handleUndo = () => {
@@ -212,6 +221,13 @@ export const NodeMapWidget = ({
     setLocalConnections(updated);
     onConnectionsChange?.(updated);
     toast.info("Última conexão removida.");
+  };
+
+  const handleDeleteConnection = (from: string, to: string) => {
+    const updated = localConnections.filter(c => !(c.from === from && c.to === to));
+    setLocalConnections(updated);
+    onConnectionsChange?.(updated);
+    toast.info(`Conexão ${from} → ${to} removida.`);
   };
 
   const handleClearMap = () => {
@@ -323,6 +339,23 @@ export const NodeMapWidget = ({
             <Button size="sm" variant="outline" className="h-7" onClick={handleSaveDemand}>
               <Save className="h-3 w-3 mr-1" /> Salvar
             </Button>
+          </div>
+        )}
+
+        {/* Connections list - editable */}
+        {editable && localConnections.length > 0 && (
+          <div className="max-h-32 overflow-auto border border-border rounded-lg p-2">
+            <p className="text-xs font-medium mb-1">Conexões ({localConnections.length})</p>
+            <div className="space-y-1">
+              {localConnections.map((c, i) => (
+                <div key={i} className="flex items-center justify-between text-xs bg-muted/30 rounded px-2 py-1">
+                  <span>{c.from} → {c.to}</span>
+                  <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => handleDeleteConnection(c.from, c.to)}>
+                    <Trash2 className="h-3 w-3 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

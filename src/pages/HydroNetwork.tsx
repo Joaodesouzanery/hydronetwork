@@ -213,6 +213,29 @@ const HydroNetwork = () => {
   function TopografiaModule() {
     return (
       <div className="space-y-4">
+        {/* Header */}
+        <Card className="border-l-4 border-l-blue-500 bg-gradient-to-r from-blue-50/50 to-transparent dark:from-blue-950/20">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-blue-600" /> Levantamento Topográfico
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Importe pontos topográficos (CSV, TXT, XLSX, DXF) e visualize no mapa interativo
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {pontos.length > 0 && (
+                  <>
+                    <Badge className="bg-blue-600">{pontos.length} pontos</Badge>
+                    <Badge variant="secondary">{trechos.length} trechos</Badge>
+                  </>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
             <CardHeader>
