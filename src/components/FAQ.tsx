@@ -7,53 +7,53 @@ import {
 
 const faqs = [
   {
-    question: "O que é o ConstruData?",
-    answer: "O ConstruData é um sistema completo de gestão de obras e manutenção predial. Ele centraliza todas as operações em uma única plataforma: controle de produção, RDO digital, gestão de materiais, equipes, QR Codes para manutenção, alertas automáticos e muito mais."
+    question: "Preciso instalar alguma coisa?",
+    answer: "Não! O HydroNetwork é 100% online. Funciona diretamente no navegador — sem instalação, sem plugins, sem licenças. Acesse de qualquer dispositivo com internet."
   },
   {
-    question: "Preciso instalar algum software?",
-    answer: "Não! O ConstruData é 100% online e funciona diretamente no navegador. Acesse de qualquer dispositivo — computador, tablet ou celular — sem precisar instalar nada. Seus dados ficam salvos na nuvem com segurança."
+    question: "Funciona para esgoto, água E drenagem?",
+    answer: "Sim! Temos módulos dedicados para cada tipo de rede: esgoto por gravidade (NBR 9649), distribuição de água pressurizada (NBR 12211/12218) e drenagem pluvial (NBR 10844), com motores de cálculo específicos."
   },
   {
-    question: "Como funciona a gestão de equipes no campo?",
-    answer: "As equipes de campo podem registrar produção, materiais utilizados e ocorrências diretamente pelo celular. Os registros incluem fotos, localização GPS e horário automático. Tudo aparece em tempo real no dashboard do gestor."
+    question: "Posso exportar para o QGIS e AutoCAD?",
+    answer: "Sim! Exportamos para Shapefile, GeoJSON, GeoPackage, DXF, KML/KMZ e mais. Totalmente compatível com QGIS, AutoCAD, Google Earth e outros softwares GIS."
   },
   {
-    question: "O sistema funciona offline?",
-    answer: "O sistema requer conexão com a internet para sincronizar dados em tempo real. No entanto, a interface é otimizada para funcionar bem mesmo com conexões lentas."
+    question: "Quanto custa?",
+    answer: "O HydroNetwork possui um plano DEMO gratuito para começar sem compromisso. Sem cartão de crédito, sem cadastro obrigatório. Acesse agora e comece a projetar."
   },
   {
-    question: "Como funciona o QR Code para manutenção?",
-    answer: "Você pode gerar QR Codes para cada ativo ou local do seu empreendimento. Quando alguém precisa reportar um problema, basta escanear o QR Code e preencher um formulário simples. O chamado chega automaticamente para a equipe responsável."
+    question: "E se eu já tenho dados em planilha?",
+    answer: "Perfeito! Importamos CSV, TXT, XLSX e XLS com mapeamento de campos inteligente. Até dados sem cabeçalho (X, Y, Z) são processados automaticamente. Também suportamos DXF, SHP e GeoJSON."
   },
   {
-    question: "Posso importar dados de planilhas?",
-    answer: "Sim! O ConstruData permite importar funcionários, materiais e outros dados a partir de planilhas Excel. Isso facilita a migração e acelera a configuração inicial."
+    question: "Como funciona o suporte?",
+    answer: "Oferecemos suporte por email (construdata.contato@gmail.com) e demonstrações personalizadas via Calendly. Nossa equipe de engenheiros está pronta para ajudar na implementação."
   },
   {
-    question: "Quantos usuários posso ter?",
-    answer: "Usuários ilimitados! Você pode cadastrar quantos funcionários, gestores e equipes precisar, sem custos adicionais por usuário."
+    question: "Meus dados estão seguros?",
+    answer: "Sim! Utilizamos criptografia de ponta a ponta, backups automáticos e infraestrutura em nuvem com alta disponibilidade. Seus projetos e dados estão sempre protegidos."
   },
   {
-    question: "Os dados são seguros?",
-    answer: "Sim! Utilizamos criptografia de ponta a ponta, backups automáticos diários e conformidade total com a LGPD. Seus dados e dos seus clientes estão sempre protegidos."
+    question: "Posso colaborar com minha equipe?",
+    answer: "Sim! Múltiplos usuários podem acessar o mesmo projeto. Equipes de campo registram produção e ocorrências pelo celular, enquanto gestores acompanham tudo pelo dashboard."
   },
   {
-    question: "Como funciona a implementação?",
-    answer: "A implementação é feita em etapas e acompanhada pela nossa equipe. Configuramos seu ambiente, importamos seus dados e treinamos sua equipe. Em até 7 dias você já está operando com resultados reais."
+    question: "Há limites de uso no plano gratuito?",
+    answer: "O plano DEMO oferece acesso a todos os módulos para que você conheça a plataforma. Para projetos profissionais com capacidade ilimitada, oferecemos o plano PRO."
   },
   {
-    question: "Posso testar antes de contratar?",
-    answer: "Sim! Oferecemos demonstração gratuita e período de teste. Agende uma reunião para conhecer o sistema na prática e ver como ele resolve os problemas específicos da sua operação."
+    question: "O sistema gera relatórios automáticos?",
+    answer: "Sim! Gera RDOs completos, relatórios de produção, orçamentos SINAPI, quantitativos, perfis longitudinais e muito mais. Todos exportáveis em PDF, Excel e outros formatos."
   },
   {
-    question: "É possível gerar relatórios automáticos?",
-    answer: "Sim! O sistema gera RDOs completos, relatórios de produção, consumo de materiais, histórico de manutenção e muito mais. Todos podem ser exportados em PDF para enviar ao cliente."
+    question: "Como funciona a simulação EPANET?",
+    answer: "O HydroNetwork integra o motor EPANET via WebAssembly diretamente no navegador. Você importa ou cria sua rede, executa a simulação e visualiza resultados de pressão e vazão — sem instalar o EPANET."
   },
   {
-    question: "O sistema envia alertas automáticos?",
-    answer: "Sim! Você configura alertas para produção abaixo da meta, materiais em falta, chamados de manutenção pendentes e outros eventos importantes. Os alertas chegam por e-mail e aparecem no dashboard."
-  }
+    question: "Posso importar arquivos DXF do AutoCAD?",
+    answer: "Sim! Importamos arquivos DXF com entidades POINT, LINE e POLYLINE. Os dados são automaticamente convertidos em pontos topográficos com coordenadas X, Y e Z para uso em todos os módulos."
+  },
 ];
 
 export function FAQ() {
@@ -62,10 +62,10 @@ export function FAQ() {
       <div className="container mx-auto px-4">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-center mb-4">
-            Perguntas Frequentes
+            Dúvidas Respondidas: Tudo o que Você Precisa Saber
           </h2>
           <p className="text-center text-muted-foreground mb-12">
-            Tire suas dúvidas sobre o ConstruData
+            Tire suas dúvidas sobre o HydroNetwork e a plataforma ConstruData
           </p>
           
           <Accordion type="single" collapsible className="w-full">
