@@ -67,7 +67,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
     tileLayerRef.current = L.tileLayer(cfg.url, { attribution: cfg.attribution, maxZoom: 19 }).addTo(map);
   }, [tileKey]);
 
-  // Handle draw mode - create trecho when clicking destination, auto-chain
+  // Handle draw mode - create trecho when clicking destination
   const handleMarkerClick = useCallback((pointId: string) => {
     if (!drawMode) return;
     if (!drawOrigin) {
@@ -78,6 +78,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
         toast.error("Selecione um ponto diferente para o destino.");
         return;
       }
+      // Create trecho between drawOrigin and pointId
       const pOrigem = pontos.find(p => p.id === drawOrigin);
       const pDestino = pontos.find(p => p.id === pointId);
       if (pOrigem && pDestino) {
@@ -85,9 +86,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
         onTrechosChange?.([...trechos, novoTrecho]);
         toast.success(`Trecho ${drawOrigin} → ${pointId} criado!`);
       }
-      // Auto-chain: destination becomes next origin
-      setDrawOrigin(pointId);
-      toast.info(`Continuando de ${pointId} — clique no próximo destino (ESC para sair)`);
+      setDrawOrigin(null);
     }
   }, [drawMode, drawOrigin, pontos, trechos, onTrechosChange]);
 
@@ -207,22 +206,9 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
   const toggleDrawMode = () => {
     setDrawMode(!drawMode);
     setDrawOrigin(null);
-    if (!drawMode) toast.info("Modo desenho ativado. Clique origem → destino (encadeamento automático). ESC para sair.");
+    if (!drawMode) toast.info("Modo desenho ativado. Clique em um ponto de origem, depois no destino.");
     else toast.info("Modo desenho desativado.");
   };
-
-  // ESC key to exit draw mode
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && drawMode) {
-        setDrawMode(false);
-        setDrawOrigin(null);
-        toast.info("Modo desenho desativado");
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [drawMode]);
 
   if (pontos.length === 0) return null;
 
