@@ -207,6 +207,27 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos }: RDOHydroModul
         }}>📁 DXF Rede</Button>
       </div>
 
+      {/* Save/Load project */}
+      <div className="flex gap-2 flex-wrap">
+        <Button variant="outline" size="sm" onClick={() => {
+          const projectData = {
+            rdos, trechos: trechos.map(t => ({ idInicio: t.idInicio, idFim: t.idFim, comprimento: t.comprimento })),
+            pontos: pontos.map(p => ({ id: p.id, x: p.x, y: p.y, cota: p.cota })),
+            planning: localStorage.getItem("hydronetwork_shared_planning"),
+            savedAt: new Date().toISOString(),
+          };
+          localStorage.setItem("hydronetwork_rdo_project", JSON.stringify(projectData));
+          toast.success("Projeto RDO salvo com todos os dados (RDOs, trechos, pontos, planejamento)!");
+        }}>💾 Salvar Projeto</Button>
+        <Button variant="outline" size="sm" onClick={() => {
+          const data = localStorage.getItem("hydronetwork_rdo_project");
+          if (!data) { toast.error("Nenhum projeto salvo encontrado."); return; }
+          const parsed = JSON.parse(data);
+          if (parsed.rdos) setRdos(parsed.rdos);
+          toast.success(`Projeto carregado (salvo em ${new Date(parsed.savedAt).toLocaleString("pt-BR")})`);
+        }}>📂 Carregar Projeto</Button>
+      </div>
+
       {/* DASHBOARD VIEW */}
       {view === "dashboard" && (
         <div className="space-y-4">
@@ -220,9 +241,17 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos }: RDOHydroModul
 
           {/* Charts row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Daily chart */}
+            {/* Daily chart with data source info */}
             <Card>
-              <CardHeader><CardTitle>📈 Avanço Diário (Acumulado)</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>📈 Avanço Diário (Acumulado)</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  📊 <strong>Origem dos dados:</strong> {trechos.length > 0
+                    ? `${activeSegments.length} trechos da topografia importada (${totalPlanned}m planejados) + ${rdos.length} RDOs registrados`
+                    : `Dados de exemplo (${MOCK_SEGMENTS.length} trechos mock)`
+                  }
+                </p>
+              </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
                   <AreaChart data={dailyData}>
@@ -293,7 +322,15 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos }: RDOHydroModul
 
           {/* Segment detail table */}
           <Card>
-            <CardHeader><CardTitle>📏 Detalhamento por Trecho</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>📏 Detalhamento por Trecho</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                📊 <strong>Fonte:</strong> {trechos.length > 0
+                  ? "Trechos calculados a partir da topografia importada. Execução vem dos RDOs registrados."
+                  : "Trechos de exemplo (dados demonstrativos). Importe a topografia para dados reais."
+                }
+              </p>
+            </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>

@@ -1,27 +1,20 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Upload, Download, Trash2, Calendar, ZoomIn, ZoomOut, Maximize, Package, RefreshCw, GitCompare, FileText, Edit } from "lucide-react";
+import { Plus, Upload, Download, Trash2, Calendar, Package, RefreshCw, GitCompare, FileText } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
-
-interface Resource { name: string; type: string; qty: number; }
-interface Task {
-  id: string; name: string; duration: number; start: string; resource: string;
-  predecessors: string; progress: number; color: string;
-}
+import { useSharedPlanning } from "@/hooks/useSharedPlanning";
 
 interface ProjectLibreModuleProps {
   pontos?: PontoTopografico[];
   trechos?: Trecho[];
 }
-
-const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
 
 const addDays = (dateStr: string, days: number) => {
   const d = new Date(dateStr);
@@ -34,9 +27,9 @@ const diffDays = (a: string, b: string) => {
 };
 
 export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreModuleProps) => {
-  const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
+  const planning = useSharedPlanning("ProjectLibre");
+  const { tasks, startDate, setTasks, setStartDate, COLORS, lastUpdatedBy, lastUpdatedAt } = planning;
   const [ganttView, setGanttView] = useState("day");
-  const [tasks, setTasks] = useState<Task[]>([]);
 
   const addTask = () => {
     setTasks([...tasks, {
@@ -50,19 +43,16 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
       toast.error("Carregue topografia primeiro.");
       return;
     }
-    const newTasks: Task[] = [];
-    let currentDate = startDate;
-    const prodPerDay = 50;
-    trechos.forEach((t, i) => {
-      const dur = Math.max(1, Math.ceil(t.comprimento / prodPerDay));
-      newTasks.push({
+    const newTasks = trechos.map((t, i) => {
+      const dur = Math.max(1, Math.ceil(t.comprimento / 50));
+      const currentDate = i === 0 ? startDate : addDays(startDate, trechos.slice(0, i).reduce((s, tr) => s + Math.max(1, Math.ceil(tr.comprimento / 50)), 0));
+      return {
         id: `T${i + 1}`,
         name: `Trecho ${t.idInicio}-${t.idFim} (${t.comprimento.toFixed(1)}m)`,
         duration: dur, start: currentDate, resource: "",
         predecessors: i > 0 ? `T${i}` : "", progress: 0,
         color: COLORS[i % COLORS.length],
-      });
-      currentDate = addDays(currentDate, dur);
+      };
     });
     setTasks(newTasks);
     toast.success(`${newTasks.length} tarefas geradas.`);
@@ -96,10 +86,20 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
 
   return (
     <div className="space-y-4">
+      {/* Sync indicator */}
+      {lastUpdatedBy && lastUpdatedBy !== "ProjectLibre" && tasks.length > 0 && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200">
+          <RefreshCw className="h-4 w-4 text-blue-600" />
+          <span className="text-sm text-blue-700 dark:text-blue-400">
+            Dados sincronizados do <strong>{lastUpdatedBy}</strong> ({new Date(lastUpdatedAt).toLocaleString("pt-BR")})
+          </span>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-pink-600" /> ProjectLibre</CardTitle>
-          <CardDescription>Gerenciamento de projetos com Gráfico de Gantt editável</CardDescription>
+          <CardDescription>Gerenciamento de projetos com Gráfico de Gantt editável — dados compartilhados com OpenProject e Planejamento</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -117,7 +117,6 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
       </Card>
 
       <div className="flex gap-2 flex-wrap">
-        <Button variant="outline"><Upload className="h-4 w-4 mr-1" /> Importar .pod/.xml</Button>
         <Button onClick={loadPlatformData}><Package className="h-4 w-4 mr-1" /> Usar Dados da Plataforma</Button>
         <Button size="sm" onClick={addTask} variant="outline"><Plus className="h-4 w-4 mr-1" /> Add Tarefa</Button>
         <Button variant="outline" onClick={() => { setTasks([]); toast.info("Tarefas limpas."); }}><Trash2 className="h-4 w-4 mr-1" /> Limpar</Button>
@@ -129,6 +128,7 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
           <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle>📅 Gráfico de Gantt</CardTitle>
             <div className="flex gap-2 items-center">
+              <Badge variant="outline" className="text-xs">Compartilhado</Badge>
               <Select value={ganttView} onValueChange={setGanttView}>
                 <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -168,21 +168,20 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
                     <div key={i} className="flex items-center border-b border-border/50 hover:bg-muted/30 group">
                       <div className="w-[40px] shrink-0 p-2 text-xs font-mono">{t.id}</div>
                       <div className="w-[180px] shrink-0 p-2">
-                        <Input value={t.name} className="h-7 text-xs" onChange={e => { const u = [...tasks]; u[i].name = e.target.value; setTasks(u); }} />
+                        <Input value={t.name} className="h-7 text-xs" onChange={e => { const u = [...tasks]; u[i] = { ...u[i], name: e.target.value }; setTasks(u); }} />
                       </div>
                       <div className="w-[60px] shrink-0 p-2">
-                        <Input type="number" value={t.duration} className="h-7 text-xs w-14" onChange={e => { const u = [...tasks]; u[i].duration = Math.max(1, Number(e.target.value)); setTasks(u); }} />
+                        <Input type="number" value={t.duration} className="h-7 text-xs w-14" onChange={e => { const u = [...tasks]; u[i] = { ...u[i], duration: Math.max(1, Number(e.target.value)) }; setTasks(u); }} />
                       </div>
                       <div className="w-[90px] shrink-0 p-2">
-                        <Input type="date" value={t.start} className="h-7 text-xs" onChange={e => { const u = [...tasks]; u[i].start = e.target.value; setTasks(u); }} />
+                        <Input type="date" value={t.start} className="h-7 text-xs" onChange={e => { const u = [...tasks]; u[i] = { ...u[i], start: e.target.value }; setTasks(u); }} />
                       </div>
                       <div className="w-[50px] shrink-0 p-2">
-                        <Input type="number" value={t.progress} className="h-7 text-xs w-12" min={0} max={100} onChange={e => { const u = [...tasks]; u[i].progress = Math.min(100, Math.max(0, Number(e.target.value))); setTasks(u); }} />
+                        <Input type="number" value={t.progress} className="h-7 text-xs w-12" min={0} max={100} onChange={e => { const u = [...tasks]; u[i] = { ...u[i], progress: Math.min(100, Math.max(0, Number(e.target.value))) }; setTasks(u); }} />
                       </div>
                       <div className="w-[40px] shrink-0 p-1">
                         <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => {
                           setTasks(tasks.filter((_, j) => j !== i));
-                          toast.info(`Tarefa removida.`);
                         }}>
                           <Trash2 className="h-3 w-3 text-destructive" />
                         </Button>
@@ -216,8 +215,6 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
       <div className="flex gap-2 flex-wrap">
         <Button variant="outline"><Download className="h-4 w-4 mr-1" /> Exportar POD</Button>
         <Button variant="outline"><Download className="h-4 w-4 mr-1" /> Exportar XML</Button>
-        <Button variant="outline" onClick={() => toast.info("Sincronizando...")}><RefreshCw className="h-4 w-4 mr-1" /> Sincronizar</Button>
-        <Button variant="outline" onClick={() => toast.info("Comparando versões...")}><GitCompare className="h-4 w-4 mr-1" /> Comparar</Button>
       </div>
     </div>
   );
