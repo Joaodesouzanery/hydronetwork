@@ -65,19 +65,19 @@ function normalizeForDetection(name: string): string {
 
 function autoDetectMapping(field: SourceField): PlatformField {
   const name = normalizeForDetection(field.name);
-  // Exact
+  // Exact matches
   if (name === "id" || name === "ponto" || name === "point_id" || name === "fid") return "id";
-  if (name === "x" || name === "este" || name === "easting" || name === "e" || name === "lon" || name === "longitude") return "x";
-  if (name === "y" || name === "norte" || name === "northing" || name === "n" || name === "lat" || name === "latitude") return "y";
-  if (name === "z" || name === "cota" || name === "elevation" || name === "elev" || name === "alt" || name === "altura" || name === "z cota") return "z_cota";
+  if (name === "x" || name === "este" || name === "easting" || name === "e" || name === "lon" || name === "longitude" || name === "_geom_x") return "x";
+  if (name === "y" || name === "norte" || name === "northing" || name === "n" || name === "lat" || name === "latitude" || name === "_geom_y") return "y";
+  if (name === "z" || name === "cota" || name === "elevation" || name === "elev" || name === "alt" || name === "altura" || name === "z cota" || name === "_geom_z") return "z_cota";
   if (name === "dn" || name === "diametro" || name === "diameter" || name === "diam" || name === "dn mm") return "diameter";
   if (name === "material" || name === "mat" || name === "tipo mat") return "material";
-  if (name === "tipo" || name === "type" || name === "class" || name === "categoria") return "type";
+  if (name === "tipo" || name === "type" || name === "class" || name === "categoria" || name === "_geom_type") return "type";
   if (name === "nome" || name === "name" || name === "desc" || name === "descricao" || name === "label") return "name";
-  // Trecho fields
-  if (name === "de" || name === "from" || name === "no inicio" || name === "id inicio" || name === "inicio" || name === "from id" || name === "node1") return "from_id";
-  if (name === "para" || name === "to" || name === "no fim" || name === "id fim" || name === "fim" || name === "to id" || name === "node2") return "to_id";
-  if (name === "comprimento" || name === "length" || name === "comp" || name === "extensao") return "length";
+  // Trecho / LineString fields
+  if (name === "de" || name === "from" || name === "no inicio" || name === "id inicio" || name === "inicio" || name === "from id" || name === "node1" || name === "_line_start_x") return "from_id";
+  if (name === "para" || name === "to" || name === "no fim" || name === "id fim" || name === "fim" || name === "to id" || name === "node2" || name === "_line_end_x") return "to_id";
+  if (name === "comprimento" || name === "length" || name === "comp" || name === "extensao" || name === "_line_length_approx") return "length";
   if (name === "declividade" || name === "slope" || name === "decliv" || name === "i") return "slope";
   if (name === "tipo rede" || name === "rede" || name === "network" || name === "sistema") return "network_type";
   if (name === "profundidade" || name === "depth" || name === "prof") return "depth";
@@ -89,6 +89,12 @@ function autoDetectMapping(field: SourceField): PlatformField {
   if (name === "entitytype" || name === "entity type" || name === "entidade") return "entity_type";
   if (name === "observacao" || name === "obs" || name === "notas" || name === "notes" || name === "comentario") return "observation";
   if (name === "status") return "status";
+  // Line-specific geometry fields
+  if (name === "_line_start_y") return "ignore"; // y of from node, user maps explicitly
+  if (name === "_line_start_z") return "ignore";
+  if (name === "_line_end_y") return "ignore";
+  if (name === "_line_end_z") return "ignore";
+  if (name === "_line_num_vertices") return "ignore";
   // Contains fallback
   if (name.includes("diametr")) return "diameter";
   if (name.includes("comprim") || name.includes("length")) return "length";
@@ -100,7 +106,6 @@ function autoDetectMapping(field: SourceField): PlatformField {
   if (name.includes("demand")) return "demand";
   if (name.includes("elev") || name.includes("cota") || name.includes("alt")) return "z_cota";
   if (name.includes("observ") || name.includes("nota") || name.includes("comment")) return "observation";
-  // Don't ignore by default - let user see everything
   return "ignore";
 }
 

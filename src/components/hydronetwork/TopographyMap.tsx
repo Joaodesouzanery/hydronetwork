@@ -173,6 +173,9 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
     }
   }, [deleteMode, drawMode, drawOrigin, pontos, trechos, onTrechosChange]);
 
+  // Track last data signature to only fitBounds on actual data changes
+  const lastDataSigRef = useRef("");
+
   // Draw points and segments
   useEffect(() => {
     const map = mapRef.current;
@@ -206,8 +209,10 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         radius, fillColor: color, color: "#fff", weight: 2, fillOpacity: 0.9,
       }).addTo(map);
 
-      // Only bind popup if NOT in draw mode (popups block fast clicking)
-      if (!drawMode) {
+      // In draw/delete mode, use tooltips (don't block clicks). Otherwise popups.
+      if (drawMode || deleteMode) {
+        marker.bindTooltip(p.id, { permanent: false, direction: "top", offset: [0, -10] });
+      } else {
         marker.bindPopup(`
           <div style="font-family:sans-serif;min-width:150px;">
             <strong style="font-size:14px;">${p.id}</strong>
@@ -219,12 +224,12 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
             </div>
           </div>
         `);
-      } else {
-        // In draw mode, show tooltip instead (doesn't block clicks)
-        marker.bindTooltip(p.id, { permanent: false, direction: "top", offset: [0, -10] });
       }
 
-      marker.on("click", () => handleMarkerClick(p.id));
+      marker.on("click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        handleMarkerClick(p.id);
+      });
       markersRef.current.push(marker);
     });
 
@@ -238,6 +243,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         color: isGravity ? "#22c55e" : "#f59e0b", weight: 4, opacity: 0.8,
       }).addTo(map);
 
+      polyline.bindTooltip(`${t.idInicio} → ${t.idFim} (${t.comprimento.toFixed(1)}m)`, { sticky: true });
       polyline.bindPopup(`
         <div style="font-family:sans-serif;min-width:180px;">
           <strong>${t.idInicio} → ${t.idFim}</strong>
@@ -254,7 +260,10 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       polylinesRef.current.push(polyline);
     });
 
-    if (bounds.length > 0) {
+    // Only fitBounds when actual data changes, not selection state
+    const dataSig = `${pontos.map(p => p.id).join(",")}|${trechos.length}`;
+    if (bounds.length > 0 && dataSig !== lastDataSigRef.current) {
+      lastDataSigRef.current = dataSig;
       try {
         map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30], maxZoom: 18 });
       } catch {
