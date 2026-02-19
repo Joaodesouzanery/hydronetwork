@@ -92,9 +92,9 @@ const DEMAND_PATTERNS: Record<string, number[]> = {
   "Industrial": [0.6, 0.6, 0.6, 0.6, 0.6, 0.8, 1.0, 1.2, 1.2, 1.2, 1.2, 1.2, 1.0, 1.2, 1.2, 1.2, 1.2, 1.0, 0.8, 0.6, 0.6, 0.6, 0.6, 0.6],
 };
 
-// ── Parse INP ──
+// ── Parse INP (robust: handles tabs, semicolons mid-line, case-insensitive sections, EPANET2 format) ──
 function parseINP(content: string) {
-  const lines = content.split("\n").map(l => l.trim());
+  const lines = content.split(/\r?\n/);
   const junctions: Junction[] = [];
   const reservoirs: Reservoir[] = [];
   const tanks: Tank[] = [];
@@ -103,13 +103,17 @@ function parseINP(content: string) {
   const valves: Valve[] = [];
   const coords: Coord[] = [];
   let section = "";
-  for (const line of lines) {
-    if (line.startsWith("[")) { section = line; continue; }
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line.startsWith("[")) { section = line.toUpperCase().replace(/\s/g, ""); continue; }
     if (!line || line.startsWith(";")) continue;
-    const p = line.split(/\s+/).filter(Boolean);
+    // Strip inline comments (semicolons after data)
+    const dataLine = line.split(";")[0].trim();
+    if (!dataLine) continue;
+    const p = dataLine.split(/[\s\t]+/).filter(Boolean);
     switch (section) {
       case "[JUNCTIONS]":
-        if (p.length >= 3) junctions.push({ id: p[0], elevation: +p[1], demand: +p[2], pattern: p[3] || "" });
+        if (p.length >= 2) junctions.push({ id: p[0], elevation: +p[1], demand: p.length >= 3 ? +p[2] : 0, pattern: p[3] || "" });
         break;
       case "[RESERVOIRS]":
         if (p.length >= 2) reservoirs.push({ id: p[0], head: +p[1], pattern: p[2] || "" });
@@ -118,10 +122,15 @@ function parseINP(content: string) {
         if (p.length >= 6) tanks.push({ id: p[0], elevation: +p[1], initLevel: +p[2], minLevel: +p[3], maxLevel: +p[4], diameter: +p[5] });
         break;
       case "[PIPES]":
-        if (p.length >= 6) pipes.push({ id: p[0], node1: p[1], node2: p[2], length: +p[3], diameter: +p[4], roughness: +p[5], material: "PVC", status: "Aberto" });
+        if (p.length >= 6) pipes.push({ id: p[0], node1: p[1], node2: p[2], length: +p[3], diameter: +p[4], roughness: +p[5], material: p.length >= 8 ? p[7] : "PVC", status: "Aberto" });
         break;
       case "[PUMPS]":
-        if (p.length >= 3) pumps.push({ id: p[0], node1: p[1], node2: p[2], power: +p[3] || 10 });
+        if (p.length >= 3) {
+          // Handle "POWER X" syntax
+          const powerIdx = p.findIndex(v => v.toUpperCase() === "POWER");
+          const power = powerIdx >= 0 && p[powerIdx + 1] ? +p[powerIdx + 1] : (+p[3] || 10);
+          pumps.push({ id: p[0], node1: p[1], node2: p[2], power });
+        }
         break;
       case "[VALVES]":
         if (p.length >= 6) valves.push({ id: p[0], node1: p[1], node2: p[2], diameter: +p[3], type: p[4], setting: +p[5] });
@@ -280,7 +289,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
   // ── Import INP ──
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !file.name.endsWith(".inp")) { toast.error("Use arquivos .inp"); return; }
+    if (!file || !file.name.toLowerCase().endsWith(".inp")) { toast.error("Use arquivos .inp"); return; }
     const text = await file.text();
     const parsed = parseINP(text);
     setJunctions(parsed.junctions);
@@ -457,7 +466,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
             ))}
           </div>
           <div className="flex gap-2 flex-wrap">
-            <input ref={fileInputRef} type="file" accept=".inp" className="hidden" onChange={handleFileUpload} />
+            <input ref={fileInputRef} type="file" accept=".inp,.INP" className="hidden" onChange={handleFileUpload} key={Date.now()} />
             <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4 mr-1" /> Importar .INP</Button>
             <Button variant="outline" onClick={loadExample}>📂 Carregar Exemplo</Button>
             <Button variant="outline" onClick={() => {

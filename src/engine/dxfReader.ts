@@ -113,52 +113,38 @@ function parseDxfEntities(text: string): DxfEntity[] {
  * LWPOLYLINE vertices also become points.
  * LINE endpoints become points (deduplicated).
  */
-export function parseDxfToPoints(text: string): PontoTopografico[] {
+export function parseDxfToPoints(text: string): (PontoTopografico & { layer?: string; entityType?: string })[] {
   const entities = parseDxfEntities(text);
-  const pointsMap = new Map<string, PontoTopografico>();
+  const pointsMap = new Map<string, PontoTopografico & { layer?: string; entityType?: string }>();
   let autoId = 1;
 
-  const addPoint = (x: number, y: number, z: number, layer?: string) => {
+  const addPoint = (x: number, y: number, z: number, layer?: string, entityType?: string) => {
     if (isNaN(x) || isNaN(y)) return;
     const key = `${x.toFixed(4)}_${y.toFixed(4)}`;
     if (!pointsMap.has(key)) {
       const id = layer ? `${layer}_${autoId}` : `P${String(autoId).padStart(3, "0")}`;
       autoId++;
-      pointsMap.set(key, { id, x, y, cota: isNaN(z) ? 0 : z });
+      pointsMap.set(key, { id, x, y, cota: isNaN(z) ? 0 : z, layer, entityType });
     }
   };
 
   for (const e of entities) {
     switch (e.type) {
       case "POINT":
-        if (e.x !== undefined && e.y !== undefined) {
-          addPoint(e.x, e.y, e.z ?? 0, e.layer);
-        }
+        if (e.x !== undefined && e.y !== undefined) addPoint(e.x, e.y, e.z ?? 0, e.layer, e.type);
         break;
-
       case "LINE":
-        if (e.x !== undefined && e.y !== undefined) addPoint(e.x, e.y, e.z ?? 0, e.layer);
-        if (e.x2 !== undefined && e.y2 !== undefined) addPoint(e.x2, e.y2, e.z2 ?? 0, e.layer);
+        if (e.x !== undefined && e.y !== undefined) addPoint(e.x, e.y, e.z ?? 0, e.layer, e.type);
+        if (e.x2 !== undefined && e.y2 !== undefined) addPoint(e.x2, e.y2, e.z2 ?? 0, e.layer, e.type);
         break;
-
       case "LWPOLYLINE":
       case "POLYLINE":
-        if (e.vertices) {
-          for (const v of e.vertices) {
-            addPoint(v.x, v.y, v.z ?? 0, e.layer);
-          }
-        }
-        // Also check if x/y are set (LWPOLYLINE stores vertices differently in some files)
-        if (e.x !== undefined && e.y !== undefined) {
-          addPoint(e.x, e.y, e.z ?? 0, e.layer);
-        }
+        if (e.vertices) { for (const v of e.vertices) addPoint(v.x, v.y, v.z ?? 0, e.layer, e.type); }
+        if (e.x !== undefined && e.y !== undefined) addPoint(e.x, e.y, e.z ?? 0, e.layer, e.type);
         break;
-
       case "INSERT":
       case "CIRCLE":
-        if (e.x !== undefined && e.y !== undefined) {
-          addPoint(e.x, e.y, e.z ?? 0, e.layer);
-        }
+        if (e.x !== undefined && e.y !== undefined) addPoint(e.x, e.y, e.z ?? 0, e.layer, e.type);
         break;
     }
   }
@@ -167,8 +153,19 @@ export function parseDxfToPoints(text: string): PontoTopografico[] {
   if (points.length === 0) {
     throw new DxfReaderError("Nenhum ponto encontrado no arquivo DXF. Verifique se o arquivo contém entidades POINT, LINE ou POLYLINE.");
   }
-
   return points;
+}
+
+/**
+ * Extract all unique layers from DXF content.
+ */
+export function extractDxfLayers(text: string): string[] {
+  const entities = parseDxfEntities(text);
+  const layers = new Set<string>();
+  for (const e of entities) {
+    if (e.layer) layers.add(e.layer);
+  }
+  return Array.from(layers).sort();
 }
 
 /**
