@@ -2,7 +2,7 @@
  * ImportEngine — Unified import layer that converts ANY file format
  * into the internal Spatial Core model (nodes + edges + drawing_layers).
  *
- * Supported: INP, DXF, GeoJSON, CSV, TXT, XLSX, SHP(json), IFC(json), SWMM
+ * Supported: INP, DXF, DWG, SHP, GeoJSON, CSV, TXT, XLSX, IFC, SWMM
  *
  * EPANET PRO is a CONSUMER only — it reads nodes/edges from the Spatial Core.
  * This engine NEVER modifies simulation parameters.
@@ -37,7 +37,6 @@ export function parseLocalizedNumber(
   if (typeof value === "number") return isNaN(value) ? null : value;
 
   let str = String(value).trim();
-  // Remove currency symbols, spaces, and non-breaking spaces
   str = str.replace(/[¤$\u20AC£¥\s\u00A0]/g, "");
   if (str === "" || str === "-") return null;
 
@@ -51,37 +50,30 @@ export function parseLocalizedNumber(
   } else if (format === "us") {
     isCommaDecimal = false;
   } else {
-    // Auto-detect
     if (lastComma > lastDot) {
-      // e.g. "362.285,523" → comma is decimal
       isCommaDecimal = true;
     } else if (lastDot > lastComma) {
-      // e.g. "362,285.523" → dot is decimal
       isCommaDecimal = false;
     } else if (lastComma >= 0 && lastDot < 0) {
-      // Only commas: check if it's a decimal separator
-      // If digits after comma are not exactly 3, treat as decimal
       const afterComma = str.substring(lastComma + 1);
       isCommaDecimal = afterComma.length !== 3 || str.indexOf(",") === lastComma;
     } else if (lastDot >= 0 && lastComma < 0) {
-      // Only dots: check pattern
       const dotCount = (str.match(/\./g) || []).length;
       if (dotCount > 1) {
-        // Multiple dots = thousand separators (Brazilian)
-        isCommaDecimal = true; // dots are thousands
+        isCommaDecimal = true;
       } else {
-        isCommaDecimal = false; // single dot = decimal (American)
+        isCommaDecimal = false;
       }
     } else {
-      isCommaDecimal = false; // no separators
+      isCommaDecimal = false;
     }
   }
 
   if (isCommaDecimal) {
-    str = str.replace(/\./g, ""); // remove thousand separators
-    str = str.replace(",", "."); // convert decimal comma to dot
+    str = str.replace(/\./g, "");
+    str = str.replace(",", ".");
   } else {
-    str = str.replace(/,/g, ""); // remove thousand separators
+    str = str.replace(/,/g, "");
   }
 
   const parsed = parseFloat(str);
@@ -111,11 +103,9 @@ export type ImportFileFormat =
 
 export type ImportModelType = "rede" | "topografia" | "bim" | "generico" | "desenho";
 
-/** How to interpret geometric files: by geometry or by tabular fields */
 export type ImportMode = "geometric" | "tabular";
 
-/** Entity-level import role assignment */
-export type EntityImportRole = "edge" | "node" | "ignore";
+export type EntityImportRole = "edge" | "node" | "drawing" | "ignore";
 
 export interface EntityTypeMapping {
   entityType: string;
@@ -172,7 +162,257 @@ export interface ImportOptions {
   numericFormat?: NumericFormat;
   importMode?: ImportMode;
   entityMappings?: EntityTypeMapping[];
-  snapTolerance?: number; // in CRS units, default 0.001
+  snapTolerance?: number;
+}
+
+// ════════════════════════════════════════
+// RAW FILE ANALYSIS (Geometry-First)
+// Counts geometry DIRECTLY from the file
+// WITHOUT depending on entity mappings
+// ════════════════════════════════════════
+
+export interface RawFileAnalysis {
+  /** Total count per geometry/entity type */
+  entityCounts: { type: string; count: number; geometricClass: "point" | "line" | "polygon" | "solid" | "other" }[];
+  /** Total raw geometries found */
+  totalGeometries: number;
+  /** Bounding box from raw coords */
+  bbox: { minX: number; maxX: number; minY: number; maxY: number } | null;
+  /** Any coord samples for format detection */
+  coordSamples: { x: number; y: number; z?: number }[];
+  /** Detected layers/classes */
+  layers: string[];
+  /** Format-specific info */
+  formatInfo: Record<string, any>;
+}
+
+/** Classify a geometry/entity type into a geometric class */
+function classifyGeometryType(type: string): "point" | "line" | "polygon" | "solid" | "other" {
+  const t = type.toUpperCase();
+  // Point types
+  if (t === "POINT" || t === "INSERT" || t === "MULTIPOINT" ||
+    t.includes("POINT") || t.includes("TERMINAL") || t.includes("FITTING")) return "point";
+  // Line types
+  if (t === "LINE" || t === "LWPOLYLINE" || t === "POLYLINE" || t === "3DPOLYLINE" ||
+    t === "LINESTRING" || t === "MULTILINESTRING" ||
+    t.includes("PIPE") || t.includes("DUCT") || t.includes("CONDUIT") || t.includes("SEGMENT")) return "line";
+  // Polygon types
+  if (t === "POLYGON" || t === "MULTIPOLYGON" || t === "CIRCLE" ||
+    t.includes("SLAB") || t.includes("WALL")) return "polygon";
+  // Solid types
+  if (t.includes("SOLID") || t.includes("BEAM") || t.includes("COLUMN")) return "solid";
+  return "other";
+}
+
+/**
+ * Analyze a file's raw geometry WITHOUT any conversion or entity mapping.
+ * This MUST return counts > 0 if the file contains any geometry.
+ */
+export function analyzeFileRaw(content: string, format: ImportFileFormat): RawFileAnalysis {
+  const result: RawFileAnalysis = {
+    entityCounts: [],
+    totalGeometries: 0,
+    bbox: null,
+    coordSamples: [],
+    layers: [],
+    formatInfo: {},
+  };
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  let hasBbox = false;
+
+  function updateBbox(x: number, y: number) {
+    if (isNaN(x) || isNaN(y)) return;
+    hasBbox = true;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+
+  switch (format) {
+    case "DXF": {
+      const entities = parseDxfEntities(content);
+      const counts = new Map<string, number>();
+      const layerSet = new Set<string>();
+      for (const e of entities) {
+        counts.set(e.type, (counts.get(e.type) || 0) + 1);
+        if (e.layer) layerSet.add(e.layer);
+        if (e.x !== undefined && e.y !== undefined) {
+          updateBbox(e.x, e.y);
+          if (result.coordSamples.length < 10) result.coordSamples.push({ x: e.x, y: e.y, z: e.z });
+        }
+        if (e.x2 !== undefined && e.y2 !== undefined) updateBbox(e.x2, e.y2);
+        if (e.vertices) {
+          for (const v of e.vertices) {
+            updateBbox(v.x, v.y);
+            if (result.coordSamples.length < 10) result.coordSamples.push({ x: v.x, y: v.y, z: v.z });
+          }
+        }
+      }
+      result.entityCounts = Array.from(counts.entries()).map(([type, count]) => ({
+        type, count, geometricClass: classifyGeometryType(type),
+      }));
+      result.layers = Array.from(layerSet).sort();
+      result.formatInfo = { entityCount: entities.length };
+      break;
+    }
+    case "GeoJSON": {
+      const geojson = JSON.parse(content);
+      const features = geojson.type === "FeatureCollection" ? geojson.features
+        : geojson.type === "Feature" ? [geojson]
+        : geojson.type ? [{ type: "Feature", geometry: geojson, properties: {} }] : [];
+      const counts = new Map<string, number>();
+      
+      function processGeometry(geom: any) {
+        if (!geom || !geom.type) return;
+        const gtype = geom.type;
+        
+        if (gtype === "GeometryCollection") {
+          for (const g of (geom.geometries || [])) processGeometry(g);
+          return;
+        }
+
+        counts.set(gtype, (counts.get(gtype) || 0) + 1);
+
+        // Extract coords for bbox
+        if (gtype === "Point" && geom.coordinates) {
+          const [x, y, z] = geom.coordinates;
+          updateBbox(x, y);
+          if (result.coordSamples.length < 10) result.coordSamples.push({ x, y, z });
+        } else if (gtype === "MultiPoint" && geom.coordinates) {
+          for (const c of geom.coordinates) { updateBbox(c[0], c[1]); }
+        } else if (gtype === "LineString" && geom.coordinates) {
+          for (const c of geom.coordinates) { updateBbox(c[0], c[1]); }
+          if (result.coordSamples.length < 10 && geom.coordinates.length > 0) {
+            const c = geom.coordinates[0];
+            result.coordSamples.push({ x: c[0], y: c[1], z: c[2] });
+          }
+        } else if (gtype === "MultiLineString" && geom.coordinates) {
+          for (const line of geom.coordinates) { for (const c of line) { updateBbox(c[0], c[1]); } }
+        } else if (gtype === "Polygon" && geom.coordinates) {
+          for (const ring of geom.coordinates) { for (const c of ring) { updateBbox(c[0], c[1]); } }
+        } else if (gtype === "MultiPolygon" && geom.coordinates) {
+          for (const poly of geom.coordinates) { for (const ring of poly) { for (const c of ring) { updateBbox(c[0], c[1]); } } }
+        }
+      }
+
+      for (const feature of features) {
+        processGeometry(feature.geometry || feature);
+      }
+
+      result.entityCounts = Array.from(counts.entries()).map(([type, count]) => ({
+        type, count, geometricClass: classifyGeometryType(type),
+      }));
+      result.formatInfo = { featureCount: features.length };
+      break;
+    }
+    case "INP": {
+      const lines = content.split(/\r?\n/);
+      let section = "";
+      const counts = new Map<string, number>();
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (line.startsWith("[")) {
+          section = line.toUpperCase().replace(/\s/g, "");
+          continue;
+        }
+        if (!line || line.startsWith(";")) continue;
+        const dataLine = line.split(";")[0].trim();
+        if (!dataLine) continue;
+
+        if (section === "[JUNCTIONS]") counts.set("JUNCTION", (counts.get("JUNCTION") || 0) + 1);
+        else if (section === "[PIPES]") counts.set("PIPE", (counts.get("PIPE") || 0) + 1);
+        else if (section === "[RESERVOIRS]") counts.set("RESERVOIR", (counts.get("RESERVOIR") || 0) + 1);
+        else if (section === "[TANKS]") counts.set("TANK", (counts.get("TANK") || 0) + 1);
+        else if (section === "[PUMPS]") counts.set("PUMP", (counts.get("PUMP") || 0) + 1);
+        else if (section === "[VALVES]") counts.set("VALVE", (counts.get("VALVE") || 0) + 1);
+        else if (section === "[COORDINATES]") {
+          const p = dataLine.split(/[\s\t]+/).filter(Boolean);
+          if (p.length >= 3) {
+            const x = parseFloat(p[1]);
+            const y = parseFloat(p[2]);
+            updateBbox(x, y);
+            if (result.coordSamples.length < 10) result.coordSamples.push({ x, y });
+          }
+        }
+      }
+      result.entityCounts = Array.from(counts.entries()).map(([type, count]) => ({
+        type, count, geometricClass: classifyGeometryType(type),
+      }));
+      break;
+    }
+    case "SWMM": {
+      const lines = content.split(/\r?\n/);
+      let section = "";
+      const counts = new Map<string, number>();
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (line.startsWith("[")) { section = line.toUpperCase().replace(/\s/g, ""); continue; }
+        if (!line || line.startsWith(";")) continue;
+        const dataLine = line.split(";")[0].trim();
+        if (!dataLine) continue;
+
+        if (section === "[JUNCTIONS]") counts.set("JUNCTION", (counts.get("JUNCTION") || 0) + 1);
+        else if (section === "[CONDUITS]") counts.set("CONDUIT", (counts.get("CONDUIT") || 0) + 1);
+        else if (section === "[OUTFALLS]") counts.set("OUTFALL", (counts.get("OUTFALL") || 0) + 1);
+        else if (section === "[COORDINATES]") {
+          const p = dataLine.split(/[\s\t]+/).filter(Boolean);
+          if (p.length >= 3) {
+            const x = parseFloat(p[1]);
+            const y = parseFloat(p[2]);
+            updateBbox(x, y);
+          }
+        }
+      }
+      result.entityCounts = Array.from(counts.entries()).map(([type, count]) => ({
+        type, count, geometricClass: classifyGeometryType(type),
+      }));
+      break;
+    }
+    case "IFC": {
+      const counts = new Map<string, number>();
+      const regex = /^#\d+=\s*(IFC\w+)\s*\(/gm;
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(content)) !== null) {
+        const type = match[1].toUpperCase();
+        if (type.includes("PIPE") || type.includes("FLOW") || type.includes("DUCT") ||
+          type.includes("WALL") || type.includes("SLAB") || type.includes("BEAM") ||
+          type.includes("COLUMN") || type.includes("POINT") || type.includes("FITTING") ||
+          type.includes("MEMBER") || type.includes("PLATE") || type.includes("OPENING")) {
+          counts.set(type, (counts.get(type) || 0) + 1);
+        }
+      }
+      // Extract cartesian points for bbox
+      const pointRegex = /IFCCARTESIANPOINT\s*\(\(([^)]+)\)\)/gi;
+      while ((match = pointRegex.exec(content)) !== null) {
+        const coords = match[1].split(",").map(c => parseFloat(c.trim()));
+        if (coords.length >= 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+          updateBbox(coords[0], coords[1]);
+          if (result.coordSamples.length < 10) result.coordSamples.push({ x: coords[0], y: coords[1], z: coords[2] });
+        }
+      }
+      result.entityCounts = Array.from(counts.entries()).map(([type, count]) => ({
+        type, count, geometricClass: classifyGeometryType(type),
+      }));
+      break;
+    }
+    default: {
+      // CSV/TXT/XLSX — count rows as generic records
+      const lines = content.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length > 1) {
+        result.entityCounts = [{ type: "ROW", count: lines.length - 1, geometricClass: "other" as const }];
+      }
+      break;
+    }
+  }
+
+  result.totalGeometries = result.entityCounts.reduce((sum, e) => sum + e.count, 0);
+  if (hasBbox) {
+    result.bbox = { minX, maxX, minY, maxY };
+  }
+
+  return result;
 }
 
 // ════════════════════════════════════════
@@ -382,19 +622,21 @@ export function parseSWMMToInternal(content: string): InpParsed {
 
 // ════════════════════════════════════════
 // GEOJSON PARSER → internal model (GEOMETRIC MODE)
-// Lines become edges with auto-generated nodes
+// Supports: Point, MultiPoint, LineString, MultiLineString,
+//           Polygon, MultiPolygon, GeometryCollection
 // ════════════════════════════════════════
 
 export function parseGeoJSONToInternal(content: string, numericFormat: NumericFormat = "auto"): InpParsed {
   const geojson = JSON.parse(content);
-  const features = geojson.type === "FeatureCollection" ? geojson.features : [geojson];
+  const features = geojson.type === "FeatureCollection" ? geojson.features
+    : geojson.type === "Feature" ? [geojson]
+    : geojson.type ? [{ type: "Feature", geometry: geojson, properties: {} }] : [];
   const nodes: InpParsed["nodes"] = [];
   const edges: InpParsed["edges"] = [];
-  const nodeIndex = new Map<string, string>(); // coordKey → nodeId
+  const nodeIndex = new Map<string, string>();
   let nodeCounter = 0;
   let edgeCounter = 0;
-
-  const tolerance = 6; // decimal places for coord key
+  const tolerance = 6;
 
   function getOrCreateNode(x: number, y: number, z: number): string {
     const key = `${x.toFixed(tolerance)},${y.toFixed(tolerance)}`;
@@ -405,37 +647,82 @@ export function parseGeoJSONToInternal(content: string, numericFormat: NumericFo
     return id;
   }
 
-  for (const feature of features) {
-    const geom = feature.geometry;
-    const props = feature.properties || {};
-    if (!geom) continue;
+  function addLineString(coords: number[][], props: Record<string, any>) {
+    if (coords.length < 2) return;
+    const first = coords[0];
+    const last = coords[coords.length - 1];
+    const startId = getOrCreateNode(first[0], first[1], first[2] || 0);
+    const endId = getOrCreateNode(last[0], last[1], last[2] || 0);
+    const vertices: [number, number, number][] = coords.map(c => [c[0], c[1], c[2] || 0]);
+    edges.push({
+      id: props.id || `GJ_E${++edgeCounter}`,
+      startNodeId: startId, endNodeId: endId,
+      dn: props.diameter || props.dn || 200,
+      material: props.material || "PVC",
+      tipoRede: props.tipoRede || "Genérico",
+      roughness: props.roughness,
+      vertices,
+      properties: { ...props, _source: "GeoJSON" },
+    });
+  }
 
-    if (geom.type === "Point") {
-      const [x, y, z] = geom.coordinates;
-      const id = props.id || props.ID || `GJ_N${++nodeCounter}`;
-      nodeIndex.set(`${x.toFixed(tolerance)},${y.toFixed(tolerance)}`, id);
-      nodes.push({ id, x, y, z: z || 0, tipo: "generic", properties: { ...props, _source: "GeoJSON" } });
-    } else if (geom.type === "LineString") {
-      const coords: number[][] = geom.coordinates;
-      const first = coords[0];
-      const last = coords[coords.length - 1];
-      const startId = getOrCreateNode(first[0], first[1], first[2] || 0);
-      const endId = getOrCreateNode(last[0], last[1], last[2] || 0);
-      
-      // Store intermediate vertices
-      const vertices: [number, number, number][] = coords.map(c => [c[0], c[1], c[2] || 0] as [number, number, number]);
+  function processGeometry(geom: any, props: Record<string, any>) {
+    if (!geom || !geom.type) return;
 
-      edges.push({
-        id: props.id || `GJ_E${++edgeCounter}`,
-        startNodeId: startId, endNodeId: endId,
-        dn: props.diameter || props.dn || 200,
-        material: props.material || "PVC",
-        tipoRede: props.tipoRede || "Genérico",
-        roughness: props.roughness,
-        vertices,
-        properties: { ...props, _source: "GeoJSON" },
-      });
+    switch (geom.type) {
+      case "Point": {
+        const [x, y, z] = geom.coordinates;
+        const id = props.id || props.ID || `GJ_N${++nodeCounter}`;
+        nodeIndex.set(`${x.toFixed(tolerance)},${y.toFixed(tolerance)}`, id);
+        nodes.push({ id, x, y, z: z || 0, tipo: "generic", properties: { ...props, _source: "GeoJSON" } });
+        break;
+      }
+      case "MultiPoint": {
+        for (const coord of geom.coordinates) {
+          const [x, y, z] = coord;
+          const id = `GJ_N${++nodeCounter}`;
+          nodeIndex.set(`${x.toFixed(tolerance)},${y.toFixed(tolerance)}`, id);
+          nodes.push({ id, x, y, z: z || 0, tipo: "generic", properties: { ...props, _source: "GeoJSON" } });
+        }
+        break;
+      }
+      case "LineString": {
+        addLineString(geom.coordinates, props);
+        break;
+      }
+      case "MultiLineString": {
+        for (const line of geom.coordinates) {
+          addLineString(line, { ...props, id: undefined }); // each sub-line gets unique id
+        }
+        break;
+      }
+      case "Polygon": {
+        // Import exterior ring as a closed polyline edge
+        if (geom.coordinates && geom.coordinates[0]) {
+          addLineString(geom.coordinates[0], { ...props, id: undefined, _geometryType: "Polygon" });
+        }
+        break;
+      }
+      case "MultiPolygon": {
+        for (const poly of geom.coordinates) {
+          if (poly[0]) {
+            addLineString(poly[0], { ...props, id: undefined, _geometryType: "MultiPolygon" });
+          }
+        }
+        break;
+      }
+      case "GeometryCollection": {
+        for (const g of (geom.geometries || [])) {
+          processGeometry(g, props);
+        }
+        break;
+      }
     }
+  }
+
+  for (const feature of features) {
+    const props = feature.properties || {};
+    processGeometry(feature.geometry || feature, props);
   }
 
   return { nodes, edges };
@@ -455,20 +742,21 @@ export function parseDXFToInternal(
   const entities = parseDxfEntities(content);
   const nodes: InpParsed["nodes"] = [];
   const edges: InpParsed["edges"] = [];
-  const nodeIndex = new Map<string, string>(); // coordKey → nodeId
+  const nodeIndex = new Map<string, string>();
   let nodeCounter = 0;
   let edgeCounter = 0;
   const snapDecimals = 4;
 
   // Build role lookup from entity mappings
   const roleMap = new Map<string, EntityImportRole>();
-  if (entityMappings) {
+  if (entityMappings && entityMappings.length > 0) {
     entityMappings.forEach(m => roleMap.set(m.entityType.toUpperCase(), m.role));
   } else {
     // Default: lines→edge, points→node
     roleMap.set("LINE", "edge");
     roleMap.set("LWPOLYLINE", "edge");
     roleMap.set("POLYLINE", "edge");
+    roleMap.set("3DPOLYLINE", "edge");
     roleMap.set("POINT", "node");
     roleMap.set("INSERT", "node");
     roleMap.set("CIRCLE", "ignore");
@@ -485,12 +773,11 @@ export function parseDXFToInternal(
 
   for (const e of entities) {
     const role = roleMap.get(e.type.toUpperCase()) ?? "ignore";
-    if (role === "ignore") continue;
+    if (role === "ignore" || role === "drawing") continue;
 
     if (role === "node") {
       if (e.x !== undefined && e.y !== undefined) {
         const id = getOrCreateNode(e.x, e.y, e.z ?? 0, e.layer);
-        // Update tipo if INSERT (usually PV, CI, etc.)
         const existing = nodes.find(n => n.id === id);
         if (existing && e.type === "INSERT") {
           existing.tipo = "pv";
@@ -511,14 +798,18 @@ export function parseDXFToInternal(
             properties: { layer: e.layer, entityType: e.type, _source: "DXF" },
           });
         }
-      } else if (e.type === "LWPOLYLINE" || e.type === "POLYLINE") {
+      } else if (e.type === "LWPOLYLINE" || e.type === "POLYLINE" || e.type === "3DPOLYLINE") {
         const verts: { x: number; y: number; z: number }[] = [];
         if (e.vertices && e.vertices.length > 0) {
           verts.push(...e.vertices);
         }
-        // For LWPOLYLINE, the first vertex may be stored as x,y,z
-        if (verts.length === 0 && e.x !== undefined && e.y !== undefined) {
-          verts.push({ x: e.x, y: e.y, z: e.z ?? 0 });
+        // For LWPOLYLINE, the first point may be in x,y,z fields
+        if (e.x !== undefined && e.y !== undefined) {
+          // Check if this point is already the first vertex
+          const firstVert = verts[0];
+          if (!firstVert || (Math.abs(firstVert.x - e.x) > 0.0001 || Math.abs(firstVert.y - e.y) > 0.0001)) {
+            verts.unshift({ x: e.x, y: e.y, z: e.z ?? 0 });
+          }
         }
         if (verts.length >= 2) {
           const first = verts[0];
@@ -532,6 +823,9 @@ export function parseDXFToInternal(
             vertices: verts.map(v => [v.x, v.y, v.z] as [number, number, number]),
             properties: { layer: e.layer, entityType: e.type, _source: "DXF" },
           });
+        } else if (verts.length === 1) {
+          // Single vertex polyline → treat as point
+          getOrCreateNode(verts[0].x, verts[0].y, verts[0].z, e.layer);
         }
       }
     }
@@ -561,6 +855,55 @@ export function detectDxfEntityTypes(content: string): EntityTypeMapping[] {
       : pointTypes.has(entityType) ? "node" as EntityImportRole
       : "ignore" as EntityImportRole,
     count,
+  }));
+}
+
+// ════════════════════════════════════════
+// DETECT GEOJSON ENTITY TYPES
+// ════════════════════════════════════════
+
+export function detectGeoJSONEntityTypes(content: string): EntityTypeMapping[] {
+  const geojson = JSON.parse(content);
+  const features = geojson.type === "FeatureCollection" ? geojson.features
+    : geojson.type === "Feature" ? [geojson]
+    : geojson.type ? [{ type: "Feature", geometry: geojson, properties: {} }] : [];
+  const counts = new Map<string, number>();
+
+  function countGeom(geom: any) {
+    if (!geom || !geom.type) return;
+    if (geom.type === "GeometryCollection") {
+      for (const g of (geom.geometries || [])) countGeom(g);
+      return;
+    }
+    counts.set(geom.type, (counts.get(geom.type) || 0) + 1);
+  }
+
+  for (const f of features) countGeom(f.geometry || f);
+
+  const lineTypes = new Set(["LineString", "MultiLineString"]);
+  const pointTypes = new Set(["Point", "MultiPoint"]);
+
+  return Array.from(counts.entries()).map(([entityType, count]) => ({
+    entityType,
+    role: lineTypes.has(entityType) ? "edge" as EntityImportRole
+      : pointTypes.has(entityType) ? "node" as EntityImportRole
+      : "ignore" as EntityImportRole,
+    count,
+  }));
+}
+
+// ════════════════════════════════════════
+// DETECT INP/SWMM ENTITY TYPES
+// ════════════════════════════════════════
+
+export function detectINPEntityTypes(content: string): EntityTypeMapping[] {
+  const analysis = analyzeFileRaw(content, "INP");
+  return analysis.entityCounts.map(e => ({
+    entityType: e.type,
+    role: e.geometricClass === "line" ? "edge" as EntityImportRole
+      : e.geometricClass === "point" ? "node" as EntityImportRole
+      : "ignore" as EntityImportRole,
+    count: e.count,
   }));
 }
 
