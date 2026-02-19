@@ -3,7 +3,8 @@ import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Download, Filter, Trash2, Pencil } from "lucide-react";
+import { Download, Filter, Trash2, Pencil, Upload } from "lucide-react";
+import { ImportRDODialog } from "./ImportRDODialog";
 import { toast } from "sonner";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import jsPDF from "jspdf";
@@ -39,6 +40,7 @@ export const RDOHistoryView = ({ projectId }: RDOHistoryViewProps) => {
   const [exportingRdo, setExportingRdo] = useState<any>(null);
   const [editingRdo, setEditingRdo] = useState<any>(null);
   const [consolidateServices, setConsolidateServices] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
@@ -521,6 +523,10 @@ export const RDOHistoryView = ({ projectId }: RDOHistoryViewProps) => {
             </div>
 
             <div className="flex items-end gap-2">
+              <Button onClick={() => setShowImportDialog(true)} variant="outline" className="flex-1">
+                <Upload className="w-4 h-4 mr-2" />
+                Importar
+              </Button>
               <Button onClick={handleExportCSV} variant="outline" className="flex-1">
                 <Download className="w-4 h-4 mr-2" />
                 CSV
@@ -766,6 +772,14 @@ export const RDOHistoryView = ({ projectId }: RDOHistoryViewProps) => {
         rdo={editingRdo}
         open={!!editingRdo}
         onOpenChange={(open) => !open && setEditingRdo(null)}
+        onSuccess={loadRDOs}
+      />
+
+      {/* Import RDO Dialog */}
+      <ImportRDODialog
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        projectId={projectId}
         onSuccess={loadRDOs}
       />
     </div>
