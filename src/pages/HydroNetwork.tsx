@@ -18,6 +18,8 @@ import { useParams } from "react-router-dom";
 import { parseTopographyFile, parseTopographyCSV, validateTopographySequence, PontoTopografico } from "@/engine/reader";
 import { parseDxfFile, parseDxfToPoints } from "@/engine/dxfReader";
 import { FieldMappingDialog, SourceField, FieldMapping } from "@/components/hydronetwork/FieldMappingDialog";
+import { ImportWizard, DetectedFileInfo, ImportResult, SourceField as WizardSourceField } from "@/components/hydronetwork/ImportWizard";
+import { ValidationReport } from "@/components/hydronetwork/ValidationReport";
 import { createTrechosFromTopography, summarizeNetwork, Trecho, NetworkSummary, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from "@/engine/domain";
 import { parseCostBaseFile, applyBudget, createBudgetSummary, exportBudgetExcel, BudgetRow, BudgetSummary, CostBase } from "@/engine/budget";
 import { criarParametrosExecucao, ParametrosExecucao, TipoSolo, TipoEscavacao, TipoPavimento, TipoMaterial } from "@/engine/construction";
@@ -46,7 +48,15 @@ import { BudgetCostModule } from "@/components/hydronetwork/modules/BudgetCostMo
 import { BdiModule } from "@/components/hydronetwork/modules/BdiModule";
 import { RDOPlanningModule } from "@/components/hydronetwork/modules/RDOPlanningModule";
 import { saveHydroProject, loadHydroProject } from "@/engine/sharedPlanningStore";
-// Shared state context - in a real app, use React Context or Zustand
+import {
+  getSpatialProject, createLayer, addNode, addEdge,
+  validateProject, ValidationIssue, CRS_CATALOG,
+  detectCRSFromCoordinates, getAllLayers, getAllNodes, getAllEdges,
+  nodesToLegacyPoints, edgesToLegacyTrechos, legacyPointsToNodes, legacyTrechosToEdges,
+  setProjectCRS, importEdgeWithAutoNodes, resetSpatialProject,
+} from "@/engine/spatialCore";
+
+// Shared state context
 const useHydroState = () => {
   const [pontos, setPontos] = useState<PontoTopografico[]>([]);
   const [trechos, setTrechos] = useState<Trecho[]>([]);
@@ -89,10 +99,21 @@ const HydroNetwork = () => {
   const [teamConfig, setTeamConfig] = useState<TeamConfig>(DEFAULT_TEAM_CONFIG);
   const [dataInicio, setDataInicio] = useState(new Date().toISOString().split("T")[0]);
 
-  // Field mapping dialog state
+  // Legacy field mapping dialog state
   const [showFieldMapping, setShowFieldMapping] = useState(false);
   const [pendingFileData, setPendingFileData] = useState<{ rows: Record<string, any>[]; fileName: string } | null>(null);
   const [detectedFields, setDetectedFields] = useState<SourceField[]>([]);
+
+  // New Import Wizard state
+  const [showImportWizard, setShowImportWizard] = useState(false);
+  const [wizardFileInfo, setWizardFileInfo] = useState<DetectedFileInfo | null>(null);
+  const [wizardSourceFields, setWizardSourceFields] = useState<WizardSourceField[]>([]);
+  const [wizardRows, setWizardRows] = useState<Record<string, any>[]>([]);
+  const [wizardFileName, setWizardFileName] = useState("");
+
+  // Validation report
+  const [showValidation, setShowValidation] = useState(false);
+  const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
 
   const processPoints = useCallback((pts: PontoTopografico[]) => {
     validateTopographySequence(pts);
@@ -103,6 +124,59 @@ const HydroNetwork = () => {
     setBudgetRows([]); setBudgetSummary(null);
     toast.success(`${pts.length} pontos carregados, ${segs.length} trechos criados.`);
   }, [diametroMm, material]);
+
+  // Handle Import Wizard result → feed into Spatial Core + legacy state
+  const handleImportResult = useCallback((result: ImportResult) => {
+    const project = getSpatialProject();
+    setProjectCRS(result.crs);
+
+    // Create a layer
+    const layer = createLayer({
+      name: result.layerName,
+      discipline: result.discipline,
+      geometryType: result.edges.length > 0 ? "LineString" : "Point",
+      sourceFile: result.sourceFile,
+      sourceCRS: result.crs,
+    });
+
+    // Add nodes to spatial core
+    result.nodes.forEach(n => {
+      addNode({ ...n, layerId: layer.id });
+    });
+
+    // Add edges to spatial core
+    result.edges.forEach(e => {
+      if (!project.nodes.has(e.startNodeId) || !project.nodes.has(e.endNodeId)) {
+        // Auto-create nodes at endpoints
+        importEdgeWithAutoNodes({
+          ...e,
+          startX: 0, startY: 0, startZ: 0,
+          endX: 0, endY: 0, endZ: 0,
+          layerId: layer.id,
+        });
+      } else {
+        addEdge({ ...e, layerId: layer.id });
+      }
+    });
+
+    // Sync to legacy state
+    const allNodes = getAllNodes();
+    const allEdges = getAllEdges();
+    const legacyPts = nodesToLegacyPoints(allNodes);
+    const legacyTrechos = edgesToLegacyTrechos(allEdges, project.nodes);
+    setPontos(legacyPts);
+    setTrechos(legacyTrechos);
+    if (legacyTrechos.length > 0) setNetworkSummary(summarizeNetwork(legacyTrechos));
+
+    // Run validation
+    const issues = validateProject();
+    if (issues.length > 0) {
+      setValidationIssues(issues);
+      setShowValidation(true);
+    }
+
+    toast.success(`Camada "${result.layerName}" importada: ${result.nodes.length} nós, ${result.edges.length} trechos`);
+  }, []);
 
   const applyFieldMapping = useCallback((mappings: FieldMapping[]) => {
     if (!pendingFileData) return;
@@ -129,21 +203,83 @@ const HydroNetwork = () => {
     setPendingFileData(null);
   }, [pendingFileData, processPoints]);
 
+  // Detect file info and open wizard
+  const openImportWizard = useCallback((
+    rows: Record<string, any>[],
+    fileName: string,
+    format: DetectedFileInfo["format"],
+    extraInfo?: Partial<DetectedFileInfo>
+  ) => {
+    const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+
+    // Detect geometry types
+    const geomTypes = new Set<string>();
+    const geomTypeField = headers.find(h => h === "_geom_type");
+    if (geomTypeField) {
+      rows.forEach(r => { if (r[geomTypeField]) geomTypes.add(String(r[geomTypeField])); });
+    }
+
+    // Detect Z
+    const hasZ = headers.some(h => {
+      const n = h.toLowerCase();
+      return n === "z" || n === "cota" || n === "elevation" || n === "elev" || n === "_geom_z";
+    });
+
+    // Detect CRS from first row
+    let detectedCRS = null;
+    const xField = headers.find(h => ["x", "este", "easting", "lon", "longitude", "_geom_x"].includes(h.toLowerCase()));
+    const yField = headers.find(h => ["y", "norte", "northing", "lat", "latitude", "_geom_y"].includes(h.toLowerCase()));
+    if (xField && yField && rows.length > 0) {
+      const x = parseFloat(String(rows[0][xField]));
+      const y = parseFloat(String(rows[0][yField]));
+      if (!isNaN(x) && !isNaN(y)) {
+        detectedCRS = detectCRSFromCoordinates(x, y);
+      }
+    }
+
+    // Detect layers
+    const layerField = headers.find(h => ["layer", "camada"].includes(h.toLowerCase()));
+    const layers = layerField ? [...new Set(rows.map(r => String(r[layerField] || "")).filter(Boolean))] : undefined;
+
+    const fileInfo: DetectedFileInfo = {
+      format,
+      hasGeometry: geomTypes.size > 0 || !!xField,
+      geometryTypes: Array.from(geomTypes),
+      hasZ,
+      detectedCRS,
+      detectedUnit: detectedCRS?.unit || "unknown",
+      fieldCount: headers.length,
+      recordCount: rows.length,
+      layers,
+      ...extraInfo,
+    };
+
+    const fields: WizardSourceField[] = headers.map(h => ({
+      name: h,
+      sampleValues: rows.slice(0, 3).map(r => String(r[h] ?? "")),
+      type: rows.slice(0, 5).every(r => !isNaN(Number(r[h])) && r[h] !== "" && r[h] !== undefined) ? "number" as const : "text" as const,
+    }));
+
+    setWizardFileInfo(fileInfo);
+    setWizardSourceFields(fields);
+    setWizardRows(rows);
+    setWizardFileName(fileName);
+    setShowImportWizard(true);
+  }, []);
+
   const handleTopographyUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
       const ext = file.name.split(".").pop()?.toLowerCase();
 
-      // DXF: parse into rows and show field mapping
+      // DXF: parse into rows and open wizard
       if (ext === "dxf") {
         const text = await file.text();
         const pts = parseDxfToPoints(text);
         if (pts.length === 0) { toast.error("Nenhum ponto encontrado no DXF."); return; }
-        // Extract ALL available fields from parsed points
         const allKeys = new Set<string>();
         pts.forEach(p => { Object.keys(p).forEach(k => allKeys.add(k)); });
-        // Ensure core fields always present
         ["id", "x", "y", "cota", "layer", "entityType"].forEach(k => allKeys.add(k));
         const headers = Array.from(allKeys);
         const rows = pts.map(p => {
@@ -151,19 +287,11 @@ const HydroNetwork = () => {
           headers.forEach(h => { row[h] = String((p as any)[h] ?? ""); });
           return row;
         });
-        const fields: SourceField[] = headers.map(h => ({
-          name: h,
-          sampleValues: rows.slice(0, 3).map(r => String(r[h] ?? "")),
-          type: ["x", "y", "cota"].includes(h) ? "number" as const : 
-                rows.slice(0, 5).every(r => !isNaN(Number(r[h])) && r[h] !== "") ? "number" as const : "text" as const,
-        }));
-        setDetectedFields(fields);
-        setPendingFileData({ rows, fileName: file.name });
-        setShowFieldMapping(true);
+        openImportWizard(rows, file.name, "DXF");
         return;
       }
 
-      // For CSV/TXT/XLSX/XLS: parse into rows then show field mapping
+      // CSV/TXT
       if (ext === "csv" || ext === "txt") {
         const text = await file.text();
         const lines = text.trim().split("\n").filter(l => l.trim());
@@ -179,140 +307,99 @@ const HydroNetwork = () => {
             headers.forEach((h, idx) => { row[h] = parts[idx]?.trim() ?? ""; });
             return row;
           });
-          const fields: SourceField[] = headers.map(h => ({
-            name: h,
-            sampleValues: rows.slice(0, 3).map(r => String(r[h] ?? "")),
-            type: rows.slice(0, 5).every(r => !isNaN(Number(r[h])) && r[h] !== "") ? "number" : "text" as any,
-          }));
-          setDetectedFields(fields);
-          setPendingFileData({ rows, fileName: file.name });
-          setShowFieldMapping(true);
+          openImportWizard(rows, file.name, ext === "csv" ? "CSV" : "TXT");
         } else {
-          // No header, try direct parse
           const pts = parseTopographyCSV(text);
           processPoints(pts);
         }
         return;
       }
 
+      // XLSX/XLS
       if (ext === "xlsx" || ext === "xls") {
         const buffer = await file.arrayBuffer();
         const wb = XLSX.read(buffer, { type: "array" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const data = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
         if (data.length === 0) { toast.error("Planilha vazia."); return; }
-        const headers = Object.keys(data[0]);
-        const fields: SourceField[] = headers.map(h => ({
-          name: h,
-          sampleValues: data.slice(0, 3).map(r => String(r[h] ?? "")),
-          type: data.slice(0, 5).every(r => !isNaN(Number(r[h])) && r[h] !== undefined) ? "number" : "text" as any,
-        }));
-        setDetectedFields(fields);
-        setPendingFileData({ rows: data, fileName: file.name });
-        setShowFieldMapping(true);
+        openImportWizard(data, file.name, "XLSX");
         return;
       }
 
-      // SHP, IFC, DWG, GPKG: try reading as text/binary and extract tabular attributes
-      if (ext === "shp" || ext === "ifc" || ext === "dwg" || ext === "gpkg" || ext === "geojson") {
+      // GeoJSON
       if (ext === "geojson") {
-          const text = await file.text();
-          const geojson = JSON.parse(text);
-          const features = geojson.features || [];
-          if (features.length === 0) { toast.error("GeoJSON sem features."); return; }
-          const allProps = new Set<string>();
-          features.forEach((f: any) => { if (f.properties) Object.keys(f.properties).forEach(k => allProps.add(k)); });
-          // Add geometry fields for all geometry types
-          allProps.add("_geom_type");
-          allProps.add("_geom_x"); allProps.add("_geom_y"); allProps.add("_geom_z");
-          // For LineString/polyline features, add start/end coordinate fields
-          const hasLines = features.some((f: any) => f.geometry?.type === "LineString" || f.geometry?.type === "MultiLineString");
-          if (hasLines) {
-            allProps.add("_line_start_x"); allProps.add("_line_start_y"); allProps.add("_line_start_z");
-            allProps.add("_line_end_x"); allProps.add("_line_end_y"); allProps.add("_line_end_z");
-            allProps.add("_line_num_vertices"); allProps.add("_line_length_approx");
-          }
-          const headersList = Array.from(allProps);
-          const rows = features.map((f: any, fi: number) => {
-            const row: Record<string, any> = { ...f.properties };
-            const geomType = f.geometry?.type || "Unknown";
-            row["_geom_type"] = geomType;
-            const coords = f.geometry?.coordinates || [];
-            if (geomType === "Point") {
-              row["_geom_x"] = String(coords[0] ?? ""); row["_geom_y"] = String(coords[1] ?? ""); row["_geom_z"] = String(coords[2] ?? "0");
-            } else if (geomType === "LineString") {
-              // First vertex as main coordinate
-              row["_geom_x"] = String(coords[0]?.[0] ?? ""); row["_geom_y"] = String(coords[0]?.[1] ?? ""); row["_geom_z"] = String(coords[0]?.[2] ?? "0");
-              // Start and end vertices
-              const start = coords[0] || []; const end = coords[coords.length - 1] || [];
-              row["_line_start_x"] = String(start[0] ?? ""); row["_line_start_y"] = String(start[1] ?? ""); row["_line_start_z"] = String(start[2] ?? "0");
-              row["_line_end_x"] = String(end[0] ?? ""); row["_line_end_y"] = String(end[1] ?? ""); row["_line_end_z"] = String(end[2] ?? "0");
-              row["_line_num_vertices"] = String(coords.length);
-              // Approximate length
-              let len = 0;
-              for (let vi = 1; vi < coords.length; vi++) {
-                const dx = (coords[vi][0] - coords[vi - 1][0]); const dy = (coords[vi][1] - coords[vi - 1][1]);
-                len += Math.sqrt(dx * dx + dy * dy);
-              }
-              row["_line_length_approx"] = String(len.toFixed(3));
-            } else if (geomType === "MultiLineString") {
-              const firstLine = coords[0] || [];
-              row["_geom_x"] = String(firstLine[0]?.[0] ?? ""); row["_geom_y"] = String(firstLine[0]?.[1] ?? ""); row["_geom_z"] = String(firstLine[0]?.[2] ?? "0");
-              const start = firstLine[0] || []; const end = firstLine[firstLine.length - 1] || [];
-              row["_line_start_x"] = String(start[0] ?? ""); row["_line_start_y"] = String(start[1] ?? ""); row["_line_start_z"] = String(start[2] ?? "0");
-              row["_line_end_x"] = String(end[0] ?? ""); row["_line_end_y"] = String(end[1] ?? ""); row["_line_end_z"] = String(end[2] ?? "0");
-              row["_line_num_vertices"] = String(firstLine.length);
-            } else {
-              row["_geom_x"] = String(coords[0] ?? ""); row["_geom_y"] = String(coords[1] ?? ""); row["_geom_z"] = String(coords[2] ?? "0");
-            }
-            return row;
-          });
-          const fields: SourceField[] = headersList.map(h => ({
-            name: h, sampleValues: rows.slice(0, 3).map((r: any) => String(r[h] ?? "")),
-            type: rows.slice(0, 5).every((r: any) => !isNaN(Number(r[h])) && r[h] !== "" && r[h] !== undefined) ? "number" as const : "text" as const,
-          }));
-          setDetectedFields(fields);
-          setPendingFileData({ rows, fileName: file.name });
-          setShowFieldMapping(true);
-          return;
+        const text = await file.text();
+        const geojson = JSON.parse(text);
+        const features = geojson.features || [];
+        if (features.length === 0) { toast.error("GeoJSON sem features."); return; }
+        const allProps = new Set<string>();
+        features.forEach((f: any) => { if (f.properties) Object.keys(f.properties).forEach(k => allProps.add(k)); });
+        allProps.add("_geom_type");
+        allProps.add("_geom_x"); allProps.add("_geom_y"); allProps.add("_geom_z");
+        const hasLines = features.some((f: any) => f.geometry?.type === "LineString" || f.geometry?.type === "MultiLineString");
+        if (hasLines) {
+          allProps.add("_line_start_x"); allProps.add("_line_start_y"); allProps.add("_line_start_z");
+          allProps.add("_line_end_x"); allProps.add("_line_end_y"); allProps.add("_line_end_z");
+          allProps.add("_line_num_vertices"); allProps.add("_line_length_approx");
         }
-        // IFC/BIM: parse text-based IFC STEP format to extract coordinate data
-        if (ext === "ifc") {
-          const text = await file.text();
-          const pts: { id: string; x: string; y: string; z: string; type: string; name: string }[] = [];
-          const lines = text.split(/\r?\n/);
-          let autoId = 1;
-          for (const line of lines) {
-            // Match IFCCARTESIANPOINT((...))
-            const cpMatch = line.match(/IFCCARTESIANPOINT\s*\(\s*\(\s*([-\d.eE+]+)\s*,\s*([-\d.eE+]+)\s*(?:,\s*([-\d.eE+]+))?\s*\)/i);
-            if (cpMatch) {
-              pts.push({
-                id: `IFC_${autoId++}`,
-                x: cpMatch[1], y: cpMatch[2], z: cpMatch[3] || "0",
-                type: "IFCCARTESIANPOINT", name: "",
-              });
+        const headersList = Array.from(allProps);
+        const rows = features.map((f: any) => {
+          const row: Record<string, any> = { ...f.properties };
+          const geomType = f.geometry?.type || "Unknown";
+          row["_geom_type"] = geomType;
+          const coords = f.geometry?.coordinates || [];
+          if (geomType === "Point") {
+            row["_geom_x"] = String(coords[0] ?? ""); row["_geom_y"] = String(coords[1] ?? ""); row["_geom_z"] = String(coords[2] ?? "0");
+          } else if (geomType === "LineString") {
+            row["_geom_x"] = String(coords[0]?.[0] ?? ""); row["_geom_y"] = String(coords[0]?.[1] ?? ""); row["_geom_z"] = String(coords[0]?.[2] ?? "0");
+            const start = coords[0] || []; const end = coords[coords.length - 1] || [];
+            row["_line_start_x"] = String(start[0] ?? ""); row["_line_start_y"] = String(start[1] ?? ""); row["_line_start_z"] = String(start[2] ?? "0");
+            row["_line_end_x"] = String(end[0] ?? ""); row["_line_end_y"] = String(end[1] ?? ""); row["_line_end_z"] = String(end[2] ?? "0");
+            row["_line_num_vertices"] = String(coords.length);
+            let len = 0;
+            for (let vi = 1; vi < coords.length; vi++) {
+              const dx = (coords[vi][0] - coords[vi - 1][0]); const dy = (coords[vi][1] - coords[vi - 1][1]);
+              len += Math.sqrt(dx * dx + dy * dy);
             }
+            row["_line_length_approx"] = String(len.toFixed(3));
+          } else if (geomType === "MultiLineString") {
+            const firstLine = coords[0] || [];
+            row["_geom_x"] = String(firstLine[0]?.[0] ?? ""); row["_geom_y"] = String(firstLine[0]?.[1] ?? ""); row["_geom_z"] = String(firstLine[0]?.[2] ?? "0");
+            const start = firstLine[0] || []; const end = firstLine[firstLine.length - 1] || [];
+            row["_line_start_x"] = String(start[0] ?? ""); row["_line_start_y"] = String(start[1] ?? ""); row["_line_start_z"] = String(start[2] ?? "0");
+            row["_line_end_x"] = String(end[0] ?? ""); row["_line_end_y"] = String(end[1] ?? ""); row["_line_end_z"] = String(end[2] ?? "0");
+            row["_line_num_vertices"] = String(firstLine.length);
+          } else {
+            row["_geom_x"] = String(coords[0] ?? ""); row["_geom_y"] = String(coords[1] ?? ""); row["_geom_z"] = String(coords[2] ?? "0");
           }
-          if (pts.length === 0) {
-            toast.error("Nenhum ponto de coordenadas encontrado no IFC. Tente converter para GeoJSON/CSV via software BIM.");
-            return;
+          return row;
+        });
+        openImportWizard(rows, file.name, "GeoJSON");
+        return;
+      }
+
+      // IFC
+      if (ext === "ifc") {
+        const text = await file.text();
+        const pts: { id: string; x: string; y: string; z: string; type: string }[] = [];
+        const lines = text.split(/\r?\n/);
+        let autoId = 1;
+        for (const line of lines) {
+          const cpMatch = line.match(/IFCCARTESIANPOINT\s*\(\s*\(\s*([-\d.eE+]+)\s*,\s*([-\d.eE+]+)\s*(?:,\s*([-\d.eE+]+))?\s*\)/i);
+          if (cpMatch) {
+            pts.push({ id: `IFC_${autoId++}`, x: cpMatch[1], y: cpMatch[2], z: cpMatch[3] || "0", type: "IFCCARTESIANPOINT" });
           }
-          // Limit to manageable amount
-          const limitedPts = pts.slice(0, 5000);
-          const headers = ["id", "x", "y", "z", "type"];
-          const rows = limitedPts.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, type: p.type }));
-          const fields: SourceField[] = headers.map(h => ({
-            name: h,
-            sampleValues: rows.slice(0, 3).map(r => String((r as any)[h] ?? "")),
-            type: ["x", "y", "z"].includes(h) ? "number" as const : "text" as const,
-          }));
-          setDetectedFields(fields);
-          setPendingFileData({ rows, fileName: file.name });
-          setShowFieldMapping(true);
-          toast.info(`${limitedPts.length} pontos extraídos do IFC (de ${pts.length} total).`);
-          return;
         }
-        toast.info(`Formato .${ext}: Converta para GeoJSON, CSV ou DXF usando QGIS para importar com mapeamento de campos.`);
+        if (pts.length === 0) { toast.error("Nenhum ponto no IFC."); return; }
+        const limitedPts = pts.slice(0, 5000);
+        const rows = limitedPts.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, type: p.type }));
+        openImportWizard(rows, file.name, "IFC");
+        toast.info(`${limitedPts.length} pontos extraídos do IFC.`);
+        return;
+      }
+
+      if (ext === "shp" || ext === "dwg" || ext === "gpkg") {
+        toast.info(`Formato .${ext}: Converta para GeoJSON, CSV ou DXF usando QGIS para importar.`);
         return;
       }
 
@@ -320,7 +407,7 @@ const HydroNetwork = () => {
       const pts = await parseTopographyFile(file);
       processPoints(pts);
     } catch (err: any) { toast.error(err.message || "Erro ao processar arquivo."); }
-  }, [processPoints]);
+  }, [processPoints, openImportWizard]);
 
   const handleClearTopography = useCallback(() => {
     setPontos([]);
@@ -329,6 +416,7 @@ const HydroNetwork = () => {
     setBudgetRows([]);
     setBudgetSummary(null);
     setScheduleResult(null);
+    resetSpatialProject();
     toast.success("Dados de topografia limpos.");
   }, []);
 
@@ -367,7 +455,6 @@ const HydroNetwork = () => {
 
   const fmt = (n: number, d = 2) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
   const fmtCurrency = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  
 
   const renderModule = () => {
     switch (activeModule) {
@@ -420,6 +507,9 @@ const HydroNetwork = () => {
   const [summaryFilter, setSummaryFilter] = useState<string>("todos");
 
   function TopografiaModule() {
+    const spatialProject = getSpatialProject();
+    const layerCount = getAllLayers().length;
+
     return (
       <div className="space-y-4">
         {/* Header */}
@@ -431,10 +521,12 @@ const HydroNetwork = () => {
                   <MapPin className="h-5 w-5 text-blue-600" /> Levantamento Topográfico
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Importe pontos topográficos (CSV, TXT, XLSX, DXF) e visualize no mapa interativo
+                  Importe dados (CSV, XLSX, DXF, GeoJSON, IFC) com wizard de 4 etapas estilo QGIS
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {layerCount > 0 && <Badge variant="outline">{layerCount} camadas</Badge>}
+                <Badge className="bg-muted text-muted-foreground text-xs">CRS: {spatialProject.crs.name}</Badge>
                 {pontos.length > 0 && (
                   <>
                     <Badge className="bg-blue-600">{pontos.length} pontos</Badge>
@@ -445,11 +537,12 @@ const HydroNetwork = () => {
             </div>
           </CardContent>
         </Card>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" /> Carregar Topografia</CardTitle>
-              <CardDescription>CSV, TXT, XLSX, XLS, DXF</CardDescription>
+              <CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" /> Importar Dados</CardTitle>
+              <CardDescription>CSV, TXT, XLSX, DXF, GeoJSON, IFC — Wizard de 4 etapas</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {pontos.length > 0 ? (
@@ -459,24 +552,42 @@ const HydroNetwork = () => {
                       <Badge variant="default" className="bg-green-600">{pontos.length} pontos</Badge>
                       <Badge variant="secondary">{trechos.length} trechos</Badge>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={handleClearTopography}>
-                      <X className="h-4 w-4 mr-1" /> Limpar
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => {
+                        const issues = validateProject();
+                        setValidationIssues(issues);
+                        setShowValidation(true);
+                      }}>
+                        <AlertTriangle className="h-4 w-4 mr-1" /> Validar
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={handleClearTopography}>
+                        <X className="h-4 w-4 mr-1" /> Limpar
+                      </Button>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">Dados processados. Clique em "Limpar" para substituir.</p>
+                  <p className="text-xs text-muted-foreground">Dados processados. Importe mais camadas ou limpe para substituir.</p>
                 </div>
               ) : (
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer">
                   <Upload className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground mb-2">Arraste ou clique para selecionar</p>
-                   <p className="text-xs text-muted-foreground mb-1">Aceita: CSV, TXT, XLSX, XLS, <strong>DXF</strong>, SHP, GeoJSON</p>
-                   <p className="text-xs text-muted-foreground mb-3">Ao importar CSV/XLSX, você poderá mapear manualmente quais colunas correspondem a X, Y, Z, ID, etc.</p>
-                   <Input type="file" accept=".csv,.txt,.xlsx,.xls,.dxf,.shp,.ifc,.dwg,.gpkg,.geojson" onChange={handleTopographyUpload} className="mt-2" />
+                  <p className="text-xs text-muted-foreground mb-1">Aceita: CSV, TXT, XLSX, <strong>DXF</strong>, GeoJSON, IFC</p>
+                  <p className="text-xs text-muted-foreground mb-3">Wizard de importação com CRS obrigatório, tipo de modelo e mapeamento livre de atributos</p>
+                  <Input type="file" accept=".csv,.txt,.xlsx,.xls,.dxf,.shp,.ifc,.dwg,.gpkg,.geojson" onChange={handleTopographyUpload} className="mt-2" />
                 </div>
               )}
+
+              {/* Add more layers even when data exists */}
+              {pontos.length > 0 && (
+                <div className="border border-dashed border-border rounded p-3">
+                  <p className="text-xs text-muted-foreground mb-2">Adicionar mais camadas ao projeto</p>
+                  <Input type="file" accept=".csv,.txt,.xlsx,.xls,.dxf,.shp,.ifc,.dwg,.gpkg,.geojson" onChange={handleTopographyUpload} />
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>Colar dados manualmente</Label>
-                <Textarea placeholder={"358129.1978,7353581.4981,-0.8630\n358132.1686,7353618.8114,-0.7250\n\nou com cabeçalho:\nid;x;y;cota"} value={pasteData} onChange={e => setPasteData(e.target.value)} rows={4} />
+                <Textarea placeholder={"358129.1978,7353581.4981,-0.8630\n..."} value={pasteData} onChange={e => setPasteData(e.target.value)} rows={3} />
                 <Button variant="outline" size="sm" onClick={handlePasteData} className="w-full">Processar Dados Colados</Button>
                 <Button variant="secondary" size="sm" onClick={async () => {
                   try {
@@ -488,6 +599,7 @@ const HydroNetwork = () => {
                   } catch (err: any) { toast.error(err.message); }
                 }} className="w-full">🎯 Carregar Demo (pontos_criadores.txt)</Button>
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Diâmetro (mm)</Label>
@@ -557,17 +669,17 @@ const HydroNetwork = () => {
                   const filteredTrechos = summaryFilter === "todos" ? trechos :
                     summaryFilter === "esgoto" ? trechos.filter(t => t.tipoRede === "Esgoto por Gravidade") :
                     summaryFilter === "elevatoria" ? trechos.filter(t => t.tipoRede !== "Esgoto por Gravidade") :
-                    trechos; // agua/drenagem use all for now (type is determined by module)
+                    trechos;
                   const summary = summarizeNetwork(filteredTrechos);
                   return (
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { label: "Pontos", value: pontos.length, color: "text-blue-600", desc: "Total de pontos topográficos carregados" },
-                        { label: "Trechos", value: summary.totalTrechos, color: "text-green-600", desc: "Segmentos de tubulação entre pontos" },
-                        { label: "Comprimento", value: `${fmt(summary.comprimentoTotal, 1)}m`, color: "text-orange-600", desc: "Extensão total da rede" },
-                        { label: "Gravidade", value: summary.trechosGravidade, color: "text-green-600", desc: "Trechos com escoamento por gravidade (decliv. positiva)" },
-                        { label: "Elevatória", value: summary.trechosElevatoria, color: "text-orange-600", desc: "Trechos que necessitam bombeamento (decliv. negativa)" },
-                        { label: "Decliv. Média", value: `${(summary.declividadeMedia * 100).toFixed(2)}%`, color: "text-purple-600", desc: "Declividade média ponderada da rede" },
+                        { label: "Pontos", value: pontos.length, color: "text-blue-600", desc: "Total de pontos topográficos" },
+                        { label: "Trechos", value: summary.totalTrechos, color: "text-green-600", desc: "Segmentos de tubulação" },
+                        { label: "Comprimento", value: `${fmt(summary.comprimentoTotal, 1)}m`, color: "text-orange-600", desc: "Extensão total" },
+                        { label: "Gravidade", value: summary.trechosGravidade, color: "text-green-600", desc: "Escoamento por gravidade" },
+                        { label: "Elevatória", value: summary.trechosElevatoria, color: "text-orange-600", desc: "Necessita bombeamento" },
+                        { label: "Decliv. Média", value: `${(summary.declividadeMedia * 100).toFixed(2)}%`, color: "text-purple-600", desc: "Declividade média ponderada" },
                       ].map((item, i) => (
                         <TooltipProvider key={i}>
                           <Tooltip>
@@ -590,7 +702,35 @@ const HydroNetwork = () => {
             </Card>
           )}
         </div>
+
+        {/* Spatial Layers Panel */}
+        {getAllLayers().length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Settings2 className="h-4 w-4" /> Camadas do Projeto ({getAllLayers().length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-1">
+                {getAllLayers().map(layer => (
+                  <div key={layer.id} className="flex items-center justify-between py-1 px-2 rounded hover:bg-muted/50 text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: layer.color }} />
+                      <span className="font-medium">{layer.name}</span>
+                      <Badge variant="outline" className="text-[10px]">{layer.discipline}</Badge>
+                      <Badge variant="outline" className="text-[10px]">{layer.geometryType}</Badge>
+                    </div>
+                    <span className="text-muted-foreground">{layer.nodeIds.length} nós · {layer.edgeIds.length} trechos</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <TopographyMap pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} onClearAll={handleClearTopography} onPontosChange={setPontos} />
+
         {pontos.length > 0 && (
           <Card>
             <CardHeader><CardTitle>Pontos ({pontos.length})</CardTitle></CardHeader>
@@ -611,27 +751,23 @@ const HydroNetwork = () => {
               <div className="max-h-[400px] overflow-auto">
                 <Table>
                   <TableHeader>
-                     <TableRow>
-                       <TableHead>Início</TableHead>
-                       <TableHead>Fim</TableHead>
-                       <TableHead>Comp.</TableHead>
-                       <TableHead>Decliv.</TableHead>
-                       <TableHead>Desnível</TableHead>
-                       <TableHead>Material</TableHead>
-                     </TableRow>
+                    <TableRow>
+                      <TableHead>Início</TableHead><TableHead>Fim</TableHead><TableHead>Comp.</TableHead>
+                      <TableHead>Decliv.</TableHead><TableHead>Desnível</TableHead><TableHead>Material</TableHead>
+                    </TableRow>
                   </TableHeader>
                   <TableBody>{trechos.map((t, i) => (
-                     <TableRow key={i}>
-                       <TableCell className="font-medium">{t.idInicio}</TableCell>
-                       <TableCell className="font-medium">{t.idFim}</TableCell>
-                       <TableCell>{fmt(t.comprimento, 2)}m</TableCell>
-                       <TableCell className={t.declividade < 0 ? "text-destructive font-medium" : ""}>{(t.declividade * 100).toFixed(2)}%</TableCell>
-                       <TableCell className={t.cotaInicio - t.cotaFim < 0 ? "text-destructive" : "text-green-600"}>
-                         {(t.cotaInicio - t.cotaFim).toFixed(3)}m
-                       </TableCell>
-                       <TableCell><Badge variant="outline">{t.material}</Badge></TableCell>
-                     </TableRow>
-                   ))}</TableBody>
+                    <TableRow key={i}>
+                      <TableCell className="font-medium">{t.idInicio}</TableCell>
+                      <TableCell className="font-medium">{t.idFim}</TableCell>
+                      <TableCell>{fmt(t.comprimento, 2)}m</TableCell>
+                      <TableCell className={t.declividade < 0 ? "text-destructive font-medium" : ""}>{(t.declividade * 100).toFixed(2)}%</TableCell>
+                      <TableCell className={t.cotaInicio - t.cotaFim < 0 ? "text-destructive" : "text-green-600"}>
+                        {(t.cotaInicio - t.cotaFim).toFixed(3)}m
+                      </TableCell>
+                      <TableCell><Badge variant="outline">{t.material}</Badge></TableCell>
+                    </TableRow>
+                  ))}</TableBody>
                 </Table>
               </div>
             </CardContent>
@@ -681,7 +817,20 @@ const HydroNetwork = () => {
           </Card>
         )}
 
-        {/* Field Mapping Dialog */}
+        {/* Import Wizard */}
+        {showImportWizard && wizardFileInfo && (
+          <ImportWizard
+            open={showImportWizard}
+            onOpenChange={setShowImportWizard}
+            sourceFields={wizardSourceFields}
+            fileInfo={wizardFileInfo}
+            fileName={wizardFileName}
+            rows={wizardRows}
+            onImport={handleImportResult}
+          />
+        )}
+
+        {/* Legacy Field Mapping Dialog (fallback) */}
         <FieldMappingDialog
           open={showFieldMapping}
           onOpenChange={setShowFieldMapping}
@@ -689,6 +838,15 @@ const HydroNetwork = () => {
           fileName={pendingFileData?.fileName || ""}
           rowCount={pendingFileData?.rows.length || 0}
           onConfirm={applyFieldMapping}
+        />
+
+        {/* Validation Report */}
+        <ValidationReport
+          open={showValidation}
+          onOpenChange={setShowValidation}
+          issues={validationIssues}
+          nodeCount={pontos.length}
+          edgeCount={trechos.length}
         />
       </div>
     );
@@ -704,7 +862,7 @@ const HydroNetwork = () => {
   function MapaInterativoModule() {
     return (
       <div className="space-y-4">
-        <TopographyMap pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />
+        <TopographyMap pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} onPontosChange={setPontos} />
         <Card>
           <CardHeader><CardTitle>Camadas</CardTitle></CardHeader>
           <CardContent>
@@ -795,7 +953,7 @@ const HydroNetwork = () => {
                   toast.success(`Projeto restaurado: ${saved.pontos?.length || 0} pontos, ${saved.trechos?.length || 0} trechos`);
                 }}>📂 Carregar Projeto</Button>
                 <Button variant="outline" size="sm" onClick={() => {
-                  toast.info(`Pontos: ${pontos.length} | Trechos: ${trechos.length} | RDOs: ${rdos.length} | Cronograma: ${scheduleResult ? "Sim" : "Não"}`);
+                  toast.info(`Pontos: ${pontos.length} | Trechos: ${trechos.length} | RDOs: ${rdos.length} | Camadas: ${getAllLayers().length} | CRS: ${getSpatialProject().crs.name}`);
                 }}>✅ Verificar Plataforma</Button>
               </div>
             </div>
