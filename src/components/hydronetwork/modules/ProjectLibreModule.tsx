@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,15 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Upload, Download, Trash2, Calendar, ZoomIn, ZoomOut, Maximize, Package, RefreshCw, GitCompare, FileText, Edit } from "lucide-react";
+import { Plus, Upload, Download, Trash2, Calendar, FileText, RefreshCw, Save, Package } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
-
-interface Resource { name: string; type: string; qty: number; }
-interface Task {
-  id: string; name: string; duration: number; start: string; resource: string;
-  predecessors: string; progress: number; color: string;
-}
+import { loadSharedPlanning, saveSharedPlanning, SharedPlanningData, SharedTask, SharedResource } from "@/engine/sharedPlanningStore";
 
 interface ProjectLibreModuleProps {
   pontos?: PontoTopografico[];
@@ -24,19 +19,52 @@ interface ProjectLibreModuleProps {
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
 
 const addDays = (dateStr: string, days: number) => {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
+  const d = new Date(dateStr); d.setDate(d.getDate() + days); return d.toISOString().split("T")[0];
 };
-
-const diffDays = (a: string, b: string) => {
-  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / (1000 * 60 * 60 * 24));
-};
+const diffDays = (a: string, b: string) => Math.round((new Date(b).getTime() - new Date(a).getTime()) / (1000 * 60 * 60 * 24));
 
 export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreModuleProps) => {
   const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
   const [ganttView, setGanttView] = useState("day");
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<SharedTask[]>([]);
+  const [resources, setResources] = useState<SharedResource[]>([]);
+  const [projectName, setProjectName] = useState("");
+  const [lastSyncSource, setLastSyncSource] = useState("");
+
+  // Load shared data on mount
+  useEffect(() => {
+    const shared = loadSharedPlanning();
+    if (shared && shared.tasks.length > 0) {
+      setTasks(shared.tasks);
+      setResources(shared.resources);
+      setProjectName(shared.projectName);
+      setStartDate(shared.startDate);
+      setLastSyncSource(shared.updatedBy);
+    }
+  }, []);
+
+  const syncFromShared = () => {
+    const shared = loadSharedPlanning();
+    if (shared && shared.tasks.length > 0) {
+      setTasks(shared.tasks);
+      setResources(shared.resources);
+      setProjectName(shared.projectName);
+      setStartDate(shared.startDate);
+      setLastSyncSource(shared.updatedBy);
+      toast.success(`Dados sincronizados (última edição: ${shared.updatedBy})`);
+    } else {
+      toast.info("Nenhum dado compartilhado encontrado.");
+    }
+  };
+
+  const saveToShared = () => {
+    const data: SharedPlanningData = {
+      projectName, manager: "", startDate, tasks, resources,
+      updatedAt: new Date().toISOString(), updatedBy: "projectlibre",
+    };
+    saveSharedPlanning(data);
+    toast.success("Dados salvos e compartilhados com Planning/OpenProject!");
+  };
 
   const addTask = () => {
     setTasks([...tasks, {
@@ -46,26 +74,26 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
   };
 
   const loadPlatformData = () => {
-    if (trechos.length === 0) {
-      toast.error("Carregue topografia primeiro.");
-      return;
-    }
-    const newTasks: Task[] = [];
+    if (trechos.length === 0) { toast.error("Carregue topografia primeiro."); return; }
+    const newTasks: SharedTask[] = [];
     let currentDate = startDate;
     const prodPerDay = 50;
     trechos.forEach((t, i) => {
       const dur = Math.max(1, Math.ceil(t.comprimento / prodPerDay));
       newTasks.push({
-        id: `T${i + 1}`,
-        name: `Trecho ${t.idInicio}-${t.idFim} (${t.comprimento.toFixed(1)}m)`,
+        id: `T${i + 1}`, name: `Trecho ${t.idInicio}-${t.idFim} (${t.comprimento.toFixed(1)}m)`,
         duration: dur, start: currentDate, resource: "",
-        predecessors: i > 0 ? `T${i}` : "", progress: 0,
-        color: COLORS[i % COLORS.length],
+        predecessors: i > 0 ? `T${i}` : "", progress: 0, color: COLORS[i % COLORS.length],
       });
       currentDate = addDays(currentDate, dur);
     });
     setTasks(newTasks);
-    toast.success(`${newTasks.length} tarefas geradas.`);
+    // Auto-save
+    saveSharedPlanning({
+      projectName, manager: "", startDate, tasks: newTasks, resources,
+      updatedAt: new Date().toISOString(), updatedBy: "projectlibre",
+    });
+    toast.success(`${newTasks.length} tarefas geradas e compartilhadas.`);
   };
 
   const ganttData = useMemo(() => {
@@ -96,10 +124,26 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
 
   return (
     <div className="space-y-4">
+      {/* Sync bar */}
+      <Card className="border-pink-500/30 bg-pink-500/5">
+        <CardContent className="pt-3 pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="text-sm">
+              <span className="font-medium">🔄 Dados compartilhados com Planning/OpenProject</span>
+              {lastSyncSource && <span className="text-muted-foreground ml-2">(última edição: {lastSyncSource})</span>}
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={syncFromShared}><RefreshCw className="h-3 w-3 mr-1" /> Sincronizar</Button>
+              <Button size="sm" onClick={saveToShared}><Save className="h-3 w-3 mr-1" /> Salvar</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-pink-600" /> ProjectLibre</CardTitle>
-          <CardDescription>Gerenciamento de projetos com Gráfico de Gantt editável</CardDescription>
+          <CardDescription>Gerenciamento de projetos com Gráfico de Gantt editável — dados sincronizados</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -117,27 +161,23 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
       </Card>
 
       <div className="flex gap-2 flex-wrap">
-        <Button variant="outline"><Upload className="h-4 w-4 mr-1" /> Importar .pod/.xml</Button>
         <Button onClick={loadPlatformData}><Package className="h-4 w-4 mr-1" /> Usar Dados da Plataforma</Button>
         <Button size="sm" onClick={addTask} variant="outline"><Plus className="h-4 w-4 mr-1" /> Add Tarefa</Button>
         <Button variant="outline" onClick={() => { setTasks([]); toast.info("Tarefas limpas."); }}><Trash2 className="h-4 w-4 mr-1" /> Limpar</Button>
       </div>
 
-      {/* Gantt Chart */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-2">
             <CardTitle>📅 Gráfico de Gantt</CardTitle>
-            <div className="flex gap-2 items-center">
-              <Select value={ganttView} onValueChange={setGanttView}>
-                <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="day">Por Dia</SelectItem>
-                  <SelectItem value="week">Por Semana</SelectItem>
-                  <SelectItem value="month">Por Mês</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={ganttView} onValueChange={setGanttView}>
+              <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="day">Por Dia</SelectItem>
+                <SelectItem value="week">Por Semana</SelectItem>
+                <SelectItem value="month">Por Mês</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent>
@@ -180,10 +220,7 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
                         <Input type="number" value={t.progress} className="h-7 text-xs w-12" min={0} max={100} onChange={e => { const u = [...tasks]; u[i].progress = Math.min(100, Math.max(0, Number(e.target.value))); setTasks(u); }} />
                       </div>
                       <div className="w-[40px] shrink-0 p-1">
-                        <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => {
-                          setTasks(tasks.filter((_, j) => j !== i));
-                          toast.info(`Tarefa removida.`);
-                        }}>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => setTasks(tasks.filter((_, j) => j !== i))}>
                           <Trash2 className="h-3 w-3 text-destructive" />
                         </Button>
                       </div>
@@ -193,7 +230,7 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
                             <div key={ci} className="border-r border-border/20" style={{ width: `${100 / ganttData.columns.length}%` }} />
                           ))}
                         </div>
-                        <div className="absolute top-1/2 -translate-y-1/2 h-6 rounded-md shadow-sm flex items-center justify-center text-[10px] text-white font-medium" style={{ left: `${t.offsetPct}%`, width: `${Math.max(t.widthPct, 1.5)}%`, backgroundColor: t.color }} title={`${t.name} (${t.duration}d, ${t.progress}%)`}>
+                        <div className="absolute top-1/2 -translate-y-1/2 h-6 rounded-md shadow-sm flex items-center justify-center text-[10px] text-white font-medium" style={{ left: `${t.offsetPct}%`, width: `${Math.max(t.widthPct, 1.5)}%`, backgroundColor: t.color }}>
                           {t.widthPct > 5 && <span className="truncate px-1">{t.duration}d</span>}
                         </div>
                         {t.progress > 0 && (
@@ -216,8 +253,6 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
       <div className="flex gap-2 flex-wrap">
         <Button variant="outline"><Download className="h-4 w-4 mr-1" /> Exportar POD</Button>
         <Button variant="outline"><Download className="h-4 w-4 mr-1" /> Exportar XML</Button>
-        <Button variant="outline" onClick={() => toast.info("Sincronizando...")}><RefreshCw className="h-4 w-4 mr-1" /> Sincronizar</Button>
-        <Button variant="outline" onClick={() => toast.info("Comparando versões...")}><GitCompare className="h-4 w-4 mr-1" /> Comparar</Button>
       </div>
     </div>
   );

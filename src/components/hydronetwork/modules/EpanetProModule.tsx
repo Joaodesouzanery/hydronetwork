@@ -287,21 +287,32 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
   }, [rebuildMapConnections]);
 
   // ── Import INP ──
+  const [fileInputKey, setFileInputKey] = useState(0);
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !file.name.toLowerCase().endsWith(".inp")) { toast.error("Use arquivos .inp"); return; }
-    const text = await file.text();
-    const parsed = parseINP(text);
-    setJunctions(parsed.junctions);
-    setReservoirs(parsed.reservoirs);
-    setTanks(parsed.tanks);
-    setPipes(parsed.pipes);
-    setPumps(parsed.pumps);
-    setValves(parsed.valves);
-    setCoords(parsed.coords);
-    setResults(null);
-    rebuildMapConnections(parsed.pipes, parsed.pumps, parsed.valves);
-    toast.success(`INP importado: ${parsed.junctions.length} junções, ${parsed.pipes.length} tubos`);
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".inp")) { toast.error("Use arquivos .inp"); return; }
+    try {
+      const text = await file.text();
+      const parsed = parseINP(text);
+      if (parsed.junctions.length === 0 && parsed.pipes.length === 0) {
+        toast.error("Nenhum dado encontrado no arquivo .INP. Verifique o formato.");
+        return;
+      }
+      setJunctions(parsed.junctions);
+      setReservoirs(parsed.reservoirs);
+      setTanks(parsed.tanks);
+      setPipes(parsed.pipes);
+      setPumps(parsed.pumps);
+      setValves(parsed.valves);
+      setCoords(parsed.coords);
+      setResults(null);
+      rebuildMapConnections(parsed.pipes, parsed.pumps, parsed.valves);
+      toast.success(`INP importado: ${parsed.junctions.length} junções, ${parsed.pipes.length} tubos, ${parsed.coords.length} coordenadas`);
+    } catch (err: any) {
+      toast.error(`Erro ao importar INP: ${err.message}`);
+    }
+    setFileInputKey(k => k + 1); // reset file input
   }, [rebuildMapConnections]);
 
   // ── Run simulation ──
@@ -466,7 +477,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
             ))}
           </div>
           <div className="flex gap-2 flex-wrap">
-            <input ref={fileInputRef} type="file" accept=".inp,.INP" className="hidden" onChange={handleFileUpload} key={Date.now()} />
+            <input ref={fileInputRef} type="file" accept=".inp,.INP" className="hidden" onChange={handleFileUpload} key={fileInputKey} />
             <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4 mr-1" /> Importar .INP</Button>
             <Button variant="outline" onClick={loadExample}>📂 Carregar Exemplo</Button>
             <Button variant="outline" onClick={() => {

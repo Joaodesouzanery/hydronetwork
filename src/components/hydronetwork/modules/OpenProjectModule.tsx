@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,15 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Upload, Download, Trash2, Calendar, ZoomIn, ZoomOut, Maximize, Package } from "lucide-react";
+import { Plus, Upload, Download, Trash2, Calendar, ZoomIn, ZoomOut, Maximize, Package, Save, FolderOpen, RefreshCw } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
-
-interface Resource { name: string; type: string; qty: number; }
-interface Task {
-  id: string; name: string; duration: number; start: string; resource: string;
-  predecessors: string; progress: number; color: string;
-}
+import { loadSharedPlanning, saveSharedPlanning, SharedPlanningData, SharedTask, SharedResource } from "@/engine/sharedPlanningStore";
 
 interface OpenProjectModuleProps {
   pontos?: PontoTopografico[];
@@ -38,12 +33,50 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
   const [manager, setManager] = useState("");
   const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
   const [ganttView, setGanttView] = useState("day");
-  const [resources, setResources] = useState<Resource[]>([
+  const [resources, setResources] = useState<SharedResource[]>([
     { name: "Encarregado", type: "mdo", qty: 1 },
     { name: "Pedreiro", type: "mdo", qty: 3 },
     { name: "Ajudante", type: "mdo", qty: 6 },
   ]);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<SharedTask[]>([]);
+  const [lastSyncSource, setLastSyncSource] = useState<string>("");
+
+  // Load shared data on mount
+  useEffect(() => {
+    const shared = loadSharedPlanning();
+    if (shared && shared.tasks.length > 0) {
+      setTasks(shared.tasks);
+      setResources(shared.resources);
+      setProjectName(shared.projectName);
+      setManager(shared.manager);
+      setStartDate(shared.startDate);
+      setLastSyncSource(shared.updatedBy);
+    }
+  }, []);
+
+  const syncFromShared = () => {
+    const shared = loadSharedPlanning();
+    if (shared && shared.tasks.length > 0) {
+      setTasks(shared.tasks);
+      setResources(shared.resources);
+      setProjectName(shared.projectName);
+      setManager(shared.manager);
+      setStartDate(shared.startDate);
+      setLastSyncSource(shared.updatedBy);
+      toast.success(`Dados sincronizados (última edição: ${shared.updatedBy})`);
+    } else {
+      toast.info("Nenhum dado compartilhado encontrado.");
+    }
+  };
+
+  const saveToShared = () => {
+    const data: SharedPlanningData = {
+      projectName, manager, startDate, tasks, resources,
+      updatedAt: new Date().toISOString(), updatedBy: "openproject",
+    };
+    saveSharedPlanning(data);
+    toast.success("Dados salvos e compartilhados com Planning/ProjectLibre!");
+  };
 
   const addResource = () => {
     setResources([...resources, { name: "", type: "mdo", qty: 1 }]);
@@ -57,81 +90,73 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
   };
 
   const loadPlatformData = () => {
-    if (trechos.length === 0) {
-      toast.error("Carregue topografia primeiro.");
-      return;
-    }
-    const newTasks: Task[] = [];
+    if (trechos.length === 0) { toast.error("Carregue topografia primeiro."); return; }
+    const newTasks: SharedTask[] = [];
     let currentDate = startDate;
-    const prodPerDay = 50; // metros por dia
-
+    const prodPerDay = 50;
     trechos.forEach((t, i) => {
       const dur = Math.max(1, Math.ceil(t.comprimento / prodPerDay));
       newTasks.push({
-        id: `T${i + 1}`,
-        name: `Trecho ${t.idInicio}-${t.idFim} (${t.comprimento.toFixed(1)}m)`,
-        duration: dur,
-        start: currentDate,
-        resource: resources.length > 0 ? resources[i % resources.length].name : "",
-        predecessors: i > 0 ? `T${i}` : "",
-        progress: 0,
-        color: COLORS[i % COLORS.length],
+        id: `T${i + 1}`, name: `Trecho ${t.idInicio}-${t.idFim} (${t.comprimento.toFixed(1)}m)`,
+        duration: dur, start: currentDate, resource: resources.length > 0 ? resources[i % resources.length].name : "",
+        predecessors: i > 0 ? `T${i}` : "", progress: 0, color: COLORS[i % COLORS.length],
       });
       currentDate = addDays(currentDate, dur);
     });
     setTasks(newTasks);
-    toast.success(`${newTasks.length} tarefas geradas a partir dos trechos.`);
+    // Auto-save to shared
+    const data: SharedPlanningData = {
+      projectName, manager, startDate, tasks: newTasks, resources,
+      updatedAt: new Date().toISOString(), updatedBy: "openproject",
+    };
+    saveSharedPlanning(data);
+    toast.success(`${newTasks.length} tarefas geradas e compartilhadas.`);
   };
 
-  // Gantt chart computation
   const ganttData = useMemo(() => {
     if (tasks.length === 0) return null;
-    const allDates = tasks.map(t => ({
-      start: new Date(t.start),
-      end: new Date(addDays(t.start, t.duration)),
-    }));
+    const allDates = tasks.map(t => ({ start: new Date(t.start), end: new Date(addDays(t.start, t.duration)) }));
     const minDate = new Date(Math.min(...allDates.map(d => d.start.getTime())));
     const maxDate = new Date(Math.max(...allDates.map(d => d.end.getTime())));
     const totalDays = Math.max(1, diffDays(minDate.toISOString().split("T")[0], maxDate.toISOString().split("T")[0]));
-
-    // Generate column headers
     const columns: string[] = [];
     const colDate = new Date(minDate);
     for (let i = 0; i <= totalDays; i++) {
-      if (ganttView === "day") {
-        columns.push(`${colDate.getDate()}/${colDate.getMonth() + 1}`);
-      } else if (ganttView === "week") {
-        if (i % 7 === 0) columns.push(`S${Math.floor(i / 7) + 1}`);
-      } else {
-        if (i === 0 || colDate.getDate() === 1) {
-          columns.push(`${colDate.toLocaleString("pt-BR", { month: "short" })}`);
-        }
-      }
+      if (ganttView === "day") columns.push(`${colDate.getDate()}/${colDate.getMonth() + 1}`);
+      else if (ganttView === "week") { if (i % 7 === 0) columns.push(`S${Math.floor(i / 7) + 1}`); }
+      else { if (i === 0 || colDate.getDate() === 1) columns.push(colDate.toLocaleString("pt-BR", { month: "short" })); }
       colDate.setDate(colDate.getDate() + 1);
     }
-
     return {
-      minDate: minDate.toISOString().split("T")[0],
-      totalDays,
+      minDate: minDate.toISOString().split("T")[0], totalDays,
       columns: ganttView === "day" ? columns : columns.length > 0 ? columns : [""],
       tasks: tasks.map(t => {
         const offset = diffDays(minDate.toISOString().split("T")[0], t.start);
-        return {
-          ...t,
-          offsetPct: (offset / totalDays) * 100,
-          widthPct: (t.duration / totalDays) * 100,
-        };
+        return { ...t, offsetPct: (offset / totalDays) * 100, widthPct: (t.duration / totalDays) * 100 };
       }),
     };
   }, [tasks, ganttView]);
 
-  const totalDuration = tasks.length > 0 ? tasks.reduce((sum, t) => {
-    const end = diffDays(startDate, addDays(t.start, t.duration));
-    return Math.max(sum, end);
-  }, 0) : 0;
+  const totalDuration = tasks.length > 0 ? tasks.reduce((sum, t) => Math.max(sum, diffDays(startDate, addDays(t.start, t.duration))), 0) : 0;
 
   return (
     <div className="space-y-4">
+      {/* Sync bar */}
+      <Card className="border-blue-500/30 bg-blue-500/5">
+        <CardContent className="pt-3 pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="text-sm">
+              <span className="font-medium">🔄 Dados compartilhados</span>
+              {lastSyncSource && <span className="text-muted-foreground ml-2">(última edição: {lastSyncSource})</span>}
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={syncFromShared}><RefreshCw className="h-3 w-3 mr-1" /> Sincronizar</Button>
+              <Button size="sm" onClick={saveToShared}><Save className="h-3 w-3 mr-1" /> Salvar</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
@@ -159,9 +184,7 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Recursos ({resources.length})</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Recursos ({resources.length})</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="max-h-[200px] overflow-auto">
               <Table>
@@ -192,8 +215,6 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        <Button variant="outline"><Upload className="h-4 w-4 mr-1" /> Importar JSON/XML</Button>
-        <Button variant="outline"><Upload className="h-4 w-4 mr-1" /> Importar CSV</Button>
         <Button onClick={loadPlatformData} className="bg-blue-600 hover:bg-blue-700 text-white">
           <Package className="h-4 w-4 mr-1" /> Usar Dados da Plataforma
         </Button>
@@ -215,9 +236,6 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
                   <SelectItem value="month">Por Mês</SelectItem>
                 </SelectContent>
               </Select>
-              <Button size="icon" variant="outline" title="Zoom In"><ZoomIn className="h-4 w-4" /></Button>
-              <Button size="icon" variant="outline" title="Zoom Out"><ZoomOut className="h-4 w-4" /></Button>
-              <Button size="icon" variant="outline" title="Ajustar"><Maximize className="h-4 w-4" /></Button>
             </div>
           </div>
         </CardHeader>
@@ -226,104 +244,62 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
             <p className="text-center text-muted-foreground py-8">Adicione tarefas ou use dados da plataforma para gerar o Gantt</p>
           ) : (
             <div className="space-y-4">
-              {/* Task table + Gantt bars */}
               <div className="overflow-x-auto">
                 <div className="min-w-[900px]">
-                  {/* Header row */}
                   <div className="flex border-b border-border">
                     <div className="w-[40px] shrink-0 p-2 text-xs font-semibold text-muted-foreground">ID</div>
                     <div className="w-[200px] shrink-0 p-2 text-xs font-semibold text-muted-foreground">Tarefa</div>
                     <div className="w-[60px] shrink-0 p-2 text-xs font-semibold text-muted-foreground text-center">Dias</div>
                     <div className="w-[90px] shrink-0 p-2 text-xs font-semibold text-muted-foreground">Início</div>
                     <div className="w-[50px] shrink-0 p-2 text-xs font-semibold text-muted-foreground">%</div>
-                    <div className="w-[40px] shrink-0 p-2 text-xs font-semibold text-muted-foreground"></div>
+                    <div className="w-[40px] shrink-0 p-2"></div>
                     <div className="flex-1 p-2 relative">
-                      {/* Timeline header */}
                       {ganttData && (
                         <div className="flex">
                           {ganttData.columns.map((col, i) => (
-                            <div key={i} className="text-[10px] text-muted-foreground text-center" style={{ width: `${100 / ganttData.columns.length}%` }}>
-                              {col}
-                            </div>
+                            <div key={i} className="text-[10px] text-muted-foreground text-center" style={{ width: `${100 / ganttData.columns.length}%` }}>{col}</div>
                           ))}
                         </div>
                       )}
                     </div>
                   </div>
-
-                  {/* Task rows */}
                   {ganttData?.tasks.map((t, i) => (
-                    <div key={i} className="flex items-center border-b border-border/50 hover:bg-muted/30 transition-colors group">
+                    <div key={i} className="flex items-center border-b border-border/50 hover:bg-muted/30 group">
                       <div className="w-[40px] shrink-0 p-2 text-xs font-mono">{t.id}</div>
                       <div className="w-[200px] shrink-0 p-2">
-                        <Input
-                          value={t.name} className="h-7 text-xs"
-                          onChange={e => { const u = [...tasks]; u[i].name = e.target.value; setTasks(u); }}
-                        />
+                        <Input value={t.name} className="h-7 text-xs" onChange={e => { const u = [...tasks]; u[i].name = e.target.value; setTasks(u); }} />
                       </div>
                       <div className="w-[60px] shrink-0 p-2">
-                        <Input
-                          type="number" value={t.duration} className="h-7 text-xs w-14"
-                          onChange={e => { const u = [...tasks]; u[i].duration = Math.max(1, Number(e.target.value)); setTasks(u); }}
-                        />
+                        <Input type="number" value={t.duration} className="h-7 text-xs w-14" onChange={e => { const u = [...tasks]; u[i].duration = Math.max(1, Number(e.target.value)); setTasks(u); }} />
                       </div>
                       <div className="w-[90px] shrink-0 p-2">
-                        <Input
-                          type="date" value={t.start} className="h-7 text-xs"
-                          onChange={e => { const u = [...tasks]; u[i].start = e.target.value; setTasks(u); }}
-                        />
+                        <Input type="date" value={t.start} className="h-7 text-xs" onChange={e => { const u = [...tasks]; u[i].start = e.target.value; setTasks(u); }} />
                       </div>
                       <div className="w-[50px] shrink-0 p-2">
-                        <Input
-                          type="number" value={t.progress} className="h-7 text-xs w-12" min={0} max={100}
-                          onChange={e => { const u = [...tasks]; u[i].progress = Math.min(100, Math.max(0, Number(e.target.value))); setTasks(u); }}
-                          title="Progresso %"
-                        />
+                        <Input type="number" value={t.progress} className="h-7 text-xs w-12" min={0} max={100} onChange={e => { const u = [...tasks]; u[i].progress = Math.min(100, Math.max(0, Number(e.target.value))); setTasks(u); }} />
                       </div>
                       <div className="w-[40px] shrink-0 p-1">
-                        <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => {
-                          setTasks(tasks.filter((_, j) => j !== i));
-                          toast.info(`Tarefa ${t.id} removida.`);
-                        }}>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => { setTasks(tasks.filter((_, j) => j !== i)); }}>
                           <Trash2 className="h-3 w-3 text-destructive" />
                         </Button>
                       </div>
                       <div className="flex-1 p-2 relative h-10">
-                        {/* Bar background grid */}
                         <div className="absolute inset-0 flex">
                           {ganttData.columns.map((_, ci) => (
                             <div key={ci} className="border-r border-border/20" style={{ width: `${100 / ganttData.columns.length}%` }} />
                           ))}
                         </div>
-                        {/* Gantt bar */}
-                        <div
-                          className="absolute top-1/2 -translate-y-1/2 h-6 rounded-md shadow-sm flex items-center justify-center text-[10px] text-white font-medium transition-all"
-                          style={{
-                            left: `${t.offsetPct}%`,
-                            width: `${Math.max(t.widthPct, 1.5)}%`,
-                            backgroundColor: t.color,
-                          }}
-                          title={`${t.name} (${t.duration}d, ${t.progress}%)`}
-                        >
+                        <div className="absolute top-1/2 -translate-y-1/2 h-6 rounded-md shadow-sm flex items-center justify-center text-[10px] text-white font-medium" style={{ left: `${t.offsetPct}%`, width: `${Math.max(t.widthPct, 1.5)}%`, backgroundColor: t.color }} title={`${t.name} (${t.duration}d, ${t.progress}%)`}>
                           {t.widthPct > 5 && <span className="truncate px-1">{t.duration}d</span>}
                         </div>
-                        {/* Progress overlay */}
                         {t.progress > 0 && (
-                          <div
-                            className="absolute top-1/2 -translate-y-1/2 h-6 rounded-l-md opacity-30 bg-black"
-                            style={{
-                              left: `${t.offsetPct}%`,
-                              width: `${(t.widthPct * t.progress) / 100}%`,
-                            }}
-                          />
+                          <div className="absolute top-1/2 -translate-y-1/2 h-6 rounded-l-md opacity-30 bg-black" style={{ left: `${t.offsetPct}%`, width: `${(t.widthPct * t.progress) / 100}%` }} />
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-
-              {/* Summary */}
               <div className="flex gap-4 text-sm text-muted-foreground">
                 <span>📊 {tasks.length} tarefas</span>
                 <span>📅 {totalDuration} dias totais</span>
@@ -336,22 +312,12 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
 
       {/* Materials Schedule */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Package className="h-5 w-5" /> Cronograma de Materiais</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-5 w-5" /> Cronograma de Materiais</CardTitle></CardHeader>
         <CardContent>
           {tasks.length > 0 ? (
             <div className="overflow-auto max-h-[250px]">
               <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Material</TableHead>
-                    <TableHead>Unid.</TableHead>
-                    <TableHead>Qtd Total</TableHead>
-                    <TableHead>Data Necessária</TableHead>
-                    <TableHead>Data Pedido</TableHead>
-                  </TableRow>
-                </TableHeader>
+                <TableHeader><TableRow><TableHead>Material</TableHead><TableHead>Unid.</TableHead><TableHead>Qtd Total</TableHead><TableHead>Data Necessária</TableHead><TableHead>Data Pedido</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {tasks.slice(0, 10).map((t, i) => (
                     <TableRow key={i}>
@@ -366,16 +332,10 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
               </Table>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">Configure tarefas para gerar o cronograma de materiais</p>
+            <p className="text-center text-muted-foreground py-4">Gere o cronograma para ver o planejamento de materiais</p>
           )}
         </CardContent>
       </Card>
-
-      <div className="flex gap-2 flex-wrap">
-        <Button variant="outline"><Download className="h-4 w-4 mr-1" /> Exportar OpenProject XML</Button>
-        <Button variant="outline"><Download className="h-4 w-4 mr-1" /> Exportar MS Project XML</Button>
-        <Button variant="outline"><Download className="h-4 w-4 mr-1" /> Exportar Gantt PDF</Button>
-      </div>
     </div>
   );
 };
