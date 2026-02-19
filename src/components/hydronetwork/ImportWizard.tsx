@@ -1,9 +1,10 @@
 /**
- * Import Wizard — 4-step QGIS-like import wizard
+ * Import Wizard — 5-step import wizard with mandatory preview
  * Step 1: File Type Detection + Import Mode + Numeric Format
  * Step 2: CRS Selection (mandatory, UTM zone, unit confirmation)
  * Step 3: Model Type + Entity Type Mapping (for geometric formats)
- * Step 4: Attribute Mapping (full freedom, template saving)
+ * Step 4: Attribute Mapping (tabular) / Summary (geometric)
+ * Step 5: Analysis & Confirmation — shows real parsed counts, warnings, confirmation
  */
 import { useState, useMemo, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -19,7 +20,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import {
   Upload, FileText, AlertTriangle, Check, ChevronRight, ChevronLeft,
-  Globe, Layers, Settings2, Save, FolderOpen
+  Globe, Layers, Settings2, Save, FolderOpen, Search, Eye
 } from "lucide-react";
 import {
   CRSDefinition, CRS_CATALOG,
@@ -28,6 +29,9 @@ import {
 import {
   NumericFormat, ImportMode, EntityTypeMapping, EntityImportRole,
   parseLocalizedNumber, validateUTMCoordinates, detectDxfEntityTypes,
+  parseDXFToInternal, parseGeoJSONToInternal, parseINPToInternal,
+  parseSWMMToInternal, parseTabularToInternal,
+  InpParsed, FieldMapping,
 } from "@/engine/importEngine";
 
 // ════════════════════════════════════════
@@ -44,7 +48,7 @@ export interface DetectedFileInfo {
   fieldCount: number;
   recordCount: number;
   layers?: string[];
-  fileContent?: string; // raw file content for entity detection
+  fileContent?: string;
 }
 
 export type ModelType = "rede" | "topografia" | "bim" | "generico" | "desenho";
@@ -189,6 +193,8 @@ function isGeometricFormat(format: string): boolean {
   return GEOMETRIC_FORMATS.has(format);
 }
 
+const TOTAL_STEPS = 5;
+
 // ════════════════════════════════════════
 // COMPONENT
 // ════════════════════════════════════════
@@ -221,14 +227,23 @@ export const ImportWizard = ({
   const [importMode, setImportMode] = useState<ImportMode>(
     isGeometricFormat(fileInfo.format) ? "geometric" : "tabular"
   );
-  
+
   // Entity type mappings for DXF/geometric files
   const [entityMappings, setEntityMappings] = useState<EntityTypeMapping[]>(() => {
     if (fileInfo.format === "DXF" && fileInfo.fileContent) {
       try { return detectDxfEntityTypes(fileInfo.fileContent); } catch { return []; }
     }
+    // For IFC files, detect entity types from content
+    if (fileInfo.format === "IFC" && fileInfo.fileContent) {
+      return detectIFCEntityTypes(fileInfo.fileContent);
+    }
     return [];
   });
+
+  // Step 5: pre-parsed analysis results
+  const [analysisResult, setAnalysisResult] = useState<InpParsed | null>(null);
+  const [analysisRan, setAnalysisRan] = useState(false);
+  const [analysisIssues, setAnalysisIssues] = useState<string[]>([]);
 
   const isGeometric = isGeometricFormat(fileInfo.format);
   const crs = CRS_CATALOG.find(c => c.code === selectedCRS) || CRS_CATALOG[5];
@@ -239,7 +254,6 @@ export const ImportWizard = ({
   const hasNodeEnd = useMemo(() => Object.values(mappings).includes("no_fim"), [mappings]);
   const mappedCount = Object.values(mappings).filter(v => v !== "ignore").length;
 
-  // In geometric mode, X/Y are not required from field mapping (they come from geometry)
   const step4Valid = importMode === "geometric" ? true : (hasX && hasY);
 
   const canProceed = useMemo(() => {
@@ -247,8 +261,89 @@ export const ImportWizard = ({
     if (step === 2) return !!selectedCRS;
     if (step === 3) return !!modelType;
     if (step === 4) return step4Valid;
+    if (step === 5) return analysisRan; // must have run analysis
     return false;
-  }, [step, selectedCRS, modelType, step4Valid]);
+  }, [step, selectedCRS, modelType, step4Valid, analysisRan]);
+
+  // ── Run analysis when entering step 5 ──
+  const runAnalysis = useCallback(() => {
+    const issues: string[] = [];
+    let parsed: InpParsed = { nodes: [], edges: [] };
+
+    try {
+      if (importMode === "geometric") {
+        // Parse based on format
+        if (fileInfo.format === "DXF" && fileInfo.fileContent) {
+          parsed = parseDXFToInternal(fileInfo.fileContent, entityMappings, numericFormat);
+        } else if (fileInfo.format === "GeoJSON" && fileInfo.fileContent) {
+          parsed = parseGeoJSONToInternal(fileInfo.fileContent, numericFormat);
+        } else if (fileInfo.format === "INP" && fileInfo.fileContent) {
+          parsed = parseINPToInternal(fileInfo.fileContent);
+        } else if (fileInfo.format === "SWMM" && fileInfo.fileContent) {
+          parsed = parseSWMMToInternal(fileInfo.fileContent);
+        } else if (fileInfo.format === "IFC" && fileInfo.fileContent) {
+          // IFC geometric parsing - extract lines as edges, points as nodes
+          parsed = parseIFCGeometric(fileInfo.fileContent, entityMappings);
+        }
+      } else {
+        // Tabular mode
+        const getField = (target: TargetField) => {
+          const entry = Object.entries(mappings).find(([_, t]) => t === target);
+          return entry?.[0];
+        };
+        const fieldMapping: FieldMapping = {
+          id: getField("id"),
+          x: getField("x"),
+          y: getField("y"),
+          z: getField("z") || getField("cota_terreno"),
+          cotaFundo: getField("cota_fundo"),
+          profundidade: getField("profundidade"),
+          noInicio: getField("no_inicio"),
+          noFim: getField("no_fim"),
+          diametro: getField("diametro"),
+          material: getField("material"),
+          comprimento: getField("comprimento"),
+          declividade: getField("declividade"),
+          rugosidade: getField("rugosidade"),
+          demanda: getField("demanda"),
+          tipo: getField("tipo"),
+          nome: getField("nome"),
+          layer: getField("layer"),
+        };
+        parsed = parseTabularToInternal(rows, fieldMapping, numericFormat);
+      }
+
+      // UTM validation on first few nodes
+      if (crs.unit === "m" && crs.utmZone && parsed.nodes.length > 0) {
+        const sample = parsed.nodes.slice(0, 5);
+        for (const n of sample) {
+          const check = validateUTMCoordinates(n.x, n.y);
+          if (!check.valid && check.warning) {
+            issues.push(check.warning);
+            break; // one warning is enough
+          }
+        }
+      }
+
+      // Check for zero results
+      if (parsed.nodes.length === 0 && parsed.edges.length === 0) {
+        issues.push("Nenhuma geometria convertível detectada no arquivo.");
+      }
+    } catch (err: any) {
+      issues.push(`Erro ao analisar: ${err.message || String(err)}`);
+    }
+
+    setAnalysisResult(parsed);
+    setAnalysisIssues(issues);
+    setAnalysisRan(true);
+  }, [importMode, fileInfo, entityMappings, numericFormat, mappings, rows, crs]);
+
+  const handleStepChange = useCallback((newStep: number) => {
+    if (newStep === 5 && !analysisRan) {
+      runAnalysis();
+    }
+    setStep(newStep);
+  }, [analysisRan, runAnalysis]);
 
   const handleApplyTemplate = useCallback((template: MappingTemplate) => {
     const newMappings: Record<string, TargetField> = {};
@@ -281,166 +376,62 @@ export const ImportWizard = ({
     setEntityMappings(prev => prev.map(m =>
       m.entityType === entityType ? { ...m, role } : m
     ));
+    // Reset analysis when entity roles change
+    setAnalysisRan(false);
+    setAnalysisResult(null);
   }, []);
 
-  const handleImport = useCallback(() => {
+  // ── Final import (only from step 5, with pre-parsed data) ──
+  const handleConfirmImport = useCallback(() => {
+    if (!analysisResult) {
+      toast.error("Execute a análise primeiro");
+      return;
+    }
+
     const discipline: LayerDiscipline = modelType === "topografia" ? "topografia"
       : modelType === "bim" ? "bim"
       : modelType === "generico" ? "generico"
       : modelType === "desenho" ? "desenho"
       : "esgoto";
 
-    // For geometric mode, the ImportEngine handles node/edge creation from geometry
-    if (importMode === "geometric") {
-      const result: ImportResult = {
-        nodes: [],
-        edges: [],
-        crs,
-        modelType,
-        discipline,
-        layerName: fileName.replace(/\.[^.]+$/, ""),
-        sourceFile: fileName,
-        validationIssues: [],
-        numericFormat,
-        importMode: "geometric",
-        entityMappings: entityMappings.length > 0 ? entityMappings : undefined,
-      };
-      onImport(result);
-      onOpenChange(false);
-      toast.success("Importação geométrica iniciada");
-      return;
-    }
-
-    // Tabular mode - parse from rows with locale-aware numbers
-    const getField = (target: TargetField) => {
-      const entry = Object.entries(mappings).find(([_, t]) => t === target);
-      return entry?.[0];
-    };
-
-    const xField = getField("x");
-    const yField = getField("y");
-    const zField = getField("z") || getField("cota_terreno");
-    const idField = getField("id");
-    const tipoField = getField("tipo");
-    const nomeField = getField("nome");
-    const fromField = getField("no_inicio");
-    const toField = getField("no_fim");
-    const dnField = getField("diametro");
-    const matField = getField("material");
-    const compField = getField("comprimento");
-    const slopeField = getField("declividade");
-    const roughField = getField("rugosidade");
-    const demandField = getField("demanda");
-    const cotaFundoField = getField("cota_fundo");
-    const profField = getField("profundidade");
-
-    if (!xField || !yField) { toast.error("Campos X e Y são obrigatórios no modo tabular"); return; }
-
-    const pn = (val: any) => parseLocalizedNumber(val, numericFormat);
-
-    const nodes: Array<Omit<SpatialNode, "layerId">> = [];
-    const edges: Array<Omit<SpatialEdge, "layerId" | "properties"> & { properties?: Record<string, any> }> = [];
-    const issues: string[] = [];
-
-    const isEdgeImport = modelType === "rede" && fromField && toField;
-
-    if (isEdgeImport) {
-      const nodeMap = new Map<string, { x: number; y: number; z: number }>();
-
-      rows.forEach((row, i) => {
-        const fromId = String(row[fromField!] || "").trim();
-        const toId = String(row[toField!] || "").trim();
-        if (!fromId || !toId) { issues.push(`Linha ${i + 1}: sem nó início/fim`); return; }
-
-        const x = pn(row[xField]) ?? 0;
-        const y = pn(row[yField]) ?? 0;
-        const z = zField ? pn(row[zField]) ?? 0 : 0;
-
-        if (!nodeMap.has(fromId)) nodeMap.set(fromId, { x, y, z });
-
-        // UTM validation
-        if (crs.unit === "m" && crs.utmZone) {
-          const utmCheck = validateUTMCoordinates(x, y);
-          if (!utmCheck.valid && i < 3) {
-            issues.push(`Linha ${i + 1}: ${utmCheck.warning}`);
-          }
-        }
-
-        edges.push({
-          id: `E${String(i + 1).padStart(4, "0")}`,
-          startNodeId: fromId,
-          endNodeId: toId,
-          dn: dnField ? pn(row[dnField]) ?? 200 : 200,
-          comprimento: compField ? pn(row[compField]) ?? 0 : 0,
-          declividade: slopeField ? (pn(row[slopeField]) ?? 0) / 100 : 0,
-          material: matField ? String(row[matField] || "PVC") : "PVC",
-          tipoRede: "Esgoto por Gravidade",
-          roughness: roughField ? pn(row[roughField]) ?? undefined : undefined,
-          properties: {},
-        });
-      });
-
-      nodeMap.forEach((coords, id) => {
-        nodes.push({ id, x: coords.x, y: coords.y, z: coords.z, tipo: "junction", properties: {} });
-      });
-    } else {
-      rows.forEach((row, i) => {
-        const x = pn(row[xField]);
-        const y = pn(row[yField]);
-        if (x === null || y === null) { issues.push(`Linha ${i + 1}: coordenadas inválidas`); return; }
-        const z = zField ? pn(row[zField]) ?? 0 : 0;
-        const id = idField ? String(row[idField] || `P${String(i + 1).padStart(3, "0")}`) : `P${String(i + 1).padStart(3, "0")}`;
-
-        // UTM validation (first 3 rows)
-        if (crs.unit === "m" && crs.utmZone && i < 3) {
-          const utmCheck = validateUTMCoordinates(x, y);
-          if (!utmCheck.valid) issues.push(`Linha ${i + 1}: ${utmCheck.warning}`);
-        }
-
-        let tipo: NodeType = "generic";
-        if (tipoField) {
-          const t = String(row[tipoField] || "").toLowerCase();
-          if (t.includes("pv") || t.includes("poco")) tipo = "pv";
-          else if (t.includes("ci")) tipo = "ci";
-          else if (t.includes("tl")) tipo = "tl";
-          else if (t.includes("reserv")) tipo = "reservoir";
-          else if (t.includes("bomba") || t.includes("pump")) tipo = "pump";
-        }
-
-        nodes.push({
-          id, x, y, z: isNaN(z) ? 0 : z,
-          tipo,
-          label: nomeField ? String(row[nomeField] || "") : undefined,
-          demanda: demandField ? pn(row[demandField]) ?? undefined : undefined,
-          cotaFundo: cotaFundoField ? pn(row[cotaFundoField]) ?? undefined : undefined,
-          profundidade: profField ? pn(row[profField]) ?? undefined : undefined,
-          properties: {},
-        });
-      });
-    }
-
-    if (nodes.length === 0 && edges.length === 0) {
-      toast.error("Nenhum dado válido após mapeamento");
-      return;
-    }
-
     const result: ImportResult = {
-      nodes,
-      edges,
+      nodes: analysisResult.nodes.map(n => ({
+        id: n.id, x: n.x, y: n.y, z: n.z,
+        tipo: n.tipo,
+        demanda: n.demanda,
+        label: n.properties?.label,
+        cotaFundo: n.properties?.cotaFundo,
+        profundidade: n.properties?.profundidade,
+        properties: n.properties || {},
+      })),
+      edges: analysisResult.edges.map(e => ({
+        id: e.id,
+        startNodeId: e.startNodeId,
+        endNodeId: e.endNodeId,
+        dn: e.dn,
+        comprimento: 0,
+        declividade: 0,
+        material: e.material,
+        tipoRede: e.tipoRede,
+        roughness: e.roughness,
+        vertices: e.vertices,
+        properties: e.properties || {},
+      })),
       crs,
       modelType,
       discipline,
       layerName: fileName.replace(/\.[^.]+$/, ""),
       sourceFile: fileName,
-      validationIssues: issues,
+      validationIssues: analysisIssues,
       numericFormat,
-      importMode: "tabular",
+      importMode,
+      entityMappings: entityMappings.length > 0 ? entityMappings : undefined,
     };
 
     onImport(result);
     onOpenChange(false);
-    toast.success(`Importação concluída: ${nodes.length} nós, ${edges.length} trechos`);
-  }, [mappings, rows, crs, modelType, fileName, onImport, onOpenChange, numericFormat, importMode, entityMappings]);
+    toast.success(`Importação concluída: ${analysisResult.nodes.length} nós, ${analysisResult.edges.length} trechos`);
+  }, [analysisResult, crs, modelType, fileName, onImport, onOpenChange, numericFormat, importMode, entityMappings, analysisIssues]);
 
   const templates = useMemo(() => loadTemplates(), []);
 
@@ -471,7 +462,7 @@ export const ImportWizard = ({
         <Card>
           <CardContent className="pt-4 pb-3">
             <Label className="font-medium mb-2 block">Modo de Importação</Label>
-            <RadioGroup value={importMode} onValueChange={v => setImportMode(v as ImportMode)} className="space-y-2">
+            <RadioGroup value={importMode} onValueChange={v => { setImportMode(v as ImportMode); setAnalysisRan(false); }} className="space-y-2">
               <div className="flex items-start gap-2">
                 <RadioGroupItem value="geometric" id="mode-geo" className="mt-0.5" />
                 <div>
@@ -495,7 +486,7 @@ export const ImportWizard = ({
       <Card>
         <CardContent className="pt-4 pb-3">
           <Label className="font-medium mb-2 block">Formato Numérico</Label>
-          <RadioGroup value={numericFormat} onValueChange={v => setNumericFormat(v as NumericFormat)} className="space-y-1">
+          <RadioGroup value={numericFormat} onValueChange={v => { setNumericFormat(v as NumericFormat); setAnalysisRan(false); }} className="space-y-1">
             <div className="flex items-center gap-2">
               <RadioGroupItem value="auto" id="nf-auto" />
               <Label htmlFor="nf-auto" className="text-sm cursor-pointer">🔍 Detectar automaticamente</Label>
@@ -520,7 +511,7 @@ export const ImportWizard = ({
         <div>
           <Label className="font-medium">Sistema de Referência (CRS) *</Label>
           <p className="text-xs text-muted-foreground mb-2">Obrigatório. Nada entra sem CRS definido.</p>
-          <Select value={selectedCRS} onValueChange={setSelectedCRS}>
+          <Select value={selectedCRS} onValueChange={v => { setSelectedCRS(v); setAnalysisRan(false); }}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {CRS_CATALOG.map(c => (
@@ -570,7 +561,7 @@ export const ImportWizard = ({
             <Card
               key={opt.value}
               className={`cursor-pointer transition-all ${modelType === opt.value ? "ring-2 ring-primary border-primary" : "hover:border-primary/50"}`}
-              onClick={() => setModelType(opt.value)}
+              onClick={() => { setModelType(opt.value); setAnalysisRan(false); }}
             >
               <CardContent className="pt-3 pb-3">
                 <div className="flex items-start gap-2">
@@ -681,7 +672,6 @@ export const ImportWizard = ({
             </div>
           </div>
 
-          {/* Optional: attribute mapping for additional fields (if sourceFields available) */}
           {sourceFields.length > 0 && (
             <div>
               <Label className="text-xs font-medium mb-1 block">Mapeamento de Atributos Adicionais (opcional)</Label>
@@ -836,11 +826,232 @@ export const ImportWizard = ({
     );
   };
 
+  // ── Step 5 computed values (must be at component top level) ──
+  const analysisNodeCount = analysisResult?.nodes.length ?? 0;
+  const analysisEdgeCount = analysisResult?.edges.length ?? 0;
+  const analysisHasData = analysisNodeCount > 0 || analysisEdgeCount > 0;
+  const analysisIsZero = analysisRan && !analysisHasData;
+
+  const entityBreakdown = useMemo(() => {
+    if (!analysisResult) return null;
+    const nodeSources = new Map<string, number>();
+    const edgeSources = new Map<string, number>();
+    for (const n of analysisResult.nodes) {
+      const src = n.properties?._source || n.properties?.entityType || "Desconhecido";
+      nodeSources.set(src, (nodeSources.get(src) || 0) + 1);
+    }
+    for (const e of analysisResult.edges) {
+      const src = e.properties?._source || e.properties?.entityType || "Desconhecido";
+      edgeSources.set(src, (edgeSources.get(src) || 0) + 1);
+    }
+    return { nodeSources: Array.from(nodeSources.entries()), edgeSources: Array.from(edgeSources.entries()) };
+  }, [analysisResult]);
+
+  const analysisBbox = useMemo(() => {
+    if (!analysisResult || analysisResult.nodes.length === 0) return null;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const n of analysisResult.nodes) {
+      if (n.x < minX) minX = n.x;
+      if (n.x > maxX) maxX = n.x;
+      if (n.y < minY) minY = n.y;
+      if (n.y > maxY) maxY = n.y;
+    }
+    return { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY };
+  }, [analysisResult]);
+
+  // ── Step 5: Analysis & Confirmation ──
+  const renderStep5 = () => {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Eye className="h-5 w-5 text-primary" />
+          <h3 className="font-semibold text-base">Análise do Arquivo</h3>
+          <Button size="sm" variant="outline" className="ml-auto h-7 text-xs" onClick={runAnalysis}>
+            <Search className="h-3 w-3 mr-1" /> Re-analisar
+          </Button>
+        </div>
+
+        {/* File info recap */}
+        <Card>
+          <CardContent className="pt-4 pb-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-primary">{analysisNodeCount}</div>
+                <div className="text-xs text-muted-foreground">Nós detectados</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{analysisEdgeCount}</div>
+                <div className="text-xs text-muted-foreground">Trechos detectados</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm font-medium">{crs.name}</div>
+                <div className="text-xs text-muted-foreground">CRS</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm font-medium">
+                  {numericFormat === "auto" ? "Auto" : numericFormat === "br" ? "Brasileiro" : "Americano"}
+                </div>
+                <div className="text-xs text-muted-foreground">Formato Numérico</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Zero result warning */}
+        {analysisIsZero && (
+          <div className="bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-400 dark:border-amber-700 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="space-y-2">
+                <h4 className="font-semibold text-amber-800 dark:text-amber-300">⚠ Nenhuma geometria convertível detectada</h4>
+                <p className="text-sm text-amber-700 dark:text-amber-400">
+                  O arquivo foi lido mas nenhum nó ou trecho pôde ser gerado. Verifique:
+                </p>
+                <ul className="text-xs text-amber-700 dark:text-amber-400 space-y-1 list-disc list-inside">
+                  <li>O <strong>mapeamento de entidades</strong> (Step 3) — marque os tipos corretos como Trecho ou Nó</li>
+                  <li>O <strong>formato numérico</strong> — coordenadas podem estar sendo interpretadas incorretamente</li>
+                  <li>O <strong>CRS</strong> — se as coordenadas estão em sistema diferente do esperado</li>
+                  <li>O <strong>modo de importação</strong> — tente alternar entre Geométrico e Tabular</li>
+                </ul>
+                <div className="flex gap-2 pt-2 flex-wrap">
+                  <Button size="sm" variant="outline" onClick={() => { setStep(3); setAnalysisRan(false); }}>
+                    Ajustar Entidades
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => { setStep(1); setAnalysisRan(false); }}>
+                    Ajustar Formato/Modo
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => { setStep(2); setAnalysisRan(false); }}>
+                    Ajustar CRS
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => {
+                    setModelType("desenho");
+                    setAnalysisRan(false);
+                    runAnalysis();
+                  }}>
+                    Forçar como Desenho
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* UTM / coordinate warnings */}
+        {analysisIssues.length > 0 && (
+          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1">⚠ Avisos:</p>
+            <ul className="space-y-1">
+              {analysisIssues.map((issue, i) => (
+                <li key={i} className="text-xs text-amber-700 dark:text-amber-400 flex items-start gap-1">
+                  <AlertTriangle className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                  {issue}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Entity breakdown */}
+        {analysisHasData && entityBreakdown && (
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <Label className="font-medium mb-2 block">Detalhamento por Origem</Label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {entityBreakdown.nodeSources.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-green-700 dark:text-green-400 mb-1">📍 Nós</p>
+                    {entityBreakdown.nodeSources.map(([src, count]) => (
+                      <div key={src} className="flex items-center justify-between text-xs py-0.5">
+                        <span className="font-mono">{src}</span>
+                        <Badge variant="outline" className="text-xs">{count}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {entityBreakdown.edgeSources.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-1">📏 Trechos</p>
+                    {entityBreakdown.edgeSources.map(([src, count]) => (
+                      <div key={src} className="flex items-center justify-between text-xs py-0.5">
+                        <span className="font-mono">{src}</span>
+                        <Badge variant="outline" className="text-xs">{count}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Bounding box info */}
+        {analysisBbox && (
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <Label className="font-medium mb-2 block">Bounding Box</Label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                <div>
+                  <span className="text-muted-foreground">X min:</span>{" "}
+                  <span className="font-mono">{analysisBbox.minX.toFixed(2)}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">X max:</span>{" "}
+                  <span className="font-mono">{analysisBbox.maxX.toFixed(2)}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Y min:</span>{" "}
+                  <span className="font-mono">{analysisBbox.minY.toFixed(2)}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Y max:</span>{" "}
+                  <span className="font-mono">{analysisBbox.maxY.toFixed(2)}</span>
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Extensão: {analysisBbox.width.toFixed(2)} × {analysisBbox.height.toFixed(2)} {crs.unit}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Configuration summary */}
+        {analysisHasData && (
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <Label className="font-medium mb-2 block">Resumo da Configuração</Label>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Arquivo:</span>
+                  <span className="font-medium truncate">{fileName}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Formato:</span>
+                  <Badge variant="outline" className="text-xs">{fileInfo.format}</Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Modo:</span>
+                  <Badge variant="outline" className="text-xs">{importMode === "geometric" ? "Geométrico" : "Tabular"}</Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Tipo:</span>
+                  <Badge variant="outline" className="text-xs">
+                    {modelType === "rede" ? "Rede" : modelType === "topografia" ? "Topografia" : modelType === "bim" ? "BIM" : modelType === "desenho" ? "Desenho" : "Genérico"}
+                  </Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    );
+  };
+
   const stepTitles = [
     { num: 1, title: "Arquivo & Modo", icon: <FileText className="h-4 w-4" /> },
     { num: 2, title: "Sistema de Referência", icon: <Globe className="h-4 w-4" /> },
     { num: 3, title: "Tipo de Modelo", icon: <Layers className="h-4 w-4" /> },
-    { num: 4, title: importMode === "geometric" ? "Resumo" : "Mapeamento de Atributos", icon: <Settings2 className="h-4 w-4" /> },
+    { num: 4, title: importMode === "geometric" ? "Resumo" : "Mapeamento", icon: <Settings2 className="h-4 w-4" /> },
+    { num: 5, title: "Análise & Confirmação", icon: <Eye className="h-4 w-4" /> },
   ];
 
   return (
@@ -852,36 +1063,37 @@ export const ImportWizard = ({
             Importação — {fileName}
           </DialogTitle>
           <DialogDescription>
-            Wizard de importação em {stepTitles.length} etapas
+            Wizard de importação em {TOTAL_STEPS} etapas
             {importMode === "geometric" && <Badge variant="outline" className="ml-2">Modo Geométrico</Badge>}
           </DialogDescription>
         </DialogHeader>
 
         {/* Step indicator */}
-        <div className="flex items-center gap-1 mb-2">
+        <div className="flex items-center gap-1 mb-2 flex-wrap">
           {stepTitles.map((s, i) => (
             <div key={s.num} className="flex items-center">
               <div
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium cursor-pointer transition-all
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium cursor-pointer transition-all
                   ${step === s.num ? "bg-primary text-primary-foreground" : step > s.num ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300" : "bg-muted text-muted-foreground"}`}
-                onClick={() => { if (s.num < step) setStep(s.num); }}
+                onClick={() => { if (s.num < step) { setStep(s.num); } }}
               >
                 {step > s.num ? <Check className="h-3 w-3" /> : s.icon}
                 <span className="hidden sm:inline">{s.title}</span>
                 <span className="sm:hidden">{s.num}</span>
               </div>
-              {i < stepTitles.length - 1 && <ChevronRight className="h-4 w-4 text-muted-foreground mx-1" />}
+              {i < stepTitles.length - 1 && <ChevronRight className="h-4 w-4 text-muted-foreground mx-0.5" />}
             </div>
           ))}
         </div>
 
-        <Progress value={(step / 4) * 100} className="h-1" />
+        <Progress value={(step / TOTAL_STEPS) * 100} className="h-1" />
 
         <div className="min-h-[200px]">
           {step === 1 && renderStep1()}
           {step === 2 && renderStep2()}
           {step === 3 && renderStep3()}
           {step === 4 && renderStep4()}
+          {step === 5 && renderStep5()}
         </div>
 
         <DialogFooter className="flex justify-between">
@@ -893,13 +1105,17 @@ export const ImportWizard = ({
               </Button>
             )}
           </div>
-          {step < 4 ? (
-            <Button onClick={() => setStep(s => s + 1)} disabled={!canProceed}>
+          {step < TOTAL_STEPS ? (
+            <Button onClick={() => handleStepChange(step + 1)} disabled={!canProceed}>
               Próximo <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           ) : (
-            <Button onClick={handleImport} disabled={!step4Valid} className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Upload className="h-4 w-4 mr-1" /> Importar
+            <Button
+              onClick={handleConfirmImport}
+              disabled={!analysisRan || (!analysisResult?.nodes.length && !analysisResult?.edges.length)}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <Check className="h-4 w-4 mr-1" /> Confirmar Importação
             </Button>
           )}
         </DialogFooter>
@@ -907,6 +1123,95 @@ export const ImportWizard = ({
     </Dialog>
   );
 };
+
+// ── IFC helpers (basic text-based detection) ──
+
+function detectIFCEntityTypes(content: string): EntityTypeMapping[] {
+  const counts = new Map<string, number>();
+  const regex = /^#\d+=\s*(IFC\w+)\s*\(/gm;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(content)) !== null) {
+    const type = match[1].toUpperCase();
+    // Only count geometry-relevant types
+    if (type.includes("PIPE") || type.includes("FLOW") || type.includes("DUCT") ||
+        type.includes("WALL") || type.includes("SLAB") || type.includes("BEAM") ||
+        type.includes("COLUMN") || type.includes("POINT") || type.includes("FITTING")) {
+      counts.set(type, (counts.get(type) || 0) + 1);
+    }
+  }
+
+  const lineTypes = new Set(["IFCPIPESEGMENT", "IFCDUCTSEGMENT", "IFCFLOWSEGMENT"]);
+  const nodeTypes = new Set(["IFCFLOWTERMINAL", "IFCFLOWFITTING", "IFCPIPEFITTING"]);
+
+  return Array.from(counts.entries()).map(([entityType, count]) => ({
+    entityType,
+    role: lineTypes.has(entityType) ? "edge" as EntityImportRole
+      : nodeTypes.has(entityType) ? "node" as EntityImportRole
+      : "ignore" as EntityImportRole,
+    count,
+  }));
+}
+
+function parseIFCGeometric(content: string, entityMappings?: EntityTypeMapping[]): InpParsed {
+  // Basic IFC text parser for coordinate extraction
+  // This is a simplified parser - full IFC would need a proper library
+  const nodes: InpParsed["nodes"] = [];
+  const edges: InpParsed["edges"] = [];
+
+  const roleMap = new Map<string, EntityImportRole>();
+  if (entityMappings) {
+    entityMappings.forEach(m => roleMap.set(m.entityType.toUpperCase(), m.role));
+  }
+
+  // Extract IFCCARTESIANPOINT coordinates
+  const pointMap = new Map<string, { x: number; y: number; z: number }>();
+  const pointRegex = /#(\d+)=\s*IFCCARTESIANPOINT\s*\(\(([^)]+)\)\)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pointRegex.exec(content)) !== null) {
+    const id = match[1];
+    const coords = match[2].split(",").map(c => parseFloat(c.trim()));
+    if (coords.length >= 2) {
+      pointMap.set(`#${id}`, { x: coords[0], y: coords[1], z: coords[2] || 0 });
+    }
+  }
+
+  // For each entity with a role, try to extract placement
+  let nodeCounter = 0;
+  let edgeCounter = 0;
+
+  const entityRegex = /#(\d+)=\s*(IFC\w+)\s*\(([^;]*)\);/gi;
+  while ((match = entityRegex.exec(content)) !== null) {
+    const entityType = match[2].toUpperCase();
+    const role = roleMap.get(entityType);
+    if (!role || role === "ignore") continue;
+
+    // Try to find associated placement point
+    const body = match[3];
+    const refMatches = body.match(/#\d+/g);
+    let foundCoord: { x: number; y: number; z: number } | null = null;
+    if (refMatches) {
+      for (const ref of refMatches) {
+        if (pointMap.has(ref)) {
+          foundCoord = pointMap.get(ref)!;
+          break;
+        }
+      }
+    }
+
+    if (role === "node" && foundCoord) {
+      nodes.push({
+        id: `IFC_N${++nodeCounter}`,
+        x: foundCoord.x, y: foundCoord.y, z: foundCoord.z,
+        tipo: "junction",
+        properties: { entityType, _source: "IFC" },
+      });
+    }
+    // Edges from IFC are harder without full geometry parsing
+    // We'd need start+end points - skip for now, user can adjust
+  }
+
+  return { nodes, edges };
+}
 
 function InfoCard({ label, value, icon }: { label: string; value: string; icon: string }) {
   return (
