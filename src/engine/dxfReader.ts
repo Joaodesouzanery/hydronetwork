@@ -12,7 +12,7 @@ export class DxfReaderError extends Error {
   }
 }
 
-interface DxfEntity {
+export interface DxfEntity {
   type: string;
   x?: number;
   y?: number;
@@ -26,8 +26,9 @@ interface DxfEntity {
 
 /**
  * Parse DXF text content and extract entities.
+ * Exported so ImportEngine can use it directly for geometric import.
  */
-function parseDxfEntities(text: string): DxfEntity[] {
+export function parseDxfEntities(text: string): DxfEntity[] {
   const lines = text.split(/\r?\n/);
   const entities: DxfEntity[] = [];
 
@@ -63,7 +64,7 @@ function parseDxfEntities(text: string): DxfEntity[] {
 
       if (value === "ENDSEC" || value === "EOF") break;
 
-      if (value === "POINT" || value === "LINE" || value === "LWPOLYLINE" || value === "POLYLINE" || value === "INSERT" || value === "CIRCLE") {
+      if (value === "POINT" || value === "LINE" || value === "LWPOLYLINE" || value === "POLYLINE" || value === "INSERT" || value === "CIRCLE" || value === "3DPOLYLINE") {
         current = { type: value, vertices: [] };
         inVertex = false;
       } else if (value === "VERTEX") {
@@ -139,6 +140,7 @@ export function parseDxfToPoints(text: string): (PontoTopografico & { layer?: st
         break;
       case "LWPOLYLINE":
       case "POLYLINE":
+      case "3DPOLYLINE":
         if (e.vertices) { for (const v of e.vertices) addPoint(v.x, v.y, v.z ?? 0, e.layer, e.type); }
         if (e.x !== undefined && e.y !== undefined) addPoint(e.x, e.y, e.z ?? 0, e.layer, e.type);
         break;
