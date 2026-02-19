@@ -108,25 +108,33 @@ const E_SQUARED = 0.00669437999014;
 const EQUATORIAL_RADIUS = 6378137.0;
 
 export function isUTM(x: number, y: number): boolean {
-  return x > 1000 && x < 1000000 && y > 100000;
+  // Easting 100,000-999,999 and Northing > 100,000 indicates UTM
+  return x > 100000 && x < 999999 && y > 100000;
+}
+
+/**
+ * Check if coordinates look like geographic lat/lng
+ */
+export function isLatLng(x: number, y: number): boolean {
+  return Math.abs(x) <= 180 && Math.abs(y) <= 90;
 }
 
 /**
  * Auto-detect UTM zone from easting/northing.
+ * Uses the easting value to estimate the central meridian zone.
  * For Brazil, typical zones are 18-25 (SIRGAS 2000).
- * We use the northing to determine hemisphere and
- * default to zone 23 (covers most of SP, MG, RJ, ES).
  */
-export function detectUTMZone(x: number, y: number): { zone: number; hemisphere: "N" | "S" } {
-  // Northing > 10,000,000 is impossible - it's southern hemisphere with offset
+export function detectUTMZone(x: number, y: number, overrideZone?: number): { zone: number; hemisphere: "N" | "S" } {
   const hemisphere: "N" | "S" = y < 10000000 ? "S" : "N";
-  // For Brazil, most common zones:
-  // Zone 22: ~51°W to ~45°W (PR, SC, RS, MS, west SP)
-  // Zone 23: ~45°W to ~39°W (SP, MG, RJ, ES, BA, GO)
-  // Zone 24: ~39°W to ~33°W (NE, SE coast)
-  // Default to 23 as it covers the most populated areas
+  if (overrideZone) return { zone: overrideZone, hemisphere };
+  // Default to zone 23 as it covers the most populated areas of Brazil
   return { zone: 23, hemisphere };
 }
+
+// Global override for UTM zone - can be set by user
+let globalUtmZone: number | undefined;
+export function setGlobalUtmZone(zone: number | undefined) { globalUtmZone = zone; }
+export function getGlobalUtmZone() { return globalUtmZone; }
 
 export function utmToLatLng(
   easting: number,
@@ -183,10 +191,16 @@ export function utmToLatLng(
 
 export function getMapCoordinates(x: number, y: number): [number, number] {
   if (isUTM(x, y)) {
-    const { zone, hemisphere } = detectUTMZone(x, y);
+    const { zone, hemisphere } = detectUTMZone(x, y, globalUtmZone);
     const { lat, lng } = utmToLatLng(x, y, zone, hemisphere);
     return [lat, lng];
   }
-  // Assume lat/lng already
+  // Check if it looks like lat/lng
+  if (isLatLng(x, y)) {
+    // x=longitude, y=latitude
+    return [y, x];
+  }
+  // Fallback: treat as local coords (small numbers), project to a default area
+  // This handles EPANET-style relative coordinates
   return [y, x];
 }

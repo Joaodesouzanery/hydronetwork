@@ -2,15 +2,17 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   MapPin, Plus, Minus, Trash2, Undo2, Save,
-  FolderOpen, Maximize, Link2, Layers, X
+  FolderOpen, Maximize, Link2, Layers, X, Crosshair
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho, createTrechoFromPoints } from "@/engine/domain";
-import { getMapCoordinates } from "@/engine/hydraulics";
+import { getMapCoordinates, setGlobalUtmZone, getGlobalUtmZone } from "@/engine/hydraulics";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -19,6 +21,7 @@ interface TopographyMapProps {
   trechos: Trecho[];
   onTrechosChange?: (trechos: Trecho[]) => void;
   onClearAll?: () => void;
+  onPontosChange?: (pontos: PontoTopografico[]) => void;
 }
 
 const STORAGE_KEY = "hydronetwork_trechos";
@@ -32,16 +35,18 @@ const TILE_LAYERS: Record<string, { url: string; attribution: string; name: stri
   terrain: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", attribution: "© Esri", name: "Ruas" },
 };
 
-export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: TopographyMapProps) => {
+export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, onPontosChange }: TopographyMapProps) => {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const [drawMode, setDrawMode] = useState(false);
+  const [addNodeMode, setAddNodeMode] = useState(false);
   const [drawOrigin, setDrawOrigin] = useState<string | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<string | null>(null);
   const markersRef = useRef<L.CircleMarker[]>([]);
   const polylinesRef = useRef<L.Polyline[]>([]);
   const [tileKey, setTileKey] = useState("osm");
+  const [utmZone, setUtmZone] = useState<string>(String(getGlobalUtmZone() || "auto"));
 
   const getPointCoords = useCallback((p: PontoTopografico): [number, number] => {
     return getMapCoordinates(p.x, p.y);
@@ -77,18 +82,56 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
     tileLayerRef.current = L.tileLayer(cfg.url, { attribution: cfg.attribution, maxZoom: 19 }).addTo(map);
   }, [tileKey]);
 
-  // ESC key to exit draw mode
+  // ESC key to exit modes
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && drawMode) {
-        setDrawMode(false);
-        setDrawOrigin(null);
-        toast.info("Modo ligação desativado");
+      if (e.key === "Escape") {
+        if (drawMode) {
+          setDrawMode(false);
+          setDrawOrigin(null);
+          toast.info("Modo ligação desativado");
+        }
+        if (addNodeMode) {
+          setAddNodeMode(false);
+          toast.info("Modo adicionar ponto desativado");
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [drawMode]);
+  }, [drawMode, addNodeMode]);
+
+  // UTM zone change handler
+  const handleUtmZoneChange = useCallback((value: string) => {
+    setUtmZone(value);
+    if (value === "auto") {
+      setGlobalUtmZone(undefined);
+    } else {
+      setGlobalUtmZone(parseInt(value));
+    }
+    // Force re-render of map points
+    if (mapRef.current && pontos.length > 0) {
+      toast.success(`Fuso UTM alterado para ${value === "auto" ? "automático (23)" : `zona ${value}`}`);
+    }
+  }, [pontos]);
+
+  // Handle map click for adding nodes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    
+    const handleMapClick = (e: L.LeafletMouseEvent) => {
+      if (!addNodeMode || !onPontosChange) return;
+      const { lat, lng } = e.latlng;
+      const newId = `P${String(pontos.length + 1).padStart(3, "0")}`;
+      const newPoint: PontoTopografico = { id: newId, x: lng, y: lat, cota: 0 };
+      onPontosChange([...pontos, newPoint]);
+      toast.success(`Ponto ${newId} adicionado (${lat.toFixed(6)}, ${lng.toFixed(6)})`);
+    };
+
+    map.on("click", handleMapClick);
+    return () => { map.off("click", handleMapClick); };
+  }, [addNodeMode, pontos, onPontosChange]);
 
   // Handle marker click - draw mode or select mode
   const handleMarkerClick = useCallback((pointId: string) => {
@@ -300,6 +343,27 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
           <Button size="sm" variant="outline" onClick={handleLoad}>
             <FolderOpen className="h-3 w-3 mr-1" /> Carregar
           </Button>
+          <Button size="sm" variant={addNodeMode ? "default" : "outline"} onClick={() => {
+            const newMode = !addNodeMode;
+            setAddNodeMode(newMode);
+            if (newMode) { setDrawMode(false); setDrawOrigin(null); }
+            toast.info(newMode ? "Clique no mapa para adicionar pontos. ESC para sair." : "Modo adicionar ponto desativado.");
+          }} className={addNodeMode ? "bg-green-600 hover:bg-green-700 text-white" : ""} disabled={!onPontosChange}>
+            <Crosshair className="h-3 w-3 mr-1" /> {addNodeMode ? "Adicionando..." : "Adicionar Ponto"}
+          </Button>
+          {/* UTM Zone selector */}
+          <div className="flex items-center gap-1 ml-2">
+            <span className="text-xs text-muted-foreground">UTM:</span>
+            <Select value={utmZone} onValueChange={handleUtmZoneChange}>
+              <SelectTrigger className="h-7 w-[80px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto (23)</SelectItem>
+                {Array.from({ length: 8 }, (_, i) => i + 18).map(z => (
+                  <SelectItem key={z} value={String(z)}>Zona {z}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {/* Layer selector inline */}
           <div className="flex items-center gap-1 ml-auto">
             <Layers className="h-3 w-3 text-muted-foreground" />
@@ -313,6 +377,19 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll }: 
             </Select>
           </div>
         </div>
+
+        {/* Add node mode status bar */}
+        {addNodeMode && (
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200">
+            <Crosshair className="h-4 w-4 text-green-600" />
+            <span className="text-sm font-medium text-green-700 dark:text-green-400">
+              Clique no mapa para adicionar um novo ponto topográfico
+            </span>
+            <Button size="sm" variant="ghost" className="h-6 text-xs ml-auto" onClick={() => setAddNodeMode(false)}>
+              <X className="h-3 w-3 mr-1" /> Sair (ESC)
+            </Button>
+          </div>
+        )}
 
         {/* Draw mode status bar */}
         {drawMode && (

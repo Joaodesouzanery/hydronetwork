@@ -139,8 +139,8 @@ const HydroNetwork = () => {
         const text = await file.text();
         const pts = parseDxfToPoints(text);
         if (pts.length === 0) { toast.error("Nenhum ponto encontrado no DXF."); return; }
-        const headers = ["id", "x", "y", "cota", "layer"];
-        const rows = pts.map(p => ({ id: p.id, x: String(p.x), y: String(p.y), cota: String(p.cota), layer: (p as any).layer || "" }));
+        const headers = ["id", "x", "y", "cota", "layer", "entityType"];
+        const rows = pts.map(p => ({ id: p.id, x: String(p.x), y: String(p.y), cota: String(p.cota), layer: (p as any).layer || "", entityType: (p as any).entityType || "" }));
         const fields: SourceField[] = headers.map(h => ({
           name: h,
           sampleValues: rows.slice(0, 3).map(r => String((r as any)[h] ?? "")),
@@ -506,7 +506,7 @@ const HydroNetwork = () => {
             </Card>
           )}
         </div>
-        <TopographyMap pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} onClearAll={handleClearTopography} />
+        <TopographyMap pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} onClearAll={handleClearTopography} onPontosChange={setPontos} />
         {pontos.length > 0 && (
           <Card>
             <CardHeader><CardTitle>Pontos ({pontos.length})</CardTitle></CardHeader>
