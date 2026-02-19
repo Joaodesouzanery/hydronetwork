@@ -31,7 +31,7 @@ import {
 // ════════════════════════════════════════
 
 export interface DetectedFileInfo {
-  format: "DXF" | "DWG" | "SHP" | "GeoJSON" | "CSV" | "TXT" | "XLSX" | "IFC" | "GPKG" | "Unknown";
+  format: "DXF" | "DWG" | "SHP" | "GeoJSON" | "CSV" | "TXT" | "XLSX" | "IFC" | "GPKG" | "INP" | "SWMM" | "Unknown";
   hasGeometry: boolean;
   geometryTypes: string[];
   hasZ: boolean;
@@ -42,7 +42,7 @@ export interface DetectedFileInfo {
   layers?: string[];
 }
 
-export type ModelType = "rede" | "topografia" | "bim" | "generico";
+export type ModelType = "rede" | "topografia" | "bim" | "generico" | "desenho";
 
 export type TargetField =
   | "id" | "x" | "y" | "z" | "cota_terreno" | "cota_fundo"
@@ -278,6 +278,7 @@ export const ImportWizard = ({
     const discipline: LayerDiscipline = modelType === "topografia" ? "topografia"
       : modelType === "bim" ? "bim"
       : modelType === "generico" ? "generico"
+      : modelType === "desenho" ? "desenho"
       : "esgoto"; // default for rede
 
     const nodes: Array<Omit<SpatialNode, "layerId">> = [];
@@ -452,6 +453,7 @@ export const ImportWizard = ({
           { value: "topografia" as ModelType, label: "📍 Topografia", desc: "Pontos topográficos com coordenadas e cota" },
           { value: "bim" as ModelType, label: "🏗️ BIM (IFC)", desc: "Modelo BIM com elementos construtivos" },
           { value: "generico" as ModelType, label: "🗺️ Genérico GIS", desc: "Dados geoespaciais genéricos" },
+          { value: "desenho" as ModelType, label: "✏️ Desenho (Apenas Visual)", desc: "Camada de desenho que NÃO entra na simulação (EPANET/SWMM)" },
         ]).map(opt => (
           <Card
             key={opt.value}
