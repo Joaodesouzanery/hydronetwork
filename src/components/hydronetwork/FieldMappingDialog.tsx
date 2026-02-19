@@ -18,7 +18,13 @@ export interface SourceField {
   type: "number" | "text" | "unknown";
 }
 
-export type PlatformField = "id" | "x" | "y" | "z_cota" | "elevation" | "diameter" | "material" | "type" | "name" | "ignore";
+export type PlatformField =
+  | "id" | "x" | "y" | "z_cota" | "elevation"
+  | "diameter" | "material" | "type" | "name"
+  | "from_id" | "to_id" | "length" | "slope" | "network_type"
+  | "depth" | "flow" | "velocity" | "roughness" | "demand"
+  | "layer" | "entity_type" | "description" | "status" | "observation"
+  | "ignore";
 
 export interface FieldMapping {
   sourceField: string;
@@ -35,19 +41,66 @@ const PLATFORM_FIELDS: { value: PlatformField; label: string; description: strin
   { value: "material", label: "Material", description: "Material do tubo (PVC, PEAD, etc.)", required: false },
   { value: "type", label: "Tipo de Elemento", description: "PV, CI, TL, Nó, etc.", required: false },
   { value: "name", label: "Descrição / Rótulo", description: "Descrição textual do elemento", required: false },
+  { value: "from_id", label: "ID Nó Início (Trecho)", description: "Identificador do nó de origem do trecho", required: false },
+  { value: "to_id", label: "ID Nó Fim (Trecho)", description: "Identificador do nó de destino do trecho", required: false },
+  { value: "length", label: "Comprimento (m)", description: "Comprimento do trecho em metros", required: false },
+  { value: "slope", label: "Declividade (%)", description: "Declividade do trecho em percentual", required: false },
+  { value: "network_type", label: "Tipo de Rede", description: "Esgoto, Água, Drenagem, Elevatória", required: false },
+  { value: "depth", label: "Profundidade (m)", description: "Profundidade de instalação", required: false },
+  { value: "flow", label: "Vazão (L/s)", description: "Vazão do trecho ou nó", required: false },
+  { value: "velocity", label: "Velocidade (m/s)", description: "Velocidade do escoamento", required: false },
+  { value: "roughness", label: "Rugosidade (Manning n)", description: "Coeficiente de rugosidade", required: false },
+  { value: "demand", label: "Demanda (L/s)", description: "Demanda nodal", required: false },
+  { value: "layer", label: "Camada / Layer", description: "Camada ou layer de origem do arquivo", required: false },
+  { value: "entity_type", label: "Tipo de Entidade", description: "Tipo geométrico (ponto, linha, polígono)", required: false },
+  { value: "description", label: "Observação / Descrição", description: "Texto descritivo genérico", required: false },
+  { value: "status", label: "Status", description: "Status do elemento (ativo, inativo, planejado)", required: false },
+  { value: "observation", label: "Notas / Comentários", description: "Anotações adicionais", required: false },
   { value: "ignore", label: "⊘ Ignorar", description: "Não importar este campo", required: false },
 ];
 
+function normalizeForDetection(name: string): string {
+  return name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s]+/g, " ").trim();
+}
+
 function autoDetectMapping(field: SourceField): PlatformField {
-  const name = field.name.toLowerCase().trim();
+  const name = normalizeForDetection(field.name);
+  // Exact
   if (name === "id" || name === "ponto" || name === "point_id" || name === "fid") return "id";
   if (name === "x" || name === "este" || name === "easting" || name === "e" || name === "lon" || name === "longitude") return "x";
   if (name === "y" || name === "norte" || name === "northing" || name === "n" || name === "lat" || name === "latitude") return "y";
-  if (name === "z" || name === "cota" || name === "elevation" || name === "elev" || name === "alt" || name === "altura" || name === "z_cota") return "z_cota";
-  if (name === "dn" || name === "diametro" || name === "diameter" || name === "diam") return "diameter";
-  if (name === "material" || name === "mat" || name === "tipo_mat") return "material";
+  if (name === "z" || name === "cota" || name === "elevation" || name === "elev" || name === "alt" || name === "altura" || name === "z cota") return "z_cota";
+  if (name === "dn" || name === "diametro" || name === "diameter" || name === "diam" || name === "dn mm") return "diameter";
+  if (name === "material" || name === "mat" || name === "tipo mat") return "material";
   if (name === "tipo" || name === "type" || name === "class" || name === "categoria") return "type";
   if (name === "nome" || name === "name" || name === "desc" || name === "descricao" || name === "label") return "name";
+  // Trecho fields
+  if (name === "de" || name === "from" || name === "no inicio" || name === "id inicio" || name === "inicio" || name === "from id" || name === "node1") return "from_id";
+  if (name === "para" || name === "to" || name === "no fim" || name === "id fim" || name === "fim" || name === "to id" || name === "node2") return "to_id";
+  if (name === "comprimento" || name === "length" || name === "comp" || name === "extensao") return "length";
+  if (name === "declividade" || name === "slope" || name === "decliv" || name === "i") return "slope";
+  if (name === "tipo rede" || name === "rede" || name === "network" || name === "sistema") return "network_type";
+  if (name === "profundidade" || name === "depth" || name === "prof") return "depth";
+  if (name === "vazao" || name === "flow" || name === "q") return "flow";
+  if (name === "velocidade" || name === "velocity" || name === "v") return "velocity";
+  if (name === "rugosidade" || name === "roughness" || name === "manning" || name === "n") return "roughness";
+  if (name === "demanda" || name === "demand") return "demand";
+  if (name === "layer" || name === "camada") return "layer";
+  if (name === "entitytype" || name === "entity type" || name === "entidade") return "entity_type";
+  if (name === "observacao" || name === "obs" || name === "notas" || name === "notes" || name === "comentario") return "observation";
+  if (name === "status") return "status";
+  // Contains fallback
+  if (name.includes("diametr")) return "diameter";
+  if (name.includes("comprim") || name.includes("length")) return "length";
+  if (name.includes("decliv") || name.includes("slope")) return "slope";
+  if (name.includes("profund")) return "depth";
+  if (name.includes("vazao") || name.includes("flow")) return "flow";
+  if (name.includes("veloc")) return "velocity";
+  if (name.includes("rugos")) return "roughness";
+  if (name.includes("demand")) return "demand";
+  if (name.includes("elev") || name.includes("cota") || name.includes("alt")) return "z_cota";
+  if (name.includes("observ") || name.includes("nota") || name.includes("comment")) return "observation";
+  // Don't ignore by default - let user see everything
   return "ignore";
 }
 

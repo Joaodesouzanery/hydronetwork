@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +14,8 @@ import {
   RDO, ExecutedService, SegmentProgress, ServiceUnit, RDOStatus, SystemType,
   generateId, saveRDOs, loadRDOs, deleteRDO, validateRDO, calculateDashboardMetrics, getStatusColor, exportRDOsToCSV
 } from "@/engine/rdo";
-import { PontoTopografico } from "@/engine/reader";
-import { Trecho } from "@/engine/domain";
+import { PontoTopografico, parseTopographyFile, parseTopographyCSV } from "@/engine/reader";
+import { Trecho, createTrechosFromTopography } from "@/engine/domain";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend,
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line
@@ -30,6 +30,8 @@ interface RDOHydroModuleProps {
   trechos: Trecho[];
   rdos: RDO[];
   setRdos: (rdos: RDO[]) => void;
+  onPontosChange?: (pontos: PontoTopografico[]) => void;
+  onTrechosChange?: (trechos: Trecho[]) => void;
 }
 
 const fmt = (n: number, d = 1) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -68,10 +70,32 @@ const MOCK_SEGMENTS = [
   { id: "TRD-001", system: "drenagem" as const, planned: 250, executed: 100 },
 ];
 
-export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos }: RDOHydroModuleProps) => {
+export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange, onTrechosChange }: RDOHydroModuleProps) => {
   const [view, setView] = useState<"dashboard" | "list" | "new" | "map" | "financial">("dashboard");
   const [financials, setFinancials] = useState<FinancialEntry[]>(MOCK_FINANCIALS);
   const [curvaSView, setCurvaSView] = useState<"financeiro" | "fisico" | "ambos">("ambos");
+  const topoInputRef = useRef<HTMLInputElement>(null);
+
+  const handleTopoImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      let pts: PontoTopografico[];
+      if (ext === "csv" || ext === "txt") {
+        const text = await file.text();
+        pts = parseTopographyCSV(text);
+      } else {
+        pts = await parseTopographyFile(file);
+      }
+      if (pts.length < 2) { toast.error("Mínimo de 2 pontos necessários."); return; }
+      const segs = createTrechosFromTopography(pts, 200, "PVC");
+      onPontosChange?.(pts);
+      onTrechosChange?.(segs);
+      toast.success(`Topografia importada: ${pts.length} pontos, ${segs.length} trechos.`);
+    } catch (err: any) { toast.error(err.message || "Erro ao importar topografia."); }
+    if (topoInputRef.current) topoInputRef.current.value = "";
+  }, [onPontosChange, onTrechosChange]);
 
   const metrics = calculateDashboardMetrics(rdos);
 
@@ -195,6 +219,14 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos }: RDOHydroModul
           <Button key={key} variant={view === key ? "default" : "outline"} size="sm" onClick={() => setView(key as any)}>{label}</Button>
         ))}
         <Button variant="outline" size="sm" onClick={() => toast.info("Importar trechos planejados")}>📥 Importar Planejamento</Button>
+        {onPontosChange && onTrechosChange && (
+          <>
+            <Button variant="outline" size="sm" onClick={() => topoInputRef.current?.click()}>
+              <Upload className="h-3 w-3 mr-1" /> Importar Topografia
+            </Button>
+            <input ref={topoInputRef} type="file" accept=".csv,.txt,.xlsx,.xls" className="hidden" onChange={handleTopoImport} />
+          </>
+        )}
         <Button variant="outline" size="sm" onClick={() => {
           if (trechos.length === 0) { toast.error("Sem dados para exportar"); return; }
           downloadRDODXF(pontos, trechos, rdos);

@@ -355,7 +355,7 @@ const HydroNetwork = () => {
       case "revisao":
         return <PeerReviewModule pontos={pontos} trechos={trechos} />;
       case "rdo":
-        return <RDOHydroModule pontos={pontos} trechos={trechos} rdos={rdos} setRdos={setRdos} />;
+        return <RDOHydroModule pontos={pontos} trechos={trechos} rdos={rdos} setRdos={setRdos} onPontosChange={setPontos} onTrechosChange={setTrechos} />;
       case "rdo-planejamento":
         return <RDOPlanningModule pontos={pontos} trechos={trechos} rdos={rdos} scheduleResult={scheduleResult} />;
       case "perfil":
