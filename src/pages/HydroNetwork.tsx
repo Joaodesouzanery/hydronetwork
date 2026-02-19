@@ -140,12 +140,22 @@ const HydroNetwork = () => {
         const text = await file.text();
         const pts = parseDxfToPoints(text);
         if (pts.length === 0) { toast.error("Nenhum ponto encontrado no DXF."); return; }
-        const headers = ["id", "x", "y", "cota", "layer", "entityType"];
-        const rows = pts.map(p => ({ id: p.id, x: String(p.x), y: String(p.y), cota: String(p.cota), layer: (p as any).layer || "", entityType: (p as any).entityType || "" }));
+        // Extract ALL available fields from parsed points
+        const allKeys = new Set<string>();
+        pts.forEach(p => { Object.keys(p).forEach(k => allKeys.add(k)); });
+        // Ensure core fields always present
+        ["id", "x", "y", "cota", "layer", "entityType"].forEach(k => allKeys.add(k));
+        const headers = Array.from(allKeys);
+        const rows = pts.map(p => {
+          const row: Record<string, any> = {};
+          headers.forEach(h => { row[h] = String((p as any)[h] ?? ""); });
+          return row;
+        });
         const fields: SourceField[] = headers.map(h => ({
           name: h,
-          sampleValues: rows.slice(0, 3).map(r => String((r as any)[h] ?? "")),
-          type: ["x", "y", "cota"].includes(h) ? "number" as const : "text" as const,
+          sampleValues: rows.slice(0, 3).map(r => String(r[h] ?? "")),
+          type: ["x", "y", "cota"].includes(h) ? "number" as const : 
+                rows.slice(0, 5).every(r => !isNaN(Number(r[h])) && r[h] !== "") ? "number" as const : "text" as const,
         }));
         setDetectedFields(fields);
         setPendingFileData({ rows, fileName: file.name });
@@ -205,19 +215,56 @@ const HydroNetwork = () => {
 
       // SHP, IFC, DWG, GPKG: try reading as text/binary and extract tabular attributes
       if (ext === "shp" || ext === "ifc" || ext === "dwg" || ext === "gpkg" || ext === "geojson") {
-        if (ext === "geojson") {
+      if (ext === "geojson") {
           const text = await file.text();
           const geojson = JSON.parse(text);
           const features = geojson.features || [];
           if (features.length === 0) { toast.error("GeoJSON sem features."); return; }
           const allProps = new Set<string>();
           features.forEach((f: any) => { if (f.properties) Object.keys(f.properties).forEach(k => allProps.add(k)); });
+          // Add geometry fields for all geometry types
+          allProps.add("_geom_type");
           allProps.add("_geom_x"); allProps.add("_geom_y"); allProps.add("_geom_z");
+          // For LineString/polyline features, add start/end coordinate fields
+          const hasLines = features.some((f: any) => f.geometry?.type === "LineString" || f.geometry?.type === "MultiLineString");
+          if (hasLines) {
+            allProps.add("_line_start_x"); allProps.add("_line_start_y"); allProps.add("_line_start_z");
+            allProps.add("_line_end_x"); allProps.add("_line_end_y"); allProps.add("_line_end_z");
+            allProps.add("_line_num_vertices"); allProps.add("_line_length_approx");
+          }
           const headersList = Array.from(allProps);
-          const rows = features.map((f: any) => {
+          const rows = features.map((f: any, fi: number) => {
             const row: Record<string, any> = { ...f.properties };
+            const geomType = f.geometry?.type || "Unknown";
+            row["_geom_type"] = geomType;
             const coords = f.geometry?.coordinates || [];
-            row["_geom_x"] = String(coords[0] ?? ""); row["_geom_y"] = String(coords[1] ?? ""); row["_geom_z"] = String(coords[2] ?? "0");
+            if (geomType === "Point") {
+              row["_geom_x"] = String(coords[0] ?? ""); row["_geom_y"] = String(coords[1] ?? ""); row["_geom_z"] = String(coords[2] ?? "0");
+            } else if (geomType === "LineString") {
+              // First vertex as main coordinate
+              row["_geom_x"] = String(coords[0]?.[0] ?? ""); row["_geom_y"] = String(coords[0]?.[1] ?? ""); row["_geom_z"] = String(coords[0]?.[2] ?? "0");
+              // Start and end vertices
+              const start = coords[0] || []; const end = coords[coords.length - 1] || [];
+              row["_line_start_x"] = String(start[0] ?? ""); row["_line_start_y"] = String(start[1] ?? ""); row["_line_start_z"] = String(start[2] ?? "0");
+              row["_line_end_x"] = String(end[0] ?? ""); row["_line_end_y"] = String(end[1] ?? ""); row["_line_end_z"] = String(end[2] ?? "0");
+              row["_line_num_vertices"] = String(coords.length);
+              // Approximate length
+              let len = 0;
+              for (let vi = 1; vi < coords.length; vi++) {
+                const dx = (coords[vi][0] - coords[vi - 1][0]); const dy = (coords[vi][1] - coords[vi - 1][1]);
+                len += Math.sqrt(dx * dx + dy * dy);
+              }
+              row["_line_length_approx"] = String(len.toFixed(3));
+            } else if (geomType === "MultiLineString") {
+              const firstLine = coords[0] || [];
+              row["_geom_x"] = String(firstLine[0]?.[0] ?? ""); row["_geom_y"] = String(firstLine[0]?.[1] ?? ""); row["_geom_z"] = String(firstLine[0]?.[2] ?? "0");
+              const start = firstLine[0] || []; const end = firstLine[firstLine.length - 1] || [];
+              row["_line_start_x"] = String(start[0] ?? ""); row["_line_start_y"] = String(start[1] ?? ""); row["_line_start_z"] = String(start[2] ?? "0");
+              row["_line_end_x"] = String(end[0] ?? ""); row["_line_end_y"] = String(end[1] ?? ""); row["_line_end_z"] = String(end[2] ?? "0");
+              row["_line_num_vertices"] = String(firstLine.length);
+            } else {
+              row["_geom_x"] = String(coords[0] ?? ""); row["_geom_y"] = String(coords[1] ?? ""); row["_geom_z"] = String(coords[2] ?? "0");
+            }
             return row;
           });
           const fields: SourceField[] = headersList.map(h => ({

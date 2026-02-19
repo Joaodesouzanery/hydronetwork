@@ -195,15 +195,15 @@ export const NodeMapWidget = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [linkMode, deleteMode]);
 
+  // Track last data signature to only fitBounds on actual data changes
+  const lastDataSigRef = useRef("");
+
   // Draw nodes and connections
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    
-    // Ensure map renders properly
     map.invalidateSize();
     
-    // Clear previous markers and lines
     markersRef.current.forEach(m => m.remove());
     linesRef.current.forEach(l => l.remove());
     markersRef.current = [];
@@ -214,39 +214,45 @@ export const NodeMapWidget = ({
 
     nodes.forEach((n, idx) => {
       const coords = getCoords(n.x, n.y);
-      
-      // Validate coordinates
       if (!isFinite(coords[0]) || !isFinite(coords[1])) return;
-      
       bounds.push(coords);
+
       let color = accentColor;
       if (idx === 0) color = "#22c55e";
       else if (idx === nodes.length - 1) color = "#ef4444";
       if (selectedNode === n.id) color = "#f59e0b";
       if (linkMode && linkOrigin === n.id) color = "#f97316";
-      if (deleteMode && selectedForDelete.has(n.id)) color = "#dc2626"; // red for delete selection
+      if (deleteMode && selectedForDelete.has(n.id)) color = "#dc2626";
 
       const radius = (linkMode || deleteMode) ? 10 : 8;
       const marker = L.circleMarker(coords, {
         radius, fillColor: color, color: "#fff", weight: 2, fillOpacity: 0.9,
       }).addTo(map);
 
-      const demandaInfo = n.demanda !== undefined ? `<br><b>Demanda:</b> ${n.demanda} L/s` : "";
-      marker.bindPopup(`
-        <div style="font-family:sans-serif;min-width:150px;">
-          <strong style="font-size:13px;">${n.id}</strong>
-          ${n.label ? `<br><em style="font-size:11px;color:#888;">${n.label}</em>` : ""}
-          <hr style="margin:4px 0;border-color:#e2e8f0;">
-          <div style="font-size:11px;line-height:1.5;">
-            <b>X:</b> ${n.x.toFixed(3)}<br>
-            <b>Y:</b> ${n.y.toFixed(3)}
-            ${n.cota !== undefined ? `<br><b>Cota:</b> ${n.cota.toFixed(3)}m` : ""}
-            ${demandaInfo}
+      // In link/delete mode use tooltips only (popups block fast clicking)
+      if (linkMode || deleteMode) {
+        marker.bindTooltip(n.id, { permanent: false, direction: "top", offset: [0, -10] });
+      } else {
+        const demandaInfo = n.demanda !== undefined ? `<br><b>Demanda:</b> ${n.demanda} L/s` : "";
+        marker.bindPopup(`
+          <div style="font-family:sans-serif;min-width:150px;">
+            <strong style="font-size:13px;">${n.id}</strong>
+            ${n.label ? `<br><em style="font-size:11px;color:#888;">${n.label}</em>` : ""}
+            <hr style="margin:4px 0;border-color:#e2e8f0;">
+            <div style="font-size:11px;line-height:1.5;">
+              <b>X:</b> ${n.x.toFixed(3)}<br>
+              <b>Y:</b> ${n.y.toFixed(3)}
+              ${n.cota !== undefined ? `<br><b>Cota:</b> ${n.cota.toFixed(3)}m` : ""}
+              ${demandaInfo}
+            </div>
           </div>
-        </div>
-      `);
+        `);
+      }
 
-      marker.on("click", () => handleNodeClickInternal(n.id));
+      marker.on("click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        handleNodeClickInternal(n.id);
+      });
       markersRef.current.push(marker);
     });
 
@@ -261,18 +267,19 @@ export const NodeMapWidget = ({
       const line = L.polyline([fromCoords, toCoords], {
         color: c.color || accentColor, weight: 3, opacity: 0.8,
       }).addTo(map);
-      if (c.label) line.bindPopup(`<b>${c.label}</b>`);
+      if (c.label) line.bindTooltip(c.label || `${c.from} → ${c.to}`, { sticky: true });
       linesRef.current.push(line);
     });
 
-    if (bounds.length > 0) {
+    // Only fitBounds when actual data changes (not selection/mode changes)
+    const dataSig = `${nodes.map(n => n.id).join(",")}|${localConnections.length}`;
+    if (bounds.length > 0 && dataSig !== lastDataSigRef.current) {
+      lastDataSigRef.current = dataSig;
       try {
         map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30], maxZoom: 18 });
       } catch (e) {
-        // Fallback if bounds are invalid
         map.setView(bounds[0] as L.LatLngExpression, 15);
       }
-      // Ensure tiles load after bounds change
       setTimeout(() => map.invalidateSize(), 200);
       setTimeout(() => map.invalidateSize(), 500);
     }
