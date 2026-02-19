@@ -197,6 +197,10 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
           connections={mapConnections}
           onConnectionsChange={setMapConnections}
           onNodeDemandChange={(nodeId, demanda) => setNodes(nodes.map(n => n.id === nodeId ? { ...n, demanda } : n))}
+          onNodesDelete={(ids) => {
+            setNodes(prev => prev.filter(n => !ids.includes(n.id)));
+            setCalculated(false);
+          }}
           title="Mapa da Rede de Esgoto"
           accentColor="#22c55e"
           editable

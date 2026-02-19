@@ -255,6 +255,13 @@ export const SwmmModule = ({ pontos, trechos }: SwmmModuleProps) => {
           nodes={mapNodes}
           connections={mapConnections}
           onConnectionsChange={setMapConnections}
+          onNodesDelete={(ids) => {
+            const idSet = new Set(ids);
+            setSubBacias(prev => prev.filter(s => !idSet.has(s.id)));
+            setExutorios(prev => prev.filter(e => !idSet.has(e.id)));
+            setBaciasDetencao(prev => prev.filter(b => !idSet.has(b.id)));
+            setSimulated(false);
+          }}
           title="Mapa da Rede de Drenagem SWMM"
           accentColor="hsl(140, 60%, 45%)"
           height={380}

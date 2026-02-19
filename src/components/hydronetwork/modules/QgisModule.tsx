@@ -276,6 +276,11 @@ export const QgisModule = ({ pontos = [], trechos = [] }: QgisModuleProps) => {
           nodes={mapNodes}
           connections={mapConnections}
           onConnectionsChange={setMapConnections}
+          onNodesDelete={(ids) => {
+            const idSet = new Set(ids);
+            setLocalPontos(prev => prev.filter(p => !idSet.has(p.id)));
+            setLocalTrechos(prev => prev.filter(t => !idSet.has(t.idInicio) && !idSet.has(t.idFim)));
+          }}
           title="Mapa Interativo QGIS"
           accentColor={nodeColor}
           height={450}

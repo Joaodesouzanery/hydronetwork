@@ -190,6 +190,10 @@ export const WaterModule = ({ pontos }: WaterModuleProps) => {
         connections={mapConnections}
         onConnectionsChange={setMapConnections}
         onNodeDemandChange={handleNodeDemandChange}
+        onNodesDelete={(ids) => {
+          setNodes(prev => prev.filter(n => !ids.includes(n.id)));
+          setCalculated(false);
+        }}
         title="Mapa da Rede de Água"
         accentColor="#06b6d4"
         editable
