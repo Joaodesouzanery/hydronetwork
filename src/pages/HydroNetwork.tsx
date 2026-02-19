@@ -202,44 +202,8 @@ const HydroNetwork = () => {
         return;
       }
 
-      // SHP, IFC, DWG, GPKG, GeoJSON: try reading as text/binary and extract tabular attributes
+      // SHP, IFC, DWG, GPKG: try reading as text/binary and extract tabular attributes
       if (ext === "shp" || ext === "ifc" || ext === "dwg" || ext === "gpkg" || ext === "geojson") {
-        // IFC/BIM: extract coordinate data from IFC text
-        if (ext === "ifc") {
-          const text = await file.text();
-          const ifcPoints: PontoTopografico[] = [];
-          // Parse IFCCARTESIANPOINT entries
-          const pointRegex = /IFCCARTESIANPOINT\(\(([-\d.eE+]+),([-\d.eE+]+)(?:,([-\d.eE+]+))?\)\)/gi;
-          let match;
-          const seenKeys = new Set<string>();
-          while ((match = pointRegex.exec(text)) !== null) {
-            const x = parseFloat(match[1]);
-            const y = parseFloat(match[2]);
-            const z = match[3] ? parseFloat(match[3]) : 0;
-            if (isNaN(x) || isNaN(y)) continue;
-            const key = `${x.toFixed(3)}_${y.toFixed(3)}`;
-            if (seenKeys.has(key)) continue;
-            seenKeys.add(key);
-            ifcPoints.push({ id: `IFC${String(ifcPoints.length + 1).padStart(3, "0")}`, x, y, cota: isNaN(z) ? 0 : z });
-          }
-          if (ifcPoints.length === 0) {
-            toast.error("Nenhum ponto cartesiano encontrado no arquivo IFC. Verifique se o arquivo contém geometria válida.");
-            return;
-          }
-          // Show in field mapping dialog
-          const headers = ["id", "x", "y", "cota"];
-          const rows = ifcPoints.map(p => ({ id: p.id, x: String(p.x), y: String(p.y), cota: String(p.cota) }));
-          const fields: SourceField[] = headers.map(h => ({
-            name: h,
-            sampleValues: rows.slice(0, 3).map(r => String((r as any)[h] ?? "")),
-            type: ["x", "y", "cota"].includes(h) ? "number" as const : "text" as const,
-          }));
-          setDetectedFields(fields);
-          setPendingFileData({ rows, fileName: file.name });
-          setShowFieldMapping(true);
-          toast.success(`${ifcPoints.length} pontos extraídos do arquivo IFC/BIM.`);
-          return;
-        }
         if (ext === "geojson") {
           const text = await file.text();
           const geojson = JSON.parse(text);
@@ -264,7 +228,7 @@ const HydroNetwork = () => {
           setShowFieldMapping(true);
           return;
         }
-        toast.info(`Formato .${ext}: Converta para GeoJSON, CSV, IFC ou DXF usando QGIS para importar com mapeamento de campos.`);
+        toast.info(`Formato .${ext}: Converta para GeoJSON, CSV ou DXF usando QGIS para importar com mapeamento de campos.`);
         return;
       }
 
@@ -421,8 +385,8 @@ const HydroNetwork = () => {
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer">
                   <Upload className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground mb-2">Arraste ou clique para selecionar</p>
-                   <p className="text-xs text-muted-foreground mb-1">Aceita: CSV, TXT, XLSX, XLS, <strong>DXF</strong>, <strong>IFC/BIM</strong>, SHP, GeoJSON</p>
-                   <p className="text-xs text-muted-foreground mb-3">Ao importar CSV/XLSX/IFC, você poderá mapear manualmente quais colunas correspondem a X, Y, Z, ID, etc.</p>
+                   <p className="text-xs text-muted-foreground mb-1">Aceita: CSV, TXT, XLSX, XLS, <strong>DXF</strong>, SHP, GeoJSON</p>
+                   <p className="text-xs text-muted-foreground mb-3">Ao importar CSV/XLSX, você poderá mapear manualmente quais colunas correspondem a X, Y, Z, ID, etc.</p>
                    <Input type="file" accept=".csv,.txt,.xlsx,.xls,.dxf,.shp,.ifc,.dwg,.gpkg,.geojson" onChange={handleTopographyUpload} className="mt-2" />
                 </div>
               )}
@@ -656,7 +620,7 @@ const HydroNetwork = () => {
   function MapaInterativoModule() {
     return (
       <div className="space-y-4">
-        <TopographyMap pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} onPontosChange={setPontos} />
+        <TopographyMap pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />
         <Card>
           <CardHeader><CardTitle>Camadas</CardTitle></CardHeader>
           <CardContent>

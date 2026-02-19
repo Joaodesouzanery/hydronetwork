@@ -4,8 +4,7 @@ import {
   Calendar, Beaker, Waves, Layers, FileText, Map, Shield, ClipboardList,
   Plus, History, Image, AlertCircle, Archive, HeadphonesIcon, Settings,
   BarChart3, ClipboardCheck, Activity, DollarSign, Building2, Bell, Clock,
-  BookOpen, Smile, Mail, Linkedin, Package, Wrench, Users, ShoppingCart,
-  HardHat, Warehouse, QrCode, UserCheck, Construction, Briefcase
+  BookOpen, Smile, Mail, Linkedin
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -28,29 +27,6 @@ const monitoringItems = [
   { title: "Atrasos de Projeto", url: "/project-delays", icon: Clock },
 ];
 
-const materialsItems = [
-  { title: "Materiais", url: "/materials", icon: Package },
-  { title: "Controle de Material", url: "/material-control", icon: ClipboardCheck },
-  { title: "Pedidos de Material", url: "/material-requests", icon: ShoppingCart },
-  { title: "Almoxarifado", url: "/inventory", icon: Warehouse },
-  { title: "Orçamentos", url: "/budgets", icon: DollarSign },
-  { title: "Preços", url: "/prices", icon: BarChart3 },
-];
-
-const maintenanceItems = [
-  { title: "Tarefas de Manutenção", url: "/maintenance-tasks", icon: Wrench },
-  { title: "Solicitações", url: "/maintenance-requests", icon: ClipboardList },
-  { title: "QR Codes", url: "/maintenance-qrcodes", icon: QrCode },
-  { title: "Ativos", url: "/assets-catalog", icon: Building2 },
-  { title: "Relatórios", url: "/facility-reports", icon: FileText },
-];
-
-const rhCrmItems = [
-  { title: "RH ConstruData", url: "/rh", icon: HardHat },
-  { title: "Funcionários", url: "/employees", icon: Users },
-  { title: "CRM", url: "/crm", icon: Briefcase },
-];
-
 const hydroModules = [
   { title: "Topografia", url: "/hydronetwork/topografia", icon: Upload },
   { title: "Esgoto", url: "/hydronetwork/esgoto", icon: Droplets },
@@ -71,7 +47,6 @@ const hydroModules = [
   { title: "Mapa Interativo", url: "/hydronetwork/mapa", icon: Map },
   { title: "Exportação GIS", url: "/hydronetwork/exportacao", icon: FileSpreadsheet },
 ];
-
 const rdoItems = [
   { title: "RDO Hydro", url: "/hydronetwork/rdo", icon: ClipboardList },
   { title: "RDO × Planejamento", url: "/hydronetwork/rdo-planejamento", icon: BarChart3 },
@@ -132,11 +107,8 @@ export function AppSidebar() {
       <SidebarContent>
         {renderSection("Menu Principal", dashboardItems)}
         {renderSection("Monitoramento", monitoringItems)}
-        {renderSection("Materiais", materialsItems, false)}
-        {renderSection("Manutenção", maintenanceItems, false)}
-        {renderSection("RH & CRM", rhCrmItems, false)}
-        {renderSection("HydroNetwork", hydroModules, false)}
-        {renderSection("Diário de Obra", rdoItems, false)}
+        {renderSection("HydroNetwork", hydroModules)}
+        {renderSection("Diário de Obra", rdoItems)}
         {renderSection("Sistema", settingsItems, false)}
 
         {/* Support footer */}
