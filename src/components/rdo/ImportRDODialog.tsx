@@ -140,6 +140,27 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
     return mapping;
   };
 
+  // ─── Known construction service keywords for fuzzy matching ───
+  const SERVICE_KEYWORDS = [
+    "concretagem", "alvenaria", "escavação", "escavacao", "aterro", "reaterro",
+    "compactação", "compactacao", "assentamento", "demolição", "demolicao",
+    "impermeabilização", "impermeabilizacao", "armação", "armacao", "forma",
+    "desforma", "lançamento", "lancamento", "vibração", "vibracao", "cura",
+    "chapisco", "reboco", "emboço", "emboco", "contrapiso", "piso",
+    "pintura", "textura", "revestimento", "cerâmica", "ceramica", "azulejo",
+    "tubulação", "tubulacao", "encanamento", "hidráulica", "hidraulica",
+    "elétrica", "eletrica", "cabeamento", "fiação", "fiacao",
+    "terraplanagem", "drenagem", "pavimentação", "pavimentacao",
+    "fundação", "fundacao", "estaca", "sapata", "radier", "baldrame",
+    "laje", "viga", "pilar", "estrutura", "montagem", "solda",
+    "instalação", "instalacao", "manutenção", "manutencao",
+    "sondagem", "topografia", "levantamento", "locação", "locacao",
+    "corte", "transporte", "carga", "descarga", "movimentação",
+    "serviço", "servico", "execução", "execucao", "produção", "producao",
+    "ligação", "ligacao", "ramal", "rede", "poço", "poco", "caixa",
+    "meio-fio", "meio fio", "sarjeta", "calçada", "calcada", "guia",
+  ];
+
   // ─── PDF parser ───
   const extractRDOsFromPdfText = (text: string, sourceFile?: string): ParsedRDO[] => {
     const lines = text.split("\n").filter(l => l.trim());
@@ -171,7 +192,8 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
       }
     };
 
-    for (const line of lines) {
+    for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+      const line = lines[lineIdx];
       const lowerLine = line.toLowerCase();
       const dateMatch = line.match(dateRegex);
 
@@ -214,12 +236,12 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
         const windMatch = line.match(/(?:vento|wind)[:\s]*(\d+[\.,]?\d*)/i);
         if (windMatch && !currentRDO.windSpeed) currentRDO.windSpeed = parseFloat(windMatch[1].replace(",", "."));
 
-        // Services
+        // ─── SERVICE EXTRACTION (improved) ───
+        // Method 1: Line has quantity+unit pattern
         const svcMatch = line.match(serviceRegex);
         if (svcMatch) {
           const serviceName = line.replace(svcMatch[0], "").replace(/[:\-\t,;]+$/, "").trim();
           if (serviceName && serviceName.length > 2) {
-            // Try to extract equipment from the line
             const eqMatch = line.match(/(?:equip(?:amento)?s?)[:\s]*([^,;]+)/i);
             currentRDO.services?.push({
               name: serviceName.substring(0, 150),
@@ -227,6 +249,70 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
               unit: svcMatch[2].replace("²", "2").replace("³", "3"),
               equipment: eqMatch?.[1]?.trim(),
             });
+          }
+        }
+
+        // Method 2: Line contains a known service keyword without quantity on same line
+        // Look ahead for quantity on nearby lines
+        if (!svcMatch) {
+          const matchedKeyword = SERVICE_KEYWORDS.find(kw => lowerLine.includes(kw));
+          if (matchedKeyword) {
+            // Extract the service name from the line
+            let serviceName = line.replace(/^[\d\.\-\)\s]+/, "").replace(/[:\-\t,;]+$/, "").trim();
+            if (serviceName.length > 2 && serviceName.length < 200) {
+              // Look ahead up to 3 lines for a quantity
+              let foundQty = false;
+              for (let ahead = 1; ahead <= 3 && lineIdx + ahead < lines.length; ahead++) {
+                const nextLine = lines[lineIdx + ahead];
+                const qtyMatch = nextLine.match(serviceRegex);
+                if (qtyMatch) {
+                  const eqMatch = nextLine.match(/(?:equip(?:amento)?s?)[:\s]*([^,;]+)/i);
+                  currentRDO.services?.push({
+                    name: serviceName.substring(0, 150),
+                    quantity: parseFloat(qtyMatch[1].replace(",", ".")),
+                    unit: qtyMatch[2].replace("²", "2").replace("³", "3"),
+                    equipment: eqMatch?.[1]?.trim(),
+                  });
+                  foundQty = true;
+                  break;
+                }
+              }
+              // If no quantity found, still add with qty 0
+              if (!foundQty) {
+                // Check if service name is not already added
+                const alreadyAdded = currentRDO.services?.some(s => 
+                  s.name.toLowerCase().includes(matchedKeyword) || serviceName.toLowerCase().includes(s.name.toLowerCase())
+                );
+                if (!alreadyAdded) {
+                  currentRDO.services?.push({
+                    name: serviceName.substring(0, 150),
+                    quantity: 0,
+                    unit: "un",
+                  });
+                }
+              }
+            }
+          }
+        }
+
+        // Method 3: Tabular format — line has multiple tab/multi-space separated columns
+        if (!svcMatch) {
+          const columns = line.split(/\t|  {2,}/).map(c => c.trim()).filter(Boolean);
+          if (columns.length >= 3) {
+            // Check if any column looks like a service name (contains a keyword)
+            const nameCol = columns.find(col => SERVICE_KEYWORDS.some(kw => col.toLowerCase().includes(kw)));
+            const qtyCol = columns.find(col => /^\d+[\.,]?\d*$/.test(col));
+            const unitCol = columns.find(col => /^(m[²³23]?|un|vb|kg|h|l|t|pç|cx|gl|km)$/i.test(col));
+            if (nameCol && qtyCol) {
+              const alreadyAdded = currentRDO.services?.some(s => s.name === nameCol);
+              if (!alreadyAdded) {
+                currentRDO.services?.push({
+                  name: nameCol.substring(0, 150),
+                  quantity: parseFloat(qtyCol.replace(",", ".")),
+                  unit: unitCol || "un",
+                });
+              }
+            }
           }
         }
       } else if (isNewDateLine) {
@@ -243,15 +329,68 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
         const m = line.match(dateRegex);
         if (m) allDates.add(normalizeDate(m[1]));
       }
+
+      // Even without RDO headers, try to extract services from the whole text
+      const allServices: ParsedService[] = [];
+      for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+        const line = lines[lineIdx];
+        const lowerLine = line.toLowerCase();
+        const svcMatch = line.match(serviceRegex);
+        
+        if (svcMatch) {
+          const serviceName = line.replace(svcMatch[0], "").replace(/[:\-\t,;]+$/, "").trim();
+          if (serviceName && serviceName.length > 2) {
+            allServices.push({
+              name: serviceName.substring(0, 150),
+              quantity: parseFloat(svcMatch[1].replace(",", ".")),
+              unit: svcMatch[2].replace("²", "2").replace("³", "3"),
+            });
+          }
+        } else {
+          const matchedKeyword = SERVICE_KEYWORDS.find(kw => lowerLine.includes(kw));
+          if (matchedKeyword) {
+            let serviceName = line.replace(/^[\d\.\-\)\s]+/, "").replace(/[:\-\t,;]+$/, "").trim();
+            if (serviceName.length > 2 && serviceName.length < 200) {
+              // Look ahead for qty
+              for (let ahead = 1; ahead <= 3 && lineIdx + ahead < lines.length; ahead++) {
+                const nextLine = lines[lineIdx + ahead];
+                const qtyMatch = nextLine.match(serviceRegex);
+                if (qtyMatch) {
+                  allServices.push({
+                    name: serviceName.substring(0, 150),
+                    quantity: parseFloat(qtyMatch[1].replace(",", ".")),
+                    unit: qtyMatch[2].replace("²", "2").replace("³", "3"),
+                  });
+                  break;
+                }
+              }
+              if (!allServices.some(s => s.name.toLowerCase().includes(matchedKeyword))) {
+                allServices.push({ name: serviceName.substring(0, 150), quantity: 0, unit: "un" });
+              }
+            }
+          }
+        }
+      }
+
       if (allDates.size > 0) {
-        allDates.forEach(d => rdos.push({ date: d, location: "Importado do PDF", front: "Frente Importada", services: [], sourceFile }));
+        const dateArr = Array.from(allDates);
+        // If only one date, put all services in one RDO
+        if (dateArr.length === 1) {
+          rdos.push({ date: dateArr[0], location: "Importado do PDF", front: "Frente Importada", services: allServices, sourceFile });
+        } else {
+          dateArr.forEach(d => rdos.push({ date: d, location: "Importado do PDF", front: "Frente Importada", services: [], sourceFile }));
+          // Distribute services to first RDO if can't determine
+          if (rdos.length > 0 && allServices.length > 0) {
+            rdos[0].services = allServices;
+          }
+        }
       } else {
         rdos.push({
           date: new Date().toISOString().split("T")[0],
           location: "Importado do PDF",
           front: "Frente Importada",
           observations: text.substring(0, 1000),
-          services: [],
+          services: allServices,
           sourceFile,
         });
       }
