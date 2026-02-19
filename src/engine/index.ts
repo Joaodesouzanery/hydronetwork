@@ -11,3 +11,6 @@ export * from "./budget";
 export * from "./planning";
 export * from "./rdo";
 export * from "./hydraulics";
+export * from "./spatialCore";
+export * from "./importEngine";
+export * from "./dxfReader";

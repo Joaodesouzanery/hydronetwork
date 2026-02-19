@@ -93,7 +93,7 @@ export interface SpatialEdge {
 // ════════════════════════════════════════
 
 export type LayerGeometryType = "Point" | "LineString" | "Polygon" | "Mixed";
-export type LayerDiscipline = "topografia" | "esgoto" | "agua" | "drenagem" | "bim" | "generico";
+export type LayerDiscipline = "topografia" | "esgoto" | "agua" | "drenagem" | "bim" | "generico" | "desenho";
 
 export interface SpatialLayer {
   id: string;
