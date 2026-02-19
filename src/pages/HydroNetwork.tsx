@@ -45,6 +45,7 @@ import { PeerReviewModule } from "@/components/hydronetwork/modules/PeerReviewMo
 import { BudgetCostModule } from "@/components/hydronetwork/modules/BudgetCostModule";
 import { BdiModule } from "@/components/hydronetwork/modules/BdiModule";
 import { RDOPlanningModule } from "@/components/hydronetwork/modules/RDOPlanningModule";
+import { saveHydroProject, loadHydroProject } from "@/engine/sharedPlanningStore";
 // Shared state context - in a real app, use React Context or Zustand
 const useHydroState = () => {
   const [pontos, setPontos] = useState<PontoTopografico[]>([]);
@@ -226,6 +227,42 @@ const HydroNetwork = () => {
           setDetectedFields(fields);
           setPendingFileData({ rows, fileName: file.name });
           setShowFieldMapping(true);
+          return;
+        }
+        // IFC/BIM: parse text-based IFC STEP format to extract coordinate data
+        if (ext === "ifc") {
+          const text = await file.text();
+          const pts: { id: string; x: string; y: string; z: string; type: string; name: string }[] = [];
+          const lines = text.split(/\r?\n/);
+          let autoId = 1;
+          for (const line of lines) {
+            // Match IFCCARTESIANPOINT((...))
+            const cpMatch = line.match(/IFCCARTESIANPOINT\s*\(\s*\(\s*([-\d.eE+]+)\s*,\s*([-\d.eE+]+)\s*(?:,\s*([-\d.eE+]+))?\s*\)/i);
+            if (cpMatch) {
+              pts.push({
+                id: `IFC_${autoId++}`,
+                x: cpMatch[1], y: cpMatch[2], z: cpMatch[3] || "0",
+                type: "IFCCARTESIANPOINT", name: "",
+              });
+            }
+          }
+          if (pts.length === 0) {
+            toast.error("Nenhum ponto de coordenadas encontrado no IFC. Tente converter para GeoJSON/CSV via software BIM.");
+            return;
+          }
+          // Limit to manageable amount
+          const limitedPts = pts.slice(0, 5000);
+          const headers = ["id", "x", "y", "z", "type"];
+          const rows = limitedPts.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, type: p.type }));
+          const fields: SourceField[] = headers.map(h => ({
+            name: h,
+            sampleValues: rows.slice(0, 3).map(r => String((r as any)[h] ?? "")),
+            type: ["x", "y", "z"].includes(h) ? "number" as const : "text" as const,
+          }));
+          setDetectedFields(fields);
+          setPendingFileData({ rows, fileName: file.name });
+          setShowFieldMapping(true);
+          toast.info(`${limitedPts.length} pontos extraídos do IFC (de ${pts.length} total).`);
           return;
         }
         toast.info(`Formato .${ext}: Converta para GeoJSON, CSV ou DXF usando QGIS para importar com mapeamento de campos.`);
@@ -694,6 +731,22 @@ const HydroNetwork = () => {
                 <p className="text-muted-foreground mt-1">{moduleNames[activeModule] || "Plataforma de Saneamento"}</p>
               </div>
               <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => {
+                  saveHydroProject({
+                    pontos, trechos, rdos, planning: null, scheduleResult,
+                    savedAt: new Date().toISOString(), projectName: "HydroNetwork",
+                  });
+                  toast.success("Projeto salvo localmente!");
+                }}>💾 Salvar Projeto</Button>
+                <Button variant="outline" size="sm" onClick={() => {
+                  const saved = loadHydroProject();
+                  if (!saved) { toast.error("Nenhum projeto salvo encontrado."); return; }
+                  if (saved.pontos?.length) setPontos(saved.pontos);
+                  if (saved.trechos?.length) setTrechos(saved.trechos);
+                  if (saved.rdos?.length) setRdos(saved.rdos);
+                  if (saved.scheduleResult) setScheduleResult(saved.scheduleResult);
+                  toast.success(`Projeto restaurado: ${saved.pontos?.length || 0} pontos, ${saved.trechos?.length || 0} trechos`);
+                }}>📂 Carregar Projeto</Button>
                 <Button variant="outline" size="sm" onClick={() => {
                   toast.info(`Pontos: ${pontos.length} | Trechos: ${trechos.length} | RDOs: ${rdos.length} | Cronograma: ${scheduleResult ? "Sim" : "Não"}`);
                 }}>✅ Verificar Plataforma</Button>

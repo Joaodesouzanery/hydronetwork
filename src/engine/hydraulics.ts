@@ -108,12 +108,16 @@ const E_SQUARED = 0.00669437999014;
 const EQUATORIAL_RADIUS = 6378137.0;
 
 export function isUTM(x: number, y: number): boolean {
-  // Easting 100,000-999,999 and Northing > 100,000 indicates UTM
-  return x > 100000 && x < 999999 && y > 100000;
+  // UTM: Easting 100,000-999,999 and Northing typically large (> 100,000)
+  // Also handle negative northing values from some systems
+  const absX = Math.abs(x);
+  const absY = Math.abs(y);
+  return absX > 100000 && absX < 999999 && absY > 100000;
 }
 
 /**
  * Check if coordinates look like geographic lat/lng
+ * x = longitude (-180 to 180), y = latitude (-90 to 90)
  */
 export function isLatLng(x: number, y: number): boolean {
   return Math.abs(x) <= 180 && Math.abs(y) <= 90;
@@ -121,10 +125,10 @@ export function isLatLng(x: number, y: number): boolean {
 
 /**
  * Auto-detect UTM zone from easting/northing.
- * Uses the easting value to estimate the central meridian zone.
  * For Brazil, typical zones are 18-25 (SIRGAS 2000).
  */
 export function detectUTMZone(x: number, y: number, overrideZone?: number): { zone: number; hemisphere: "N" | "S" } {
+  // Southern hemisphere if northing < 10,000,000 (standard UTM convention)
   const hemisphere: "N" | "S" = y < 10000000 ? "S" : "N";
   if (overrideZone) return { zone: overrideZone, hemisphere };
   // Default to zone 23 as it covers the most populated areas of Brazil
@@ -190,17 +194,29 @@ export function utmToLatLng(
 }
 
 export function getMapCoordinates(x: number, y: number): [number, number] {
+  // 1. Check UTM first (large numbers)
   if (isUTM(x, y)) {
     const { zone, hemisphere } = detectUTMZone(x, y, globalUtmZone);
     const { lat, lng } = utmToLatLng(x, y, zone, hemisphere);
-    return [lat, lng];
+    if (isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+      return [lat, lng];
+    }
   }
-  // Check if it looks like lat/lng
+  // 2. Check if it looks like lat/lng (including negative values for Brazil)
   if (isLatLng(x, y)) {
-    // x=longitude, y=latitude
+    // Convention: x=longitude, y=latitude
     return [y, x];
   }
-  // Fallback: treat as local coords (small numbers), project to a default area
-  // This handles EPANET-style relative coordinates
+  // 3. Check if coordinates are swapped (y=longitude, x=latitude)
+  if (isLatLng(y, x)) {
+    return [x, y];
+  }
+  // 4. Fallback: treat as local/relative coords centered on São Paulo
+  // Scale small numbers to be near a default location
+  const baseLatLng: [number, number] = [-23.55, -46.63];
+  if (Math.abs(x) < 10000 && Math.abs(y) < 10000) {
+    // Small local coordinate system - scale to ~meters and offset
+    return [baseLatLng[0] + y / 111320, baseLatLng[1] + x / (111320 * Math.cos(baseLatLng[0] * Math.PI / 180))];
+  }
   return [y, x];
 }

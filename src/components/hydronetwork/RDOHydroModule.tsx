@@ -222,14 +222,21 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos }: RDOHydroModul
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Daily chart */}
             <Card>
-              <CardHeader><CardTitle>📈 Avanço Diário (Acumulado)</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>📈 Avanço Diário (Acumulado)</CardTitle>
+                <CardDescription className="text-xs">
+                  Fonte: {trechos.length > 0 ? `${activeSegments.length} trechos da topografia carregada` : "dados de exemplo (mock)"} 
+                  {rdos.length > 0 ? ` + ${rdos.length} RDOs registrados` : ""}.
+                  Valores acumulados calculados a partir dos metros executados por trecho.
+                </CardDescription>
+              </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
                   <AreaChart data={dailyData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="day" tick={{ fontSize: 10 }} />
                     <YAxis />
-                    <RechartsTooltip />
+                    <RechartsTooltip formatter={(value: number) => [`${value} m`, "Executado"]} />
                     <Area type="monotone" dataKey="executado" name="Executado (m)" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} />
                   </AreaChart>
                 </ResponsiveContainer>
