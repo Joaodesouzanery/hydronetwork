@@ -17,16 +17,77 @@ interface ImportRDODialogProps {
   onSuccess: () => void;
 }
 
+interface ParsedService {
+  name: string;
+  quantity: number;
+  unit: string;
+  equipment?: string;
+  employee?: string;
+}
+
 interface ParsedRDO {
   date: string;
   location: string;
   front: string;
+  terrainCondition?: string;
+  gpsLocation?: string;
+  visits?: string;
+  occurrences?: string;
   observations?: string;
-  services: { name: string; quantity: number; unit: string }[];
+  temperature?: number;
+  humidity?: number;
+  windSpeed?: number;
+  weatherDescription?: string;
+  willRain?: boolean;
+  services: ParsedService[];
   sourceFile?: string;
 }
 
 type ImportStep = "upload" | "mapping" | "preview" | "importing" | "done";
+
+// All mappable field definitions
+const FIELD_DEFS = [
+  { key: "date", label: "Data *", required: true },
+  { key: "location", label: "Local / Obra" },
+  { key: "front", label: "Frente de Serviço" },
+  { key: "terrainCondition", label: "Condição do Terreno" },
+  { key: "gpsLocation", label: "Localização GPS" },
+  { key: "visits", label: "Visitas Recebidas" },
+  { key: "occurrences", label: "Ocorrências" },
+  { key: "observations", label: "Observações Gerais" },
+  { key: "temperature", label: "Temperatura" },
+  { key: "humidity", label: "Umidade" },
+  { key: "windSpeed", label: "Velocidade do Vento" },
+  { key: "weatherDescription", label: "Clima" },
+  { key: "serviceName", label: "Nome do Serviço" },
+  { key: "quantity", label: "Quantidade" },
+  { key: "unit", label: "Unidade" },
+  { key: "equipment", label: "Equipamentos Utilizados" },
+  { key: "employee", label: "Funcionário Responsável" },
+];
+
+const INITIAL_MAPPING: Record<string, string> = Object.fromEntries(FIELD_DEFS.map(f => [f.key, ""]));
+
+// Alias maps for auto-mapping
+const ALIAS_MAP: Record<string, string[]> = {
+  date: ["date", "data", "report_date", "dt", "dia", "data_relatorio"],
+  location: ["location", "local", "localizacao", "obra", "construction_site", "endereco", "local_da_obra", "local da obra"],
+  front: ["front", "frente", "service_front", "frente_servico", "frente de serviço", "frente_de_servico"],
+  terrainCondition: ["terrain_condition", "terreno", "condicao_terreno", "condição do terreno", "condicao", "terrain"],
+  gpsLocation: ["gps_location", "gps", "coordinates", "coordenadas", "lat_lng", "localizacao_gps", "localização"],
+  visits: ["visits", "visitas", "visitas_recebidas", "visitas recebidas"],
+  occurrences: ["occurrences", "ocorrencias", "ocorrências", "occurrences_summary"],
+  observations: ["observations", "observacoes", "observações", "obs", "notas", "notes", "general_observations", "observações gerais"],
+  temperature: ["temperature", "temperatura", "temp"],
+  humidity: ["humidity", "umidade"],
+  windSpeed: ["wind_speed", "vento", "velocidade_vento", "wind"],
+  weatherDescription: ["weather_description", "clima", "weather", "tempo"],
+  serviceName: ["service", "servico", "serviço", "service_name", "nome_servico", "descrição", "descricao", "nome do serviço"],
+  quantity: ["quantity", "quantidade", "qtd", "qty"],
+  unit: ["unit", "unidade", "un", "und"],
+  equipment: ["equipment", "equipamento", "equipamentos", "equipment_used", "equipamentos_utilizados"],
+  employee: ["employee", "funcionario", "funcionário", "responsavel", "responsável", "employee_name", "funcionario_responsavel"],
+};
 
 export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: ImportRDODialogProps) => {
   const [step, setStep] = useState<ImportStep>("upload");
@@ -36,9 +97,7 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
   const [fileFormat, setFileFormat] = useState("");
   const [progress, setProgress] = useState(0);
   const [importResults, setImportResults] = useState({ success: 0, errors: 0 });
-  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({
-    date: "", location: "", front: "", observations: "", serviceName: "", quantity: "", unit: ""
-  });
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({ ...INITIAL_MAPPING });
   const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
@@ -51,21 +110,42 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
     setFileFormat("");
     setProgress(0);
     setImportResults({ success: 0, errors: 0 });
-    setColumnMapping({ date: "", location: "", front: "", observations: "", serviceName: "", quantity: "", unit: "" });
+    setColumnMapping({ ...INITIAL_MAPPING });
     setDetectedColumns([]);
     setFileInputKey(k => k + 1);
   };
 
-  // ─── Improved PDF text → RDOs parser ───
+  // ─── Normalize date ───
+  const normalizeDate = (dateStr: string): string => {
+    const parts = dateStr.split(/[\/\.\-]/);
+    if (parts.length === 3) {
+      let [a, b, c] = parts;
+      if (a.length === 4) return `${a}-${b.padStart(2, "0")}-${c.padStart(2, "0")}`;
+      if (c.length === 2) c = "20" + c;
+      if (parseInt(a) > 12) return `${c}-${b.padStart(2, "0")}-${a.padStart(2, "0")}`;
+      return `${c}-${a.padStart(2, "0")}-${b.padStart(2, "0")}`;
+    }
+    const parsed = new Date(dateStr);
+    if (!isNaN(parsed.getTime())) return parsed.toISOString().split("T")[0];
+    return dateStr;
+  };
+
+  // ─── Auto-map columns ───
+  const autoMapColumns = (cols: string[]): Record<string, string> => {
+    const mapping: Record<string, string> = { ...INITIAL_MAPPING };
+    for (const [key, aliases] of Object.entries(ALIAS_MAP)) {
+      const found = cols.find(c => aliases.includes(c.toLowerCase().trim()));
+      if (found) mapping[key] = found;
+    }
+    return mapping;
+  };
+
+  // ─── PDF parser ───
   const extractRDOsFromPdfText = (text: string, sourceFile?: string): ParsedRDO[] => {
     const lines = text.split("\n").filter(l => l.trim());
     const rdos: ParsedRDO[] = [];
-
-    // Broader date regex: dd/mm/yyyy, dd-mm-yyyy, dd.mm.yyyy, yyyy-mm-dd
     const dateRegex = /(\d{2}[\/\.\-]\d{2}[\/\.\-]\d{2,4}|\d{4}[\/\.\-]\d{2}[\/\.\-]\d{2})/;
-    // Service line: has a number + unit pattern
     const serviceRegex = /(\d+[\.,]?\d*)\s*(m[²³23]?|un|vb|kg|h|l|t|pç|cx|gl|km|cm|mm|ml|ton)/i;
-    // RDO header keywords
     const rdoHeaderKeywords = ["rdo", "relatório", "relatorio", "diário", "diario", "daily", "report"];
 
     let currentRDO: Partial<ParsedRDO> | null = null;
@@ -76,7 +156,15 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
           date: currentRDO.date,
           location: currentRDO.location || "Importado do PDF",
           front: currentRDO.front || "Frente Importada",
+          terrainCondition: currentRDO.terrainCondition,
+          gpsLocation: currentRDO.gpsLocation,
+          visits: currentRDO.visits,
+          occurrences: currentRDO.occurrences,
           observations: currentRDO.observations,
+          temperature: currentRDO.temperature,
+          humidity: currentRDO.humidity,
+          windSpeed: currentRDO.windSpeed,
+          weatherDescription: currentRDO.weatherDescription,
           services: currentRDO.services || [],
           sourceFile,
         });
@@ -87,66 +175,68 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
       const lowerLine = line.toLowerCase();
       const dateMatch = line.match(dateRegex);
 
-      // Detect RDO boundary: line with date + header keyword, OR page separator
       const isHeader = dateMatch && rdoHeaderKeywords.some(k => lowerLine.includes(k));
       const isPageBreak = lowerLine.includes("página") || lowerLine.includes("page ") || /^-{5,}$/.test(line.trim());
       const isNewDateLine = dateMatch && !currentRDO;
 
       if (isHeader || (dateMatch && isPageBreak)) {
         flushRDO();
-        currentRDO = {
-          date: normalizeDate(dateMatch![1]),
-          services: [],
-          location: "",
-          front: "",
-        };
+        currentRDO = { date: normalizeDate(dateMatch![1]), services: [], location: "", front: "" };
         continue;
       }
 
       if (currentRDO) {
-        // Extract location
-        if (!currentRDO.location && (lowerLine.includes("local") || lowerLine.includes("obra") || lowerLine.includes("endereço") || lowerLine.includes("endereco"))) {
-          const parts = line.split(/[:\t]/).map(p => p.trim());
-          if (parts.length > 1) currentRDO.location = parts.slice(1).join(" ").substring(0, 200);
-        }
-        // Extract front
-        if (!currentRDO.front && (lowerLine.includes("frente") || lowerLine.includes("front"))) {
-          const parts = line.split(/[:\t]/).map(p => p.trim());
-          if (parts.length > 1) currentRDO.front = parts.slice(1).join(" ").substring(0, 200);
-        }
-        // Extract observations
-        if (lowerLine.includes("observa") || lowerLine.includes("obs:") || lowerLine.includes("notas")) {
-          const parts = line.split(/[:\t]/).map(p => p.trim());
-          if (parts.length > 1) {
-            currentRDO.observations = (currentRDO.observations || "") + parts.slice(1).join(" ") + " ";
+        const extractField = (keywords: string[], setter: (val: string) => void) => {
+          if (keywords.some(k => lowerLine.includes(k))) {
+            const parts = line.split(/[:\t]/).map(p => p.trim());
+            if (parts.length > 1) setter(parts.slice(1).join(" ").substring(0, 500));
           }
-        }
-        // Extract services
+        };
+
+        if (!currentRDO.location) extractField(["local", "obra", "endereço", "endereco"], v => { currentRDO!.location = v; });
+        if (!currentRDO.front) extractField(["frente", "front"], v => { currentRDO!.front = v; });
+        if (!currentRDO.terrainCondition) extractField(["terreno", "terrain", "condição do terreno", "condicao"], v => { currentRDO!.terrainCondition = v; });
+        if (!currentRDO.gpsLocation) extractField(["gps", "coordenada", "latitude", "localização"], v => { currentRDO!.gpsLocation = v; });
+        if (!currentRDO.visits) extractField(["visita", "fiscaliza"], v => { currentRDO!.visits = v; });
+        extractField(["ocorrência", "ocorrencia", "ocorrências"], v => { currentRDO!.occurrences = (currentRDO!.occurrences || "") + v + " "; });
+        extractField(["observa", "obs:", "notas"], v => { currentRDO!.observations = (currentRDO!.observations || "") + v + " "; });
+        extractField(["clima", "weather", "tempo"], v => { currentRDO!.weatherDescription = v; });
+
+        // Temperature
+        const tempMatch = line.match(/(?:temperatura|temp)[:\s]*(\d+[\.,]?\d*)\s*[°ºc]?/i);
+        if (tempMatch && !currentRDO.temperature) currentRDO.temperature = parseFloat(tempMatch[1].replace(",", "."));
+
+        // Humidity
+        const humMatch = line.match(/(?:umidade|humidity)[:\s]*(\d+[\.,]?\d*)\s*%?/i);
+        if (humMatch && !currentRDO.humidity) currentRDO.humidity = parseFloat(humMatch[1].replace(",", "."));
+
+        // Wind
+        const windMatch = line.match(/(?:vento|wind)[:\s]*(\d+[\.,]?\d*)/i);
+        if (windMatch && !currentRDO.windSpeed) currentRDO.windSpeed = parseFloat(windMatch[1].replace(",", "."));
+
+        // Services
         const svcMatch = line.match(serviceRegex);
         if (svcMatch) {
           const serviceName = line.replace(svcMatch[0], "").replace(/[:\-\t,;]+$/, "").trim();
           if (serviceName && serviceName.length > 2) {
+            // Try to extract equipment from the line
+            const eqMatch = line.match(/(?:equip(?:amento)?s?)[:\s]*([^,;]+)/i);
             currentRDO.services?.push({
               name: serviceName.substring(0, 150),
               quantity: parseFloat(svcMatch[1].replace(",", ".")),
               unit: svcMatch[2].replace("²", "2").replace("³", "3"),
+              equipment: eqMatch?.[1]?.trim(),
             });
           }
         }
       } else if (isNewDateLine) {
-        // Start a new RDO from any line with a date when we have no current
-        currentRDO = {
-          date: normalizeDate(dateMatch![1]),
-          services: [],
-          location: "",
-          front: "",
-        };
+        currentRDO = { date: normalizeDate(dateMatch![1]), services: [], location: "", front: "" };
       }
     }
 
     flushRDO();
 
-    // Fallback: if no RDOs found, try collecting all unique dates
+    // Fallback
     if (rdos.length === 0) {
       const allDates = new Set<string>();
       for (const line of lines) {
@@ -154,11 +244,8 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
         if (m) allDates.add(normalizeDate(m[1]));
       }
       if (allDates.size > 0) {
-        allDates.forEach(d => {
-          rdos.push({ date: d, location: "Importado do PDF", front: "Frente Importada", services: [], sourceFile });
-        });
+        allDates.forEach(d => rdos.push({ date: d, location: "Importado do PDF", front: "Frente Importada", services: [], sourceFile }));
       } else {
-        // Absolute fallback: single RDO with the full text as observations
         rdos.push({
           date: new Date().toISOString().split("T")[0],
           location: "Importado do PDF",
@@ -173,77 +260,123 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
     return rdos;
   };
 
-  // ─── Handle single PDF file ───
   const processSinglePdf = async (file: File): Promise<ParsedRDO[]> => {
     const { extractPdfText } = await import("@/lib/pdfTextExtractor");
     const text = await extractPdfText(file);
     return extractRDOsFromPdfText(text, file.name);
   };
 
+  // ─── Quick parse items from JSON/CSV ───
+  const quickParseItems = (items: any[], sourceFile: string, mapping?: Record<string, string>): ParsedRDO[] => {
+    const cols = Object.keys(items[0] || {}).filter(k => !k.startsWith("_"));
+    const m = mapping || autoMapColumns(cols);
+
+    const grouped = new Map<string, ParsedRDO>();
+    for (const item of items) {
+      const dateRaw = String(item[m.date] || "");
+      const date = m.date ? normalizeDate(dateRaw) : new Date().toISOString().split("T")[0];
+      const location = m.location ? String(item[m.location] || "Importado") : "Importado";
+      const front = m.front ? String(item[m.front] || "Frente Importada") : "Frente Importada";
+      const key = `${date}|${location}|${front}`;
+
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          date, location, front,
+          terrainCondition: m.terrainCondition ? String(item[m.terrainCondition] || "") || undefined : undefined,
+          gpsLocation: m.gpsLocation ? String(item[m.gpsLocation] || "") || undefined : undefined,
+          visits: m.visits ? String(item[m.visits] || "") || undefined : undefined,
+          occurrences: m.occurrences ? String(item[m.occurrences] || "") || undefined : undefined,
+          observations: m.observations ? String(item[m.observations] || "") || undefined : undefined,
+          temperature: m.temperature && item[m.temperature] ? parseFloat(String(item[m.temperature]).replace(",", ".")) || undefined : undefined,
+          humidity: m.humidity && item[m.humidity] ? parseFloat(String(item[m.humidity]).replace(",", ".")) || undefined : undefined,
+          windSpeed: m.windSpeed && item[m.windSpeed] ? parseFloat(String(item[m.windSpeed]).replace(",", ".")) || undefined : undefined,
+          weatherDescription: m.weatherDescription ? String(item[m.weatherDescription] || "") || undefined : undefined,
+          services: [],
+          sourceFile,
+        });
+      }
+
+      const rdo = grouped.get(key)!;
+
+      // Inline service
+      if (m.serviceName && item[m.serviceName]) {
+        rdo.services.push({
+          name: String(item[m.serviceName]),
+          quantity: parseFloat(String(item[m.quantity] || "0").replace(",", ".")) || 0,
+          unit: String(item[m.unit] || "un"),
+          equipment: m.equipment ? String(item[m.equipment] || "") || undefined : undefined,
+          employee: m.employee ? String(item[m.employee] || "") || undefined : undefined,
+        });
+      }
+
+      // Nested services array
+      if (item.services && Array.isArray(item.services)) {
+        for (const svc of item.services) {
+          rdo.services.push({
+            name: String(svc.name || svc.serviceName || svc.servico || svc.descricao || "Serviço importado"),
+            quantity: parseFloat(String(svc.quantity || svc.quantidade || "0").replace(",", ".")) || 0,
+            unit: String(svc.unit || svc.unidade || "un"),
+            equipment: String(svc.equipment || svc.equipamento || svc.equipment_used || "") || undefined,
+            employee: String(svc.employee || svc.funcionario || svc.responsavel || "") || undefined,
+          });
+        }
+      }
+
+      // Merge extra fields from nested objects if present
+      if (item.weather || item.clima) {
+        const w = item.weather || item.clima;
+        if (!rdo.temperature && w.temperature) rdo.temperature = parseFloat(String(w.temperature));
+        if (!rdo.humidity && w.humidity) rdo.humidity = parseFloat(String(w.humidity));
+        if (!rdo.windSpeed && (w.windSpeed || w.wind_speed)) rdo.windSpeed = parseFloat(String(w.windSpeed || w.wind_speed));
+        if (!rdo.weatherDescription && w.description) rdo.weatherDescription = String(w.description);
+      }
+    }
+
+    return Array.from(grouped.values());
+  };
+
   // ─── Handle ZIP ───
   const processZipFile = async (file: File): Promise<ParsedRDO[]> => {
     const zip = await JSZip.loadAsync(file);
     const allRDOs: ParsedRDO[] = [];
-    const pdfFiles = Object.entries(zip.files).filter(
-      ([name, entry]) => !entry.dir && name.toLowerCase().endsWith(".pdf")
-    );
-    const jsonFiles = Object.entries(zip.files).filter(
-      ([name, entry]) => !entry.dir && (name.toLowerCase().endsWith(".json") || name.toLowerCase().endsWith(".geojson"))
-    );
-    const csvFiles = Object.entries(zip.files).filter(
-      ([name, entry]) => !entry.dir && name.toLowerCase().endsWith(".csv")
-    );
+    const pdfFiles = Object.entries(zip.files).filter(([name, entry]) => !entry.dir && name.toLowerCase().endsWith(".pdf"));
+    const jsonFiles = Object.entries(zip.files).filter(([name, entry]) => !entry.dir && (name.toLowerCase().endsWith(".json") || name.toLowerCase().endsWith(".geojson")));
+    const csvFiles = Object.entries(zip.files).filter(([name, entry]) => !entry.dir && name.toLowerCase().endsWith(".csv"));
 
-    // Process PDFs
     for (const [name, entry] of pdfFiles) {
       try {
         const blob = await entry.async("blob");
         const pdfFile = new File([blob], name, { type: "application/pdf" });
-        const rdos = await processSinglePdf(pdfFile);
-        allRDOs.push(...rdos);
-      } catch (err) {
-        console.error(`Erro ao processar PDF ${name} do ZIP:`, err);
-      }
+        allRDOs.push(...await processSinglePdf(pdfFile));
+      } catch (err) { console.error(`Erro ao processar PDF ${name}:`, err); }
     }
 
-    // Process JSON/GeoJSON
     for (const [name, entry] of jsonFiles) {
       try {
         const text = await entry.async("string");
         const json = JSON.parse(text);
         const items = extractJsonItems(json);
-        if (items.length > 0) {
-          const rdos = quickParseItems(items, name);
-          allRDOs.push(...rdos);
-        }
-      } catch (err) {
-        console.error(`Erro ao processar JSON ${name} do ZIP:`, err);
-      }
+        if (items.length > 0) allRDOs.push(...quickParseItems(items, name));
+      } catch (err) { console.error(`Erro ao processar JSON ${name}:`, err); }
     }
 
-    // Process CSVs
     for (const [name, entry] of csvFiles) {
       try {
         const text = await entry.async("string");
         const items = parseCsvText(text);
-        if (items.length > 0) {
-          const rdos = quickParseItems(items, name);
-          allRDOs.push(...rdos);
-        }
-      } catch (err) {
-        console.error(`Erro ao processar CSV ${name} do ZIP:`, err);
-      }
+        if (items.length > 0) allRDOs.push(...quickParseItems(items, name));
+      } catch (err) { console.error(`Erro ao processar CSV ${name}:`, err); }
     }
 
     return allRDOs;
   };
 
   const extractJsonItems = (json: any): any[] => {
-    if (json.type === "FeatureCollection" && Array.isArray(json.features)) {
+    if (json.type === "FeatureCollection" && Array.isArray(json.features))
       return json.features.map((f: any) => ({ ...f.properties, _geometry: f.geometry }));
-    } else if (Array.isArray(json)) return json;
-    else if (json.rdos && Array.isArray(json.rdos)) return json.rdos;
-    else if (json.data && Array.isArray(json.data)) return json.data;
+    if (Array.isArray(json)) return json;
+    if (json.rdos && Array.isArray(json.rdos)) return json.rdos;
+    if (json.data && Array.isArray(json.data)) return json.data;
     return [json];
   };
 
@@ -262,57 +395,7 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
     });
   };
 
-  // Quick parse items from JSON/CSV inside ZIP – auto-map and parse
-  const quickParseItems = (items: any[], sourceFile: string): ParsedRDO[] => {
-    const cols = Object.keys(items[0] || {}).filter(k => !k.startsWith("_"));
-    const dateAliases = ["date", "data", "report_date", "dt", "dia"];
-    const locationAliases = ["location", "local", "localizacao", "obra", "construction_site", "endereco"];
-    const frontAliases = ["front", "frente", "service_front", "frente_servico"];
-    const serviceAliases = ["service", "servico", "service_name", "nome_servico", "descricao"];
-    const qtyAliases = ["quantity", "quantidade", "qtd", "qty"];
-    const unitAliases = ["unit", "unidade", "un", "und"];
-
-    const find = (aliases: string[]) => cols.find(c => aliases.includes(c.toLowerCase())) || "";
-    const mapping = {
-      date: find(dateAliases),
-      location: find(locationAliases),
-      front: find(frontAliases),
-      serviceName: find(serviceAliases),
-      quantity: find(qtyAliases),
-      unit: find(unitAliases),
-    };
-
-    const grouped = new Map<string, ParsedRDO>();
-    for (const item of items) {
-      const dateRaw = String(item[mapping.date] || "");
-      const date = mapping.date ? normalizeDate(dateRaw) : new Date().toISOString().split("T")[0];
-      const location = String(item[mapping.location] || "Importado");
-      const front = String(item[mapping.front] || "Frente Importada");
-      const key = `${date}|${location}|${front}`;
-      if (!grouped.has(key)) {
-        grouped.set(key, { date, location, front, services: [], sourceFile });
-      }
-      if (mapping.serviceName && item[mapping.serviceName]) {
-        grouped.get(key)!.services.push({
-          name: String(item[mapping.serviceName]),
-          quantity: parseFloat(String(item[mapping.quantity] || "0").replace(",", ".")) || 0,
-          unit: String(item[mapping.unit] || "un"),
-        });
-      }
-      if (item.services && Array.isArray(item.services)) {
-        for (const svc of item.services) {
-          grouped.get(key)!.services.push({
-            name: String(svc.name || svc.serviceName || svc.servico || svc.descricao || "Serviço importado"),
-            quantity: parseFloat(String(svc.quantity || svc.quantidade || "0").replace(",", ".")) || 0,
-            unit: String(svc.unit || svc.unidade || "un"),
-          });
-        }
-      }
-    }
-    return Array.from(grouped.values());
-  };
-
-  // ─── File handler (supports multiple files) ───
+  // ─── File handler ───
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -329,11 +412,9 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
 
       try {
         if (ext === "zip") {
-          const rdos = await processZipFile(file);
-          totalRDOs.push(...rdos);
+          totalRDOs.push(...await processZipFile(file));
         } else if (ext === "pdf") {
-          const rdos = await processSinglePdf(file);
-          totalRDOs.push(...rdos);
+          totalRDOs.push(...await processSinglePdf(file));
         } else if (ext === "json" || ext === "geojson") {
           const text = await file.text();
           const json = JSON.parse(text);
@@ -343,16 +424,11 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
             setRawData(items);
             setDetectedColumns(cols);
             setFileFormat(ext === "geojson" ? "GeoJSON" : "JSON");
-
-            // Auto-map
             const autoMap = autoMapColumns(cols);
             setColumnMapping(autoMap);
-
             if (autoMap.date) {
-              const rdos = quickParseItems(items, file.name);
-              totalRDOs.push(...rdos);
+              totalRDOs.push(...quickParseItems(items, file.name, autoMap));
             } else {
-              // Need manual mapping – stop here for this file
               setFileName(file.name);
               setStep("mapping");
               return;
@@ -366,13 +442,10 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
             setRawData(items);
             setDetectedColumns(cols);
             setFileFormat("CSV");
-
             const autoMap = autoMapColumns(cols);
             setColumnMapping(autoMap);
-
             if (autoMap.date) {
-              const rdos = quickParseItems(items, file.name);
-              totalRDOs.push(...rdos);
+              totalRDOs.push(...quickParseItems(items, file.name, autoMap));
             } else {
               setFileName(file.name);
               setStep("mapping");
@@ -399,70 +472,13 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
     }
   };
 
-  const autoMapColumns = (cols: string[]): Record<string, string> => {
-    const mapping: Record<string, string> = { date: "", location: "", front: "", observations: "", serviceName: "", quantity: "", unit: "" };
-    const dateAliases = ["date", "data", "report_date", "dt", "dia"];
-    const locationAliases = ["location", "local", "localizacao", "obra", "construction_site", "endereco", "local da obra"];
-    const frontAliases = ["front", "frente", "service_front", "frente_servico", "frente de serviço"];
-    const obsAliases = ["observations", "observacoes", "obs", "notas", "notes"];
-    const serviceAliases = ["service", "servico", "service_name", "nome_servico", "serviço", "descrição", "descricao"];
-    const qtyAliases = ["quantity", "quantidade", "qtd", "qty"];
-    const unitAliases = ["unit", "unidade", "un", "und"];
-
-    const tryMap = (aliases: string[], key: string) => {
-      const found = cols.find(c => aliases.includes(c.toLowerCase()));
-      if (found) mapping[key] = found;
-    };
-    tryMap(dateAliases, "date");
-    tryMap(locationAliases, "location");
-    tryMap(frontAliases, "front");
-    tryMap(obsAliases, "observations");
-    tryMap(serviceAliases, "serviceName");
-    tryMap(qtyAliases, "quantity");
-    tryMap(unitAliases, "unit");
-    return mapping;
-  };
-
-  const normalizeDate = (dateStr: string): string => {
-    const parts = dateStr.split(/[\/\.\-]/);
-    if (parts.length === 3) {
-      let [a, b, c] = parts;
-      // yyyy-mm-dd
-      if (a.length === 4) return `${a}-${b.padStart(2, "0")}-${c.padStart(2, "0")}`;
-      // dd/mm/yyyy
-      if (c.length === 2) c = "20" + c;
-      if (parseInt(a) > 12) return `${c}-${b.padStart(2, "0")}-${a.padStart(2, "0")}`;
-      return `${c}-${a.padStart(2, "0")}-${b.padStart(2, "0")}`;
-    }
-    const parsed = new Date(dateStr);
-    if (!isNaN(parsed.getTime())) return parsed.toISOString().split("T")[0];
-    return dateStr;
-  };
-
   const handleApplyMapping = () => {
     if (!columnMapping.date) {
       toast.error("O campo 'Data' é obrigatório para importação");
       return;
     }
-    const rdos = quickParseItems(rawData, fileName);
-    // Override with user mapping
-    const grouped = new Map<string, ParsedRDO>();
-    for (const item of rawData) {
-      const date = normalizeDate(String(item[columnMapping.date] || ""));
-      const location = columnMapping.location ? String(item[columnMapping.location] || "Importado") : "Importado";
-      const front = columnMapping.front ? String(item[columnMapping.front] || "Frente Importada") : "Frente Importada";
-      const obs = columnMapping.observations ? String(item[columnMapping.observations] || "") : "";
-      const key = `${date}|${location}|${front}`;
-      if (!grouped.has(key)) grouped.set(key, { date, location, front, observations: obs, services: [], sourceFile: fileName });
-      if (columnMapping.serviceName && item[columnMapping.serviceName]) {
-        grouped.get(key)!.services.push({
-          name: String(item[columnMapping.serviceName]),
-          quantity: parseFloat(String(item[columnMapping.quantity] || "0").replace(",", ".")) || 0,
-          unit: String(item[columnMapping.unit] || "un"),
-        });
-      }
-    }
-    setParsedRDOs(Array.from(grouped.values()));
+    const rdos = quickParseItems(rawData, fileName, columnMapping);
+    setParsedRDOs(rdos);
     setStep("preview");
   };
 
@@ -500,18 +516,32 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
           frontId = newFront.id;
         }
 
-        // Create daily_report
+        // Build enhanced observations with all extra fields
+        let enhancedObs = rdo.observations || "";
+        if (rdo.visits) enhancedObs += `\n\nVisitas Recebidas: ${rdo.visits}`;
+        if (rdo.occurrences) enhancedObs += `\n\nOcorrências: ${rdo.occurrences}`;
+
+        // Create daily_report with ALL fields
         const { data: report, error: reportErr } = await supabase.from("daily_reports").insert({
           report_date: rdo.date,
           project_id: projectId,
           construction_site_id: siteId,
           service_front_id: frontId,
           executed_by_user_id: user.id,
-          general_observations: rdo.observations || null,
+          general_observations: enhancedObs.trim() || null,
+          terrain_condition: rdo.terrainCondition || null,
+          gps_location: rdo.gpsLocation || null,
+          visits: rdo.visits || null,
+          occurrences_summary: rdo.occurrences || null,
+          temperature: rdo.temperature ?? null,
+          humidity: rdo.humidity ?? null,
+          wind_speed: rdo.windSpeed ?? null,
+          weather_description: rdo.weatherDescription || null,
+          will_rain: rdo.willRain ?? null,
         }).select("id").single();
         if (reportErr) throw reportErr;
 
-        // Create executed_services
+        // Create executed_services with equipment and employee
         for (const svc of rdo.services) {
           let serviceId: string;
           const { data: existingSvc } = await supabase.from("services_catalog").select("id").ilike("name", svc.name).limit(1).single();
@@ -521,7 +551,23 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
             if (error) throw error;
             serviceId = newSvc.id;
           }
-          await supabase.from("executed_services").insert({ daily_report_id: report.id, service_id: serviceId, quantity: svc.quantity, unit: svc.unit, created_by_user_id: user.id });
+
+          // Try to find employee by name
+          let employeeId: string | null = null;
+          if (svc.employee) {
+            const { data: emp } = await supabase.from("employees").select("id").ilike("name", `%${svc.employee}%`).limit(1).single();
+            if (emp) employeeId = emp.id;
+          }
+
+          await supabase.from("executed_services").insert({
+            daily_report_id: report.id,
+            service_id: serviceId,
+            quantity: svc.quantity,
+            unit: svc.unit,
+            equipment_used: svc.equipment ? { equipment: svc.equipment } : null,
+            employee_id: employeeId,
+            created_by_user_id: user.id,
+          });
         }
 
         success++;
@@ -602,16 +648,8 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
       <div className="text-sm text-muted-foreground mb-2">
         <strong>{fileName}</strong> — {rawData.length} registros encontrados ({fileFormat})
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { key: "date", label: "Data *" },
-          { key: "location", label: "Local / Obra" },
-          { key: "front", label: "Frente de Serviço" },
-          { key: "observations", label: "Observações" },
-          { key: "serviceName", label: "Nome do Serviço" },
-          { key: "quantity", label: "Quantidade" },
-          { key: "unit", label: "Unidade" },
-        ].map(({ key, label }) => (
+      <div className="grid grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto pr-1">
+        {FIELD_DEFS.map(({ key, label }) => (
           <div key={key} className="space-y-1">
             <Label className="text-xs">{label}</Label>
             <Select value={columnMapping[key] || "__none__"} onValueChange={v => setColumnMapping(prev => ({ ...prev, [key]: v === "__none__" ? "" : v }))}>
@@ -652,11 +690,22 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
                 {rdo.services.length} serviço(s)
               </span>
             </div>
+            {/* Extra fields summary */}
+            <div className="mt-1 flex flex-wrap gap-1">
+              {rdo.terrainCondition && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">🏗 Terreno</span>}
+              {rdo.gpsLocation && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">📍 GPS</span>}
+              {rdo.visits && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">👥 Visitas</span>}
+              {rdo.occurrences && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">⚠️ Ocorrências</span>}
+              {rdo.observations && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">📝 Obs</span>}
+              {rdo.temperature && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">🌡 {rdo.temperature}°C</span>}
+            </div>
             {rdo.services.length > 0 && (
               <div className="mt-2 space-y-1">
                 {rdo.services.slice(0, 3).map((s, j) => (
                   <div key={j} className="text-xs text-muted-foreground pl-2 border-l-2 border-primary/30">
                     {s.name}: {s.quantity} {s.unit}
+                    {s.equipment && <span className="ml-1 opacity-60">({s.equipment})</span>}
+                    {s.employee && <span className="ml-1 opacity-60">— {s.employee}</span>}
                   </div>
                 ))}
                 {rdo.services.length > 3 && <div className="text-xs text-muted-foreground pl-2">+{rdo.services.length - 3} mais...</div>}
@@ -697,10 +746,10 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
-      <DialogContent className="sm:max-w-[550px] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Importar RDOs</DialogTitle>
-          <DialogDescription>Importe RDOs de outras plataformas — PDF, ZIP, JSON, CSV</DialogDescription>
+          <DialogDescription>Importe RDOs completos de outras plataformas — todos os campos serão preservados</DialogDescription>
         </DialogHeader>
         {step === "upload" && renderUpload()}
         {step === "mapping" && renderMapping()}
