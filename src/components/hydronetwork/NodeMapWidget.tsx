@@ -42,6 +42,7 @@ interface NodeMapWidgetProps {
   onConnectionsChange?: (connections: ConnectionData[]) => void;
   onNodeDemandChange?: (nodeId: string, demanda: number) => void;
   onNodesDelete?: (nodeIds: string[]) => void;
+  onConnectionsDelete?: (indices: number[]) => void;
   height?: number;
   accentColor?: string;
   editable?: boolean;
@@ -65,6 +66,7 @@ export const NodeMapWidget = ({
   onConnectionsChange,
   onNodeDemandChange,
   onNodesDelete,
+  onConnectionsDelete,
   height = 400,
   accentColor = "#3b82f6",
   editable = true,
@@ -81,8 +83,9 @@ export const NodeMapWidget = ({
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [editDemanda, setEditDemanda] = useState<number>(0);
   const [mapReady, setMapReady] = useState(false);
-  const [deleteMode, setDeleteMode] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<"nodes" | "connections" | false>(false);
   const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
+  const [selectedConnsForDelete, setSelectedConnsForDelete] = useState<Set<number>>(new Set());
 
   useEffect(() => { setLocalConnections(connections); }, [connections]);
 
@@ -136,8 +139,18 @@ export const NodeMapWidget = ({
   }, [tileKey]);
 
   // Handle link mode click - improved: auto-continue after linking
+  const handleConnClickInternal = useCallback((idx: number) => {
+    if (deleteMode === "connections") {
+      setSelectedConnsForDelete(prev => {
+        const next = new Set(prev);
+        if (next.has(idx)) next.delete(idx); else next.add(idx);
+        return next;
+      });
+    }
+  }, [deleteMode]);
+
   const handleNodeClickInternal = useCallback((nodeId: string) => {
-    if (deleteMode) {
+    if (deleteMode === "nodes") {
       setSelectedForDelete(prev => {
         const next = new Set(prev);
         if (next.has(nodeId)) next.delete(nodeId);
@@ -187,6 +200,7 @@ export const NodeMapWidget = ({
         if (deleteMode) {
           setDeleteMode(false);
           setSelectedForDelete(new Set());
+          setSelectedConnsForDelete(new Set());
           toast.info("Modo de exclusão desativado");
         }
       }
@@ -222,7 +236,7 @@ export const NodeMapWidget = ({
       else if (idx === nodes.length - 1) color = "#ef4444";
       if (selectedNode === n.id) color = "#f59e0b";
       if (linkMode && linkOrigin === n.id) color = "#f97316";
-      if (deleteMode && selectedForDelete.has(n.id)) color = "#dc2626";
+      if (deleteMode === "nodes" && selectedForDelete.has(n.id)) color = "#dc2626";
 
       const radius = (linkMode || deleteMode) ? 10 : 8;
       const marker = L.circleMarker(coords, {
@@ -256,18 +270,25 @@ export const NodeMapWidget = ({
       markersRef.current.push(marker);
     });
 
-    localConnections.forEach(c => {
+    localConnections.forEach((c, idx) => {
       const from = nodes.find(n => n.id === c.from);
       const to = nodes.find(n => n.id === c.to);
       if (!from || !to) return;
       const fromCoords = getCoords(from.x, from.y);
       const toCoords = getCoords(to.x, to.y);
       if (!isFinite(fromCoords[0]) || !isFinite(toCoords[0])) return;
+      const isSelectedForDel = deleteMode === "connections" && selectedConnsForDelete.has(idx);
       
       const line = L.polyline([fromCoords, toCoords], {
-        color: c.color || accentColor, weight: 3, opacity: 0.8,
+        color: isSelectedForDel ? "#dc2626" : (c.color || accentColor),
+        weight: isSelectedForDel ? 6 : 3,
+        opacity: isSelectedForDel ? 1 : 0.8,
       }).addTo(map);
       if (c.label) line.bindTooltip(c.label || `${c.from} → ${c.to}`, { sticky: true });
+      line.on("click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        handleConnClickInternal(idx);
+      });
       linesRef.current.push(line);
     });
 
@@ -283,7 +304,7 @@ export const NodeMapWidget = ({
       setTimeout(() => map.invalidateSize(), 200);
       setTimeout(() => map.invalidateSize(), 500);
     }
-  }, [nodes, localConnections, getCoords, accentColor, handleNodeClickInternal, selectedNode, linkMode, linkOrigin, deleteMode, selectedForDelete]);
+  }, [nodes, localConnections, getCoords, accentColor, handleNodeClickInternal, handleConnClickInternal, selectedNode, linkMode, linkOrigin, deleteMode, selectedForDelete, selectedConnsForDelete]);
 
   const handleUndo = () => {
     if (localConnections.length === 0) return;
@@ -329,34 +350,51 @@ export const NodeMapWidget = ({
     else toast.info("Modo ligar pontos desativado.");
   };
 
-  const toggleDeleteMode = () => {
+  const toggleDeleteMode = (mode: "nodes" | "connections") => {
     if (linkMode) { setLinkMode(false); setLinkOrigin(null); }
-    const newMode = !deleteMode;
-    setDeleteMode(newMode);
-    setSelectedForDelete(new Set());
-    if (newMode) toast.info("Modo excluir nós ativo: clique nos nós para selecionar. ESC para sair.");
-    else toast.info("Modo excluir nós desativado.");
+    if (deleteMode === mode) {
+      setDeleteMode(false);
+      setSelectedForDelete(new Set());
+      setSelectedConnsForDelete(new Set());
+    } else {
+      setDeleteMode(mode);
+      setSelectedForDelete(new Set());
+      setSelectedConnsForDelete(new Set());
+      toast.info(mode === "nodes" ? "Modo excluir nós ativo. ESC para sair." : "Modo excluir trechos ativo: clique nos trechos. ESC para sair.");
+    }
   };
 
   const handleDeleteSelected = () => {
-    if (selectedForDelete.size === 0) { toast.error("Nenhum nó selecionado"); return; }
-    const ids = Array.from(selectedForDelete);
-    if (!confirm(`Excluir ${ids.length} nó(s)? (${ids.join(", ")})`)) return;
-    // Also remove connections involving deleted nodes
-    const updatedConns = localConnections.filter(c => !selectedForDelete.has(c.from) && !selectedForDelete.has(c.to));
-    setLocalConnections(updatedConns);
-    onConnectionsChange?.(updatedConns);
-    onNodesDelete?.(ids);
-    setSelectedForDelete(new Set());
-    setDeleteMode(false);
-    toast.success(`${ids.length} nó(s) excluído(s)`);
+    if (deleteMode === "nodes") {
+      if (selectedForDelete.size === 0) { toast.error("Nenhum nó selecionado"); return; }
+      const ids = Array.from(selectedForDelete);
+      if (!confirm(`Excluir ${ids.length} nó(s)? (${ids.join(", ")})`)) return;
+      const updatedConns = localConnections.filter(c => !selectedForDelete.has(c.from) && !selectedForDelete.has(c.to));
+      setLocalConnections(updatedConns);
+      onConnectionsChange?.(updatedConns);
+      onNodesDelete?.(ids);
+      setSelectedForDelete(new Set());
+      setDeleteMode(false);
+      toast.success(`${ids.length} nó(s) excluído(s)`);
+    } else if (deleteMode === "connections") {
+      if (selectedConnsForDelete.size === 0) { toast.error("Nenhum trecho selecionado"); return; }
+      if (!confirm(`Excluir ${selectedConnsForDelete.size} trecho(s)?`)) return;
+      const updatedConns = localConnections.filter((_, idx) => !selectedConnsForDelete.has(idx));
+      setLocalConnections(updatedConns);
+      onConnectionsChange?.(updatedConns);
+      setSelectedConnsForDelete(new Set());
+      setDeleteMode(false);
+      toast.success(`${selectedConnsForDelete.size} trecho(s) excluído(s)`);
+    }
   };
 
   const handleSelectAllForDelete = () => {
-    if (selectedForDelete.size === nodes.length) {
-      setSelectedForDelete(new Set());
-    } else {
-      setSelectedForDelete(new Set(nodes.map(n => n.id)));
+    if (deleteMode === "nodes") {
+      if (selectedForDelete.size === nodes.length) setSelectedForDelete(new Set());
+      else setSelectedForDelete(new Set(nodes.map(n => n.id)));
+    } else if (deleteMode === "connections") {
+      if (selectedConnsForDelete.size === localConnections.length) setSelectedConnsForDelete(new Set());
+      else setSelectedConnsForDelete(new Set(localConnections.map((_, i) => i)));
     }
   };
 
@@ -387,11 +425,15 @@ export const NodeMapWidget = ({
                 <Link2 className="h-3 w-3 mr-1" /> {linkMode ? "Ligando..." : "Ligar Pontos"}
               </Button>
               {onNodesDelete && (
-                <Button size="sm" variant={deleteMode ? "default" : "outline"} onClick={toggleDeleteMode}
-                  className={deleteMode ? "bg-red-600 hover:bg-red-700 text-white" : ""}>
-                  <MousePointerClick className="h-3 w-3 mr-1" /> {deleteMode ? "Selecionando..." : "Excluir Nós"}
+                <Button size="sm" variant={deleteMode === "nodes" ? "default" : "outline"} onClick={() => toggleDeleteMode("nodes")}
+                  className={deleteMode === "nodes" ? "bg-red-600 hover:bg-red-700 text-white" : ""}>
+                  <MousePointerClick className="h-3 w-3 mr-1" /> {deleteMode === "nodes" ? "Selecionando Nós..." : "Excluir Nós"}
                 </Button>
               )}
+              <Button size="sm" variant={deleteMode === "connections" ? "default" : "outline"} onClick={() => toggleDeleteMode("connections")}
+                className={deleteMode === "connections" ? "bg-red-600 hover:bg-red-700 text-white" : ""}>
+                <Trash2 className="h-3 w-3 mr-1" /> {deleteMode === "connections" ? "Selecionando Trechos..." : "Excluir Trechos"}
+              </Button>
               <Button size="sm" variant="outline" onClick={handleUndo} disabled={localConnections.length === 0}>
                 <Undo2 className="h-3 w-3 mr-1" /> Desfazer
               </Button>
@@ -438,16 +480,20 @@ export const NodeMapWidget = ({
           <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200">
             <MousePointerClick className="h-4 w-4 text-red-600" />
             <span className="text-sm font-medium text-red-700 dark:text-red-400">
-              {selectedForDelete.size > 0 ? `${selectedForDelete.size} nó(s) selecionado(s)` : "Clique nos nós para selecionar"}
+              {deleteMode === "nodes"
+                ? (selectedForDelete.size > 0 ? `${selectedForDelete.size} nó(s) selecionado(s)` : "Clique nos nós para selecionar")
+                : (selectedConnsForDelete.size > 0 ? `${selectedConnsForDelete.size} trecho(s) selecionado(s)` : "Clique nos trechos para selecionar")}
             </span>
             <div className="ml-auto flex gap-1">
               <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={handleSelectAllForDelete}>
-                {selectedForDelete.size === nodes.length ? "Desmarcar Todos" : "Selecionar Todos"}
+                {(deleteMode === "nodes" ? selectedForDelete.size === nodes.length : selectedConnsForDelete.size === localConnections.length)
+                  ? "Desmarcar Todos" : "Selecionar Todos"}
               </Button>
-              <Button size="sm" variant="destructive" className="h-6 text-xs" onClick={handleDeleteSelected} disabled={selectedForDelete.size === 0}>
-                <Trash2 className="h-3 w-3 mr-1" /> Excluir ({selectedForDelete.size})
+              <Button size="sm" variant="destructive" className="h-6 text-xs" onClick={handleDeleteSelected}
+                disabled={deleteMode === "nodes" ? selectedForDelete.size === 0 : selectedConnsForDelete.size === 0}>
+                <Trash2 className="h-3 w-3 mr-1" /> Excluir ({deleteMode === "nodes" ? selectedForDelete.size : selectedConnsForDelete.size})
               </Button>
-              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setDeleteMode(false); setSelectedForDelete(new Set()); }}>
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setDeleteMode(false); setSelectedForDelete(new Set()); setSelectedConnsForDelete(new Set()); }}>
                 <X className="h-3 w-3 mr-1" /> Sair
               </Button>
             </div>

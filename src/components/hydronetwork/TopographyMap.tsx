@@ -43,8 +43,9 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   const [addNodeMode, setAddNodeMode] = useState(false);
   const [drawOrigin, setDrawOrigin] = useState<string | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<string | null>(null);
-  const [deleteMode, setDeleteMode] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<"nodes" | "trechos" | false>(false);
   const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
+  const [selectedTrechosForDelete, setSelectedTrechosForDelete] = useState<Set<number>>(new Set());
   const markersRef = useRef<L.CircleMarker[]>([]);
   const polylinesRef = useRef<L.Polyline[]>([]);
   const [tileKey, setTileKey] = useState("osm");
@@ -90,7 +91,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       if (e.key === "Escape") {
         if (drawMode) { setDrawMode(false); setDrawOrigin(null); toast.info("Modo ligação desativado"); }
         if (addNodeMode) { setAddNodeMode(false); toast.info("Modo adicionar ponto desativado"); }
-        if (deleteMode) { setDeleteMode(false); setSelectedForDelete(new Set()); toast.info("Modo exclusão desativado"); }
+        if (deleteMode) { setDeleteMode(false); setSelectedForDelete(new Set()); setSelectedTrechosForDelete(new Set()); toast.info("Modo exclusão desativado"); }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -130,8 +131,18 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   }, [addNodeMode, pontos, onPontosChange]);
 
   // Handle marker click - draw mode or select mode
+  const handleTrechoClick = useCallback((idx: number) => {
+    if (deleteMode === "trechos") {
+      setSelectedTrechosForDelete(prev => {
+        const next = new Set(prev);
+        if (next.has(idx)) next.delete(idx); else next.add(idx);
+        return next;
+      });
+    }
+  }, [deleteMode]);
+
   const handleMarkerClick = useCallback((pointId: string) => {
-    if (deleteMode) {
+    if (deleteMode === "nodes") {
       setSelectedForDelete(prev => {
         const next = new Set(prev);
         if (next.has(pointId)) next.delete(pointId);
@@ -201,7 +212,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       else if (idx === pontos.length - 1) color = "#ef4444";
       if (drawMode && drawOrigin === p.id) color = "#f97316";
       if (!drawMode && !deleteMode && selectedPoint === p.id) color = "#f59e0b";
-      if (deleteMode && selectedForDelete.has(p.id)) color = "#dc2626";
+      if (deleteMode === "nodes" && selectedForDelete.has(p.id)) color = "#dc2626";
 
       const radius = (drawMode || deleteMode) ? 11 : 8;
 
@@ -233,30 +244,39 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       markersRef.current.push(marker);
     });
 
-    trechos.forEach(t => {
+    trechos.forEach((t, idx) => {
       const pInicio = pontos.find(p => p.id === t.idInicio);
       const pFim = pontos.find(p => p.id === t.idFim);
       if (!pInicio || !pFim) return;
       const isGravity = t.tipoRede === "Esgoto por Gravidade";
+      const isSelectedForDel = deleteMode === "trechos" && selectedTrechosForDelete.has(idx);
 
       const polyline = L.polyline([getPointCoords(pInicio), getPointCoords(pFim)], {
-        color: isGravity ? "#22c55e" : "#f59e0b", weight: 4, opacity: 0.8,
+        color: isSelectedForDel ? "#dc2626" : isGravity ? "#22c55e" : "#f59e0b",
+        weight: isSelectedForDel ? 6 : 4,
+        opacity: isSelectedForDel ? 1 : 0.8,
       }).addTo(map);
 
       polyline.bindTooltip(`${t.idInicio} → ${t.idFim} (${t.comprimento.toFixed(1)}m)`, { sticky: true });
-      polyline.bindPopup(`
-        <div style="font-family:sans-serif;min-width:180px;">
-          <strong>${t.idInicio} → ${t.idFim}</strong>
-          <hr style="margin:4px 0;">
-          <div style="font-size:12px;line-height:1.6;">
-            <b>Comprimento:</b> ${t.comprimento.toFixed(2)}m<br>
-            <b>Declividade:</b> ${(t.declividade * 100).toFixed(2)}%<br>
-            <b>Tipo:</b> ${isGravity ? "Gravidade" : "Elevatória"}<br>
-            <b>Diâmetro:</b> DN${t.diametroMm}<br>
-            <b>Material:</b> ${t.material}
+      if (deleteMode !== "trechos") {
+        polyline.bindPopup(`
+          <div style="font-family:sans-serif;min-width:180px;">
+            <strong>${t.idInicio} → ${t.idFim}</strong>
+            <hr style="margin:4px 0;">
+            <div style="font-size:12px;line-height:1.6;">
+              <b>Comprimento:</b> ${t.comprimento.toFixed(2)}m<br>
+              <b>Declividade:</b> ${(t.declividade * 100).toFixed(2)}%<br>
+              <b>Tipo:</b> ${isGravity ? "Gravidade" : "Elevatória"}<br>
+              <b>Diâmetro:</b> DN${t.diametroMm}<br>
+              <b>Material:</b> ${t.material}
+            </div>
           </div>
-        </div>
-      `);
+        `);
+      }
+      polyline.on("click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        handleTrechoClick(idx);
+      });
       polylinesRef.current.push(polyline);
     });
 
@@ -272,7 +292,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       setTimeout(() => map.invalidateSize(), 200);
       setTimeout(() => map.invalidateSize(), 500);
     }
-  }, [pontos, trechos, getPointCoords, handleMarkerClick, drawMode, drawOrigin, selectedPoint, deleteMode, selectedForDelete]);
+  }, [pontos, trechos, getPointCoords, handleMarkerClick, handleTrechoClick, drawMode, drawOrigin, selectedPoint, deleteMode, selectedForDelete, selectedTrechosForDelete]);
 
   const handleFitBounds = () => {
     if (pontos.length === 0) return;
@@ -321,33 +341,56 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
     else toast.info("Modo ligação desativado.");
   };
 
-  const toggleDeleteMode = () => {
+  const toggleDeleteMode = (mode: "nodes" | "trechos") => {
     if (drawMode) { setDrawMode(false); setDrawOrigin(null); }
     if (addNodeMode) setAddNodeMode(false);
-    const newMode = !deleteMode;
-    setDeleteMode(newMode);
-    setSelectedForDelete(new Set());
-    setSelectedPoint(null);
-    if (newMode) toast.info("Modo excluir nós: clique para selecionar, depois confirme. ESC para sair.");
-    else toast.info("Modo exclusão desativado.");
+    if (deleteMode === mode) {
+      setDeleteMode(false);
+      setSelectedForDelete(new Set());
+      setSelectedTrechosForDelete(new Set());
+      toast.info("Modo exclusão desativado.");
+    } else {
+      setDeleteMode(mode);
+      setSelectedForDelete(new Set());
+      setSelectedTrechosForDelete(new Set());
+      setSelectedPoint(null);
+      toast.info(mode === "nodes"
+        ? "Modo excluir nós: clique para selecionar, depois confirme. ESC para sair."
+        : "Modo excluir trechos: clique nos trechos para selecionar. ESC para sair.");
+    }
   };
 
   const handleDeleteSelected = () => {
-    if (selectedForDelete.size === 0) { toast.error("Nenhum nó selecionado."); return; }
-    const ids = Array.from(selectedForDelete);
-    if (!confirm(`Excluir ${ids.length} ponto(s)? (${ids.join(", ")})\nTrechos conectados serão removidos automaticamente.`)) return;
-    const updatedTrechos = trechos.filter(t => !selectedForDelete.has(t.idInicio) && !selectedForDelete.has(t.idFim));
-    onTrechosChange?.(updatedTrechos);
-    const updatedPontos = pontos.filter(p => !selectedForDelete.has(p.id));
-    onPontosChange?.(updatedPontos);
-    setSelectedForDelete(new Set());
-    setDeleteMode(false);
-    toast.success(`${ids.length} ponto(s) excluído(s) e ${trechos.length - updatedTrechos.length} trecho(s) removido(s).`);
+    if (deleteMode === "nodes") {
+      if (selectedForDelete.size === 0) { toast.error("Nenhum nó selecionado."); return; }
+      const ids = Array.from(selectedForDelete);
+      if (!confirm(`Excluir ${ids.length} ponto(s)? (${ids.join(", ")})\nTrechos conectados serão removidos automaticamente.`)) return;
+      const updatedTrechos = trechos.filter(t => !selectedForDelete.has(t.idInicio) && !selectedForDelete.has(t.idFim));
+      onTrechosChange?.(updatedTrechos);
+      const updatedPontos = pontos.filter(p => !selectedForDelete.has(p.id));
+      onPontosChange?.(updatedPontos);
+      setSelectedForDelete(new Set());
+      setDeleteMode(false);
+      toast.success(`${ids.length} ponto(s) excluído(s) e ${trechos.length - updatedTrechos.length} trecho(s) removido(s).`);
+    } else if (deleteMode === "trechos") {
+      if (selectedTrechosForDelete.size === 0) { toast.error("Nenhum trecho selecionado."); return; }
+      if (!confirm(`Excluir ${selectedTrechosForDelete.size} trecho(s)?`)) return;
+      const updatedTrechos = trechos.filter((_, idx) => !selectedTrechosForDelete.has(idx));
+      onTrechosChange?.(updatedTrechos);
+      setSelectedTrechosForDelete(new Set());
+      setDeleteMode(false);
+      toast.success(`${selectedTrechosForDelete.size} trecho(s) excluído(s).`);
+    }
   };
 
   const handleSelectAllForDelete = () => {
-    if (selectedForDelete.size === pontos.length) setSelectedForDelete(new Set());
-    else setSelectedForDelete(new Set(pontos.map(p => p.id)));
+    if (deleteMode === "nodes") {
+      if (selectedForDelete.size === pontos.length) setSelectedForDelete(new Set());
+      else setSelectedForDelete(new Set(pontos.map(p => p.id)));
+    } else if (deleteMode === "trechos") {
+      if (selectedTrechosForDelete.size === trechos.length) setSelectedTrechosForDelete(new Set());
+      else setSelectedTrechosForDelete(new Set(trechos.map((_, i) => i)));
+    }
   };
 
   if (pontos.length === 0) return null;
@@ -393,11 +436,15 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
             <Crosshair className="h-3 w-3 mr-1" /> {addNodeMode ? "Adicionando..." : "Adicionar Ponto"}
           </Button>
           {onPontosChange && (
-            <Button size="sm" variant={deleteMode ? "default" : "outline"} onClick={toggleDeleteMode}
-              className={deleteMode ? "bg-red-600 hover:bg-red-700 text-white" : ""}>
-              <MousePointerClick className="h-3 w-3 mr-1" /> {deleteMode ? "Selecionando..." : "Excluir Nós"}
+            <Button size="sm" variant={deleteMode === "nodes" ? "default" : "outline"} onClick={() => toggleDeleteMode("nodes")}
+              className={deleteMode === "nodes" ? "bg-red-600 hover:bg-red-700 text-white" : ""}>
+              <MousePointerClick className="h-3 w-3 mr-1" /> {deleteMode === "nodes" ? "Selecionando Nós..." : "Excluir Nós"}
             </Button>
           )}
+          <Button size="sm" variant={deleteMode === "trechos" ? "default" : "outline"} onClick={() => toggleDeleteMode("trechos")}
+            className={deleteMode === "trechos" ? "bg-red-600 hover:bg-red-700 text-white" : ""}>
+            <Trash2 className="h-3 w-3 mr-1" /> {deleteMode === "trechos" ? "Selecionando Trechos..." : "Excluir Trechos"}
+          </Button>
           {/* UTM Zone selector */}
           <div className="flex items-center gap-1 ml-2">
             <span className="text-xs text-muted-foreground">UTM:</span>
@@ -463,16 +510,19 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200">
             <MousePointerClick className="h-4 w-4 text-red-600" />
             <span className="text-sm font-medium text-red-700 dark:text-red-400">
-              {selectedForDelete.size > 0 ? `${selectedForDelete.size} ponto(s) selecionado(s)` : "Clique nos pontos para selecionar"}
+              {deleteMode === "nodes"
+                ? (selectedForDelete.size > 0 ? `${selectedForDelete.size} ponto(s) selecionado(s)` : "Clique nos pontos para selecionar")
+                : (selectedTrechosForDelete.size > 0 ? `${selectedTrechosForDelete.size} trecho(s) selecionado(s)` : "Clique nos trechos para selecionar")}
             </span>
             <div className="ml-auto flex gap-1">
               <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={handleSelectAllForDelete}>
-                {selectedForDelete.size === pontos.length ? "Desmarcar Todos" : "Selecionar Todos"}
+                {(deleteMode === "nodes" ? selectedForDelete.size === pontos.length : selectedTrechosForDelete.size === trechos.length) ? "Desmarcar Todos" : "Selecionar Todos"}
               </Button>
-              <Button size="sm" variant="destructive" className="h-6 text-xs" onClick={handleDeleteSelected} disabled={selectedForDelete.size === 0}>
-                <Trash2 className="h-3 w-3 mr-1" /> Excluir ({selectedForDelete.size})
+              <Button size="sm" variant="destructive" className="h-6 text-xs" onClick={handleDeleteSelected}
+                disabled={deleteMode === "nodes" ? selectedForDelete.size === 0 : selectedTrechosForDelete.size === 0}>
+                <Trash2 className="h-3 w-3 mr-1" /> Excluir ({deleteMode === "nodes" ? selectedForDelete.size : selectedTrechosForDelete.size})
               </Button>
-              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setDeleteMode(false); setSelectedForDelete(new Set()); }}>
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setDeleteMode(false); setSelectedForDelete(new Set()); setSelectedTrechosForDelete(new Set()); }}>
                 <X className="h-3 w-3 mr-1" /> Sair (ESC)
               </Button>
             </div>
