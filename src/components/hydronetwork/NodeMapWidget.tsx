@@ -10,8 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { MapPin, Plus, Minus, Maximize, Layers, Link2, Trash2, Undo2, Save, Edit3, X } from "lucide-react";
+import { MapPin, Plus, Minus, Maximize, Layers, Link2, Trash2, Undo2, Save, Edit3, X, MousePointerClick } from "lucide-react";
 import { getMapCoordinates } from "@/engine/hydraulics";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -40,6 +41,7 @@ interface NodeMapWidgetProps {
   onNodeMove?: (nodeId: string, x: number, y: number) => void;
   onConnectionsChange?: (connections: ConnectionData[]) => void;
   onNodeDemandChange?: (nodeId: string, demanda: number) => void;
+  onNodesDelete?: (nodeIds: string[]) => void;
   height?: number;
   accentColor?: string;
   editable?: boolean;
@@ -62,6 +64,7 @@ export const NodeMapWidget = ({
   onNodeMove,
   onConnectionsChange,
   onNodeDemandChange,
+  onNodesDelete,
   height = 400,
   accentColor = "#3b82f6",
   editable = true,
@@ -78,6 +81,8 @@ export const NodeMapWidget = ({
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [editDemanda, setEditDemanda] = useState<number>(0);
   const [mapReady, setMapReady] = useState(false);
+  const [deleteMode, setDeleteMode] = useState(false);
+  const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
 
   useEffect(() => { setLocalConnections(connections); }, [connections]);
 
@@ -132,6 +137,15 @@ export const NodeMapWidget = ({
 
   // Handle link mode click - improved: auto-continue after linking
   const handleNodeClickInternal = useCallback((nodeId: string) => {
+    if (deleteMode) {
+      setSelectedForDelete(prev => {
+        const next = new Set(prev);
+        if (next.has(nodeId)) next.delete(nodeId);
+        else next.add(nodeId);
+        return next;
+      });
+      return;
+    }
     if (linkMode) {
       if (!linkOrigin) {
         setLinkOrigin(nodeId);
@@ -150,7 +164,6 @@ export const NodeMapWidget = ({
         setLocalConnections(updated);
         onConnectionsChange?.(updated);
         toast.success(`Trecho ${linkOrigin} → ${nodeId} criado!`);
-        // Auto-continue: the destination becomes the next origin for quick chaining
         setLinkOrigin(nodeId);
         toast.info(`Continuando de ${nodeId} — clique no próximo destino ou ESC para parar`);
       }
@@ -160,20 +173,27 @@ export const NodeMapWidget = ({
       if (node) setEditDemanda(node.demanda ?? 0);
       onNodeClick?.(nodeId);
     }
-  }, [linkMode, linkOrigin, localConnections, accentColor, onConnectionsChange, onNodeClick, nodes]);
+  }, [deleteMode, linkMode, linkOrigin, localConnections, accentColor, onConnectionsChange, onNodeClick, nodes]);
 
   // ESC key to exit link mode
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && linkMode) {
-        setLinkMode(false);
-        setLinkOrigin(null);
-        toast.info("Modo de ligação desativado");
+      if (e.key === "Escape") {
+        if (linkMode) {
+          setLinkMode(false);
+          setLinkOrigin(null);
+          toast.info("Modo de ligação desativado");
+        }
+        if (deleteMode) {
+          setDeleteMode(false);
+          setSelectedForDelete(new Set());
+          toast.info("Modo de exclusão desativado");
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [linkMode]);
+  }, [linkMode, deleteMode]);
 
   // Draw nodes and connections
   useEffect(() => {
@@ -203,9 +223,10 @@ export const NodeMapWidget = ({
       if (idx === 0) color = "#22c55e";
       else if (idx === nodes.length - 1) color = "#ef4444";
       if (selectedNode === n.id) color = "#f59e0b";
-      if (linkMode && linkOrigin === n.id) color = "#f97316"; // highlight origin in link mode
+      if (linkMode && linkOrigin === n.id) color = "#f97316";
+      if (deleteMode && selectedForDelete.has(n.id)) color = "#dc2626"; // red for delete selection
 
-      const radius = linkMode ? 10 : 8; // bigger targets in link mode
+      const radius = (linkMode || deleteMode) ? 10 : 8;
       const marker = L.circleMarker(coords, {
         radius, fillColor: color, color: "#fff", weight: 2, fillOpacity: 0.9,
       }).addTo(map);
@@ -255,7 +276,7 @@ export const NodeMapWidget = ({
       setTimeout(() => map.invalidateSize(), 200);
       setTimeout(() => map.invalidateSize(), 500);
     }
-  }, [nodes, localConnections, getCoords, accentColor, handleNodeClickInternal, selectedNode, linkMode, linkOrigin]);
+  }, [nodes, localConnections, getCoords, accentColor, handleNodeClickInternal, selectedNode, linkMode, linkOrigin, deleteMode, selectedForDelete]);
 
   const handleUndo = () => {
     if (localConnections.length === 0) return;
@@ -293,11 +314,43 @@ export const NodeMapWidget = ({
   };
 
   const toggleLinkMode = () => {
+    if (deleteMode) { setDeleteMode(false); setSelectedForDelete(new Set()); }
     const newMode = !linkMode;
     setLinkMode(newMode);
     setLinkOrigin(null);
-    if (newMode) toast.info("Modo ligar pontos ativo: clique no ponto de origem, depois no destino. Encadeie quantos quiser! ESC para sair.");
+    if (newMode) toast.info("Modo ligar pontos ativo: clique no ponto de origem, depois no destino. ESC para sair.");
     else toast.info("Modo ligar pontos desativado.");
+  };
+
+  const toggleDeleteMode = () => {
+    if (linkMode) { setLinkMode(false); setLinkOrigin(null); }
+    const newMode = !deleteMode;
+    setDeleteMode(newMode);
+    setSelectedForDelete(new Set());
+    if (newMode) toast.info("Modo excluir nós ativo: clique nos nós para selecionar. ESC para sair.");
+    else toast.info("Modo excluir nós desativado.");
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedForDelete.size === 0) { toast.error("Nenhum nó selecionado"); return; }
+    const ids = Array.from(selectedForDelete);
+    if (!confirm(`Excluir ${ids.length} nó(s)? (${ids.join(", ")})`)) return;
+    // Also remove connections involving deleted nodes
+    const updatedConns = localConnections.filter(c => !selectedForDelete.has(c.from) && !selectedForDelete.has(c.to));
+    setLocalConnections(updatedConns);
+    onConnectionsChange?.(updatedConns);
+    onNodesDelete?.(ids);
+    setSelectedForDelete(new Set());
+    setDeleteMode(false);
+    toast.success(`${ids.length} nó(s) excluído(s)`);
+  };
+
+  const handleSelectAllForDelete = () => {
+    if (selectedForDelete.size === nodes.length) {
+      setSelectedForDelete(new Set());
+    } else {
+      setSelectedForDelete(new Set(nodes.map(n => n.id)));
+    }
   };
 
   return (
@@ -326,6 +379,12 @@ export const NodeMapWidget = ({
                 className={linkMode ? "bg-orange-500 hover:bg-orange-600 text-white" : ""}>
                 <Link2 className="h-3 w-3 mr-1" /> {linkMode ? "Ligando..." : "Ligar Pontos"}
               </Button>
+              {onNodesDelete && (
+                <Button size="sm" variant={deleteMode ? "default" : "outline"} onClick={toggleDeleteMode}
+                  className={deleteMode ? "bg-red-600 hover:bg-red-700 text-white" : ""}>
+                  <MousePointerClick className="h-3 w-3 mr-1" /> {deleteMode ? "Selecionando..." : "Excluir Nós"}
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={handleUndo} disabled={localConnections.length === 0}>
                 <Undo2 className="h-3 w-3 mr-1" /> Desfazer
               </Button>
@@ -367,6 +426,27 @@ export const NodeMapWidget = ({
           </div>
         )}
 
+        {/* Delete mode status */}
+        {deleteMode && (
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200">
+            <MousePointerClick className="h-4 w-4 text-red-600" />
+            <span className="text-sm font-medium text-red-700 dark:text-red-400">
+              {selectedForDelete.size > 0 ? `${selectedForDelete.size} nó(s) selecionado(s)` : "Clique nos nós para selecionar"}
+            </span>
+            <div className="ml-auto flex gap-1">
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={handleSelectAllForDelete}>
+                {selectedForDelete.size === nodes.length ? "Desmarcar Todos" : "Selecionar Todos"}
+              </Button>
+              <Button size="sm" variant="destructive" className="h-6 text-xs" onClick={handleDeleteSelected} disabled={selectedForDelete.size === 0}>
+                <Trash2 className="h-3 w-3 mr-1" /> Excluir ({selectedForDelete.size})
+              </Button>
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setDeleteMode(false); setSelectedForDelete(new Set()); }}>
+                <X className="h-3 w-3 mr-1" /> Sair
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Map - always render the container */}
         <div ref={containerRef} className="w-full rounded-lg border border-border overflow-hidden" style={{ height }} />
 
@@ -377,7 +457,7 @@ export const NodeMapWidget = ({
         )}
 
         {/* Selected node editor */}
-        {editable && selectedNode && onNodeDemandChange && !linkMode && (
+        {editable && selectedNode && onNodeDemandChange && !linkMode && !deleteMode && (
           <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
             <Edit3 className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">{selectedNode}</span>
@@ -414,6 +494,7 @@ export const NodeMapWidget = ({
           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: accentColor }} /> Intermediário</div>
           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500" /> Selecionado</div>
           {linkMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-orange-500" /> Origem (ligação)</div>}
+          {deleteMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-600" /> Selecionado p/ exclusão</div>}
         </div>
       </CardContent>
     </Card>

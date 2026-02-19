@@ -526,6 +526,15 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
               onNodeDemandChange={(id, d) => {
                 setJunctions(junctions.map(j => j.id === id ? { ...j, demand: d } : j));
               }}
+              onNodesDelete={(ids) => {
+                const idSet = new Set(ids);
+                setJunctions(prev => prev.filter(j => !idSet.has(j.id)));
+                setReservoirs(prev => prev.filter(r => !idSet.has(r.id)));
+                setTanks(prev => prev.filter(t => !idSet.has(t.id)));
+                setCoords(prev => prev.filter(c => !idSet.has(c.id)));
+                setPipes(prev => prev.filter(p => !idSet.has(p.node1) && !idSet.has(p.node2)));
+                setResults(null);
+              }}
               title="Rede Hidráulica EPANET PRO"
               accentColor="#3b82f6"
               height={500}

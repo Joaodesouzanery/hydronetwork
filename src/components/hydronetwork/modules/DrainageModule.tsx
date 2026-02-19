@@ -354,6 +354,7 @@ export const DrainageModule = ({ pontos }: DrainageModuleProps) => {
             connections={mapConnections}
             onConnectionsChange={setMapConnections}
             onNodeDemandChange={(nodeId, demanda) => setNodes(nodes.map(n => n.id === nodeId ? { ...n, areaContrib: demanda } : n))}
+            onNodesDelete={(ids) => setNodes(prev => prev.filter(n => !ids.includes(n.id)))}
             title="Mapa da Rede de Drenagem"
             accentColor="#10b981"
             editable

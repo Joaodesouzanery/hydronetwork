@@ -157,6 +157,11 @@ export const EpanetModule = ({ pontos, trechos }: EpanetModuleProps) => {
           onConnectionsChange={setMapConnections}
           onNodeClick={(id) => setSelectedElement(nodes.find(n => n.id === id) || null)}
           onNodeDemandChange={handleNodeDemandChange}
+          onNodesDelete={(ids) => {
+            setNodes(prev => prev.filter(n => !ids.includes(n.id)));
+            setLinks(prev => prev.filter(l => !ids.includes(l.de) && !ids.includes(l.para)));
+            setSimulated(false);
+          }}
           title="Mapa da Rede EPANET"
           accentColor="hsl(210, 70%, 50%)"
           height={400}
