@@ -47,12 +47,31 @@ export function parseDxfEntities(text: string): DxfEntity[] {
   let inVertex = false;
   let currentVertex: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 };
 
+  // Track LWPOLYLINE vertex collection state
+  let lwPolyVertices: { x: number; y: number; z: number }[] = [];
+  let lwPolyCollecting = false;
+  let lwPolyCurrentVertex: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 };
+  let lwPolyHasX = false;
+
   while (i < lines.length - 1) {
     const code = parseInt(lines[i].trim(), 10);
     const value = lines[i + 1]?.trim() ?? "";
     i += 2;
 
     if (code === 0) {
+      // Flush any pending LWPOLYLINE vertex
+      if (lwPolyCollecting && lwPolyHasX && current) {
+        lwPolyVertices.push({ ...lwPolyCurrentVertex });
+        lwPolyHasX = false;
+      }
+      // Save pending LWPOLYLINE vertices to current entity
+      if (current && current.type === "LWPOLYLINE" && lwPolyVertices.length > 0) {
+        current.vertices = [...lwPolyVertices];
+      }
+      lwPolyCollecting = false;
+      lwPolyVertices = [];
+      lwPolyHasX = false;
+
       // Save previous entity
       if (current) {
         if (inVertex && current.vertices) {
@@ -67,6 +86,12 @@ export function parseDxfEntities(text: string): DxfEntity[] {
       if (value === "POINT" || value === "LINE" || value === "LWPOLYLINE" || value === "POLYLINE" || value === "INSERT" || value === "CIRCLE" || value === "3DPOLYLINE") {
         current = { type: value, vertices: [] };
         inVertex = false;
+        if (value === "LWPOLYLINE") {
+          lwPolyCollecting = true;
+          lwPolyVertices = [];
+          lwPolyCurrentVertex = { x: 0, y: 0, z: 0 };
+          lwPolyHasX = false;
+        }
       } else if (value === "VERTEX") {
         inVertex = true;
         currentVertex = { x: 0, y: 0, z: 0 };
@@ -80,6 +105,25 @@ export function parseDxfEntities(text: string): DxfEntity[] {
     }
 
     if (!current && !inVertex) continue;
+
+    // LWPOLYLINE: vertices are encoded as repeated code 10/20/30 groups
+    if (lwPolyCollecting && current && current.type === "LWPOLYLINE") {
+      if (code === 10) {
+        // New vertex starts. Flush previous if any.
+        if (lwPolyHasX) {
+          lwPolyVertices.push({ ...lwPolyCurrentVertex });
+        }
+        lwPolyCurrentVertex = { x: parseFloat(value), y: 0, z: 0 };
+        lwPolyHasX = true;
+      } else if (code === 20 && lwPolyHasX) {
+        lwPolyCurrentVertex.y = parseFloat(value);
+      } else if (code === 30 && lwPolyHasX) {
+        lwPolyCurrentVertex.z = parseFloat(value);
+      } else if (code === 8) {
+        current.layer = value;
+      }
+      continue;
+    }
 
     if (inVertex) {
       if (code === 10) currentVertex.x = parseFloat(value);

@@ -4,9 +4,9 @@
  * Step 2: CRS Selection (mandatory, UTM zone, unit confirmation)
  * Step 3: Model Type + Entity Type Mapping (for geometric formats)
  * Step 4: Attribute Mapping (tabular) / Summary (geometric)
- * Step 5: Analysis & Confirmation — shows real parsed counts, warnings, confirmation
+ * Step 5: Analysis & Confirmation — shows raw counts, converted counts, warnings
  */
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,7 +20,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import {
   Upload, FileText, AlertTriangle, Check, ChevronRight, ChevronLeft,
-  Globe, Layers, Settings2, Save, FolderOpen, Search, Eye
+  Globe, Layers, Settings2, Save, FolderOpen, Search, Eye, Info
 } from "lucide-react";
 import {
   CRSDefinition, CRS_CATALOG,
@@ -29,9 +29,11 @@ import {
 import {
   NumericFormat, ImportMode, EntityTypeMapping, EntityImportRole,
   parseLocalizedNumber, validateUTMCoordinates, detectDxfEntityTypes,
+  detectGeoJSONEntityTypes, detectINPEntityTypes,
   parseDXFToInternal, parseGeoJSONToInternal, parseINPToInternal,
   parseSWMMToInternal, parseTabularToInternal,
-  InpParsed, FieldMapping,
+  analyzeFileRaw, RawFileAnalysis, ImportFileFormat,
+  InpParsed, FieldMapping, detectFileFormat,
 } from "@/engine/importEngine";
 
 // ════════════════════════════════════════
@@ -195,6 +197,15 @@ function isGeometricFormat(format: string): boolean {
 
 const TOTAL_STEPS = 5;
 
+// Info card helper
+const InfoCard = ({ label, value, icon }: { label: string; value: string; icon: string }) => (
+  <div className="bg-muted/50 rounded-lg p-3 text-center">
+    <div className="text-lg mb-1">{icon}</div>
+    <div className="text-xs text-muted-foreground">{label}</div>
+    <div className="text-sm font-medium truncate">{value}</div>
+  </div>
+);
+
 // ════════════════════════════════════════
 // COMPONENT
 // ════════════════════════════════════════
@@ -225,18 +236,26 @@ export const ImportWizard = ({
   const [templateName, setTemplateName] = useState("");
   const [numericFormat, setNumericFormat] = useState<NumericFormat>("auto");
   const [importMode, setImportMode] = useState<ImportMode>(
-    isGeometricFormat(fileInfo.format) ? "geometric" : "tabular"
+    isGeometricFormat(fileInfo.format) || fileInfo.format === "INP" || fileInfo.format === "SWMM" ? "geometric" : "tabular"
   );
 
-  // Entity type mappings for DXF/geometric files
+  // ── RAW FILE ANALYSIS (runs immediately, no dependency on mappings) ──
+  const rawAnalysis = useMemo<RawFileAnalysis | null>(() => {
+    if (!fileInfo.fileContent) return null;
+    try {
+      return analyzeFileRaw(fileInfo.fileContent, fileInfo.format as ImportFileFormat);
+    } catch { return null; }
+  }, [fileInfo.fileContent, fileInfo.format]);
+
+  // Entity type mappings — detect from ALL supported formats
   const [entityMappings, setEntityMappings] = useState<EntityTypeMapping[]>(() => {
-    if (fileInfo.format === "DXF" && fileInfo.fileContent) {
-      try { return detectDxfEntityTypes(fileInfo.fileContent); } catch { return []; }
-    }
-    // For IFC files, detect entity types from content
-    if (fileInfo.format === "IFC" && fileInfo.fileContent) {
-      return detectIFCEntityTypes(fileInfo.fileContent);
-    }
+    if (!fileInfo.fileContent) return [];
+    try {
+      if (fileInfo.format === "DXF") return detectDxfEntityTypes(fileInfo.fileContent);
+      if (fileInfo.format === "GeoJSON") return detectGeoJSONEntityTypes(fileInfo.fileContent);
+      if (fileInfo.format === "IFC") return detectIFCEntityTypes(fileInfo.fileContent);
+      if (fileInfo.format === "INP" || fileInfo.format === "SWMM") return detectINPEntityTypes(fileInfo.fileContent);
+    } catch { /* ignore */ }
     return [];
   });
 
@@ -245,7 +264,7 @@ export const ImportWizard = ({
   const [analysisRan, setAnalysisRan] = useState(false);
   const [analysisIssues, setAnalysisIssues] = useState<string[]>([]);
 
-  const isGeometric = isGeometricFormat(fileInfo.format);
+  const isGeometric = isGeometricFormat(fileInfo.format) || fileInfo.format === "INP" || fileInfo.format === "SWMM";
   const crs = CRS_CATALOG.find(c => c.code === selectedCRS) || CRS_CATALOG[5];
 
   const hasX = useMemo(() => Object.values(mappings).includes("x"), [mappings]);
@@ -261,7 +280,7 @@ export const ImportWizard = ({
     if (step === 2) return !!selectedCRS;
     if (step === 3) return !!modelType;
     if (step === 4) return step4Valid;
-    if (step === 5) return analysisRan; // must have run analysis
+    if (step === 5) return analysisRan;
     return false;
   }, [step, selectedCRS, modelType, step4Valid, analysisRan]);
 
@@ -272,7 +291,6 @@ export const ImportWizard = ({
 
     try {
       if (importMode === "geometric") {
-        // Parse based on format
         if (fileInfo.format === "DXF" && fileInfo.fileContent) {
           parsed = parseDXFToInternal(fileInfo.fileContent, entityMappings, numericFormat);
         } else if (fileInfo.format === "GeoJSON" && fileInfo.fileContent) {
@@ -282,11 +300,9 @@ export const ImportWizard = ({
         } else if (fileInfo.format === "SWMM" && fileInfo.fileContent) {
           parsed = parseSWMMToInternal(fileInfo.fileContent);
         } else if (fileInfo.format === "IFC" && fileInfo.fileContent) {
-          // IFC geometric parsing - extract lines as edges, points as nodes
           parsed = parseIFCGeometric(fileInfo.fileContent, entityMappings);
         }
       } else {
-        // Tabular mode
         const getField = (target: TargetField) => {
           const entry = Object.entries(mappings).find(([_, t]) => t === target);
           return entry?.[0];
@@ -313,21 +329,36 @@ export const ImportWizard = ({
         parsed = parseTabularToInternal(rows, fieldMapping, numericFormat);
       }
 
-      // UTM validation on first few nodes
+      // UTM validation
       if (crs.unit === "m" && crs.utmZone && parsed.nodes.length > 0) {
         const sample = parsed.nodes.slice(0, 5);
         for (const n of sample) {
           const check = validateUTMCoordinates(n.x, n.y);
           if (!check.valid && check.warning) {
             issues.push(check.warning);
-            break; // one warning is enough
+            break;
           }
         }
       }
 
-      // Check for zero results
+      // Check for zero results and explain WHY
       if (parsed.nodes.length === 0 && parsed.edges.length === 0) {
-        issues.push("Nenhuma geometria convertível detectada no arquivo.");
+        if (rawAnalysis && rawAnalysis.totalGeometries > 0) {
+          // Raw file has geometry but conversion yielded nothing
+          const ignored = entityMappings.filter(m => m.role === "ignore" || m.role === "drawing");
+          const edgeMapped = entityMappings.filter(m => m.role === "edge");
+          const nodeMapped = entityMappings.filter(m => m.role === "node");
+
+          if (ignored.length > 0 && edgeMapped.length === 0 && nodeMapped.length === 0) {
+            issues.push(`Todas as ${rawAnalysis.totalGeometries} geometrias do arquivo foram marcadas como "Ignorar" ou "Desenho" no mapeamento de entidades. Volte ao Passo 3 e marque pelo menos um tipo como Trecho ou Nó.`);
+          } else if (edgeMapped.length === 0 && nodeMapped.length === 0) {
+            issues.push(`Nenhum tipo de entidade foi mapeado como Trecho ou Nó. O arquivo contém ${rawAnalysis.totalGeometries} geometrias brutas. Verifique o mapeamento no Passo 3.`);
+          } else {
+            issues.push(`O arquivo contém ${rawAnalysis.totalGeometries} geometrias brutas, mas a conversão resultou em 0 elementos. Possíveis causas: formato numérico incorreto, entidades sem coordenadas válidas, ou filtro de entidades muito restritivo.`);
+          }
+        } else {
+          issues.push("Nenhuma geometria detectada no arquivo. Verifique se o formato está correto.");
+        }
       }
     } catch (err: any) {
       issues.push(`Erro ao analisar: ${err.message || String(err)}`);
@@ -336,7 +367,7 @@ export const ImportWizard = ({
     setAnalysisResult(parsed);
     setAnalysisIssues(issues);
     setAnalysisRan(true);
-  }, [importMode, fileInfo, entityMappings, numericFormat, mappings, rows, crs]);
+  }, [importMode, fileInfo, entityMappings, numericFormat, mappings, rows, crs, rawAnalysis]);
 
   const handleStepChange = useCallback((newStep: number) => {
     if (newStep === 5 && !analysisRan) {
@@ -376,12 +407,11 @@ export const ImportWizard = ({
     setEntityMappings(prev => prev.map(m =>
       m.entityType === entityType ? { ...m, role } : m
     ));
-    // Reset analysis when entity roles change
     setAnalysisRan(false);
     setAnalysisResult(null);
   }, []);
 
-  // ── Final import (only from step 5, with pre-parsed data) ──
+  // ── Final import ──
   const handleConfirmImport = useCallback(() => {
     if (!analysisResult) {
       toast.error("Execute a análise primeiro");
@@ -435,7 +465,9 @@ export const ImportWizard = ({
 
   const templates = useMemo(() => loadTemplates(), []);
 
-  // ── RENDER STEPS ──
+  // ══════════════════════════════════════
+  // RENDER STEPS
+  // ══════════════════════════════════════
 
   const renderStep1 = () => (
     <div className="space-y-4">
@@ -448,7 +480,48 @@ export const ImportWizard = ({
         <InfoCard label="CRS Detectado" value={fileInfo.detectedCRS?.name || "Não detectado"} icon="🌐" />
       </div>
 
-      {fileInfo.layers && fileInfo.layers.length > 0 && (
+      {/* RAW FILE ANALYSIS — always shown */}
+      {rawAnalysis && rawAnalysis.totalGeometries > 0 && (
+        <Card className="border-green-200 dark:border-green-800">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Search className="h-4 w-4 text-green-600" />
+              <Label className="font-medium text-green-700 dark:text-green-400">
+                Leitura Bruta do Arquivo — {rawAnalysis.totalGeometries} geometrias detectadas
+              </Label>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {rawAnalysis.entityCounts.map(e => (
+                <div key={e.type} className="flex items-center justify-between text-xs bg-muted/30 rounded px-2 py-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`inline-block w-2 h-2 rounded-full ${
+                      e.geometricClass === "line" ? "bg-blue-500" :
+                      e.geometricClass === "point" ? "bg-green-500" :
+                      e.geometricClass === "polygon" ? "bg-purple-500" :
+                      "bg-gray-400"
+                    }`} />
+                    <span className="font-mono font-medium">{e.type}</span>
+                  </div>
+                  <Badge variant="outline" className="text-xs">{e.count}</Badge>
+                </div>
+              ))}
+            </div>
+            {rawAnalysis.bbox && (
+              <div className="text-xs text-muted-foreground mt-2">
+                📐 BBox: X[{rawAnalysis.bbox.minX.toFixed(1)} .. {rawAnalysis.bbox.maxX.toFixed(1)}] Y[{rawAnalysis.bbox.minY.toFixed(1)} .. {rawAnalysis.bbox.maxY.toFixed(1)}]
+              </div>
+            )}
+            {rawAnalysis.layers.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {rawAnalysis.layers.slice(0, 20).map(l => <Badge key={l} variant="outline" className="text-xs">{l}</Badge>)}
+                {rawAnalysis.layers.length > 20 && <Badge variant="outline" className="text-xs">+{rawAnalysis.layers.length - 20} mais</Badge>}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {fileInfo.layers && fileInfo.layers.length > 0 && !rawAnalysis?.layers.length && (
         <div>
           <Label className="text-xs font-medium mb-1 block">Camadas Detectadas ({fileInfo.layers.length})</Label>
           <div className="flex flex-wrap gap-1">
@@ -537,8 +610,19 @@ export const ImportWizard = ({
             <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded p-2">
               <p className="text-xs text-amber-700 dark:text-amber-300 flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" />
-                CRS detectado ({fileInfo.detectedCRS.name}) difere do selecionado. A transformação será aplicada automaticamente.
+                CRS detectado ({fileInfo.detectedCRS.name}) difere do selecionado.
               </p>
+            </div>
+          )}
+          {/* Show raw coord samples for CRS validation */}
+          {rawAnalysis && rawAnalysis.coordSamples.length > 0 && (
+            <div>
+              <Label className="text-xs">Amostras de Coordenadas</Label>
+              <div className="text-xs font-mono space-y-0.5 mt-1 bg-muted/50 rounded p-2 max-h-20 overflow-auto">
+                {rawAnalysis.coordSamples.slice(0, 5).map((c, i) => (
+                  <div key={i}>X={c.x.toFixed(3)} Y={c.y.toFixed(3)}{c.z !== undefined ? ` Z=${c.z.toFixed(3)}` : ""}</div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -556,7 +640,7 @@ export const ImportWizard = ({
             { value: "topografia" as ModelType, label: "📍 Topografia", desc: "Pontos topográficos com coordenadas e cota" },
             { value: "bim" as ModelType, label: "🏗️ BIM (IFC)", desc: "Modelo BIM com elementos construtivos" },
             { value: "generico" as ModelType, label: "🗺️ Genérico GIS", desc: "Dados geoespaciais genéricos" },
-            { value: "desenho" as ModelType, label: "✏️ Desenho (Apenas Visual)", desc: "Camada de desenho que NÃO entra na simulação (EPANET/SWMM)" },
+            { value: "desenho" as ModelType, label: "✏️ Desenho (Apenas Visual)", desc: "Camada de desenho que NÃO entra na simulação" },
           ]).map(opt => (
             <Card
               key={opt.value}
@@ -579,8 +663,8 @@ export const ImportWizard = ({
         </div>
       </div>
 
-      {/* Entity type mapping for geometric formats */}
-      {importMode === "geometric" && entityMappings.length > 0 && (
+      {/* Entity type mapping — shown for ALL formats with detected entities */}
+      {entityMappings.length > 0 && (
         <Card>
           <CardContent className="pt-4 pb-3">
             <Label className="font-medium mb-2 block">Mapeamento de Entidades</Label>
@@ -590,33 +674,54 @@ export const ImportWizard = ({
                 <TableRow>
                   <TableHead>Entidade</TableHead>
                   <TableHead className="text-center">Quantidade</TableHead>
+                  <TableHead>Classe</TableHead>
                   <TableHead>Importar como</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {entityMappings.map(m => (
-                  <TableRow key={m.entityType}>
-                    <TableCell className="font-mono text-sm font-medium">{m.entityType}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline">{m.count}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={m.role}
-                        onValueChange={v => handleEntityRoleChange(m.entityType, v as EntityImportRole)}
-                      >
-                        <SelectTrigger className="h-8 text-xs w-44">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="edge">📏 Trecho (Edge)</SelectItem>
-                          <SelectItem value="node">📍 Nó (Node)</SelectItem>
-                          <SelectItem value="ignore">⊘ Ignorar</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {entityMappings.map(m => {
+                  const rawEntry = rawAnalysis?.entityCounts.find(e => e.type === m.entityType);
+                  return (
+                    <TableRow key={m.entityType}>
+                      <TableCell className="font-mono text-sm font-medium">{m.entityType}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline">{m.count}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center gap-1 text-xs ${
+                          rawEntry?.geometricClass === "line" ? "text-blue-600" :
+                          rawEntry?.geometricClass === "point" ? "text-green-600" :
+                          rawEntry?.geometricClass === "polygon" ? "text-purple-600" :
+                          "text-muted-foreground"
+                        }`}>
+                          <span className={`w-2 h-2 rounded-full ${
+                            rawEntry?.geometricClass === "line" ? "bg-blue-500" :
+                            rawEntry?.geometricClass === "point" ? "bg-green-500" :
+                            rawEntry?.geometricClass === "polygon" ? "bg-purple-500" :
+                            "bg-gray-400"
+                          }`} />
+                          {rawEntry?.geometricClass || "—"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={m.role}
+                          onValueChange={v => handleEntityRoleChange(m.entityType, v as EntityImportRole)}
+                        >
+                          <SelectTrigger className="h-8 text-xs w-48">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="edge">📏 Trecho (Edge)</SelectItem>
+                            <SelectItem value="node">📍 Nó (Node)</SelectItem>
+                            <SelectItem value="drawing">✏️ Desenho (Visual)</SelectItem>
+                            <SelectItem value="ignore">⊘ Ignorar</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>
@@ -626,10 +731,11 @@ export const ImportWizard = ({
   );
 
   const renderStep4 = () => {
-    // In geometric mode, show simplified info
     if (importMode === "geometric") {
       const edgeTypes = entityMappings.filter(m => m.role === "edge");
       const nodeTypes = entityMappings.filter(m => m.role === "node");
+      const drawingTypes = entityMappings.filter(m => m.role === "drawing");
+      const ignoredTypes = entityMappings.filter(m => m.role === "ignore");
       return (
         <div className="space-y-4">
           <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
@@ -646,7 +752,7 @@ export const ImportWizard = ({
                 <span className="text-xs">
                   {edgeTypes.length > 0
                     ? edgeTypes.map(e => `${e.entityType} (${e.count})`).join(", ")
-                    : "Linhas e polilinhas detectadas automaticamente"
+                    : "Nenhum tipo mapeado como trecho"
                   }
                 </span>
               </div>
@@ -655,12 +761,24 @@ export const ImportWizard = ({
                 <span className="text-xs">
                   {nodeTypes.length > 0
                     ? nodeTypes.map(n => `${n.entityType} (${n.count})`).join(", ")
-                    : "Criados automaticamente nos endpoints + entidades POINT/INSERT"
+                    : "Criados automaticamente nos endpoints"
                   }
                 </span>
               </div>
+              {drawingTypes.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">Desenho</Badge>
+                  <span className="text-xs">{drawingTypes.map(d => `${d.entityType} (${d.count})`).join(", ")}</span>
+                </div>
+              )}
+              {ignoredTypes.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">Ignorados</Badge>
+                  <span className="text-xs text-muted-foreground">{ignoredTypes.map(i => `${i.entityType} (${i.count})`).join(", ")}</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
-                <Badge variant="outline">Formato Numérico</Badge>
+                <Badge variant="outline">Formato</Badge>
                 <span className="text-xs">
                   {numericFormat === "auto" ? "Detecção automática" : numericFormat === "br" ? "Brasileiro (1.234,56)" : "Americano (1,234.56)"}
                 </span>
@@ -671,6 +789,20 @@ export const ImportWizard = ({
               </div>
             </div>
           </div>
+
+          {/* Warning if nothing is mapped as edge or node */}
+          {edgeTypes.length === 0 && nodeTypes.length === 0 && entityMappings.length > 0 && (
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-400 rounded-lg p-3 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Nenhuma entidade mapeada como Trecho ou Nó</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400">Volte ao Passo 3 e marque pelo menos um tipo de entidade para importação.</p>
+                <Button size="sm" variant="outline" className="mt-2 h-7 text-xs" onClick={() => setStep(3)}>
+                  Voltar ao Mapeamento
+                </Button>
+              </div>
+            </div>
+          )}
 
           {sourceFields.length > 0 && (
             <div>
@@ -715,7 +847,7 @@ export const ImportWizard = ({
       );
     }
 
-    // Tabular mode - full mapping
+    // Tabular mode
     const grouped = TARGET_FIELDS.reduce((acc, f) => {
       if (!acc[f.group]) acc[f.group] = [];
       acc[f.group].push(f);
@@ -785,24 +917,25 @@ export const ImportWizard = ({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Campo no Arquivo</TableHead>
-                <TableHead>Tipo</TableHead>
+                <TableHead>Campo Origem</TableHead>
                 <TableHead>Amostras</TableHead>
-                <TableHead className="w-56">Mapear Para</TableHead>
+                <TableHead className="w-52">Mapear para</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {sourceFields.map(field => (
                 <TableRow key={field.name} className={mappings[field.name] === "ignore" ? "opacity-40" : ""}>
                   <TableCell className="font-mono text-xs font-medium">{field.name}</TableCell>
-                  <TableCell><Badge variant="outline" className="text-xs">{field.type}</Badge></TableCell>
                   <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate">
                     {field.sampleValues.slice(0, 3).join(", ")}
                   </TableCell>
                   <TableCell>
                     <Select
                       value={mappings[field.name] || "ignore"}
-                      onValueChange={v => setMappings(prev => ({ ...prev, [field.name]: v as TargetField }))}
+                      onValueChange={v => {
+                        setMappings(prev => ({ ...prev, [field.name]: v as TargetField }));
+                        setAnalysisRan(false);
+                      }}
                     >
                       <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -826,7 +959,7 @@ export const ImportWizard = ({
     );
   };
 
-  // ── Step 5 computed values (must be at component top level) ──
+  // ── Step 5 computed values ──
   const analysisNodeCount = analysisResult?.nodes.length ?? 0;
   const analysisEdgeCount = analysisResult?.edges.length ?? 0;
   const analysisHasData = analysisNodeCount > 0 || analysisEdgeCount > 0;
@@ -837,11 +970,11 @@ export const ImportWizard = ({
     const nodeSources = new Map<string, number>();
     const edgeSources = new Map<string, number>();
     for (const n of analysisResult.nodes) {
-      const src = n.properties?._source || n.properties?.entityType || "Desconhecido";
+      const src = n.properties?.entityType || n.properties?._source || "Desconhecido";
       nodeSources.set(src, (nodeSources.get(src) || 0) + 1);
     }
     for (const e of analysisResult.edges) {
-      const src = e.properties?._source || e.properties?.entityType || "Desconhecido";
+      const src = e.properties?.entityType || e.properties?._source || "Desconhecido";
       edgeSources.set(src, (edgeSources.get(src) || 0) + 1);
     }
     return { nodeSources: Array.from(nodeSources.entries()), edgeSources: Array.from(edgeSources.entries()) };
@@ -859,74 +992,85 @@ export const ImportWizard = ({
     return { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY };
   }, [analysisResult]);
 
-  // ── Step 5: Analysis & Confirmation ──
   const renderStep5 = () => {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2 mb-2">
           <Eye className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold text-base">Análise do Arquivo</h3>
-          <Button size="sm" variant="outline" className="ml-auto h-7 text-xs" onClick={runAnalysis}>
+          <h3 className="font-semibold text-base">Análise & Confirmação</h3>
+          <Button size="sm" variant="outline" className="ml-auto h-7 text-xs" onClick={() => { setAnalysisRan(false); runAnalysis(); }}>
             <Search className="h-3 w-3 mr-1" /> Re-analisar
           </Button>
         </div>
 
-        {/* File info recap */}
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">{analysisNodeCount}</div>
-                <div className="text-xs text-muted-foreground">Nós detectados</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{analysisEdgeCount}</div>
-                <div className="text-xs text-muted-foreground">Trechos detectados</div>
-              </div>
-              <div className="text-center">
-                <div className="text-sm font-medium">{crs.name}</div>
-                <div className="text-xs text-muted-foreground">CRS</div>
-              </div>
-              <div className="text-center">
-                <div className="text-sm font-medium">
-                  {numericFormat === "auto" ? "Auto" : numericFormat === "br" ? "Brasileiro" : "Americano"}
+        {/* Raw vs Converted comparison */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Raw counts */}
+          {rawAnalysis && (
+            <Card className="border-muted">
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-xs font-medium text-muted-foreground">LEITURA BRUTA</Label>
                 </div>
-                <div className="text-xs text-muted-foreground">Formato Numérico</div>
+                <div className="text-2xl font-bold">{rawAnalysis.totalGeometries}</div>
+                <div className="text-xs text-muted-foreground">geometrias no arquivo</div>
+                <div className="mt-2 space-y-0.5">
+                  {rawAnalysis.entityCounts.map(e => (
+                    <div key={e.type} className="flex justify-between text-xs">
+                      <span className="font-mono">{e.type}</span>
+                      <span>{e.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {/* Converted counts */}
+          <Card className={analysisIsZero ? "border-amber-400" : "border-green-300 dark:border-green-800"}>
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Check className={`h-4 w-4 ${analysisIsZero ? "text-amber-500" : "text-green-600"}`} />
+                <Label className="text-xs font-medium text-muted-foreground">APÓS CONVERSÃO</Label>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className={`text-2xl font-bold ${analysisNodeCount > 0 ? "text-green-600" : "text-amber-500"}`}>{analysisNodeCount}</div>
+                  <div className="text-xs text-muted-foreground">nós</div>
+                </div>
+                <div>
+                  <div className={`text-2xl font-bold ${analysisEdgeCount > 0 ? "text-blue-600" : "text-amber-500"}`}>{analysisEdgeCount}</div>
+                  <div className="text-xs text-muted-foreground">trechos</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-        {/* Zero result warning */}
+        {/* Zero result warning with detailed explanation */}
         {analysisIsZero && (
           <div className="bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-400 dark:border-amber-700 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
               <div className="space-y-2">
-                <h4 className="font-semibold text-amber-800 dark:text-amber-300">⚠ Nenhuma geometria convertível detectada</h4>
-                <p className="text-sm text-amber-700 dark:text-amber-400">
-                  O arquivo foi lido mas nenhum nó ou trecho pôde ser gerado. Verifique:
-                </p>
-                <ul className="text-xs text-amber-700 dark:text-amber-400 space-y-1 list-disc list-inside">
-                  <li>O <strong>mapeamento de entidades</strong> (Step 3) — marque os tipos corretos como Trecho ou Nó</li>
-                  <li>O <strong>formato numérico</strong> — coordenadas podem estar sendo interpretadas incorretamente</li>
-                  <li>O <strong>CRS</strong> — se as coordenadas estão em sistema diferente do esperado</li>
-                  <li>O <strong>modo de importação</strong> — tente alternar entre Geométrico e Tabular</li>
-                </ul>
+                <h4 className="font-semibold text-amber-800 dark:text-amber-300">⚠ Nenhuma geometria convertível</h4>
+                {analysisIssues.map((issue, i) => (
+                  <p key={i} className="text-sm text-amber-700 dark:text-amber-400">{issue}</p>
+                ))}
                 <div className="flex gap-2 pt-2 flex-wrap">
                   <Button size="sm" variant="outline" onClick={() => { setStep(3); setAnalysisRan(false); }}>
-                    Ajustar Entidades
+                    Ajustar Entidades (Passo 3)
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => { setStep(1); setAnalysisRan(false); }}>
-                    Ajustar Formato/Modo
+                    Ajustar Formato/Modo (Passo 1)
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => { setStep(2); setAnalysisRan(false); }}>
-                    Ajustar CRS
+                    Ajustar CRS (Passo 2)
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => {
                     setModelType("desenho");
                     setAnalysisRan(false);
-                    runAnalysis();
+                    setTimeout(runAnalysis, 50);
                   }}>
                     Forçar como Desenho
                   </Button>
@@ -936,8 +1080,8 @@ export const ImportWizard = ({
           </div>
         )}
 
-        {/* UTM / coordinate warnings */}
-        {analysisIssues.length > 0 && (
+        {/* Non-zero warnings */}
+        {analysisIssues.length > 0 && !analysisIsZero && (
           <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
             <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1">⚠ Avisos:</p>
             <ul className="space-y-1">
@@ -955,7 +1099,7 @@ export const ImportWizard = ({
         {analysisHasData && entityBreakdown && (
           <Card>
             <CardContent className="pt-4 pb-3">
-              <Label className="font-medium mb-2 block">Detalhamento por Origem</Label>
+              <Label className="font-medium mb-2 block">Detalhamento por Tipo</Label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {entityBreakdown.nodeSources.length > 0 && (
                   <div>
@@ -984,37 +1128,33 @@ export const ImportWizard = ({
           </Card>
         )}
 
-        {/* Bounding box info */}
-        {analysisBbox && (
+        {/* Bounding box */}
+        {(analysisBbox || rawAnalysis?.bbox) && (
           <Card>
             <CardContent className="pt-4 pb-3">
               <Label className="font-medium mb-2 block">Bounding Box</Label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                <div>
-                  <span className="text-muted-foreground">X min:</span>{" "}
-                  <span className="font-mono">{analysisBbox.minX.toFixed(2)}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">X max:</span>{" "}
-                  <span className="font-mono">{analysisBbox.maxX.toFixed(2)}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Y min:</span>{" "}
-                  <span className="font-mono">{analysisBbox.minY.toFixed(2)}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Y max:</span>{" "}
-                  <span className="font-mono">{analysisBbox.maxY.toFixed(2)}</span>
-                </div>
-              </div>
-              <div className="text-xs text-muted-foreground mt-1">
-                Extensão: {analysisBbox.width.toFixed(2)} × {analysisBbox.height.toFixed(2)} {crs.unit}
-              </div>
+              {(() => {
+                const bbox = analysisBbox || rawAnalysis?.bbox;
+                if (!bbox) return null;
+                return (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      <div><span className="text-muted-foreground">X min:</span> <span className="font-mono">{bbox.minX.toFixed(2)}</span></div>
+                      <div><span className="text-muted-foreground">X max:</span> <span className="font-mono">{bbox.maxX.toFixed(2)}</span></div>
+                      <div><span className="text-muted-foreground">Y min:</span> <span className="font-mono">{bbox.minY.toFixed(2)}</span></div>
+                      <div><span className="text-muted-foreground">Y max:</span> <span className="font-mono">{bbox.maxY.toFixed(2)}</span></div>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Extensão: {(bbox.maxX - bbox.minX).toFixed(2)} × {(bbox.maxY - bbox.minY).toFixed(2)} {crs.unit}
+                    </div>
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
         )}
 
-        {/* Configuration summary */}
+        {/* Config summary */}
         {analysisHasData && (
           <Card>
             <CardContent className="pt-4 pb-3">
@@ -1124,7 +1264,7 @@ export const ImportWizard = ({
   );
 };
 
-// ── IFC helpers (basic text-based detection) ──
+// ── IFC helpers ──
 
 function detectIFCEntityTypes(content: string): EntityTypeMapping[] {
   const counts = new Map<string, number>();
@@ -1132,7 +1272,6 @@ function detectIFCEntityTypes(content: string): EntityTypeMapping[] {
   let match: RegExpExecArray | null;
   while ((match = regex.exec(content)) !== null) {
     const type = match[1].toUpperCase();
-    // Only count geometry-relevant types
     if (type.includes("PIPE") || type.includes("FLOW") || type.includes("DUCT") ||
         type.includes("WALL") || type.includes("SLAB") || type.includes("BEAM") ||
         type.includes("COLUMN") || type.includes("POINT") || type.includes("FITTING")) {
@@ -1153,8 +1292,6 @@ function detectIFCEntityTypes(content: string): EntityTypeMapping[] {
 }
 
 function parseIFCGeometric(content: string, entityMappings?: EntityTypeMapping[]): InpParsed {
-  // Basic IFC text parser for coordinate extraction
-  // This is a simplified parser - full IFC would need a proper library
   const nodes: InpParsed["nodes"] = [];
   const edges: InpParsed["edges"] = [];
 
@@ -1163,7 +1300,6 @@ function parseIFCGeometric(content: string, entityMappings?: EntityTypeMapping[]
     entityMappings.forEach(m => roleMap.set(m.entityType.toUpperCase(), m.role));
   }
 
-  // Extract IFCCARTESIANPOINT coordinates
   const pointMap = new Map<string, { x: number; y: number; z: number }>();
   const pointRegex = /#(\d+)=\s*IFCCARTESIANPOINT\s*\(\(([^)]+)\)\)/gi;
   let match: RegExpExecArray | null;
@@ -1175,50 +1311,39 @@ function parseIFCGeometric(content: string, entityMappings?: EntityTypeMapping[]
     }
   }
 
-  // For each entity with a role, try to extract placement
   let nodeCounter = 0;
   let edgeCounter = 0;
+  const nodeIndex = new Map<string, string>();
+  const snapDecimals = 4;
+
+  function getOrCreateNode(x: number, y: number, z: number): string {
+    const key = `${x.toFixed(snapDecimals)},${y.toFixed(snapDecimals)}`;
+    if (nodeIndex.has(key)) return nodeIndex.get(key)!;
+    const id = `IFC_N${++nodeCounter}`;
+    nodeIndex.set(key, id);
+    nodes.push({ id, x, y, z, tipo: "junction", properties: { _source: "IFC" } });
+    return id;
+  }
 
   const entityRegex = /#(\d+)=\s*(IFC\w+)\s*\(([^;]*)\);/gi;
   while ((match = entityRegex.exec(content)) !== null) {
-    const entityType = match[2].toUpperCase();
-    const role = roleMap.get(entityType);
-    if (!role || role === "ignore") continue;
+    const entId = match[1];
+    const entType = match[2].toUpperCase();
+    const role = roleMap.get(entType);
+    if (!role || role === "ignore" || role === "drawing") continue;
 
-    // Try to find associated placement point
-    const body = match[3];
-    const refMatches = body.match(/#\d+/g);
-    let foundCoord: { x: number; y: number; z: number } | null = null;
-    if (refMatches) {
-      for (const ref of refMatches) {
-        if (pointMap.has(ref)) {
-          foundCoord = pointMap.get(ref)!;
-          break;
+    // Try to find placement reference
+    const refMatches = match[3].match(/#\d+/g) || [];
+    for (const ref of refMatches) {
+      const pt = pointMap.get(ref);
+      if (pt) {
+        if (role === "node") {
+          getOrCreateNode(pt.x, pt.y, pt.z);
         }
+        break;
       }
     }
-
-    if (role === "node" && foundCoord) {
-      nodes.push({
-        id: `IFC_N${++nodeCounter}`,
-        x: foundCoord.x, y: foundCoord.y, z: foundCoord.z,
-        tipo: "junction",
-        properties: { entityType, _source: "IFC" },
-      });
-    }
-    // Edges from IFC are harder without full geometry parsing
-    // We'd need start+end points - skip for now, user can adjust
   }
 
   return { nodes, edges };
-}
-
-function InfoCard({ label, value, icon }: { label: string; value: string; icon: string }) {
-  return (
-    <div className="bg-muted/50 rounded-lg p-3 text-center">
-      <div className="text-lg mb-0.5">{icon}</div>
-      <div className="text-sm font-semibold">{value}</div>
-      <div className="text-xs text-muted-foreground">{label}</div>
-    </div>
-  );
 }
