@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+﻿import { useState, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,7 @@ import {
   nodesToLegacyPoints, edgesToLegacyTrechos, legacyPointsToNodes, legacyTrechosToEdges,
   setProjectCRS, importEdgeWithAutoNodes, resetSpatialProject,
 } from "@/engine/spatialCore";
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
 
 // Shared state context
 const useHydroState = () => {
@@ -106,6 +107,7 @@ const HydroNetwork = () => {
 
   // New Import Wizard state
   const [showImportWizard, setShowImportWizard] = useState(false);
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
   const [wizardFileInfo, setWizardFileInfo] = useState<DetectedFileInfo | null>(null);
   const [wizardSourceFields, setWizardSourceFields] = useState<WizardSourceField[]>([]);
   const [wizardRows, setWizardRows] = useState<Record<string, any>[]>([]);
@@ -125,9 +127,10 @@ const HydroNetwork = () => {
     toast.success(`${pts.length} pontos carregados, ${segs.length} trechos criados.`);
   }, [diametroMm, material]);
 
-  // Handle Import Wizard result → feed into Spatial Core + legacy state
+  // Handle Import Wizard result â†’ feed into Spatial Core + legacy state
   const handleImportResult = useCallback((result: ImportResult) => {
     const project = getSpatialProject();
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
     setProjectCRS(result.crs);
 
     // Create a layer
@@ -154,6 +157,7 @@ const HydroNetwork = () => {
           endX: 0, endY: 0, endZ: 0,
           layerId: layer.id,
         });
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
       } else {
         addEdge({ ...e, layerId: layer.id });
       }
@@ -175,7 +179,8 @@ const HydroNetwork = () => {
       setShowValidation(true);
     }
 
-    toast.success(`Camada "${result.layerName}" importada: ${result.nodes.length} nós, ${result.edges.length} trechos`);
+    toast.success(`Camada "${result.layerName}" importada: ${result.nodes.length} nÃ³s, ${result.edges.length} trechos`);
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
   }, []);
 
   const applyFieldMapping = useCallback((mappings: FieldMapping[]) => {
@@ -186,7 +191,7 @@ const HydroNetwork = () => {
     const zField = mappings.find(m => m.targetField === "z_cota")?.sourceField || mappings.find(m => m.targetField === "elevation")?.sourceField;
     const idField = mappings.find(m => m.targetField === "id")?.sourceField;
 
-    if (!xField || !yField) { toast.error("Campos X e Y são obrigatórios."); return; }
+    if (!xField || !yField) { toast.error("Campos X e Y sÃ£o obrigatÃ³rios."); return; }
 
     const pts: PontoTopografico[] = [];
     rows.forEach((row, i) => {
@@ -198,7 +203,7 @@ const HydroNetwork = () => {
       pts.push({ id, x, y, cota: isNaN(z) ? 0 : z });
     });
 
-    if (pts.length === 0) { toast.error("Nenhum ponto válido após mapeamento."); return; }
+    if (pts.length === 0) { toast.error("Nenhum ponto vÃ¡lido apÃ³s mapeamento."); return; }
     processPoints(pts);
     setPendingFileData(null);
   }, [pendingFileData, processPoints]);
@@ -211,6 +216,7 @@ const HydroNetwork = () => {
     extraInfo?: Partial<DetectedFileInfo>
   ) => {
     const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
 
     // Detect geometry types
     const geomTypes = new Set<string>();
@@ -265,6 +271,7 @@ const HydroNetwork = () => {
     setWizardRows(rows);
     setWizardFileName(fileName);
     setShowImportWizard(true);
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
   }, []);
 
   const handleTopographyUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -288,6 +295,7 @@ const HydroNetwork = () => {
           return row;
         });
         openImportWizard(rows, file.name, "DXF");
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
         return;
       }
 
@@ -308,6 +316,7 @@ const HydroNetwork = () => {
             return row;
           });
           openImportWizard(rows, file.name, ext === "csv" ? "CSV" : "TXT");
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
         } else {
           const pts = parseTopographyCSV(text);
           processPoints(pts);
@@ -323,6 +332,7 @@ const HydroNetwork = () => {
         const data = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
         if (data.length === 0) { toast.error("Planilha vazia."); return; }
         openImportWizard(data, file.name, "XLSX");
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
         return;
       }
 
@@ -375,6 +385,7 @@ const HydroNetwork = () => {
           return row;
         });
         openImportWizard(rows, file.name, "GeoJSON");
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
         return;
       }
 
@@ -394,12 +405,14 @@ const HydroNetwork = () => {
         const limitedPts = pts.slice(0, 5000);
         const rows = limitedPts.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, type: p.type }));
         openImportWizard(rows, file.name, "IFC");
-        toast.info(`${limitedPts.length} pontos extraídos do IFC.`);
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
+        toast.info(`${limitedPts.length} pontos extraÃ­dos do IFC.`);
         return;
       }
 
       if (ext === "shp" || ext === "dwg" || ext === "gpkg") {
         toast.info(`Formato .${ext}: Converta para GeoJSON, CSV ou DXF usando QGIS para importar.`);
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
         return;
       }
 
@@ -408,6 +421,7 @@ const HydroNetwork = () => {
       processPoints(pts);
     } catch (err: any) { toast.error(err.message || "Erro ao processar arquivo."); }
   }, [processPoints, openImportWizard]);
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
 
   const handleClearTopography = useCallback(() => {
     setPontos([]);
@@ -443,7 +457,7 @@ const HydroNetwork = () => {
     if (!costBase) { toast.error("Carregue a base de custos primeiro."); return; }
     const rows = applyBudget(trechos, costBase, false);
     setBudgetRows(rows); setBudgetSummary(createBudgetSummary(rows));
-    toast.success("Orçamento calculado!");
+    toast.success("OrÃ§amento calculado!");
   }, [trechos, costBase]);
 
   const handleGenerateSchedule = useCallback(() => {
@@ -503,7 +517,7 @@ const HydroNetwork = () => {
     }
   };
 
-  // ── TOPOGRAFIA MODULE ──
+  // â”€â”€ TOPOGRAFIA MODULE â”€â”€
   const [summaryFilter, setSummaryFilter] = useState<string>("todos");
 
   function TopografiaModule() {
@@ -518,7 +532,7 @@ const HydroNetwork = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-blue-600" /> Levantamento Topográfico
+                  <MapPin className="h-5 w-5 text-blue-600" /> Levantamento TopogrÃ¡fico
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
                   Importe dados (CSV, XLSX, DXF, GeoJSON, IFC) com wizard de 4 etapas estilo QGIS
@@ -542,7 +556,7 @@ const HydroNetwork = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" /> Importar Dados</CardTitle>
-              <CardDescription>CSV, TXT, XLSX, DXF, GeoJSON, IFC — Wizard de 4 etapas</CardDescription>
+              <CardDescription>CSV, TXT, XLSX, DXF, GeoJSON, IFC â€” Wizard de 4 etapas</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {pontos.length > 0 ? (
@@ -555,6 +569,7 @@ const HydroNetwork = () => {
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm" onClick={() => {
                         const issues = validateProject();
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
                         setValidationIssues(issues);
                         setShowValidation(true);
                       }}>
@@ -572,7 +587,7 @@ const HydroNetwork = () => {
                   <Upload className="h-10 w-10 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground mb-2">Arraste ou clique para selecionar</p>
                   <p className="text-xs text-muted-foreground mb-1">Aceita: CSV, TXT, XLSX, <strong>DXF</strong>, GeoJSON, IFC</p>
-                  <p className="text-xs text-muted-foreground mb-3">Wizard de importação com CRS obrigatório, tipo de modelo e mapeamento livre de atributos</p>
+                  <p className="text-xs text-muted-foreground mb-3">Wizard de importaÃ§Ã£o com CRS obrigatÃ³rio, tipo de modelo e mapeamento livre de atributos</p>
                   <Input type="file" accept=".csv,.txt,.xlsx,.xls,.dxf,.shp,.ifc,.dwg,.gpkg,.geojson" onChange={handleTopographyUpload} className="mt-2" />
                 </div>
               )}
@@ -592,17 +607,18 @@ const HydroNetwork = () => {
                 <Button variant="secondary" size="sm" onClick={async () => {
                   try {
                     const res = await fetch("/demo/pontos_criadores.txt");
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
                     const text = await res.text();
                     const pts = parseTopographyCSV(text);
                     processPoints(pts);
                     toast.success("Demo carregado: pontos_criadores.txt");
                   } catch (err: any) { toast.error(err.message); }
-                }} className="w-full">🎯 Carregar Demo (pontos_criadores.txt)</Button>
+                }} className="w-full">ðŸŽ¯ Carregar Demo (pontos_criadores.txt)</Button>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Diâmetro (mm)</Label>
+                  <Label>DiÃ¢metro (mm)</Label>
                   <Select value={String(diametroMm)} onValueChange={v => setDiametroMm(Number(v))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -627,9 +643,9 @@ const HydroNetwork = () => {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="esgoto">Esgoto (Gravidade)</SelectItem>
-                      <SelectItem value="agua">Água (Pressurizado)</SelectItem>
+                      <SelectItem value="agua">Ãgua (Pressurizado)</SelectItem>
                       <SelectItem value="drenagem">Drenagem Pluvial</SelectItem>
-                      <SelectItem value="recalque">Recalque/Elevatória</SelectItem>
+                      <SelectItem value="recalque">Recalque/ElevatÃ³ria</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -638,9 +654,9 @@ const HydroNetwork = () => {
                   <Select value={tipoSolo} onValueChange={v => setTipoSolo(v as TipoSolo)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="normal">1ª Categoria</SelectItem>
-                      <SelectItem value="rochoso">2ª Categoria</SelectItem>
-                      <SelectItem value="arenoso">3ª Categoria (Rocha)</SelectItem>
+                      <SelectItem value="normal">1Âª Categoria</SelectItem>
+                      <SelectItem value="rochoso">2Âª Categoria</SelectItem>
+                      <SelectItem value="arenoso">3Âª Categoria (Rocha)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -657,9 +673,9 @@ const HydroNetwork = () => {
                     <SelectContent>
                       <SelectItem value="todos">Todos os Tipos</SelectItem>
                       <SelectItem value="esgoto">Rede de Esgoto</SelectItem>
-                      <SelectItem value="agua">Rede de Água</SelectItem>
+                      <SelectItem value="agua">Rede de Ãgua</SelectItem>
                       <SelectItem value="drenagem">Drenagem Pluvial</SelectItem>
-                      <SelectItem value="elevatoria">Elevatória</SelectItem>
+                      <SelectItem value="elevatoria">ElevatÃ³ria</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -674,12 +690,12 @@ const HydroNetwork = () => {
                   return (
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { label: "Pontos", value: pontos.length, color: "text-blue-600", desc: "Total de pontos topográficos" },
-                        { label: "Trechos", value: summary.totalTrechos, color: "text-green-600", desc: "Segmentos de tubulação" },
-                        { label: "Comprimento", value: `${fmt(summary.comprimentoTotal, 1)}m`, color: "text-orange-600", desc: "Extensão total" },
+                        { label: "Pontos", value: pontos.length, color: "text-blue-600", desc: "Total de pontos topogrÃ¡ficos" },
+                        { label: "Trechos", value: summary.totalTrechos, color: "text-green-600", desc: "Segmentos de tubulaÃ§Ã£o" },
+                        { label: "Comprimento", value: `${fmt(summary.comprimentoTotal, 1)}m`, color: "text-orange-600", desc: "ExtensÃ£o total" },
                         { label: "Gravidade", value: summary.trechosGravidade, color: "text-green-600", desc: "Escoamento por gravidade" },
-                        { label: "Elevatória", value: summary.trechosElevatoria, color: "text-orange-600", desc: "Necessita bombeamento" },
-                        { label: "Decliv. Média", value: `${(summary.declividadeMedia * 100).toFixed(2)}%`, color: "text-purple-600", desc: "Declividade média ponderada" },
+                        { label: "ElevatÃ³ria", value: summary.trechosElevatoria, color: "text-orange-600", desc: "Necessita bombeamento" },
+                        { label: "Decliv. MÃ©dia", value: `${(summary.declividadeMedia * 100).toFixed(2)}%`, color: "text-purple-600", desc: "Declividade mÃ©dia ponderada" },
                       ].map((item, i) => (
                         <TooltipProvider key={i}>
                           <Tooltip>
@@ -721,7 +737,7 @@ const HydroNetwork = () => {
                       <Badge variant="outline" className="text-[10px]">{layer.discipline}</Badge>
                       <Badge variant="outline" className="text-[10px]">{layer.geometryType}</Badge>
                     </div>
-                    <span className="text-muted-foreground">{layer.nodeIds.length} nós · {layer.edgeIds.length} trechos</span>
+                    <span className="text-muted-foreground">{layer.nodeIds.length} nÃ³s Â· {layer.edgeIds.length} trechos</span>
                   </div>
                 ))}
               </div>
@@ -752,8 +768,8 @@ const HydroNetwork = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Início</TableHead><TableHead>Fim</TableHead><TableHead>Comp.</TableHead>
-                      <TableHead>Decliv.</TableHead><TableHead>Desnível</TableHead><TableHead>Material</TableHead>
+                      <TableHead>InÃ­cio</TableHead><TableHead>Fim</TableHead><TableHead>Comp.</TableHead>
+                      <TableHead>Decliv.</TableHead><TableHead>DesnÃ­vel</TableHead><TableHead>Material</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>{trechos.map((t, i) => (
@@ -775,7 +791,7 @@ const HydroNetwork = () => {
         )}
         {trechos.length > 0 && (
           <Card>
-            <CardHeader><CardTitle>Exportação</CardTitle><CardDescription>Exporte os dados em múltiplos formatos</CardDescription></CardHeader>
+            <CardHeader><CardTitle>ExportaÃ§Ã£o</CardTitle><CardDescription>Exporte os dados em mÃºltiplos formatos</CardDescription></CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 <Button variant="outline" size="sm" onClick={() => {
@@ -850,9 +866,10 @@ const HydroNetwork = () => {
         />
       </div>
     );
+import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
   }
 
-  // ── ORÇAMENTO MODULE ──
+  // â”€â”€ ORÃ‡AMENTO MODULE â”€â”€
   function OrcamentoModule() {
     return <BudgetCostModule trechos={trechos} pontos={pontos} />;
   }
@@ -867,7 +884,7 @@ const HydroNetwork = () => {
           <CardHeader><CardTitle>Camadas</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {["Nós/PVs", "Trechos por Tipo", "Trechos por Diâmetro", "Status (OK/WARN)", "Áreas de Contribuição", "Perfil Longitudinal"].map(layer => (
+              {["NÃ³s/PVs", "Trechos por Tipo", "Trechos por DiÃ¢metro", "Status (OK/WARN)", "Ãreas de ContribuiÃ§Ã£o", "Perfil Longitudinal"].map(layer => (
                 <Button key={layer} variant="outline" size="sm">{layer}</Button>
               ))}
             </div>
@@ -880,30 +897,30 @@ const HydroNetwork = () => {
   function ExportacaoGISModule() {
     return (
       <Card>
-        <CardHeader><CardTitle>Exportação GIS</CardTitle><CardDescription>Exporte resultados para formatos GIS e CAD</CardDescription></CardHeader>
+        <CardHeader><CardTitle>ExportaÃ§Ã£o GIS</CardTitle><CardDescription>Exporte resultados para formatos GIS e CAD</CardDescription></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>CRS de Saída</Label>
+            <div><Label>CRS de SaÃ­da</Label>
               <Select defaultValue="31983"><SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="31983">SIRGAS 2000 / UTM 23S</SelectItem>
                   <SelectItem value="31984">SIRGAS 2000 / UTM 24S</SelectItem>
                   <SelectItem value="4326">WGS84 (Lat/Long)</SelectItem>
-                  <SelectItem value="4674">SIRGAS 2000 Geográfico</SelectItem>
+                  <SelectItem value="4674">SIRGAS 2000 GeogrÃ¡fico</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             {[
-              { label: "Shapefile (.SHP)", icon: "🗺️" },
-              { label: "GeoJSON", icon: "📋" },
-              { label: "GeoPackage (.gpkg)", icon: "📦" },
-              { label: "KML/KMZ", icon: "🌍" },
-              { label: "DXF (AutoCAD)", icon: "📐" },
-              { label: "CSV", icon: "📊" },
+              { label: "Shapefile (.SHP)", icon: "ðŸ—ºï¸" },
+              { label: "GeoJSON", icon: "ðŸ“‹" },
+              { label: "GeoPackage (.gpkg)", icon: "ðŸ“¦" },
+              { label: "KML/KMZ", icon: "ðŸŒ" },
+              { label: "DXF (AutoCAD)", icon: "ðŸ“" },
+              { label: "CSV", icon: "ðŸ“Š" },
             ].map(f => (
-              <Button key={f.label} variant="outline" size="sm" onClick={() => toast.info(`Exportação ${f.label} em desenvolvimento`)} disabled={trechos.length === 0}>
+              <Button key={f.label} variant="outline" size="sm" onClick={() => toast.info(`ExportaÃ§Ã£o ${f.label} em desenvolvimento`)} disabled={trechos.length === 0}>
                 <span className="mr-1">{f.icon}</span>{f.label}
               </Button>
             ))}
@@ -914,12 +931,12 @@ const HydroNetwork = () => {
   }
 
   const moduleNames: Record<string, string> = {
-    topografia: "Topografia", esgoto: "Rede de Esgoto", agua: "Rede de Água",
-    drenagem: "Drenagem Pluvial", quantitativos: "Quantitativos", orcamento: "Orçamento e Custos",
-    bdi: "BDI — Benefícios e Despesas Indiretas", planejamento: "Planejamento", epanet: "EPANET", "epanet-pro": "EPANET PRO",
+    topografia: "Topografia", esgoto: "Rede de Esgoto", agua: "Rede de Ãgua",
+    drenagem: "Drenagem Pluvial", quantitativos: "Quantitativos", orcamento: "OrÃ§amento e Custos",
+    bdi: "BDI â€” BenefÃ­cios e Despesas Indiretas", planejamento: "Planejamento", epanet: "EPANET", "epanet-pro": "EPANET PRO",
     swmm: "SWMM", openproject: "OpenProject", projectlibre: "ProjectLibre", qgis: "QGIS",
-    revisao: "Revisão por Pares", rdo: "RDO", "rdo-planejamento": "RDO × Planejamento",
-    perfil: "Perfil Longitudinal", mapa: "Mapa Interativo", exportacao: "Exportação GIS",
+    revisao: "RevisÃ£o por Pares", rdo: "RDO", "rdo-planejamento": "RDO Ã— Planejamento",
+    perfil: "Perfil Longitudinal", mapa: "Mapa Interativo", exportacao: "ExportaÃ§Ã£o GIS",
   };
 
   return (
@@ -942,7 +959,7 @@ const HydroNetwork = () => {
                     savedAt: new Date().toISOString(), projectName: "HydroNetwork",
                   });
                   toast.success("Projeto salvo localmente!");
-                }}>💾 Salvar Projeto</Button>
+                }}>ðŸ’¾ Salvar Projeto</Button>
                 <Button variant="outline" size="sm" onClick={() => {
                   const saved = loadHydroProject();
                   if (!saved) { toast.error("Nenhum projeto salvo encontrado."); return; }
@@ -951,10 +968,10 @@ const HydroNetwork = () => {
                   if (saved.rdos?.length) setRdos(saved.rdos);
                   if (saved.scheduleResult) setScheduleResult(saved.scheduleResult);
                   toast.success(`Projeto restaurado: ${saved.pontos?.length || 0} pontos, ${saved.trechos?.length || 0} trechos`);
-                }}>📂 Carregar Projeto</Button>
+                }}>ðŸ“‚ Carregar Projeto</Button>
                 <Button variant="outline" size="sm" onClick={() => {
                   toast.info(`Pontos: ${pontos.length} | Trechos: ${trechos.length} | RDOs: ${rdos.length} | Camadas: ${getAllLayers().length} | CRS: ${getSpatialProject().crs.name}`);
-                }}>✅ Verificar Plataforma</Button>
+                }}>âœ… Verificar Plataforma</Button>
               </div>
             </div>
             {renderModule()}
@@ -966,3 +983,4 @@ const HydroNetwork = () => {
 };
 
 export default HydroNetwork;
+
