@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { Play, Download, Upload, Trash2, Plus, CloudRain, X } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
-import { getMapCoordinates } from "@/engine/hydraulics";
+import { getMapCoordinates } from "@/engine/hydraulics"; // kept for potential future use
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, BarChart, Bar, AreaChart, Area } from "recharts";
 import { NodeMapWidget, ConnectionData } from "@/components/hydronetwork/NodeMapWidget";
 

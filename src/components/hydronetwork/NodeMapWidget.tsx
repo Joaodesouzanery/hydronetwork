@@ -3,7 +3,7 @@
  * Supports: manual point linking (one-by-one), node dragging, demand editing, layer switching.
  * Improved UX: click origin then destination with visual feedback, auto-continue linking mode.
  */
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { MapPin, Plus, Minus, Maximize, Layers, Link2, Trash2, Undo2, Save, Edit3, X, MousePointerClick } from "lucide-react";
-import { getMapCoordinates } from "@/engine/hydraulics";
+import { detectBatchCRS, getMapCoordinatesWithCRS, DetectedCRS } from "@/engine/hydraulics";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -89,9 +89,15 @@ export const NodeMapWidget = ({
 
   useEffect(() => { setLocalConnections(connections); }, [connections]);
 
+  // Batch CRS detection for consistent coordinate conversion
+  const detectedCRS = useMemo((): DetectedCRS => {
+    if (nodes.length === 0) return { type: "unknown" };
+    return detectBatchCRS(nodes);
+  }, [nodes]);
+
   const getCoords = useCallback((x: number, y: number): [number, number] => {
-    return getMapCoordinates(x, y);
-  }, []);
+    return getMapCoordinatesWithCRS(x, y, detectedCRS);
+  }, [detectedCRS]);
 
   // Init map - always create even if no nodes
   useEffect(() => {

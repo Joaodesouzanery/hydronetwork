@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,7 +8,7 @@ import { MapPin, Download, Image } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
 import { RDO, SegmentProgress } from "@/engine/rdo";
-import { getMapCoordinates } from "@/engine/hydraulics";
+import { detectBatchCRS, getMapCoordinatesWithCRS } from "@/engine/hydraulics";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useState } from "react";
@@ -25,6 +25,12 @@ export const RDOProgressMap = ({ pontos, trechos, rdos }: RDOProgressMapProps) =
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
+
+  // Batch CRS detection for consistent coordinate conversion
+  const detectedCRS = useMemo(() => {
+    if (pontos.length === 0) return detectBatchCRS([]);
+    return detectBatchCRS(pontos);
+  }, [pontos]);
 
   // Calculate segment statuses from RDOs
   const getSegmentStatus = (trecho: Trecho): { status: string; percent: number; executed: number; planned: number; lastRDO?: string } => {
@@ -75,8 +81,8 @@ export const RDOProgressMap = ({ pontos, trechos, rdos }: RDOProgressMapProps) =
       const pFim = pontos.find(p => p.id === t.idFim);
       if (!pInicio || !pFim) return;
 
-      const coordsInicio = getMapCoordinates(pInicio.x, pInicio.y);
-      const coordsFim = getMapCoordinates(pFim.x, pFim.y);
+      const coordsInicio = getMapCoordinatesWithCRS(pInicio.x, pInicio.y, detectedCRS);
+      const coordsFim = getMapCoordinatesWithCRS(pFim.x, pFim.y, detectedCRS);
       bounds.push(coordsInicio, coordsFim);
 
       const seg = getSegmentStatus(t);
@@ -119,7 +125,7 @@ export const RDOProgressMap = ({ pontos, trechos, rdos }: RDOProgressMapProps) =
 
     // Points
     pontos.forEach(p => {
-      const coords = getMapCoordinates(p.x, p.y);
+      const coords = getMapCoordinatesWithCRS(p.x, p.y, detectedCRS);
       L.circleMarker(coords, {
         radius: 5,
         fillColor: "#6366f1",
@@ -137,7 +143,7 @@ export const RDOProgressMap = ({ pontos, trechos, rdos }: RDOProgressMapProps) =
       map.remove();
       mapRef.current = null;
     };
-  }, [pontos, trechos, rdos, statusFilter]);
+  }, [pontos, trechos, rdos, statusFilter, detectedCRS]);
 
   if (pontos.length === 0) {
     return (

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho, createTrechoFromPoints } from "@/engine/domain";
-import { getMapCoordinates, setGlobalUtmZone, getGlobalUtmZone } from "@/engine/hydraulics";
+import { detectBatchCRS, getMapCoordinatesWithCRS, setGlobalUtmZone, getGlobalUtmZone, DetectedCRS } from "@/engine/hydraulics";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -50,10 +50,18 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   const polylinesRef = useRef<L.Polyline[]>([]);
   const [tileKey, setTileKey] = useState("osm");
   const [utmZone, setUtmZone] = useState<string>(String(getGlobalUtmZone() || "auto"));
+  const [utmZoneVersion, setUtmZoneVersion] = useState(0);
+
+  // Batch CRS detection: analyze ALL points together for consistent conversion
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const detectedCRS = useMemo((): DetectedCRS => {
+    if (pontos.length === 0) return { type: "unknown" };
+    return detectBatchCRS(pontos);
+  }, [pontos, utmZoneVersion]);
 
   const getPointCoords = useCallback((p: PontoTopografico): [number, number] => {
-    return getMapCoordinates(p.x, p.y);
-  }, []);
+    return getMapCoordinatesWithCRS(p.x, p.y, detectedCRS);
+  }, [detectedCRS]);
 
   // Initialize map
   useEffect(() => {
@@ -106,9 +114,9 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
     } else {
       setGlobalUtmZone(parseInt(value));
     }
-    // Force re-render of map points
+    setUtmZoneVersion(v => v + 1); // trigger CRS re-detection
     if (mapRef.current && pontos.length > 0) {
-      toast.success(`Fuso UTM alterado para ${value === "auto" ? "automático (23)" : `zona ${value}`}`);
+      toast.success(`Fuso UTM alterado para ${value === "auto" ? "automático" : `zona ${value}`}`);
     }
   }, [pontos]);
 
