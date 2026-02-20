@@ -1093,7 +1093,7 @@ export const ImportWizard = ({
         </div>
 
         {/* Zero result warning with detailed explanation */}
-        {analysisIsZero && (
+        {analysisIsZero && modelType === "rede" && (
           <div className="bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-400 dark:border-amber-700 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -1297,7 +1297,7 @@ export const ImportWizard = ({
           ) : (
             <Button
               onClick={handleConfirmImport}
-              disabled={!analysisRan || (!analysisResult?.nodes.length && !analysisResult?.edges.length)}
+              disabled={!analysisRan}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Check className="h-4 w-4 mr-1" /> Confirmar Importação
