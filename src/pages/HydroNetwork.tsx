@@ -17,9 +17,9 @@ import {
 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { parseTopographyFile, parseTopographyCSV, validateTopographySequence, PontoTopografico } from "@/engine/reader";
-import { parseDxfFile, parseDxfToPoints } from "@/engine/dxfReader";
+// dxfReader import removed - ImportWizard handles DXF parsing internally
 import { FieldMappingDialog, SourceField, FieldMapping } from "@/components/hydronetwork/FieldMappingDialog";
-import { ImportWizard, DetectedFileInfo, ImportResult, SourceField as WizardSourceField } from "@/components/hydronetwork/ImportWizard";
+import { ImportWizard } from "@/components/hydronetwork/ImportWizard";
 import { ValidationReport } from "@/components/hydronetwork/ValidationReport";
 import { createTrechosFromTopography, summarizeNetwork, Trecho, NetworkSummary, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from "@/engine/domain";
 import { parseCostBaseFile, applyBudget, createBudgetSummary, exportBudgetExcel, BudgetRow, BudgetSummary, CostBase } from "@/engine/budget";
@@ -50,11 +50,8 @@ import { BdiModule } from "@/components/hydronetwork/modules/BdiModule";
 import { RDOPlanningModule } from "@/components/hydronetwork/modules/RDOPlanningModule";
 import { saveHydroProject, loadHydroProject } from "@/engine/sharedPlanningStore";
 import {
-  getSpatialProject, createLayer, addNode, addEdge,
-  validateProject, ValidationIssue, CRS_CATALOG,
-  detectCRSFromCoordinates, getAllLayers, getAllNodes, getAllEdges,
-  nodesToLegacyPoints, edgesToLegacyTrechos, legacyPointsToNodes, legacyTrechosToEdges,
-  setProjectCRS, importEdgeWithAutoNodes, resetSpatialProject,
+  getSpatialProject, validateProject, ValidationIssue,
+  getAllLayers, resetSpatialProject,
 } from "@/engine/spatialCore";
 
 // Shared state context
@@ -107,10 +104,7 @@ const HydroNetwork = () => {
 
   // New Import Wizard state
   const [showImportWizard, setShowImportWizard] = useState(false);
-  const [wizardFileInfo, setWizardFileInfo] = useState<DetectedFileInfo | null>(null);
-  const [wizardSourceFields, setWizardSourceFields] = useState<WizardSourceField[]>([]);
-  const [wizardRows, setWizardRows] = useState<Record<string, any>[]>([]);
-  const [wizardFileName, setWizardFileName] = useState("");
+  const [wizardFile, setWizardFile] = useState<File | null>(null);
 
   // Validation report
   const [showValidation, setShowValidation] = useState(false);
@@ -126,58 +120,6 @@ const HydroNetwork = () => {
     toast.success(`${pts.length} pontos carregados, ${segs.length} trechos criados.`);
   }, [diametroMm, material]);
 
-  // Handle Import Wizard result â†’ feed into Spatial Core + legacy state
-  const handleImportResult = useCallback((result: ImportResult) => {
-    const project = getSpatialProject();
-    setProjectCRS(result.crs);
-
-    // Create a layer
-    const layer = createLayer({
-      name: result.layerName,
-      discipline: result.discipline,
-      geometryType: result.edges.length > 0 ? "LineString" : "Point",
-      sourceFile: result.sourceFile,
-      sourceCRS: result.crs,
-    });
-
-    // Add nodes to spatial core
-    result.nodes.forEach(n => {
-      addNode({ ...n, layerId: layer.id });
-    });
-
-    // Add edges to spatial core
-    result.edges.forEach(e => {
-      if (!project.nodes.has(e.startNodeId) || !project.nodes.has(e.endNodeId)) {
-        // Auto-create nodes at endpoints
-        importEdgeWithAutoNodes({
-          ...e,
-          startX: 0, startY: 0, startZ: 0,
-          endX: 0, endY: 0, endZ: 0,
-          layerId: layer.id,
-        });
-      } else {
-        addEdge({ ...e, layerId: layer.id });
-      }
-    });
-
-    // Sync to legacy state
-    const allNodes = getAllNodes();
-    const allEdges = getAllEdges();
-    const legacyPts = nodesToLegacyPoints(allNodes);
-    const legacyTrechos = edgesToLegacyTrechos(allEdges, project.nodes);
-    setPontos(legacyPts);
-    setTrechos(legacyTrechos);
-    if (legacyTrechos.length > 0) setNetworkSummary(summarizeNetwork(legacyTrechos));
-
-    // Run validation
-    const issues = validateProject();
-    if (issues.length > 0) {
-      setValidationIssues(issues);
-      setShowValidation(true);
-    }
-
-    toast.success(`Camada "${result.layerName}" importada: ${result.nodes.length} nÃ³s, ${result.edges.length} trechos`);
-  }, []);
 
   const applyFieldMapping = useCallback((mappings: FieldMapping[]) => {
     if (!pendingFileData) return;
@@ -204,198 +146,92 @@ const HydroNetwork = () => {
     setPendingFileData(null);
   }, [pendingFileData, processPoints]);
 
-  // Detect file info and open wizard
-  const openImportWizard = useCallback((
-    rows: Record<string, any>[],
-    fileName: string,
-    format: DetectedFileInfo["format"],
-    extraInfo?: Partial<DetectedFileInfo>
-  ) => {
-    const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
-
-    // Detect geometry types
-    const geomTypes = new Set<string>();
-    const geomTypeField = headers.find(h => h === "_geom_type");
-    if (geomTypeField) {
-      rows.forEach(r => { if (r[geomTypeField]) geomTypes.add(String(r[geomTypeField])); });
-    }
-
-    // Detect Z
-    const hasZ = headers.some(h => {
-      const n = h.toLowerCase();
-      return n === "z" || n === "cota" || n === "elevation" || n === "elev" || n === "_geom_z";
-    });
-
-    // Detect CRS from first row
-    let detectedCRS = null;
-    const xField = headers.find(h => ["x", "este", "easting", "lon", "longitude", "_geom_x"].includes(h.toLowerCase()));
-    const yField = headers.find(h => ["y", "norte", "northing", "lat", "latitude", "_geom_y"].includes(h.toLowerCase()));
-    if (xField && yField && rows.length > 0) {
-      const x = parseFloat(String(rows[0][xField]));
-      const y = parseFloat(String(rows[0][yField]));
-      if (!isNaN(x) && !isNaN(y)) {
-        detectedCRS = detectCRSFromCoordinates(x, y);
-      }
-    }
-
-    // Detect layers
-    const layerField = headers.find(h => ["layer", "camada"].includes(h.toLowerCase()));
-    const layers = layerField ? [...new Set(rows.map(r => String(r[layerField] || "")).filter(Boolean))] : undefined;
-
-    const fileInfo: DetectedFileInfo = {
-      format,
-      hasGeometry: geomTypes.size > 0 || !!xField,
-      geometryTypes: Array.from(geomTypes),
-      hasZ,
-      detectedCRS,
-      detectedUnit: detectedCRS?.unit || "unknown",
-      fieldCount: headers.length,
-      recordCount: rows.length,
-      layers,
-      ...extraInfo,
-    };
-
-    const fields: WizardSourceField[] = headers.map(h => ({
-      name: h,
-      sampleValues: rows.slice(0, 3).map(r => String(r[h] ?? "")),
-      type: rows.slice(0, 5).every(r => !isNaN(Number(r[h])) && r[h] !== "" && r[h] !== undefined) ? "number" as const : "text" as const,
-    }));
-
-    setWizardFileInfo(fileInfo);
-    setWizardSourceFields(fields);
-    setWizardRows(rows);
-    setWizardFileName(fileName);
-    setShowImportWizard(true);
-  }, []);
-
   const handleTopographyUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
       const ext = file.name.split(".").pop()?.toLowerCase();
 
-      // DXF: parse into rows and open wizard
-      if (ext === "dxf") {
-        const text = await file.text();
-        const pts = parseDxfToPoints(text);
-        if (pts.length === 0) { toast.error("Nenhum ponto encontrado no DXF."); return; }
-        const allKeys = new Set<string>();
-        pts.forEach(p => { Object.keys(p).forEach(k => allKeys.add(k)); });
-        ["id", "x", "y", "cota", "layer", "entityType"].forEach(k => allKeys.add(k));
-        const headers = Array.from(allKeys);
-        const rows = pts.map(p => {
-          const row: Record<string, any> = {};
-          headers.forEach(h => { row[h] = String((p as any)[h] ?? ""); });
-          return row;
-        });
-        openImportWizard(rows, file.name, "DXF");
-        return;
-      }
-
-      // CSV/TXT
-      if (ext === "csv" || ext === "txt") {
-        const text = await file.text();
-        const lines = text.trim().split("\n").filter(l => l.trim());
-        if (lines.length < 2) { toast.error("Arquivo deve ter ao menos 2 linhas."); return; }
-        const delim = lines[0].includes("\t") ? "\t" : lines[0].includes(";") ? ";" : ",";
-        const headers = lines[0].split(delim).map(h => h.trim());
-        const isHeader = headers.some(h => isNaN(Number(h)) && h.length > 0);
-
-        if (isHeader) {
-          const rows = lines.slice(1).map(line => {
-            const parts = line.split(delim);
-            const row: Record<string, any> = {};
-            headers.forEach((h, idx) => { row[h] = parts[idx]?.trim() ?? ""; });
-            return row;
-          });
-          openImportWizard(rows, file.name, ext === "csv" ? "CSV" : "TXT");
-        } else {
-          const pts = parseTopographyCSV(text);
-          processPoints(pts);
+      // DXF, CSV, TXT, GeoJSON: open ImportWizard which has its own parsers
+      if (ext === "dxf" || ext === "csv" || ext === "txt" || ext === "geojson" || ext === "json") {
+        // For headerless CSV/TXT, process directly
+        if (ext === "csv" || ext === "txt") {
+          const text = await file.text();
+          const lines = text.trim().split("\n").filter(l => l.trim());
+          if (lines.length < 2) { toast.error("Arquivo deve ter ao menos 2 linhas."); return; }
+          const delim = lines[0].includes("\t") ? "\t" : lines[0].includes(";") ? ";" : ",";
+          const headers = lines[0].split(delim).map(h => h.trim());
+          const isHeader = headers.some(h => isNaN(Number(h)) && h.length > 0);
+          if (!isHeader) {
+            const pts = parseTopographyCSV(text);
+            processPoints(pts);
+            return;
+          }
         }
+        // Open ImportWizard with the file - it will parse internally
+        setWizardFile(file);
+        setShowImportWizard(true);
         return;
       }
 
-      // XLSX/XLS
+      // XLSX/XLS: parse and process directly (ImportWizard doesn't support XLSX)
       if (ext === "xlsx" || ext === "xls") {
         const buffer = await file.arrayBuffer();
         const wb = XLSX.read(buffer, { type: "array" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const data = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
         if (data.length === 0) { toast.error("Planilha vazia."); return; }
-        openImportWizard(data, file.name, "XLSX");
-        return;
-      }
-
-      // GeoJSON
-      if (ext === "geojson") {
-        const text = await file.text();
-        const geojson = JSON.parse(text);
-        const features = geojson.features || [];
-        if (features.length === 0) { toast.error("GeoJSON sem features."); return; }
-        const allProps = new Set<string>();
-        features.forEach((f: any) => { if (f.properties) Object.keys(f.properties).forEach(k => allProps.add(k)); });
-        allProps.add("_geom_type");
-        allProps.add("_geom_x"); allProps.add("_geom_y"); allProps.add("_geom_z");
-        const hasLines = features.some((f: any) => f.geometry?.type === "LineString" || f.geometry?.type === "MultiLineString");
-        if (hasLines) {
-          allProps.add("_line_start_x"); allProps.add("_line_start_y"); allProps.add("_line_start_z");
-          allProps.add("_line_end_x"); allProps.add("_line_end_y"); allProps.add("_line_end_z");
-          allProps.add("_line_num_vertices"); allProps.add("_line_length_approx");
+        // Try to detect X, Y, Z columns and convert to PontoTopografico
+        const headers = Object.keys(data[0]);
+        const xField = headers.find(h => /^(x|coord_?x|longitude|lon|este|easting)$/i.test(h));
+        const yField = headers.find(h => /^(y|coord_?y|latitude|lat|norte|northing)$/i.test(h));
+        const zField = headers.find(h => /^(z|cota|elevation|elev|altitude)$/i.test(h));
+        const idField = headers.find(h => /^(id|codigo|nome|name)$/i.test(h));
+        if (!xField || !yField) {
+          // Fallback to field mapping dialog
+          const fields: SourceField[] = headers.map(h => ({
+            name: h, sampleValues: data.slice(0, 3).map(r => String(r[h] ?? "")),
+          }));
+          setDetectedFields(fields);
+          setPendingFileData({ rows: data, fileName: file.name });
+          setShowFieldMapping(true);
+          return;
         }
-        const headersList = Array.from(allProps);
-        const rows = features.map((f: any) => {
-          const row: Record<string, any> = { ...f.properties };
-          const geomType = f.geometry?.type || "Unknown";
-          row["_geom_type"] = geomType;
-          const coords = f.geometry?.coordinates || [];
-          if (geomType === "Point") {
-            row["_geom_x"] = String(coords[0] ?? ""); row["_geom_y"] = String(coords[1] ?? ""); row["_geom_z"] = String(coords[2] ?? "0");
-          } else if (geomType === "LineString") {
-            row["_geom_x"] = String(coords[0]?.[0] ?? ""); row["_geom_y"] = String(coords[0]?.[1] ?? ""); row["_geom_z"] = String(coords[0]?.[2] ?? "0");
-            const start = coords[0] || []; const end = coords[coords.length - 1] || [];
-            row["_line_start_x"] = String(start[0] ?? ""); row["_line_start_y"] = String(start[1] ?? ""); row["_line_start_z"] = String(start[2] ?? "0");
-            row["_line_end_x"] = String(end[0] ?? ""); row["_line_end_y"] = String(end[1] ?? ""); row["_line_end_z"] = String(end[2] ?? "0");
-            row["_line_num_vertices"] = String(coords.length);
-            let len = 0;
-            for (let vi = 1; vi < coords.length; vi++) {
-              const dx = (coords[vi][0] - coords[vi - 1][0]); const dy = (coords[vi][1] - coords[vi - 1][1]);
-              len += Math.sqrt(dx * dx + dy * dy);
-            }
-            row["_line_length_approx"] = String(len.toFixed(3));
-          } else if (geomType === "MultiLineString") {
-            const firstLine = coords[0] || [];
-            row["_geom_x"] = String(firstLine[0]?.[0] ?? ""); row["_geom_y"] = String(firstLine[0]?.[1] ?? ""); row["_geom_z"] = String(firstLine[0]?.[2] ?? "0");
-            const start = firstLine[0] || []; const end = firstLine[firstLine.length - 1] || [];
-            row["_line_start_x"] = String(start[0] ?? ""); row["_line_start_y"] = String(start[1] ?? ""); row["_line_start_z"] = String(start[2] ?? "0");
-            row["_line_end_x"] = String(end[0] ?? ""); row["_line_end_y"] = String(end[1] ?? ""); row["_line_end_z"] = String(end[2] ?? "0");
-            row["_line_num_vertices"] = String(firstLine.length);
-          } else {
-            row["_geom_x"] = String(coords[0] ?? ""); row["_geom_y"] = String(coords[1] ?? ""); row["_geom_z"] = String(coords[2] ?? "0");
-          }
-          return row;
+        const pts: PontoTopografico[] = [];
+        data.forEach((row, i) => {
+          const x = parseFloat(String(row[xField]));
+          const y = parseFloat(String(row[yField]));
+          const z = zField ? parseFloat(String(row[zField])) : 0;
+          if (isNaN(x) || isNaN(y)) return;
+          const id = idField ? String(row[idField] || `P${String(i + 1).padStart(3, "0")}`) : `P${String(i + 1).padStart(3, "0")}`;
+          pts.push({ id, x, y, cota: isNaN(z) ? 0 : z });
         });
-        openImportWizard(rows, file.name, "GeoJSON");
+        if (pts.length === 0) { toast.error("Nenhum ponto valido no XLSX."); return; }
+        processPoints(pts);
         return;
       }
 
-      // IFC
+      // IFC: parse IFCCARTESIANPOINT and process directly
       if (ext === "ifc") {
         const text = await file.text();
-        const pts: { id: string; x: string; y: string; z: string; type: string }[] = [];
+        const ifcPts: PontoTopografico[] = [];
         const lines = text.split(/\r?\n/);
         let autoId = 1;
         for (const line of lines) {
           const cpMatch = line.match(/IFCCARTESIANPOINT\s*\(\s*\(\s*([-\d.eE+]+)\s*,\s*([-\d.eE+]+)\s*(?:,\s*([-\d.eE+]+))?\s*\)/i);
           if (cpMatch) {
-            pts.push({ id: `IFC_${autoId++}`, x: cpMatch[1], y: cpMatch[2], z: cpMatch[3] || "0", type: "IFCCARTESIANPOINT" });
+            ifcPts.push({
+              id: `IFC_${autoId++}`,
+              x: parseFloat(cpMatch[1]),
+              y: parseFloat(cpMatch[2]),
+              cota: parseFloat(cpMatch[3] || "0"),
+            });
+            if (autoId > 5000) break;
           }
         }
-        if (pts.length === 0) { toast.error("Nenhum ponto no IFC."); return; }
-        const limitedPts = pts.slice(0, 5000);
-        const rows = limitedPts.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, type: p.type }));
-        openImportWizard(rows, file.name, "IFC");
-        toast.info(`${limitedPts.length} pontos extraÃ­dos do IFC.`);
+        if (ifcPts.length === 0) { toast.error("Nenhum ponto no IFC."); return; }
+        processPoints(ifcPts);
+        toast.info(`${ifcPts.length} pontos extraidos do IFC.`);
         return;
       }
 
@@ -408,7 +244,7 @@ const HydroNetwork = () => {
       const pts = await parseTopographyFile(file);
       processPoints(pts);
     } catch (err: any) { toast.error(err.message || "Erro ao processar arquivo."); }
-  }, [processPoints, openImportWizard]);
+  }, [processPoints]);
 
   const handleClearTopography = useCallback(() => {
     setPontos([]);
@@ -648,7 +484,37 @@ const HydroNetwork = () => {
               </div>
             </CardContent>
           </Card>
-              <div style={{marginTop: '20px', marginBottom: '20px'}}><TopografiaImportNovo onImportComplete={(data) => console.log('Importado:', data)} /></div>
+              <div style={{marginTop: '20px', marginBottom: '20px'}}><TopografiaImportNovo onImportComplete={(data) => {
+                const { points, edges } = data as { points: { id: string; x: number; y: number; z: number; layer: string }[]; edges: { id: string; coordinates: number[][]; layer: string }[] };
+                // Collect PontoTopografico[] from parsed points
+                const pontosTopo: PontoTopografico[] = [];
+                const seen = new Set<string>();
+                // Add explicit points
+                points.forEach(p => {
+                  const key = `${p.x.toFixed(4)}_${p.y.toFixed(4)}`;
+                  if (!seen.has(key)) {
+                    seen.add(key);
+                    pontosTopo.push({ id: p.id, x: p.x, y: p.y, cota: p.z || 0 });
+                  }
+                });
+                // If no explicit points, extract vertices from edges
+                if (pontosTopo.length === 0 && edges?.length > 0) {
+                  edges.forEach(e => {
+                    e.coordinates?.forEach((coord, ci) => {
+                      const key = `${coord[0].toFixed(4)}_${coord[1].toFixed(4)}`;
+                      if (!seen.has(key)) {
+                        seen.add(key);
+                        pontosTopo.push({ id: `${e.id}_v${ci}`, x: coord[0], y: coord[1], cota: coord[2] || 0 });
+                      }
+                    });
+                  });
+                }
+                if (pontosTopo.length >= 2) {
+                  processPoints(pontosTopo);
+                } else {
+                  toast.error("Importacao requer pelo menos 2 pontos validos.");
+                }
+              }} /></div>
           {networkSummary && (
             <Card>
               <CardHeader>
@@ -820,15 +686,46 @@ const HydroNetwork = () => {
         )}
 
         {/* Import Wizard */}
-        {showImportWizard && wizardFileInfo && (
+        {showImportWizard && (
           <ImportWizard
-            open={showImportWizard}
-            onOpenChange={setShowImportWizard}
-            sourceFields={wizardSourceFields}
-            fileInfo={wizardFileInfo}
-            fileName={wizardFileName}
-            rows={wizardRows}
-            onImport={handleImportResult}
+            initialFile={wizardFile || undefined}
+            onComplete={(result) => {
+              setShowImportWizard(false);
+              setWizardFile(null);
+              if (!result.success || (result.points.length === 0 && result.edges.length === 0)) {
+                toast.error("Nenhum dado valido na importacao.");
+                return;
+              }
+              // Convert to PontoTopografico[] - same flow as "Carregar Demo"
+              const pontosTopo: PontoTopografico[] = [];
+              const seen = new Set<string>();
+              // Add explicit points (z → cota)
+              result.points.forEach(p => {
+                const key = `${p.x.toFixed(4)}_${p.y.toFixed(4)}`;
+                if (!seen.has(key)) {
+                  seen.add(key);
+                  pontosTopo.push({ id: p.id, x: p.x, y: p.y, cota: p.z || 0 });
+                }
+              });
+              // Extract vertices from edges if no explicit points
+              if (pontosTopo.length === 0 && result.edges.length > 0) {
+                result.edges.forEach(e => {
+                  e.coordinates?.forEach((coord: number[], ci: number) => {
+                    const key = `${coord[0].toFixed(4)}_${coord[1].toFixed(4)}`;
+                    if (!seen.has(key)) {
+                      seen.add(key);
+                      pontosTopo.push({ id: `${e.id}_v${ci}`, x: coord[0], y: coord[1], cota: coord[2] || 0 });
+                    }
+                  });
+                });
+              }
+              if (pontosTopo.length >= 2) {
+                processPoints(pontosTopo);
+              } else {
+                toast.error("Importacao requer pelo menos 2 pontos validos.");
+              }
+            }}
+            onCancel={() => { setShowImportWizard(false); setWizardFile(null); }}
           />
         )}
 
