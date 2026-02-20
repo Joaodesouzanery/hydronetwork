@@ -20,69 +20,82 @@ VALUES ('maintenance-request-photos', 'maintenance-request-photos', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- Policies para rdo-photos
+DROP POLICY IF EXISTS "Authenticated users can upload rdo photos" ON storage.objects;
 CREATE POLICY "Authenticated users can upload rdo photos"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'rdo-photos');
 
+DROP POLICY IF EXISTS "Anyone can view rdo photos" ON storage.objects;
 CREATE POLICY "Anyone can view rdo photos"
 ON storage.objects FOR SELECT
 TO public
 USING (bucket_id = 'rdo-photos');
 
+DROP POLICY IF EXISTS "Users can delete own rdo photos" ON storage.objects;
 CREATE POLICY "Users can delete own rdo photos"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id = 'rdo-photos' AND (storage.foldername(name))[1] = auth.uid()::text);
 
 -- Policies para interactive-maps
+DROP POLICY IF EXISTS "Authenticated users can upload maps" ON storage.objects;
 CREATE POLICY "Authenticated users can upload maps"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'interactive-maps');
 
+DROP POLICY IF EXISTS "Anyone can view maps" ON storage.objects;
 CREATE POLICY "Anyone can view maps"
 ON storage.objects FOR SELECT
 TO public
 USING (bucket_id = 'interactive-maps');
 
+DROP POLICY IF EXISTS "Authenticated users can update maps" ON storage.objects;
 CREATE POLICY "Authenticated users can update maps"
 ON storage.objects FOR UPDATE
 TO authenticated
 USING (bucket_id = 'interactive-maps');
 
+DROP POLICY IF EXISTS "Authenticated users can delete maps" ON storage.objects;
 CREATE POLICY "Authenticated users can delete maps"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id = 'interactive-maps');
 
 -- Policies para connection-report-photos
+DROP POLICY IF EXISTS "Authenticated users can upload connection report photos" ON storage.objects;
 CREATE POLICY "Authenticated users can upload connection report photos"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'connection-report-photos');
 
+DROP POLICY IF EXISTS "Anyone can view connection report photos" ON storage.objects;
 CREATE POLICY "Anyone can view connection report photos"
 ON storage.objects FOR SELECT
 TO public
 USING (bucket_id = 'connection-report-photos');
 
+DROP POLICY IF EXISTS "Users can delete own connection report photos" ON storage.objects;
 CREATE POLICY "Users can delete own connection report photos"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id = 'connection-report-photos');
 
 -- Policies para maintenance-request-photos
+DROP POLICY IF EXISTS "Authenticated users can upload maintenance photos" ON storage.objects;
 CREATE POLICY "Authenticated users can upload maintenance photos"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'maintenance-request-photos');
 
+DROP POLICY IF EXISTS "Anyone can view maintenance photos" ON storage.objects;
 CREATE POLICY "Anyone can view maintenance photos"
 ON storage.objects FOR SELECT
 TO public
 USING (bucket_id = 'maintenance-request-photos');
 
+DROP POLICY IF EXISTS "Users can delete own maintenance photos" ON storage.objects;
 CREATE POLICY "Users can delete own maintenance photos"
 ON storage.objects FOR DELETE
 TO authenticated

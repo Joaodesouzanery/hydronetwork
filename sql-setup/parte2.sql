@@ -584,7 +584,8 @@ EXECUTE FUNCTION public.update_updated_at_column();
 -- Migration: 20251028004639_d5ffefe1-931c-4726-b352-002fd72cd22c.sql
 -- Criar bucket de storage para fotos de tarefas
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('task-photos', 'task-photos', false);
+VALUES ('task-photos', 'task-photos', false)
+ON CONFLICT (id) DO NOTHING;
 
 -- Políticas RLS para task-photos bucket
 CREATE POLICY "Users can view task photos from their projects"
@@ -923,6 +924,7 @@ CREATE TABLE public.user_roles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   role app_role NOT NULL DEFAULT 'user',
+  is_super_admin BOOLEAN DEFAULT false,
   project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
