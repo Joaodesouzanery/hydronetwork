@@ -34,6 +34,7 @@ import {
   parseSWMMToInternal, parseTabularToInternal,
   analyzeFileRaw, RawFileAnalysis, ImportFileFormat,
   InpParsed, FieldMapping, detectFileFormat,
+  FormatParadigm, getFormatParadigm, isGeometryExplicitFormat,
 } from "@/engine/importEngine";
 
 // ════════════════════════════════════════
@@ -195,6 +196,15 @@ function isGeometricFormat(format: string): boolean {
   return GEOMETRIC_FORMATS.has(format);
 }
 
+/** Paradigm-aware labels for the wizard */
+const PARADIGM_LABELS: Record<FormatParadigm, { name: string; desc: string; icon: string }> = {
+  bim: { name: "BIM (Modelo 3D)", desc: "Modelo BIM estruturado — geometria extraída de objetos 3D. Sem campos X/Y.", icon: "🏗️" },
+  gis: { name: "GIS (Geometria Explícita)", desc: "Geometria já definida no arquivo. Sem necessidade de campos X/Y.", icon: "🌐" },
+  cad: { name: "CAD (Desenho Vetorial)", desc: "Entidades vetoriais (LINE, POLYLINE). Nós criados nos endpoints. Sem Nó Início/Fim.", icon: "📐" },
+  network: { name: "Rede Hidráulica Nativa", desc: "Modelo com JUNCTIONS, PIPES, COORDINATES. Auto-contido.", icon: "🔗" },
+  tabular: { name: "Tabular (Planilha)", desc: "Dados em tabela com colunas X, Y, Z. Requer mapeamento de campos.", icon: "📋" },
+};
+
 const TOTAL_STEPS = 5;
 
 // Info card helper
@@ -239,6 +249,13 @@ export const ImportWizard = ({
     isGeometricFormat(fileInfo.format) || fileInfo.format === "INP" || fileInfo.format === "SWMM" ? "geometric" : "tabular"
   );
 
+  // ── FORMAT PARADIGM ──
+  const paradigm = useMemo<FormatParadigm>(
+    () => getFormatParadigm(fileInfo.format as ImportFileFormat),
+    [fileInfo.format]
+  );
+  const paradigmLabel = PARADIGM_LABELS[paradigm];
+
   // ── RAW FILE ANALYSIS (runs immediately, no dependency on mappings) ──
   const rawAnalysis = useMemo<RawFileAnalysis | null>(() => {
     if (!fileInfo.fileContent) return null;
@@ -264,7 +281,7 @@ export const ImportWizard = ({
   const [analysisRan, setAnalysisRan] = useState(false);
   const [analysisIssues, setAnalysisIssues] = useState<string[]>([]);
 
-  const isGeometric = isGeometricFormat(fileInfo.format) || fileInfo.format === "INP" || fileInfo.format === "SWMM";
+  const isGeometric = paradigm !== "tabular" || importMode === "geometric";
   const crs = CRS_CATALOG.find(c => c.code === selectedCRS) || CRS_CATALOG[5];
 
   const hasX = useMemo(() => Object.values(mappings).includes("x"), [mappings]);
@@ -273,7 +290,8 @@ export const ImportWizard = ({
   const hasNodeEnd = useMemo(() => Object.values(mappings).includes("no_fim"), [mappings]);
   const mappedCount = Object.values(mappings).filter(v => v !== "ignore").length;
 
-  const step4Valid = importMode === "geometric" ? true : (hasX && hasY);
+  // Step 4 validation: geometric formats NEVER require X/Y; tabular requires X/Y
+  const step4Valid = isGeometric ? true : (hasX && hasY);
 
   const canProceed = useMemo(() => {
     if (step === 1) return true;
@@ -471,6 +489,23 @@ export const ImportWizard = ({
 
   const renderStep1 = () => (
     <div className="space-y-4">
+      {/* FORMAT PARADIGM — always shown first */}
+      <Card className="border-primary/30">
+        <CardContent className="pt-4 pb-3">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">{paradigmLabel.icon}</span>
+            <Label className="font-semibold text-sm">{paradigmLabel.name}</Label>
+            <Badge variant="outline" className="text-xs ml-auto">{fileInfo.format}</Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">{paradigmLabel.desc}</p>
+          {paradigm !== "tabular" && (
+            <p className="text-xs font-medium text-primary mt-1">
+              ✓ Geometria lida diretamente do arquivo — sem necessidade de mapeamento X/Y
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <InfoCard label="Formato" value={fileInfo.format} icon="📄" />
         <InfoCard label="Registros" value={String(fileInfo.recordCount)} icon="📊" />
@@ -530,29 +565,37 @@ export const ImportWizard = ({
         </div>
       )}
 
-      {/* Import Mode */}
-      {isGeometric && (
+      {/* Import Mode — ONLY for tabular formats or when user explicitly wants tabular override */}
+      {paradigm === "tabular" && (
         <Card>
           <CardContent className="pt-4 pb-3">
             <Label className="font-medium mb-2 block">Modo de Importação</Label>
             <RadioGroup value={importMode} onValueChange={v => { setImportMode(v as ImportMode); setAnalysisRan(false); }} className="space-y-2">
               <div className="flex items-start gap-2">
-                <RadioGroupItem value="geometric" id="mode-geo" className="mt-0.5" />
+                <RadioGroupItem value="tabular" id="mode-tab" className="mt-0.5" />
                 <div>
-                  <Label htmlFor="mode-geo" className="font-medium text-sm cursor-pointer">📐 Geométrico (CAD/GIS)</Label>
-                  <p className="text-xs text-muted-foreground">Linhas → Trechos, Pontos → Nós. Conectividade por coordenada. <strong>Sem necessidade de Nó Início/Fim.</strong></p>
+                  <Label htmlFor="mode-tab" className="font-medium text-sm cursor-pointer">📋 Tabular (Padrão)</Label>
+                  <p className="text-xs text-muted-foreground">Usa campos X/Y e opcionalmente Nó Início / Nó Fim.</p>
                 </div>
               </div>
               <div className="flex items-start gap-2">
-                <RadioGroupItem value="tabular" id="mode-tab" className="mt-0.5" />
+                <RadioGroupItem value="geometric" id="mode-geo" className="mt-0.5" />
                 <div>
-                  <Label htmlFor="mode-tab" className="font-medium text-sm cursor-pointer">📋 Tabular</Label>
-                  <p className="text-xs text-muted-foreground">Usa campos Nó Início / Nó Fim. Para dados estruturados em tabela.</p>
+                  <Label htmlFor="mode-geo" className="font-medium text-sm cursor-pointer">📐 Geométrico</Label>
+                  <p className="text-xs text-muted-foreground">Se o arquivo contiver geometria embutida.</p>
                 </div>
               </div>
             </RadioGroup>
           </CardContent>
         </Card>
+      )}
+
+      {/* For geometric formats, just show a confirmation that mode is locked */}
+      {paradigm !== "tabular" && (
+        <div className="bg-muted/30 rounded-lg p-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <Check className="h-4 w-4 text-primary" />
+          <span>Modo <strong>Geométrico</strong> ativo — o arquivo <strong>{fileInfo.format}</strong> contém geometria explícita. Não é necessário mapear campos X/Y.</span>
+        </div>
       )}
 
       {/* Numeric Format */}
@@ -731,7 +774,7 @@ export const ImportWizard = ({
   );
 
   const renderStep4 = () => {
-    if (importMode === "geometric") {
+    if (isGeometric) {
       const edgeTypes = entityMappings.filter(m => m.role === "edge");
       const nodeTypes = entityMappings.filter(m => m.role === "node");
       const drawingTypes = entityMappings.filter(m => m.role === "drawing");
@@ -740,11 +783,13 @@ export const ImportWizard = ({
         <div className="space-y-4">
           <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-              📐 Modo Geométrico Ativo
+              {paradigmLabel.icon} {paradigmLabel.name} — Resumo
             </h4>
             <p className="text-xs text-muted-foreground mb-3">
-              A importação será feita diretamente a partir da geometria do arquivo.
-              Nós serão criados automaticamente nos endpoints de cada linha/polilinha.
+              {paradigm === "bim" && "Geometria extraída de objetos BIM 3D. Placement chains resolvidos para posições absolutas."}
+              {paradigm === "gis" && "Geometria lida diretamente dos campos geometry de cada Feature. Sem campos X/Y."}
+              {paradigm === "cad" && "Entidades vetoriais convertidas: linhas → trechos, pontos → nós. Nós criados automaticamente nos endpoints."}
+              {paradigm === "network" && "Modelo hidráulico nativo. JUNCTIONS → Nós, PIPES/CONDUITS → Trechos. COORDINATES já incluídas."}
             </p>
             <div className="space-y-2">
               <div className="flex items-center gap-2">
@@ -1204,7 +1249,7 @@ export const ImportWizard = ({
           </DialogTitle>
           <DialogDescription>
             Wizard de importação em {TOTAL_STEPS} etapas
-            {importMode === "geometric" && <Badge variant="outline" className="ml-2">Modo Geométrico</Badge>}
+            <Badge variant="outline" className="ml-2">{paradigmLabel.icon} {paradigmLabel.name}</Badge>
           </DialogDescription>
         </DialogHeader>
 
@@ -1274,7 +1319,8 @@ function detectIFCEntityTypes(content: string): EntityTypeMapping[] {
     const type = match[1].toUpperCase();
     if (type.includes("PIPE") || type.includes("FLOW") || type.includes("DUCT") ||
         type.includes("WALL") || type.includes("SLAB") || type.includes("BEAM") ||
-        type.includes("COLUMN") || type.includes("POINT") || type.includes("FITTING")) {
+        type.includes("COLUMN") || type.includes("POINT") || type.includes("FITTING") ||
+        type.includes("MEMBER") || type.includes("PLATE") || type.includes("OPENING")) {
       counts.set(type, (counts.get(type) || 0) + 1);
     }
   }
@@ -1291,6 +1337,21 @@ function detectIFCEntityTypes(content: string): EntityTypeMapping[] {
   }));
 }
 
+/**
+ * IFC GEOMETRIC PARSER — Extracts geometry from BIM objects.
+ *
+ * IFC is NOT a table. IFC is NOT X/Y fields.
+ * It is a 3D BIM model with:
+ * - Object hierarchy (IfcPipeSegment, IfcFlowTerminal, etc.)
+ * - Placement chains (IfcLocalPlacement → IfcAxis2Placement3D → IfcCartesianPoint)
+ * - Geometric representations (IfcPolyline, IfcTrimmedCurve, etc.)
+ *
+ * This parser:
+ * 1. Builds a map of ALL IfcCartesianPoints
+ * 2. Resolves IfcLocalPlacement chains to get absolute positions
+ * 3. For pipe/duct segments: extracts axis curve endpoints → edges + auto-nodes
+ * 4. For terminals/fittings: extracts placement position → nodes
+ */
 function parseIFCGeometric(content: string, entityMappings?: EntityTypeMapping[]): InpParsed {
   const nodes: InpParsed["nodes"] = [];
   const edges: InpParsed["edges"] = [];
@@ -1300,47 +1361,137 @@ function parseIFCGeometric(content: string, entityMappings?: EntityTypeMapping[]
     entityMappings.forEach(m => roleMap.set(m.entityType.toUpperCase(), m.role));
   }
 
+  // Step 1: Parse ALL CartesianPoints → id → {x, y, z}
   const pointMap = new Map<string, { x: number; y: number; z: number }>();
-  const pointRegex = /#(\d+)=\s*IFCCARTESIANPOINT\s*\(\(([^)]+)\)\)/gi;
+  const pointRegex = /#(\d+)\s*=\s*IFCCARTESIANPOINT\s*\(\(([^)]+)\)\)/gi;
   let match: RegExpExecArray | null;
   while ((match = pointRegex.exec(content)) !== null) {
-    const id = match[1];
     const coords = match[2].split(",").map(c => parseFloat(c.trim()));
-    if (coords.length >= 2) {
-      pointMap.set(`#${id}`, { x: coords[0], y: coords[1], z: coords[2] || 0 });
+    if (coords.length >= 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
+      pointMap.set(`#${match[1]}`, { x: coords[0], y: coords[1], z: coords[2] || 0 });
     }
+  }
+
+  // Step 2: Parse IfcAxis2Placement3D → location point ref
+  const placementPointMap = new Map<string, string>(); // placement id → point ref
+  const axisRegex = /#(\d+)\s*=\s*IFCAXIS2PLACEMENT3D\s*\((#\d+)/gi;
+  while ((match = axisRegex.exec(content)) !== null) {
+    placementPointMap.set(`#${match[1]}`, match[2]);
+  }
+
+  // Step 3: Parse IfcLocalPlacement → relative placement ref
+  const localPlacementMap = new Map<string, { relativeTo?: string; axisPlacement: string }>();
+  const lpRegex = /#(\d+)\s*=\s*IFCLOCALPLACEMENT\s*\(([^,]*),\s*(#\d+)\)/gi;
+  while ((match = lpRegex.exec(content)) !== null) {
+    const relativeTo = match[2].trim() === "$" ? undefined : match[2].trim();
+    localPlacementMap.set(`#${match[1]}`, { relativeTo, axisPlacement: match[3] });
+  }
+
+  // Step 4: Parse IfcPolyline → list of point refs (for axis curves)
+  const polylineMap = new Map<string, string[]>();
+  const polyRegex = /#(\d+)\s*=\s*IFCPOLYLINE\s*\(\(([^)]+)\)\)/gi;
+  while ((match = polyRegex.exec(content)) !== null) {
+    const refs = match[2].match(/#\d+/g) || [];
+    if (refs.length >= 2) polylineMap.set(`#${match[1]}`, refs);
+  }
+
+  // Resolve placement to absolute coords (simplified — ignores rotation)
+  function resolvePlacementCoords(placementRef: string): { x: number; y: number; z: number } | null {
+    const lp = localPlacementMap.get(placementRef);
+    if (!lp) return null;
+    const axisPointRef = placementPointMap.get(lp.axisPlacement);
+    if (!axisPointRef) return null;
+    const pt = pointMap.get(axisPointRef);
+    if (!pt) return null;
+
+    // Add parent offset (simplified chain resolution)
+    if (lp.relativeTo) {
+      const parentCoords = resolvePlacementCoords(lp.relativeTo);
+      if (parentCoords) {
+        return { x: pt.x + parentCoords.x, y: pt.y + parentCoords.y, z: pt.z + parentCoords.z };
+      }
+    }
+    return { ...pt };
   }
 
   let nodeCounter = 0;
   let edgeCounter = 0;
   const nodeIndex = new Map<string, string>();
-  const snapDecimals = 4;
+  const snapDecimals = 3; // mm precision for BIM
 
-  function getOrCreateNode(x: number, y: number, z: number): string {
+  function getOrCreateNode(x: number, y: number, z: number, entType?: string): string {
     const key = `${x.toFixed(snapDecimals)},${y.toFixed(snapDecimals)}`;
     if (nodeIndex.has(key)) return nodeIndex.get(key)!;
     const id = `IFC_N${++nodeCounter}`;
     nodeIndex.set(key, id);
-    nodes.push({ id, x, y, z, tipo: "junction", properties: { _source: "IFC" } });
+    nodes.push({ id, x, y, z, tipo: "junction", properties: { _source: "IFC", entityType: entType } });
     return id;
   }
 
-  const entityRegex = /#(\d+)=\s*(IFC\w+)\s*\(([^;]*)\);/gi;
-  while ((match = entityRegex.exec(content)) !== null) {
-    const entId = match[1];
+  // Step 5: Parse all IFC entities and extract geometry based on role
+  const entityRegex2 = /#(\d+)\s*=\s*(IFC\w+)\s*\(([^;]*)\);/gi;
+  while ((match = entityRegex2.exec(content)) !== null) {
+    const entId = `#${match[1]}`;
     const entType = match[2].toUpperCase();
+    const entArgs = match[3];
     const role = roleMap.get(entType);
     if (!role || role === "ignore" || role === "drawing") continue;
 
-    // Try to find placement reference
-    const refMatches = match[3].match(/#\d+/g) || [];
-    for (const ref of refMatches) {
-      const pt = pointMap.get(ref);
-      if (pt) {
-        if (role === "node") {
-          getOrCreateNode(pt.x, pt.y, pt.z);
+    // Find placement ref in entity arguments
+    const refMatches = entArgs.match(/#\d+/g) || [];
+
+    if (role === "edge") {
+      // Try to find polyline representation for axis curve
+      let foundEdge = false;
+      for (const ref of refMatches) {
+        const polyPoints = polylineMap.get(ref);
+        if (polyPoints && polyPoints.length >= 2) {
+          const startPt = pointMap.get(polyPoints[0]);
+          const endPt = pointMap.get(polyPoints[polyPoints.length - 1]);
+          if (startPt && endPt) {
+            const startId = getOrCreateNode(startPt.x, startPt.y, startPt.z, entType);
+            const endId = getOrCreateNode(endPt.x, endPt.y, endPt.z, entType);
+            const vertices: [number, number, number][] = polyPoints
+              .map(pr => pointMap.get(pr))
+              .filter(Boolean)
+              .map(p => [p!.x, p!.y, p!.z] as [number, number, number]);
+            edges.push({
+              id: `IFC_E${++edgeCounter}`,
+              startNodeId: startId, endNodeId: endId,
+              dn: 200, material: "PVC", tipoRede: "Genérico",
+              vertices,
+              properties: { _source: "IFC", entityType: entType, ifcId: entId },
+            });
+            foundEdge = true;
+            break;
+          }
         }
-        break;
+      }
+      // Fallback: try placement as single point (degenerate edge → node)
+      if (!foundEdge) {
+        for (const ref of refMatches) {
+          if (localPlacementMap.has(ref)) {
+            const coords = resolvePlacementCoords(ref);
+            if (coords) { getOrCreateNode(coords.x, coords.y, coords.z, entType); break; }
+          }
+          const pt = pointMap.get(ref);
+          if (pt) { getOrCreateNode(pt.x, pt.y, pt.z, entType); break; }
+        }
+      }
+    } else if (role === "node") {
+      // Resolve placement chain for absolute position
+      let placed = false;
+      for (const ref of refMatches) {
+        if (localPlacementMap.has(ref)) {
+          const coords = resolvePlacementCoords(ref);
+          if (coords) { getOrCreateNode(coords.x, coords.y, coords.z, entType); placed = true; break; }
+        }
+      }
+      if (!placed) {
+        for (const ref of refMatches) {
+          const pt = pointMap.get(ref);
+          if (pt) { getOrCreateNode(pt.x, pt.y, pt.z, entType); break; }
+        }
       }
     }
   }
