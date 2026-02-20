@@ -55,7 +55,6 @@ import {
   nodesToLegacyPoints, edgesToLegacyTrechos, legacyPointsToNodes, legacyTrechosToEdges,
   setProjectCRS, importEdgeWithAutoNodes, resetSpatialProject,
 } from "@/engine/spatialCore";
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
 
 // Shared state context
 const useHydroState = () => {
@@ -107,7 +106,6 @@ const HydroNetwork = () => {
 
   // New Import Wizard state
   const [showImportWizard, setShowImportWizard] = useState(false);
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
   const [wizardFileInfo, setWizardFileInfo] = useState<DetectedFileInfo | null>(null);
   const [wizardSourceFields, setWizardSourceFields] = useState<WizardSourceField[]>([]);
   const [wizardRows, setWizardRows] = useState<Record<string, any>[]>([]);
@@ -130,7 +128,6 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
   // Handle Import Wizard result â†’ feed into Spatial Core + legacy state
   const handleImportResult = useCallback((result: ImportResult) => {
     const project = getSpatialProject();
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
     setProjectCRS(result.crs);
 
     // Create a layer
@@ -157,7 +154,6 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
           endX: 0, endY: 0, endZ: 0,
           layerId: layer.id,
         });
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
       } else {
         addEdge({ ...e, layerId: layer.id });
       }
@@ -180,7 +176,6 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
     }
 
     toast.success(`Camada "${result.layerName}" importada: ${result.nodes.length} nÃ³s, ${result.edges.length} trechos`);
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
   }, []);
 
   const applyFieldMapping = useCallback((mappings: FieldMapping[]) => {
@@ -216,7 +211,6 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
     extraInfo?: Partial<DetectedFileInfo>
   ) => {
     const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
 
     // Detect geometry types
     const geomTypes = new Set<string>();
@@ -271,7 +265,6 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
     setWizardRows(rows);
     setWizardFileName(fileName);
     setShowImportWizard(true);
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
   }, []);
 
   const handleTopographyUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -295,7 +288,6 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
           return row;
         });
         openImportWizard(rows, file.name, "DXF");
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
         return;
       }
 
@@ -316,7 +308,6 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
             return row;
           });
           openImportWizard(rows, file.name, ext === "csv" ? "CSV" : "TXT");
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
         } else {
           const pts = parseTopographyCSV(text);
           processPoints(pts);
@@ -332,7 +323,6 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
         const data = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
         if (data.length === 0) { toast.error("Planilha vazia."); return; }
         openImportWizard(data, file.name, "XLSX");
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
         return;
       }
 
@@ -385,7 +375,6 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
           return row;
         });
         openImportWizard(rows, file.name, "GeoJSON");
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
         return;
       }
 
@@ -405,14 +394,12 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
         const limitedPts = pts.slice(0, 5000);
         const rows = limitedPts.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.z, type: p.type }));
         openImportWizard(rows, file.name, "IFC");
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
         toast.info(`${limitedPts.length} pontos extraÃ­dos do IFC.`);
         return;
       }
 
       if (ext === "shp" || ext === "dwg" || ext === "gpkg") {
         toast.info(`Formato .${ext}: Converta para GeoJSON, CSV ou DXF usando QGIS para importar.`);
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
         return;
       }
 
@@ -421,7 +408,6 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
       processPoints(pts);
     } catch (err: any) { toast.error(err.message || "Erro ao processar arquivo."); }
   }, [processPoints, openImportWizard]);
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
 
   const handleClearTopography = useCallback(() => {
     setPontos([]);
@@ -569,7 +555,6 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm" onClick={() => {
                         const issues = validateProject();
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
                         setValidationIssues(issues);
                         setShowValidation(true);
                       }}>
@@ -607,7 +592,6 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
                 <Button variant="secondary" size="sm" onClick={async () => {
                   try {
                     const res = await fetch("/demo/pontos_criadores.txt");
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
                     const text = await res.text();
                     const pts = parseTopographyCSV(text);
                     processPoints(pts);
@@ -866,7 +850,6 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
         />
       </div>
     );
-import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImportNovo';
   }
 
   // â”€â”€ ORÃ‡AMENTO MODULE â”€â”€
@@ -983,4 +966,5 @@ import { TopografiaImportNovo } from '@/components/hydronetwork/TopografiaImport
 };
 
 export default HydroNetwork;
+
 
