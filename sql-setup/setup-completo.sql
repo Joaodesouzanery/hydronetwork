@@ -19,9 +19,13 @@ BEGIN
     END LOOP;
 END $$;
 
--- Limpar buckets de storage
+-- Limpar buckets de storage (desabilita trigger de proteção temporariamente)
+ALTER TABLE storage.objects DISABLE TRIGGER ALL;
+ALTER TABLE storage.buckets DISABLE TRIGGER ALL;
 DELETE FROM storage.objects;
 DELETE FROM storage.buckets;
+ALTER TABLE storage.objects ENABLE TRIGGER ALL;
+ALTER TABLE storage.buckets ENABLE TRIGGER ALL;
 
 -- Limpar schema public
 DO $$ 
