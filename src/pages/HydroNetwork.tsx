@@ -647,6 +647,7 @@ const HydroNetwork = () => {
               </div>
             </CardContent>
           </Card>
+              <TopografiaImportNovo onImportComplete={(data) => console.log('Importado:', data)} />
           {networkSummary && (
             <Card>
               <CardHeader>
@@ -966,5 +967,6 @@ const HydroNetwork = () => {
 };
 
 export default HydroNetwork;
+
 
 
