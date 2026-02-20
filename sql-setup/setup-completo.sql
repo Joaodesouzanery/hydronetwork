@@ -1,7 +1,6 @@
 -- ============================================
 -- SETUP COMPLETO - HydroNetwork / ConstruData
--- Arquivo consolidado para colar no Supabase SQL Editor
--- Gerado automaticamente
+-- Gerado automaticamente - Cole tudo no Supabase SQL Editor
 -- ============================================
 
 -- ============================================
@@ -61,9 +60,8 @@ BEGIN
 END $$;
 
 
-
 -- ============================================
--- PARTE 1: parte1.sql
+-- PARTE 1: Core tables e estrutura base
 -- ============================================
 
 -- PARTE 1 DE 4: Core tables e estrutura base
@@ -1271,9 +1269,8 @@ ALTER TABLE material_requests
 ADD COLUMN IF NOT EXISTS requestor_name TEXT;
 
 
-
 -- ============================================
--- PARTE 2: parte2.sql
+-- PARTE 2: Features intermediárias
 -- ============================================
 
 -- PARTE 2 DE 4: Features intermediárias
@@ -2743,9 +2740,8 @@ FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
 
-
 -- ============================================
--- PARTE 3: parte3.sql
+-- PARTE 3: CRM, dashboards, compras
 -- ============================================
 
 -- PARTE 3 DE 4: CRM, dashboards, compras
@@ -4373,9 +4369,8 @@ COMMENT ON TABLE public.maintenance_request_rate_limits IS
 -- The maintenance-request-photos bucket should use signed URLs from edge function
 
 
-
 -- ============================================
--- PARTE 4: parte4.sql
+-- PARTE 4: RH, feedback, ajustes finais
 -- ============================================
 
 -- PARTE 4 DE 4: RH, feedback, ajustes finais
@@ -6035,9 +6030,8 @@ CREATE INDEX idx_user_feedback_created ON public.user_feedback(created_at DESC);
 
 
 
-
 -- ============================================
--- PARTE 5: parte5_storage_buckets.sql
+-- PARTE 5: Storage Buckets
 -- ============================================
 
 -- PARTE 5 DE 5: Storage Buckets
@@ -6142,4 +6136,3 @@ CREATE POLICY "Users can delete own maintenance photos"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id = 'maintenance-request-photos');
-
