@@ -1,13 +1,14 @@
 /**
  * UnifiedImportPanel - Painel unico de importacao multi-arquivo
  * Suporta: DXF, CSV, TXT, XLSX, GeoJSON, IFC
- * Fila de processamento, selecao por camada, confirmar → processPoints()
+ * Fila de processamento, selecao por camada, confirmar → pontos + trechos reais
  */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PontoTopografico, parseTopographyCSV } from '@/engine/reader';
+import { Trecho, createTrechoFromPoints, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from '@/engine/domain';
 import { Upload, Trash2, Check, X, FileText, Loader2 } from 'lucide-react';
 
 // ── Types ──
@@ -55,7 +56,9 @@ interface ImportHistoryEntry {
 }
 
 interface UnifiedImportPanelProps {
-  onImport: (pontos: PontoTopografico[]) => void;
+  onImport: (pontos: PontoTopografico[], trechos: Trecho[]) => void;
+  diametroMm?: number;
+  material?: string;
 }
 
 // ── Parsers ──
@@ -386,7 +389,7 @@ function saveImportHistory(entries: ImportHistoryEntry[]) {
 
 // ── Component ──
 
-export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport }) => {
+export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport, diametroMm = DEFAULT_DIAMETRO_MM, material = DEFAULT_MATERIAL }) => {
   const [fileQueue, setFileQueue] = useState<FileQueueItem[]>([]);
   const [selectedEntities, setSelectedEntities] = useState<Set<string>>(new Set());
   const [filterLayer, setFilterLayer] = useState('all');
@@ -523,26 +526,80 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
     setSelectedEntities(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
 
-  // Confirm import
+  // Confirm import — creates real Trechos from edges preserving connectivity
   const handleConfirm = () => {
     const pontosTopo: PontoTopografico[] = [];
+    const trechosResult: Trecho[] = [];
     const seen = new Set<string>();
+    let vertexCounter = 0;
 
-    // Selected points → PontoTopografico
+    // Helper: get or create a PontoTopografico for a coordinate, deduplicating by position
+    const getOrCreatePonto = (x: number, y: number, z: number, baseId: string): PontoTopografico => {
+      const key = `${x.toFixed(4)}_${y.toFixed(4)}`;
+      const existing = pontosTopo.find(p => `${p.x.toFixed(4)}_${p.y.toFixed(4)}` === key);
+      if (existing) return existing;
+      const ponto: PontoTopografico = { id: baseId, x, y, cota: z || 0 };
+      seen.add(key);
+      pontosTopo.push(ponto);
+      return ponto;
+    };
+
+    // 1. Selected points → PontoTopografico
     allPoints.filter(p => selectedEntities.has(p.id)).forEach(p => {
-      const key = `${p.x.toFixed(4)}_${p.y.toFixed(4)}`;
-      if (!seen.has(key)) { seen.add(key); pontosTopo.push({ id: p.id, x: p.x, y: p.y, cota: p.z || 0 }); }
+      getOrCreatePonto(p.x, p.y, p.z, p.id);
     });
 
-    // Selected edges → extract unique vertices as PontoTopografico
+    // 2. Selected edges → extract vertices AND create real Trechos
     allEdges.filter(e => selectedEntities.has(e.id)).forEach(e => {
-      e.coordinates.forEach((coord, ci) => {
-        const key = `${coord[0].toFixed(4)}_${coord[1].toFixed(4)}`;
-        if (!seen.has(key)) { seen.add(key); pontosTopo.push({ id: `${e.id}_v${ci}`, x: coord[0], y: coord[1], cota: coord[2] || 0 }); }
+      const edgeCoords = e.isClosed
+        ? e.coordinates.slice(0, e.coordinates.length - 1)  // skip duplicate closing vertex
+        : e.coordinates;
+
+      // Create PontoTopografico for each vertex of this edge
+      const edgePontos: PontoTopografico[] = edgeCoords.map((coord, ci) => {
+        vertexCounter++;
+        return getOrCreatePonto(coord[0], coord[1], coord[2] || 0, `${e.id}_v${ci}`);
       });
+
+      // Create a Trecho for each consecutive pair of vertices in this edge
+      for (let j = 0; j < edgePontos.length - 1; j++) {
+        const pStart = edgePontos[j];
+        const pEnd = edgePontos[j + 1];
+        // Skip zero-length segments
+        const dx = pEnd.x - pStart.x;
+        const dy = pEnd.y - pStart.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 0.001) continue;
+        try {
+          trechosResult.push(createTrechoFromPoints(pStart, pEnd, diametroMm, material));
+        } catch {
+          // skip invalid segments (e.g. zero distance)
+        }
+      }
+
+      // For closed edges, also connect last vertex back to first
+      if (e.isClosed && edgePontos.length >= 2) {
+        const pLast = edgePontos[edgePontos.length - 1];
+        const pFirst = edgePontos[0];
+        const dx = pFirst.x - pLast.x;
+        const dy = pFirst.y - pLast.y;
+        if (Math.sqrt(dx * dx + dy * dy) >= 0.001) {
+          try {
+            trechosResult.push(createTrechoFromPoints(pLast, pFirst, diametroMm, material));
+          } catch { /* skip */ }
+        }
+      }
     });
 
-    if (pontosTopo.length < 2) return;
+    // If we have points but no edges, create sequential trechos as fallback
+    if (trechosResult.length === 0 && pontosTopo.length >= 2) {
+      for (let j = 0; j < pontosTopo.length - 1; j++) {
+        try {
+          trechosResult.push(createTrechoFromPoints(pontosTopo[j], pontosTopo[j + 1], diametroMm, material));
+        } catch { /* skip */ }
+      }
+    }
+
+    if (pontosTopo.length < 2 && trechosResult.length === 0) return;
 
     // Save history
     const historyEntries: ImportHistoryEntry[] = fileQueue.filter(f => f.status === 'ok').map(f => ({
@@ -552,7 +609,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
     }));
     saveImportHistory(historyEntries);
 
-    onImport(pontosTopo);
+    onImport(pontosTopo, trechosResult);
     clearQueue();
   };
 
@@ -622,8 +679,8 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
           {/* Stats */}
           <div className="grid grid-cols-4 gap-2">
             {[
-              { label: 'Pontos', value: allPoints.length, color: 'text-green-600' },
-              { label: 'Trechos', value: allEdges.length, color: 'text-amber-600' },
+              { label: 'Nos/Pontos', value: allPoints.length, color: 'text-green-600' },
+              { label: 'Entidades', value: allEdges.length, color: 'text-amber-600' },
               { label: 'Layers', value: allLayers.length, color: 'text-purple-600' },
               { label: 'Selecionados', value: selectedEntities.size, color: 'text-blue-600' },
             ].map(s => (
@@ -701,6 +758,21 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
             </div>
           </div>
 
+          {/* Trecho preview count */}
+          {allEdges.filter(e => selectedEntities.has(e.id)).length > 0 && (
+            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-2 text-xs text-blue-700 dark:text-blue-300">
+              {(() => {
+                const selEdges = allEdges.filter(e => selectedEntities.has(e.id));
+                const trechoCount = selEdges.reduce((acc, e) => {
+                  const n = e.isClosed ? e.coordinates.length : Math.max(0, e.coordinates.length - 1);
+                  return acc + n;
+                }, 0);
+                const vertexCount = selEdges.reduce((acc, e) => acc + e.coordinates.length, 0);
+                return `${selEdges.length} entidades selecionadas → ${vertexCount} vertices, ~${trechoCount} trechos reais`;
+              })()}
+            </div>
+          )}
+
           {/* Confirm */}
           <Button
             className="w-full"
@@ -708,7 +780,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
             onClick={handleConfirm}
           >
             <Check className="h-4 w-4 mr-2" />
-            Confirmar Importacao ({selectedEntities.size} entidades)
+            Confirmar Importacao ({selectedEntities.size} entidades selecionadas)
           </Button>
         </>
       )}

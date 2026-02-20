@@ -1,4 +1,4 @@
-﻿import { useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,11 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
-  Upload, Download, MapPin, Droplets,
-  AlertTriangle, Settings2, Info, X
+  Download, MapPin, Droplets,
+  AlertTriangle, Settings2, X
 } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { parseTopographyCSV, validateTopographySequence, PontoTopografico } from "@/engine/reader";
@@ -97,15 +96,29 @@ const HydroNetwork = () => {
   const [showValidation, setShowValidation] = useState(false);
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
 
-  const processPoints = useCallback((pts: PontoTopografico[]) => {
+  // Import handler for UnifiedImportPanel (receives both pontos + trechos from real edges)
+  const handleImportData = useCallback((pts: PontoTopografico[], importedTrechos: Trecho[]) => {
     validateTopographySequence(pts);
     setPontos(pts);
-    const segs = createTrechosFromTopography(pts, diametroMm, material);
-    setTrechos(segs);
-    setNetworkSummary(summarizeNetwork(segs));
+    if (importedTrechos.length > 0) {
+      // Use real trechos from file edges (preserves DXF/GeoJSON connectivity)
+      setTrechos(importedTrechos);
+      setNetworkSummary(summarizeNetwork(importedTrechos));
+      toast.success(`${pts.length} pontos, ${importedTrechos.length} trechos reais importados.`);
+    } else {
+      // Fallback: create sequential trechos (for paste data, CSV with only points, etc.)
+      const segs = createTrechosFromTopography(pts, diametroMm, material);
+      setTrechos(segs);
+      setNetworkSummary(summarizeNetwork(segs));
+      toast.success(`${pts.length} pontos carregados, ${segs.length} trechos criados.`);
+    }
     setBudgetRows([]); setBudgetSummary(null);
-    toast.success(`${pts.length} pontos carregados, ${segs.length} trechos criados.`);
   }, [diametroMm, material]);
+
+  // Simplified handler for paste/demo (only points → sequential trechos)
+  const processPoints = useCallback((pts: PontoTopografico[]) => {
+    handleImportData(pts, []);
+  }, [handleImportData]);
 
 
   const handleClearTopography = useCallback(() => {
@@ -142,7 +155,7 @@ const HydroNetwork = () => {
     if (!costBase) { toast.error("Carregue a base de custos primeiro."); return; }
     const rows = applyBudget(trechos, costBase, false);
     setBudgetRows(rows); setBudgetSummary(createBudgetSummary(rows));
-    toast.success("OrÃ§amento calculado!");
+    toast.success("Orcamento calculado!");
   }, [trechos, costBase]);
 
   const handleGenerateSchedule = useCallback(() => {
@@ -202,28 +215,26 @@ const HydroNetwork = () => {
     }
   };
 
-  // â”€â”€ TOPOGRAFIA MODULE â”€â”€
-  const [summaryFilter, setSummaryFilter] = useState<string>("todos");
-
+  // â"€â"€ TOPOGRAFIA MODULE â"€â"€
   function TopografiaModule() {
     const spatialProject = getSpatialProject();
     const layerCount = getAllLayers().length;
 
     return (
       <div className="space-y-4">
-        {/* Header */}
-        <Card className="border-l-4 border-l-blue-500 bg-gradient-to-r from-blue-50/50 to-transparent dark:from-blue-950/20">
-          <CardContent className="pt-4 pb-4">
+        {/* Single centered card */}
+        <Card className="max-w-4xl mx-auto">
+          <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-blue-600" /> Levantamento TopogrÃ¡fico
-                </h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Importe dados (CSV, XLSX, DXF, GeoJSON, IFC) com wizard de 4 etapas estilo QGIS
-                </p>
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-blue-600" /> Levantamento Topografico
+                </CardTitle>
+                <CardDescription>
+                  Importe DXF, CSV, XLSX, GeoJSON ou IFC -- todos os nos, trechos e layers
+                </CardDescription>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap justify-end">
                 {layerCount > 0 && <Badge variant="outline">{layerCount} camadas</Badge>}
                 <Badge className="bg-muted text-muted-foreground text-xs">CRS: {spatialProject.crs.name}</Badge>
                 {pontos.length > 0 && (
@@ -234,159 +245,117 @@ const HydroNetwork = () => {
                 )}
               </div>
             </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {pontos.length > 0 && (
+              <div className="border border-border rounded-lg p-4 bg-card">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="default" className="bg-green-600">{pontos.length} pontos</Badge>
+                    <Badge variant="secondary">{trechos.length} trechos</Badge>
+                    {networkSummary && <Badge variant="outline">{fmt(networkSummary.comprimentoTotal, 1)}m total</Badge>}
+                  </div>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      const issues = validateProject();
+                      setValidationIssues(issues);
+                      setShowValidation(true);
+                    }}>
+                      <AlertTriangle className="h-4 w-4 mr-1" /> Validar
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={handleClearTopography}>
+                      <X className="h-4 w-4 mr-1" /> Limpar
+                    </Button>
+                  </div>
+                </div>
+                {networkSummary && (
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                    {[
+                      { label: "Pontos", value: pontos.length, color: "text-blue-600" },
+                      { label: "Trechos", value: networkSummary.totalTrechos, color: "text-green-600" },
+                      { label: "Comprimento", value: `${fmt(networkSummary.comprimentoTotal, 1)}m`, color: "text-orange-600" },
+                      { label: "Gravidade", value: networkSummary.trechosGravidade, color: "text-green-600" },
+                      { label: "Elevatoria", value: networkSummary.trechosElevatoria, color: "text-orange-600" },
+                      { label: "Decliv. Media", value: `${(networkSummary.declividadeMedia * 100).toFixed(2)}%`, color: "text-purple-600" },
+                    ].map((item, i) => (
+                      <div key={i} className="bg-muted/50 rounded-lg p-2 text-center">
+                        <div className={`text-sm font-bold ${item.color}`}>{item.value}</div>
+                        <div className="text-[10px] text-muted-foreground">{item.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <UnifiedImportPanel onImport={handleImportData} diametroMm={diametroMm} material={material} />
+
+            <details className="group">
+              <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground">
+                Colar dados manualmente / Carregar Demo
+              </summary>
+              <div className="space-y-2 mt-2">
+                <Textarea placeholder={"358129.1978,7353581.4981,-0.8630\n..."} value={pasteData} onChange={e => setPasteData(e.target.value)} rows={3} />
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={handlePasteData} className="flex-1">Processar Colados</Button>
+                  <Button variant="secondary" size="sm" onClick={async () => {
+                    try {
+                      const res = await fetch("/demo/pontos_criadores.txt");
+                      const text = await res.text();
+                      const pts = parseTopographyCSV(text);
+                      processPoints(pts);
+                      toast.success("Demo carregado: pontos_criadores.txt");
+                    } catch (err: any) { toast.error(err.message); }
+                  }} className="flex-1">Carregar Demo</Button>
+                </div>
+              </div>
+            </details>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <Label className="text-xs">Diametro (mm)</Label>
+                <Select value={String(diametroMm)} onValueChange={v => setDiametroMm(Number(v))}>
+                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[100, 150, 200, 250, 300, 400, 500, 600, 800, 1000, 1200].map(d => <SelectItem key={d} value={String(d)}>DN{d}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Material</Label>
+                <Select value={material} onValueChange={setMaterial}>
+                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {["PVC", "PEAD", "Concreto", "Ferro Fundido"].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Tipo de Rede</Label>
+                <Select defaultValue="esgoto">
+                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="esgoto">Esgoto (Gravidade)</SelectItem>
+                    <SelectItem value="agua">Agua (Pressurizado)</SelectItem>
+                    <SelectItem value="drenagem">Drenagem Pluvial</SelectItem>
+                    <SelectItem value="recalque">Recalque/Elevatoria</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Tipo de Solo</Label>
+                <Select value={tipoSolo} onValueChange={v => setTipoSolo(v as TipoSolo)}>
+                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">1a Categoria</SelectItem>
+                    <SelectItem value="rochoso">2a Categoria</SelectItem>
+                    <SelectItem value="arenoso">3a Categoria (Rocha)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </CardContent>
         </Card>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" /> Importar Dados</CardTitle>
-              <CardDescription>CSV, TXT, XLSX, DXF, GeoJSON, IFC â€” Wizard de 4 etapas</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {pontos.length > 0 && (
-                <div className="border border-border rounded-lg p-4 bg-card">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="default" className="bg-green-600">{pontos.length} pontos</Badge>
-                      <Badge variant="secondary">{trechos.length} trechos</Badge>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => {
-                        const issues = validateProject();
-                        setValidationIssues(issues);
-                        setShowValidation(true);
-                      }}>
-                        <AlertTriangle className="h-4 w-4 mr-1" /> Validar
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={handleClearTopography}>
-                        <X className="h-4 w-4 mr-1" /> Limpar
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Dados processados. Importe mais arquivos ou limpe para substituir.</p>
-                </div>
-              )}
-
-              <UnifiedImportPanel onImport={processPoints} />
-
-              <div className="space-y-2">
-                <Label>Colar dados manualmente</Label>
-                <Textarea placeholder={"358129.1978,7353581.4981,-0.8630\n..."} value={pasteData} onChange={e => setPasteData(e.target.value)} rows={3} />
-                <Button variant="outline" size="sm" onClick={handlePasteData} className="w-full">Processar Dados Colados</Button>
-                <Button variant="secondary" size="sm" onClick={async () => {
-                  try {
-                    const res = await fetch("/demo/pontos_criadores.txt");
-                    const text = await res.text();
-                    const pts = parseTopographyCSV(text);
-                    processPoints(pts);
-                    toast.success("Demo carregado: pontos_criadores.txt");
-                  } catch (err: any) { toast.error(err.message); }
-                }} className="w-full">ðŸŽ¯ Carregar Demo (pontos_criadores.txt)</Button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>DiÃ¢metro (mm)</Label>
-                  <Select value={String(diametroMm)} onValueChange={v => setDiametroMm(Number(v))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {[100, 150, 200, 250, 300, 400, 500, 600, 800, 1000, 1200].map(d => <SelectItem key={d} value={String(d)}>DN{d}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Material</Label>
-                  <Select value={material} onValueChange={setMaterial}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {["PVC", "PEAD", "Concreto", "Ferro Fundido"].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Tipo de Rede</Label>
-                  <Select defaultValue="esgoto">
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="esgoto">Esgoto (Gravidade)</SelectItem>
-                      <SelectItem value="agua">Ãgua (Pressurizado)</SelectItem>
-                      <SelectItem value="drenagem">Drenagem Pluvial</SelectItem>
-                      <SelectItem value="recalque">Recalque/ElevatÃ³ria</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Tipo de Solo</Label>
-                  <Select value={tipoSolo} onValueChange={v => setTipoSolo(v as TipoSolo)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="normal">1Âª Categoria</SelectItem>
-                      <SelectItem value="rochoso">2Âª Categoria</SelectItem>
-                      <SelectItem value="arenoso">3Âª Categoria (Rocha)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          {networkSummary && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Resumo da Rede</CardTitle>
-                  <Select value={summaryFilter} onValueChange={setSummaryFilter}>
-                    <SelectTrigger className="w-[160px] h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos os Tipos</SelectItem>
-                      <SelectItem value="esgoto">Rede de Esgoto</SelectItem>
-                      <SelectItem value="agua">Rede de Ãgua</SelectItem>
-                      <SelectItem value="drenagem">Drenagem Pluvial</SelectItem>
-                      <SelectItem value="elevatoria">ElevatÃ³ria</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {(() => {
-                  const filteredTrechos = summaryFilter === "todos" ? trechos :
-                    summaryFilter === "esgoto" ? trechos.filter(t => t.tipoRede === "Esgoto por Gravidade") :
-                    summaryFilter === "elevatoria" ? trechos.filter(t => t.tipoRede !== "Esgoto por Gravidade") :
-                    trechos;
-                  const summary = summarizeNetwork(filteredTrechos);
-                  return (
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { label: "Pontos", value: pontos.length, color: "text-blue-600", desc: "Total de pontos topogrÃ¡ficos" },
-                        { label: "Trechos", value: summary.totalTrechos, color: "text-green-600", desc: "Segmentos de tubulaÃ§Ã£o" },
-                        { label: "Comprimento", value: `${fmt(summary.comprimentoTotal, 1)}m`, color: "text-orange-600", desc: "ExtensÃ£o total" },
-                        { label: "Gravidade", value: summary.trechosGravidade, color: "text-green-600", desc: "Escoamento por gravidade" },
-                        { label: "ElevatÃ³ria", value: summary.trechosElevatoria, color: "text-orange-600", desc: "Necessita bombeamento" },
-                        { label: "Decliv. MÃ©dia", value: `${(summary.declividadeMedia * 100).toFixed(2)}%`, color: "text-purple-600", desc: "Declividade mÃ©dia ponderada" },
-                      ].map((item, i) => (
-                        <TooltipProvider key={i}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="bg-muted/50 rounded-lg p-3 text-center cursor-help">
-                                <div className={`text-xl font-bold ${item.color}`}>{item.value}</div>
-                                <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                                  {item.label} <Info className="h-3 w-3" />
-                                </div>
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent><p className="max-w-[200px] text-xs">{item.desc}</p></TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </CardContent>
-            </Card>
-          )}
-        </div>
 
         {/* Spatial Layers Panel */}
         {getAllLayers().length > 0 && (
@@ -406,7 +375,7 @@ const HydroNetwork = () => {
                       <Badge variant="outline" className="text-[10px]">{layer.discipline}</Badge>
                       <Badge variant="outline" className="text-[10px]">{layer.geometryType}</Badge>
                     </div>
-                    <span className="text-muted-foreground">{layer.nodeIds.length} nÃ³s Â· {layer.edgeIds.length} trechos</span>
+                    <span className="text-muted-foreground">{layer.nodeIds.length} nos . {layer.edgeIds.length} trechos</span>
                   </div>
                 ))}
               </div>
@@ -437,8 +406,8 @@ const HydroNetwork = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>InÃ­cio</TableHead><TableHead>Fim</TableHead><TableHead>Comp.</TableHead>
-                      <TableHead>Decliv.</TableHead><TableHead>DesnÃ­vel</TableHead><TableHead>Material</TableHead>
+                      <TableHead>Inicio</TableHead><TableHead>Fim</TableHead><TableHead>Comp.</TableHead>
+                      <TableHead>Decliv.</TableHead><TableHead>Desnivel</TableHead><TableHead>Material</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>{trechos.map((t, i) => (
@@ -460,7 +429,7 @@ const HydroNetwork = () => {
         )}
         {trechos.length > 0 && (
           <Card>
-            <CardHeader><CardTitle>ExportaÃ§Ã£o</CardTitle><CardDescription>Exporte os dados em mÃºltiplos formatos</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Exportacao</CardTitle><CardDescription>Exporte os dados em multiplos formatos</CardDescription></CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 <Button variant="outline" size="sm" onClick={() => {
@@ -514,7 +483,7 @@ const HydroNetwork = () => {
     );
   }
 
-  // â”€â”€ ORÃ‡AMENTO MODULE â”€â”€
+  // â"€â"€ ORÃ‡AMENTO MODULE â"€â"€
   function OrcamentoModule() {
     return <BudgetCostModule trechos={trechos} pontos={pontos} />;
   }
@@ -529,7 +498,7 @@ const HydroNetwork = () => {
           <CardHeader><CardTitle>Camadas</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {["NÃ³s/PVs", "Trechos por Tipo", "Trechos por DiÃ¢metro", "Status (OK/WARN)", "Ãreas de ContribuiÃ§Ã£o", "Perfil Longitudinal"].map(layer => (
+              {["Nos/PVs", "Trechos por Tipo", "Trechos por Diametro", "Status (OK/WARN)", "Areas de Contribuicao", "Perfil Longitudinal"].map(layer => (
                 <Button key={layer} variant="outline" size="sm">{layer}</Button>
               ))}
             </div>
@@ -542,30 +511,30 @@ const HydroNetwork = () => {
   function ExportacaoGISModule() {
     return (
       <Card>
-        <CardHeader><CardTitle>ExportaÃ§Ã£o GIS</CardTitle><CardDescription>Exporte resultados para formatos GIS e CAD</CardDescription></CardHeader>
+        <CardHeader><CardTitle>Exportacao GIS</CardTitle><CardDescription>Exporte resultados para formatos GIS e CAD</CardDescription></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>CRS de SaÃ­da</Label>
+            <div><Label>CRS de Saida</Label>
               <Select defaultValue="31983"><SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="31983">SIRGAS 2000 / UTM 23S</SelectItem>
                   <SelectItem value="31984">SIRGAS 2000 / UTM 24S</SelectItem>
                   <SelectItem value="4326">WGS84 (Lat/Long)</SelectItem>
-                  <SelectItem value="4674">SIRGAS 2000 GeogrÃ¡fico</SelectItem>
+                  <SelectItem value="4674">SIRGAS 2000 Geografico</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             {[
-              { label: "Shapefile (.SHP)", icon: "ðŸ—ºï¸" },
-              { label: "GeoJSON", icon: "ðŸ“‹" },
-              { label: "GeoPackage (.gpkg)", icon: "ðŸ“¦" },
-              { label: "KML/KMZ", icon: "ðŸŒ" },
-              { label: "DXF (AutoCAD)", icon: "ðŸ“" },
-              { label: "CSV", icon: "ðŸ“Š" },
+              { label: "Shapefile (.SHP)", icon: "SHP" },
+              { label: "GeoJSON", icon: "JSON" },
+              { label: "GeoPackage (.gpkg)", icon: "GPKG" },
+              { label: "KML/KMZ", icon: "KML" },
+              { label: "DXF (AutoCAD)", icon: "DXF" },
+              { label: "CSV", icon: "CSV" },
             ].map(f => (
-              <Button key={f.label} variant="outline" size="sm" onClick={() => toast.info(`ExportaÃ§Ã£o ${f.label} em desenvolvimento`)} disabled={trechos.length === 0}>
+              <Button key={f.label} variant="outline" size="sm" onClick={() => toast.info(`Exportacao ${f.label} em desenvolvimento`)} disabled={trechos.length === 0}>
                 <span className="mr-1">{f.icon}</span>{f.label}
               </Button>
             ))}
@@ -576,12 +545,12 @@ const HydroNetwork = () => {
   }
 
   const moduleNames: Record<string, string> = {
-    topografia: "Topografia", esgoto: "Rede de Esgoto", agua: "Rede de Ãgua",
-    drenagem: "Drenagem Pluvial", quantitativos: "Quantitativos", orcamento: "OrÃ§amento e Custos",
-    bdi: "BDI â€” BenefÃ­cios e Despesas Indiretas", planejamento: "Planejamento", epanet: "EPANET", "epanet-pro": "EPANET PRO",
+    topografia: "Topografia", esgoto: "Rede de Esgoto", agua: "Rede de Agua",
+    drenagem: "Drenagem Pluvial", quantitativos: "Quantitativos", orcamento: "Orcamento e Custos",
+    bdi: "BDI - Beneficios e Despesas Indiretas", planejamento: "Planejamento", epanet: "EPANET", "epanet-pro": "EPANET PRO",
     swmm: "SWMM", openproject: "OpenProject", projectlibre: "ProjectLibre", qgis: "QGIS",
-    revisao: "RevisÃ£o por Pares", rdo: "RDO", "rdo-planejamento": "RDO Ã— Planejamento",
-    perfil: "Perfil Longitudinal", mapa: "Mapa Interativo", exportacao: "ExportaÃ§Ã£o GIS",
+    revisao: "Revisao por Pares", rdo: "RDO", "rdo-planejamento": "RDO Ã-- Planejamento",
+    perfil: "Perfil Longitudinal", mapa: "Mapa Interativo", exportacao: "Exportacao GIS",
   };
 
   return (
@@ -604,7 +573,7 @@ const HydroNetwork = () => {
                     savedAt: new Date().toISOString(), projectName: "HydroNetwork",
                   });
                   toast.success("Projeto salvo localmente!");
-                }}>ðŸ’¾ Salvar Projeto</Button>
+                }}> Salvar Projeto</Button>
                 <Button variant="outline" size="sm" onClick={() => {
                   const saved = loadHydroProject();
                   if (!saved) { toast.error("Nenhum projeto salvo encontrado."); return; }
@@ -613,7 +582,7 @@ const HydroNetwork = () => {
                   if (saved.rdos?.length) setRdos(saved.rdos);
                   if (saved.scheduleResult) setScheduleResult(saved.scheduleResult);
                   toast.success(`Projeto restaurado: ${saved.pontos?.length || 0} pontos, ${saved.trechos?.length || 0} trechos`);
-                }}>ðŸ“‚ Carregar Projeto</Button>
+                }}>"‚ Carregar Projeto</Button>
                 <Button variant="outline" size="sm" onClick={() => {
                   toast.info(`Pontos: ${pontos.length} | Trechos: ${trechos.length} | RDOs: ${rdos.length} | Camadas: ${getAllLayers().length} | CRS: ${getSpatialProject().crs.name}`);
                 }}>âœ… Verificar Plataforma</Button>
