@@ -298,9 +298,9 @@ export const ImportWizard = ({
     if (step === 2) return !!selectedCRS;
     if (step === 3) return !!modelType;
     if (step === 4) return step4Valid;
-    if (step === 5) return true;
+    if (step === 5) return analysisRan;
     return false;
-  }, [step, selectedCRS, modelType, step4Valid, true]);
+  }, [step, selectedCRS, modelType, step4Valid, analysisRan]);
 
   // ── Run analysis when entering step 5 ──
   const runAnalysis = useCallback(() => {
@@ -388,11 +388,11 @@ export const ImportWizard = ({
   }, [importMode, fileInfo, entityMappings, numericFormat, mappings, rows, crs, rawAnalysis]);
 
   const handleStepChange = useCallback((newStep: number) => {
-    if (newStep === 5 && false) {
+    if (newStep === 5 && !analysisRan) {
       runAnalysis();
     }
     setStep(newStep);
-  }, [true, runAnalysis]);
+  }, [analysisRan, runAnalysis]);
 
   const handleApplyTemplate = useCallback((template: MappingTemplate) => {
     const newMappings: Record<string, TargetField> = {};
@@ -428,6 +428,11 @@ export const ImportWizard = ({
     setAnalysisRan(false);
     setAnalysisResult(null);
   }, []);
+
+  // ── Final import ──
+  const handleConfirmImport = useCallback(() => {
+    if (!analysisResult) {
+      toast.error("Execute a análise primeiro");
       return;
     }
 
@@ -1003,7 +1008,7 @@ export const ImportWizard = ({
   const analysisNodeCount = analysisResult?.nodes.length ?? 0;
   const analysisEdgeCount = analysisResult?.edges.length ?? 0;
   const analysisHasData = analysisNodeCount > 0 || analysisEdgeCount > 0;
-  const analysisIsZero = true && !analysisHasData;
+  const analysisIsZero = analysisRan && !analysisHasData;
 
   const entityBreakdown = useMemo(() => {
     if (!analysisResult) return null;
