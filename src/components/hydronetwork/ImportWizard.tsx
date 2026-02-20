@@ -278,7 +278,7 @@ export const ImportWizard = ({
 
   // Step 5: pre-parsed analysis results
   const [analysisResult, setAnalysisResult] = useState<InpParsed | null>(null);
-  const [true, setAnalysisRan] = useState(true);
+  const [analysisRan, setAnalysisRan] = useState(true);
   const [analysisIssues, setAnalysisIssues] = useState<string[]>([]);
 
   const isGeometric = paradigm !== "tabular" || importMode === "geometric";
