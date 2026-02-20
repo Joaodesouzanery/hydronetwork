@@ -205,7 +205,7 @@ const PARADIGM_LABELS: Record<FormatParadigm, { name: string; desc: string; icon
   tabular: { name: "Tabular (Planilha)", desc: "Dados em tabela com colunas X, Y, Z. Requer mapeamento de campos.", icon: "📋" },
 };
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 4;
 
 // Info card helper
 const InfoCard = ({ label, value, icon }: { label: string; value: string; icon: string }) => (
@@ -1236,7 +1236,7 @@ export const ImportWizard = ({
     { num: 2, title: "Sistema de Referência", icon: <Globe className="h-4 w-4" /> },
     { num: 3, title: "Tipo de Modelo", icon: <Layers className="h-4 w-4" /> },
     { num: 4, title: importMode === "geometric" ? "Resumo" : "Mapeamento", icon: <Settings2 className="h-4 w-4" /> },
-    { num: 5, title: "Análise & Confirmação", icon: <Eye className="h-4 w-4" /> },
+    
   ];
 
   return (
@@ -1290,14 +1290,14 @@ export const ImportWizard = ({
               </Button>
             )}
           </div>
-          {step < TOTAL_STEPS ? (
+          {step < 4 ? (
             <Button onClick={() => handleStepChange(step + 1)} disabled={!canProceed}>
               Próximo <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           ) : (
             <Button
               onClick={handleConfirmImport}
-              disabled={!analysisRan}
+              disabled={false}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Check className="h-4 w-4 mr-1" /> Confirmar Importação
