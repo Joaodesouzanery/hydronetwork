@@ -105,6 +105,45 @@ export type ImportModelType = "rede" | "topografia" | "bim" | "generico" | "dese
 
 export type ImportMode = "geometric" | "tabular";
 
+/**
+ * FORMAT PARADIGMS — each format belongs to ONE paradigm.
+ * This determines what UI to show and what parsing logic to use.
+ *
+ * BIM:     IFC → 3D structured model with object hierarchy. NEVER uses X/Y fields.
+ * GIS:     GeoJSON, SHP, GPKG → geometry is explicit in the file. NEVER uses X/Y fields.
+ * CAD:     DXF, DWG → vector drawing entities (LINE, POLYLINE, etc). NEVER uses Nó Início/Fim.
+ * NETWORK: INP, SWMM → native hydraulic model with JUNCTIONS/PIPES. Self-contained.
+ * TABULAR: CSV, TXT, XLSX → only paradigm that uses X/Y field mapping.
+ */
+export type FormatParadigm = "bim" | "gis" | "cad" | "network" | "tabular";
+
+export function getFormatParadigm(format: ImportFileFormat): FormatParadigm {
+  switch (format) {
+    case "IFC": return "bim";
+    case "GeoJSON": case "SHP": return "gis";
+    case "DXF": case "DWG": return "cad";
+    case "INP": case "SWMM": return "network";
+    case "CSV": case "TXT": case "XLSX": default: return "tabular";
+  }
+}
+
+/** Returns true if the format has explicit geometry (not tabular X/Y). */
+export function isGeometryExplicitFormat(format: ImportFileFormat): boolean {
+  return getFormatParadigm(format) !== "tabular";
+}
+
+/** Returns true if the format should NEVER require Nó Início / Nó Fim fields. */
+export function isAutoTopologyFormat(format: ImportFileFormat): boolean {
+  const p = getFormatParadigm(format);
+  return p === "cad" || p === "gis" || p === "bim";
+}
+
+/** Returns true if the format should NEVER require X/Y field mapping. */
+export function isGeometryIntrinsicFormat(format: ImportFileFormat): boolean {
+  const p = getFormatParadigm(format);
+  return p !== "tabular";
+}
+
 export type EntityImportRole = "edge" | "node" | "drawing" | "ignore";
 
 export interface EntityTypeMapping {
