@@ -278,7 +278,7 @@ export const ImportWizard = ({
 
   // Step 5: pre-parsed analysis results
   const [analysisResult, setAnalysisResult] = useState<InpParsed | null>(null);
-  const [true, setAnalysisRan] = useState(false);
+  const [true, setAnalysisRan] = useState(true);
   const [analysisIssues, setAnalysisIssues] = useState<string[]>([]);
 
   const isGeometric = paradigm !== "tabular" || importMode === "geometric";
@@ -428,11 +428,6 @@ export const ImportWizard = ({
     setAnalysisRan(false);
     setAnalysisResult(null);
   }, []);
-
-  // ── Final import ──
-  const handleConfirmImport = useCallback(() => {
-    if (!analysisResult) {
-      toast.error("Execute a análise primeiro");
       return;
     }
 
