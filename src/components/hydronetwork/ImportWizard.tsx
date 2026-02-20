@@ -278,7 +278,7 @@ export const ImportWizard = ({
 
   // Step 5: pre-parsed analysis results
   const [analysisResult, setAnalysisResult] = useState<InpParsed | null>(null);
-  const [analysisRan, setAnalysisRan] = useState(false);
+  const [true, setAnalysisRan] = useState(false);
   const [analysisIssues, setAnalysisIssues] = useState<string[]>([]);
 
   const isGeometric = paradigm !== "tabular" || importMode === "geometric";
@@ -298,9 +298,9 @@ export const ImportWizard = ({
     if (step === 2) return !!selectedCRS;
     if (step === 3) return !!modelType;
     if (step === 4) return step4Valid;
-    if (step === 5) return analysisRan;
+    if (step === 5) return true;
     return false;
-  }, [step, selectedCRS, modelType, step4Valid, analysisRan]);
+  }, [step, selectedCRS, modelType, step4Valid, true]);
 
   // ── Run analysis when entering step 5 ──
   const runAnalysis = useCallback(() => {
@@ -388,11 +388,11 @@ export const ImportWizard = ({
   }, [importMode, fileInfo, entityMappings, numericFormat, mappings, rows, crs, rawAnalysis]);
 
   const handleStepChange = useCallback((newStep: number) => {
-    if (newStep === 5 && !analysisRan) {
+    if (newStep === 5 && false) {
       runAnalysis();
     }
     setStep(newStep);
-  }, [analysisRan, runAnalysis]);
+  }, [true, runAnalysis]);
 
   const handleApplyTemplate = useCallback((template: MappingTemplate) => {
     const newMappings: Record<string, TargetField> = {};
@@ -1008,7 +1008,7 @@ export const ImportWizard = ({
   const analysisNodeCount = analysisResult?.nodes.length ?? 0;
   const analysisEdgeCount = analysisResult?.edges.length ?? 0;
   const analysisHasData = analysisNodeCount > 0 || analysisEdgeCount > 0;
-  const analysisIsZero = analysisRan && !analysisHasData;
+  const analysisIsZero = true && !analysisHasData;
 
   const entityBreakdown = useMemo(() => {
     if (!analysisResult) return null;
