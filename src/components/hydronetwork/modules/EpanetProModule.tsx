@@ -25,13 +25,16 @@ import {
 import { NodeMapWidget, NodeData, ConnectionData } from "@/components/hydronetwork/NodeMapWidget";
 
 // ── Types ──
-interface Junction { id: string; elevation: number; demand: number; pattern: string; }
-interface Reservoir { id: string; head: number; pattern: string; }
-interface Tank { id: string; elevation: number; initLevel: number; minLevel: number; maxLevel: number; diameter: number; }
-interface Pipe { id: string; node1: string; node2: string; length: number; diameter: number; roughness: number; material: string; status: string; }
-interface Pump { id: string; node1: string; node2: string; power: number; }
-interface Valve { id: string; node1: string; node2: string; diameter: number; type: string; setting: number; }
+interface Junction { id: string; elevation: number; demand: number; pattern: string; emitter?: number; quality?: number; }
+interface Reservoir { id: string; head: number; pattern: string; quality?: number; }
+interface Tank { id: string; elevation: number; initLevel: number; minLevel: number; maxLevel: number; diameter: number; quality?: number; }
+interface Pipe { id: string; node1: string; node2: string; length: number; diameter: number; roughness: number; material: string; status: string; minorLoss?: number; }
+interface Pump { id: string; node1: string; node2: string; power: number; headCurve?: string; speed?: number; pumpPattern?: string; }
+interface Valve { id: string; node1: string; node2: string; diameter: number; type: string; setting: number; minorLoss?: number; }
 interface Coord { id: string; x: number; y: number; }
+interface Vertex { linkId: string; x: number; y: number; }
+interface InpPattern { id: string; multipliers: number[]; }
+interface InpCurve { id: string; type: string; points: { x: number; y: number }[]; }
 
 interface NodeResult {
   id: string; type: "junction" | "reservoir" | "tank";
@@ -102,11 +105,42 @@ function parseINP(content: string) {
   const pumps: Pump[] = [];
   const valves: Valve[] = [];
   const coords: Coord[] = [];
+  const vertices: Vertex[] = [];
+  const importedPatterns: InpPattern[] = [];
+  const importedCurves: InpCurve[] = [];
+
+  // Temporary maps for multi-line sections
+  const emitterMap = new Map<string, number>();
+  const statusMap = new Map<string, string>();
+  const qualityMap = new Map<string, number>();
+  const patternAccum = new Map<string, number[]>();
+  const curveAccum = new Map<string, { x: number; y: number }[]>();
+  const curveTypeMap = new Map<string, string>();
+
   let section = "";
-  for (const rawLine of lines) {
+  for (let li = 0; li < lines.length; li++) {
+    const rawLine = lines[li];
     const line = rawLine.trim();
     if (line.startsWith("[")) { section = line.toUpperCase().replace(/\s/g, ""); continue; }
-    if (!line || line.startsWith(";")) continue;
+    if (!line) continue;
+
+    // Detect curve type from comment line (EPANET convention)
+    if (line.startsWith(";") && section === "[CURVES]") {
+      const comment = line.substring(1).trim().toUpperCase();
+      const nextLine = li + 1 < lines.length ? lines[li + 1].trim().split(";")[0].trim() : "";
+      if (nextLine) {
+        const nextP = nextLine.split(/[\s\t]+/).filter(Boolean);
+        if (nextP.length >= 3) {
+          if (comment.includes("PUMP")) curveTypeMap.set(nextP[0], "PUMP");
+          else if (comment.includes("EFFICIENCY")) curveTypeMap.set(nextP[0], "EFFICIENCY");
+          else if (comment.includes("VOLUME")) curveTypeMap.set(nextP[0], "VOLUME");
+          else if (comment.includes("HEADLOSS")) curveTypeMap.set(nextP[0], "HEADLOSS");
+        }
+      }
+      continue;
+    }
+    if (line.startsWith(";")) continue;
+
     // Strip inline comments (semicolons after data)
     const dataLine = line.split(";")[0].trim();
     if (!dataLine) continue;
@@ -122,43 +156,155 @@ function parseINP(content: string) {
         if (p.length >= 6) tanks.push({ id: p[0], elevation: +p[1], initLevel: +p[2], minLevel: +p[3], maxLevel: +p[4], diameter: +p[5] });
         break;
       case "[PIPES]":
-        if (p.length >= 6) pipes.push({ id: p[0], node1: p[1], node2: p[2], length: +p[3], diameter: +p[4], roughness: +p[5], material: p.length >= 8 ? p[7] : "PVC", status: "Aberto" });
+        if (p.length >= 6) pipes.push({
+          id: p[0], node1: p[1], node2: p[2], length: +p[3], diameter: +p[4], roughness: +p[5],
+          material: p.length >= 8 ? p[7] : "PVC", status: "Aberto",
+          ...(p[6] && { minorLoss: +p[6] }),
+        });
         break;
       case "[PUMPS]":
         if (p.length >= 3) {
-          // Handle "POWER X" syntax
           const powerIdx = p.findIndex(v => v.toUpperCase() === "POWER");
+          const headIdx = p.findIndex(v => v.toUpperCase() === "HEAD");
+          const speedIdx = p.findIndex(v => v.toUpperCase() === "SPEED");
+          const patIdx = p.findIndex(v => v.toUpperCase() === "PATTERN");
           const power = powerIdx >= 0 && p[powerIdx + 1] ? +p[powerIdx + 1] : (+p[3] || 10);
-          pumps.push({ id: p[0], node1: p[1], node2: p[2], power });
+          pumps.push({
+            id: p[0], node1: p[1], node2: p[2], power,
+            ...(headIdx >= 0 && p[headIdx + 1] && { headCurve: p[headIdx + 1] }),
+            ...(speedIdx >= 0 && p[speedIdx + 1] && { speed: +p[speedIdx + 1] }),
+            ...(patIdx >= 0 && p[patIdx + 1] && { pumpPattern: p[patIdx + 1] }),
+          });
         }
         break;
       case "[VALVES]":
-        if (p.length >= 6) valves.push({ id: p[0], node1: p[1], node2: p[2], diameter: +p[3], type: p[4], setting: +p[5] });
+        if (p.length >= 6) valves.push({
+          id: p[0], node1: p[1], node2: p[2], diameter: +p[3], type: p[4], setting: +p[5],
+          ...(p[6] && { minorLoss: +p[6] }),
+        });
         break;
       case "[COORDINATES]":
         if (p.length >= 3) coords.push({ id: p[0], x: +p[1], y: +p[2] });
         break;
+      case "[VERTICES]":
+        if (p.length >= 3) vertices.push({ linkId: p[0], x: +p[1], y: +p[2] });
+        break;
+      case "[EMITTERS]":
+        if (p.length >= 2) emitterMap.set(p[0], +p[1]);
+        break;
+      case "[STATUS]":
+        if (p.length >= 2) statusMap.set(p[0], p[1].toUpperCase());
+        break;
+      case "[QUALITY]":
+        if (p.length >= 2) qualityMap.set(p[0], +p[1]);
+        break;
+      case "[PATTERNS]":
+        if (p.length >= 2) {
+          if (!patternAccum.has(p[0])) patternAccum.set(p[0], []);
+          patternAccum.get(p[0])!.push(...p.slice(1).map(v => +v));
+        }
+        break;
+      case "[CURVES]":
+        if (p.length >= 3) {
+          if (!curveAccum.has(p[0])) curveAccum.set(p[0], []);
+          curveAccum.get(p[0])!.push({ x: +p[1], y: +p[2] });
+        }
+        break;
     }
   }
-  return { junctions, reservoirs, tanks, pipes, pumps, valves, coords };
+
+  // Apply emitters, status, quality to nodes
+  for (const j of junctions) {
+    if (emitterMap.has(j.id)) j.emitter = emitterMap.get(j.id);
+    if (qualityMap.has(j.id)) j.quality = qualityMap.get(j.id);
+  }
+  for (const r of reservoirs) { if (qualityMap.has(r.id)) r.quality = qualityMap.get(r.id); }
+  for (const t of tanks) { if (qualityMap.has(t.id)) t.quality = qualityMap.get(t.id); }
+
+  // Apply status to links
+  for (const pipe of pipes) { if (statusMap.has(pipe.id)) pipe.status = statusMap.get(pipe.id) === "CLOSED" ? "Fechado" : "Aberto"; }
+
+  // Build patterns
+  for (const [id, multipliers] of patternAccum) {
+    importedPatterns.push({ id, multipliers });
+  }
+
+  // Build curves
+  for (const [id, points] of curveAccum) {
+    importedCurves.push({ id, type: curveTypeMap.get(id) || "GENERAL", points });
+  }
+
+  return { junctions, reservoirs, tanks, pipes, pumps, valves, coords, vertices, patterns: importedPatterns, curves: importedCurves };
 }
 
 // ── Generate INP file ──
-function generateINP(j: Junction[], r: Reservoir[], t: Tank[], p: Pipe[], pu: Pump[], v: Valve[], c: Coord[], opts: { headloss: string; units: string; duration: number; timestep: number }): string {
-  let out = `[TITLE]\nRede EPANET PRO\n\n[JUNCTIONS]\n;ID    Elev    Demand\n`;
-  j.forEach(n => { out += ` ${n.id}    ${n.elevation}     ${n.demand}\n`; });
+function generateINP(
+  j: Junction[], r: Reservoir[], t: Tank[], p: Pipe[], pu: Pump[], v: Valve[], c: Coord[],
+  opts: { headloss: string; units: string; duration: number; timestep: number },
+  verts?: Vertex[], pats?: InpPattern[], crvs?: InpCurve[]
+): string {
+  let out = `[TITLE]\nRede EPANET PRO\n\n[JUNCTIONS]\n;ID    Elev    Demand    Pattern\n`;
+  j.forEach(n => { out += ` ${n.id}    ${n.elevation}     ${n.demand}    ${n.pattern || ""}\n`; });
   out += `\n[RESERVOIRS]\n;ID    Head\n`;
   r.forEach(n => { out += ` ${n.id}    ${n.head}\n`; });
   out += `\n[TANKS]\n;ID    Elev    InitLvl    MinLvl    MaxLvl    Diam\n`;
   t.forEach(n => { out += ` ${n.id}    ${n.elevation}     ${n.initLevel}          ${n.minLevel}         ${n.maxLevel}        ${n.diameter}\n`; });
-  out += `\n[PIPES]\n;ID    Node1    Node2    Length    Diam    Rough\n`;
-  p.forEach(n => { out += ` ${n.id}    ${n.node1}       ${n.node2}       ${n.length}      ${n.diameter}     ${n.roughness}\n`; });
-  out += `\n[PUMPS]\n;ID    Node1    Node2    Power\n`;
-  pu.forEach(n => { out += ` ${n.id}    ${n.node1}       ${n.node2}    POWER ${n.power}\n`; });
-  out += `\n[VALVES]\n;ID    Node1    Node2    Diam    Type    Setting\n`;
-  v.forEach(n => { out += ` ${n.id}    ${n.node1}       ${n.node2}       ${n.diameter}     ${n.type}    ${n.setting}\n`; });
+  out += `\n[PIPES]\n;ID    Node1    Node2    Length    Diam    Rough    MinorLoss\n`;
+  p.forEach(n => { out += ` ${n.id}    ${n.node1}       ${n.node2}       ${n.length}      ${n.diameter}     ${n.roughness}    ${n.minorLoss || 0}\n`; });
+  out += `\n[PUMPS]\n;ID    Node1    Node2    Properties\n`;
+  pu.forEach(n => {
+    let props = n.headCurve ? `HEAD ${n.headCurve}` : `POWER ${n.power}`;
+    if (n.speed !== undefined) props += ` SPEED ${n.speed}`;
+    if (n.pumpPattern) props += ` PATTERN ${n.pumpPattern}`;
+    out += ` ${n.id}    ${n.node1}       ${n.node2}    ${props}\n`;
+  });
+  out += `\n[VALVES]\n;ID    Node1    Node2    Diam    Type    Setting    MinorLoss\n`;
+  v.forEach(n => { out += ` ${n.id}    ${n.node1}       ${n.node2}       ${n.diameter}     ${n.type}    ${n.setting}    ${n.minorLoss || 0}\n`; });
+
+  // Emitters
+  const emitterNodes = j.filter(n => n.emitter !== undefined && n.emitter > 0);
+  if (emitterNodes.length > 0) {
+    out += `\n[EMITTERS]\n;Junction    Coefficient\n`;
+    emitterNodes.forEach(n => { out += ` ${n.id}    ${n.emitter}\n`; });
+  }
+
+  // Patterns
+  if (pats && pats.length > 0) {
+    out += `\n[PATTERNS]\n;ID    Multipliers\n`;
+    pats.forEach(pat => {
+      // EPANET splits patterns into lines of 6 multipliers
+      for (let i = 0; i < pat.multipliers.length; i += 6) {
+        const chunk = pat.multipliers.slice(i, i + 6);
+        out += ` ${pat.id}    ${chunk.join("    ")}\n`;
+      }
+    });
+  }
+
+  // Curves
+  if (crvs && crvs.length > 0) {
+    out += `\n[CURVES]\n;ID    X-Value    Y-Value\n`;
+    crvs.forEach(crv => {
+      out += `;${crv.type}\n`;
+      crv.points.forEach(pt => { out += ` ${crv.id}    ${pt.x}    ${pt.y}\n`; });
+    });
+  }
+
+  // Quality
+  const qualityNodes = [...j.filter(n => n.quality !== undefined), ...r.filter(n => n.quality !== undefined), ...t.filter(n => n.quality !== undefined)];
+  if (qualityNodes.length > 0) {
+    out += `\n[QUALITY]\n;Node    InitQual\n`;
+    qualityNodes.forEach(n => { out += ` ${n.id}    ${(n as any).quality}\n`; });
+  }
+
   out += `\n[COORDINATES]\n;Node    X-Coord    Y-Coord\n`;
   c.forEach(n => { out += ` ${n.id}      ${n.x}          ${n.y}\n`; });
+
+  // Vertices
+  if (verts && verts.length > 0) {
+    out += `\n[VERTICES]\n;Link    X-Coord    Y-Coord\n`;
+    verts.forEach(vt => { out += ` ${vt.linkId}      ${vt.x}          ${vt.y}\n`; });
+  }
+
   out += `\n[TIMES]\n Duration           ${opts.duration}:00\n Hydraulic Timestep ${opts.timestep}:00\n Report Timestep    ${opts.timestep}:00\n\n`;
   out += `[OPTIONS]\n Units              ${opts.units}\n Headloss           ${opts.headloss === "hw" ? "H-W" : opts.headloss === "dw" ? "D-W" : "C-M"}\n\n[END]\n`;
   return out;
@@ -244,6 +390,9 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
   const [pumps, setPumps] = useState<Pump[]>([]);
   const [valves, setValves] = useState<Valve[]>([]);
   const [coords, setCoords] = useState<Coord[]>([]);
+  const [pipeVertices, setPipeVertices] = useState<Vertex[]>([]);
+  const [importedPatterns, setImportedPatterns] = useState<InpPattern[]>([]);
+  const [importedCurves, setImportedCurves] = useState<InpCurve[]>([]);
   const [results, setResults] = useState<SimResults | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -306,9 +455,17 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
       setPumps(parsed.pumps);
       setValves(parsed.valves);
       setCoords(parsed.coords);
+      setPipeVertices(parsed.vertices || []);
+      setImportedPatterns(parsed.patterns || []);
+      setImportedCurves(parsed.curves || []);
       setResults(null);
       rebuildMapConnections(parsed.pipes, parsed.pumps, parsed.valves);
-      toast.success(`INP importado: ${parsed.junctions.length} junções, ${parsed.pipes.length} tubos, ${parsed.coords.length} coordenadas`);
+      const extras: string[] = [];
+      if (parsed.vertices && parsed.vertices.length > 0) extras.push(`${parsed.vertices.length} vértices`);
+      if (parsed.patterns && parsed.patterns.length > 0) extras.push(`${parsed.patterns.length} padrões`);
+      if (parsed.curves && parsed.curves.length > 0) extras.push(`${parsed.curves.length} curvas`);
+      const extrasMsg = extras.length > 0 ? `, ${extras.join(", ")}` : "";
+      toast.success(`INP importado: ${parsed.junctions.length} junções, ${parsed.pipes.length} tubos, ${parsed.coords.length} coordenadas${extrasMsg}`);
     } catch (err: any) {
       toast.error(`Erro ao importar INP: ${err.message}`);
     }
@@ -328,7 +485,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
         const { Project, Workspace } = epanetModule;
         const ws = new Workspace();
         const model = new Project(ws);
-        const inpContent = generateINP(junctions, reservoirs, tanks, pipes, pumps, valves, coords, { headloss: headlossFormula, units: flowUnits, duration: simDuration, timestep: simTimestep });
+        const inpContent = generateINP(junctions, reservoirs, tanks, pipes, pumps, valves, coords, { headloss: headlossFormula, units: flowUnits, duration: simDuration, timestep: simTimestep }, pipeVertices, importedPatterns, importedCurves);
         const encoder = new TextEncoder();
         ws.writeFile("model.inp", encoder.encode(inpContent));
         model.open("model.inp", "report.rpt", "output.bin");
@@ -414,7 +571,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
   }, [results]);
 
   const exportINP = useCallback(() => {
-    const content = generateINP(junctions, reservoirs, tanks, pipes, pumps, valves, coords, { headloss: headlossFormula, units: flowUnits, duration: simDuration, timestep: simTimestep });
+    const content = generateINP(junctions, reservoirs, tanks, pipes, pumps, valves, coords, { headloss: headlossFormula, units: flowUnits, duration: simDuration, timestep: simTimestep }, pipeVertices, importedPatterns, importedCurves);
     const blob = new Blob([content], { type: "text/plain" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "model.inp"; a.click();
     toast.success("INP exportado");
@@ -437,7 +594,16 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
   // Chart data
   const pressureChartData = useMemo(() => results?.nodes.filter(n => n.type === "junction").map(n => ({ name: n.id, pressao: n.pressure, elevacao: n.elevation })) || [], [results]);
   const flowChartData = useMemo(() => results?.links.filter(l => l.type === "pipe").map(l => ({ name: l.id, vazao: l.flow, velocidade: l.velocity })) || [], [results]);
-  const patternChartData = useMemo(() => (DEMAND_PATTERNS[selectedPattern] || []).map((v, i) => ({ hora: `${i}h`, multiplicador: v })), [selectedPattern]);
+  // Merge default patterns with imported patterns
+  const allPatterns = useMemo(() => {
+    const merged: Record<string, number[]> = { ...DEMAND_PATTERNS };
+    for (const p of importedPatterns) {
+      merged[p.id] = p.multipliers;
+    }
+    return merged;
+  }, [importedPatterns]);
+
+  const patternChartData = useMemo(() => (allPatterns[selectedPattern] || []).map((v, i) => ({ hora: `${i}h`, multiplicador: v })), [selectedPattern, allPatterns]);
 
   // Editable table helpers
   const updateJunction = (idx: number, field: keyof Junction, val: string | number) => {
@@ -574,7 +740,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
                         <TableCell>
                           <Select value={j.pattern} onValueChange={v => updateJunction(idx, "pattern", v)}>
                             <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>{Object.keys(DEMAND_PATTERNS).map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                            <SelectContent>{Object.keys(allPatterns).map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
                           </Select>
                         </TableCell>
                         <TableCell><Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setJunctions(junctions.filter((_, i) => i !== idx)); setCoords(coords.filter(c => c.id !== j.id)); }}><X className="h-3 w-3" /></Button></TableCell>
@@ -752,7 +918,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
             <CardHeader><CardTitle className="text-sm">Padrões de Demanda (Multiplicador Horário)</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
-                {Object.keys(DEMAND_PATTERNS).map(p => (
+                {Object.keys(allPatterns).map(p => (
                   <Button key={p} size="sm" variant={selectedPattern === p ? "default" : "outline"} onClick={() => setSelectedPattern(p)}>{p}</Button>
                 ))}
               </div>

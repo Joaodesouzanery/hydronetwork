@@ -350,6 +350,8 @@ export function analyzeFileRaw(content: string, format: ImportFileFormat): RawFi
       const lines = content.split(/\r?\n/);
       let section = "";
       const counts = new Map<string, number>();
+      const patternIds = new Set<string>();
+      const curveIds = new Set<string>();
       for (const rawLine of lines) {
         const line = rawLine.trim();
         if (line.startsWith("[")) {
@@ -359,6 +361,7 @@ export function analyzeFileRaw(content: string, format: ImportFileFormat): RawFi
         if (!line || line.startsWith(";")) continue;
         const dataLine = line.split(";")[0].trim();
         if (!dataLine) continue;
+        const p = dataLine.split(/[\s\t]+/).filter(Boolean);
 
         if (section === "[JUNCTIONS]") counts.set("JUNCTION", (counts.get("JUNCTION") || 0) + 1);
         else if (section === "[PIPES]") counts.set("PIPE", (counts.get("PIPE") || 0) + 1);
@@ -366,8 +369,11 @@ export function analyzeFileRaw(content: string, format: ImportFileFormat): RawFi
         else if (section === "[TANKS]") counts.set("TANK", (counts.get("TANK") || 0) + 1);
         else if (section === "[PUMPS]") counts.set("PUMP", (counts.get("PUMP") || 0) + 1);
         else if (section === "[VALVES]") counts.set("VALVE", (counts.get("VALVE") || 0) + 1);
+        else if (section === "[VERTICES]") counts.set("VERTEX", (counts.get("VERTEX") || 0) + 1);
+        else if (section === "[EMITTERS]") counts.set("EMITTER", (counts.get("EMITTER") || 0) + 1);
+        else if (section === "[PATTERNS]" && p.length >= 1) patternIds.add(p[0]);
+        else if (section === "[CURVES]" && p.length >= 1) curveIds.add(p[0]);
         else if (section === "[COORDINATES]") {
-          const p = dataLine.split(/[\s\t]+/).filter(Boolean);
           if (p.length >= 3) {
             const x = parseFloat(p[1]);
             const y = parseFloat(p[2]);
@@ -376,6 +382,8 @@ export function analyzeFileRaw(content: string, format: ImportFileFormat): RawFi
           }
         }
       }
+      if (patternIds.size > 0) counts.set("PATTERN", patternIds.size);
+      if (curveIds.size > 0) counts.set("CURVE", curveIds.size);
       result.entityCounts = Array.from(counts.entries()).map(([type, count]) => ({
         type, count, geometricClass: classifyGeometryType(type),
       }));
@@ -490,6 +498,47 @@ export function detectFileFormat(fileName: string, content?: string): ImportFile
 // Does NOT alter hydraulic parameters.
 // ════════════════════════════════════════
 
+export interface InpPattern {
+  id: string;
+  multipliers: number[];
+}
+
+export interface InpCurve {
+  id: string;
+  type: "PUMP" | "EFFICIENCY" | "VOLUME" | "HEADLOSS" | "GENERAL";
+  points: { x: number; y: number }[];
+}
+
+export interface InpOptions {
+  units?: string;
+  headloss?: string;
+  quality?: string;
+  viscosity?: number;
+  diffusivity?: number;
+  specificGravity?: number;
+  trials?: number;
+  accuracy?: number;
+  unbalanced?: string;
+  pattern?: string;
+  demandMultiplier?: number;
+  emitterExponent?: number;
+  [key: string]: any;
+}
+
+export interface InpTimes {
+  duration?: string;
+  hydraulicTimestep?: string;
+  qualityTimestep?: string;
+  reportTimestep?: string;
+  reportStart?: string;
+  patternTimestep?: string;
+  patternStart?: string;
+  ruleTimestep?: string;
+  startClocktime?: string;
+  statistic?: string;
+  [key: string]: any;
+}
+
 export interface InpParsed {
   nodes: Array<{ id: string; x: number; y: number; z: number; tipo: NodeType; demanda?: number; properties: Record<string, any> }>;
   edges: Array<{
@@ -498,15 +547,31 @@ export interface InpParsed {
     vertices?: [number, number, number][];
     properties: Record<string, any>;
   }>;
+  patterns?: InpPattern[];
+  curves?: InpCurve[];
+  options?: InpOptions;
+  times?: InpTimes;
 }
 
 export function parseINPToInternal(content: string): InpParsed {
   const lines = content.split(/\r?\n/);
   const nodes: InpParsed["nodes"] = [];
   const edges: InpParsed["edges"] = [];
+  const patterns: InpPattern[] = [];
+  const curves: InpCurve[] = [];
+  const options: InpOptions = {};
+  const times: InpTimes = {};
   const coordMap = new Map<string, { x: number; y: number }>();
+  const verticesMap = new Map<string, [number, number, number][]>();
+  const emitterMap = new Map<string, number>();
+  const statusMap = new Map<string, string>();
+  const qualityMap = new Map<string, number>();
+  const patternMap = new Map<string, number[]>();
+  const curveMap = new Map<string, { x: number; y: number }[]>();
+  const curveTypeMap = new Map<string, InpCurve["type"]>();
   let section = "";
 
+  // ── Pass 1: Collect coordinates, vertices, and lookup data ──
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (line.startsWith("[")) { section = line.toUpperCase().replace(/\s/g, ""); continue; }
@@ -514,11 +579,106 @@ export function parseINPToInternal(content: string): InpParsed {
     const dataLine = line.split(";")[0].trim();
     if (!dataLine) continue;
     const p = dataLine.split(/[\s\t]+/).filter(Boolean);
+
     if (section === "[COORDINATES]" && p.length >= 3) {
       coordMap.set(p[0], { x: +p[1], y: +p[2] });
+    } else if (section === "[VERTICES]" && p.length >= 3) {
+      const linkId = p[0];
+      if (!verticesMap.has(linkId)) verticesMap.set(linkId, []);
+      verticesMap.get(linkId)!.push([+p[1], +p[2], 0]);
+    } else if (section === "[EMITTERS]" && p.length >= 2) {
+      emitterMap.set(p[0], +p[1]);
+    } else if (section === "[STATUS]" && p.length >= 2) {
+      statusMap.set(p[0], p[1].toUpperCase());
+    } else if (section === "[QUALITY]" && p.length >= 2) {
+      qualityMap.set(p[0], +p[1]);
+    } else if (section === "[PATTERNS]" && p.length >= 2) {
+      const patId = p[0];
+      const multipliers = p.slice(1).map(v => +v);
+      if (!patternMap.has(patId)) patternMap.set(patId, []);
+      patternMap.get(patId)!.push(...multipliers);
+    } else if (section === "[CURVES]" && p.length >= 3) {
+      const curveId = p[0];
+      if (!curveMap.has(curveId)) curveMap.set(curveId, []);
+      curveMap.get(curveId)!.push({ x: +p[1], y: +p[2] });
+    } else if (section === "[OPTIONS]" && p.length >= 2) {
+      const key = p[0].toLowerCase();
+      const val = p.slice(1).join(" ");
+      switch (key) {
+        case "units": options.units = val; break;
+        case "headloss": options.headloss = val; break;
+        case "quality": options.quality = val; break;
+        case "viscosity": options.viscosity = +p[1]; break;
+        case "diffusivity": options.diffusivity = +p[1]; break;
+        case "specific": if (p[1]?.toLowerCase() === "gravity") options.specificGravity = +p[2]; break;
+        case "trials": options.trials = +p[1]; break;
+        case "accuracy": options.accuracy = +p[1]; break;
+        case "unbalanced": options.unbalanced = val; break;
+        case "pattern": options.pattern = p[1]; break;
+        case "demand": if (p[1]?.toLowerCase() === "multiplier") options.demandMultiplier = +p[2]; break;
+        case "emitter": if (p[1]?.toLowerCase() === "exponent") options.emitterExponent = +p[2]; break;
+        default: options[key] = val; break;
+      }
+    } else if (section === "[TIMES]" && p.length >= 2) {
+      const key = p[0].toLowerCase();
+      const val = p.slice(1).join(" ");
+      switch (key) {
+        case "duration": times.duration = val; break;
+        case "hydraulic": if (p[1]?.toLowerCase() === "timestep") times.hydraulicTimestep = p.slice(2).join(" "); break;
+        case "quality": if (p[1]?.toLowerCase() === "timestep") times.qualityTimestep = p.slice(2).join(" "); break;
+        case "report": {
+          const sub = p[1]?.toLowerCase();
+          if (sub === "timestep") times.reportTimestep = p.slice(2).join(" ");
+          else if (sub === "start") times.reportStart = p.slice(2).join(" ");
+          break;
+        }
+        case "pattern": {
+          const sub = p[1]?.toLowerCase();
+          if (sub === "timestep") times.patternTimestep = p.slice(2).join(" ");
+          else if (sub === "start") times.patternStart = p.slice(2).join(" ");
+          break;
+        }
+        case "rule": if (p[1]?.toLowerCase() === "timestep") times.ruleTimestep = p.slice(2).join(" "); break;
+        case "start": if (p[1]?.toLowerCase() === "clocktime") times.startClocktime = p.slice(2).join(" "); break;
+        case "statistic": times.statistic = val; break;
+        default: times[key] = val; break;
+      }
     }
   }
 
+  // ── Detect curve types from comments (EPANET convention: ;TYPE line before data) ──
+  section = "";
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.startsWith("[")) { section = line.toUpperCase().replace(/\s/g, ""); continue; }
+    if (section !== "[CURVES]") continue;
+    if (line.startsWith(";") && i + 1 < lines.length) {
+      const comment = line.substring(1).trim().toUpperCase();
+      const nextLine = lines[i + 1].trim().split(";")[0].trim();
+      if (nextLine) {
+        const nextP = nextLine.split(/[\s\t]+/).filter(Boolean);
+        if (nextP.length >= 3) {
+          const curveId = nextP[0];
+          if (comment.includes("PUMP")) curveTypeMap.set(curveId, "PUMP");
+          else if (comment.includes("EFFICIENCY")) curveTypeMap.set(curveId, "EFFICIENCY");
+          else if (comment.includes("VOLUME")) curveTypeMap.set(curveId, "VOLUME");
+          else if (comment.includes("HEADLOSS")) curveTypeMap.set(curveId, "HEADLOSS");
+        }
+      }
+    }
+  }
+
+  // ── Build patterns array ──
+  for (const [id, multipliers] of patternMap) {
+    patterns.push({ id, multipliers });
+  }
+
+  // ── Build curves array ──
+  for (const [id, points] of curveMap) {
+    curves.push({ id, type: curveTypeMap.get(id) || "GENERAL", points });
+  }
+
+  // ── Pass 2: Build nodes and edges ──
   section = "";
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -532,67 +692,113 @@ export function parseINPToInternal(content: string): InpParsed {
       case "[JUNCTIONS]":
         if (p.length >= 2) {
           const coord = coordMap.get(p[0]) || { x: 0, y: 0 };
+          const emitter = emitterMap.get(p[0]);
+          const quality = qualityMap.get(p[0]);
           nodes.push({
             id: p[0], x: coord.x, y: coord.y, z: +p[1],
             tipo: "junction", demanda: p.length >= 3 ? +p[2] : undefined,
-            properties: { elevation: +p[1], demand: p.length >= 3 ? +p[2] : 0, pattern: p[3] || "", _source: "INP" },
+            properties: {
+              elevation: +p[1], demand: p.length >= 3 ? +p[2] : 0, pattern: p[3] || "",
+              ...(emitter !== undefined && { emitter }),
+              ...(quality !== undefined && { quality }),
+              _source: "INP",
+            },
           });
         }
         break;
       case "[RESERVOIRS]":
         if (p.length >= 2) {
           const coord = coordMap.get(p[0]) || { x: 0, y: 0 };
+          const quality = qualityMap.get(p[0]);
           nodes.push({
             id: p[0], x: coord.x, y: coord.y, z: +p[1],
             tipo: "reservoir",
-            properties: { head: +p[1], pattern: p[2] || "", _source: "INP" },
+            properties: {
+              head: +p[1], pattern: p[2] || "",
+              ...(quality !== undefined && { quality }),
+              _source: "INP",
+            },
           });
         }
         break;
       case "[TANKS]":
         if (p.length >= 6) {
           const coord = coordMap.get(p[0]) || { x: 0, y: 0 };
+          const quality = qualityMap.get(p[0]);
           nodes.push({
             id: p[0], x: coord.x, y: coord.y, z: +p[1],
             tipo: "reservoir",
-            properties: { elevation: +p[1], initLevel: +p[2], minLevel: +p[3], maxLevel: +p[4], diameter: +p[5], _source: "INP", _type: "tank" },
+            properties: {
+              elevation: +p[1], initLevel: +p[2], minLevel: +p[3], maxLevel: +p[4], diameter: +p[5],
+              ...(quality !== undefined && { quality }),
+              _source: "INP", _type: "tank",
+            },
           });
         }
         break;
       case "[PIPES]":
         if (p.length >= 6) {
+          const linkVertices = verticesMap.get(p[0]);
+          const linkStatus = statusMap.get(p[0]);
           edges.push({
             id: p[0], startNodeId: p[1], endNodeId: p[2],
             dn: +p[4], material: p.length >= 8 ? p[7] : "PVC",
             tipoRede: "Rede de Água", roughness: +p[5],
-            properties: { length: +p[3], diameter: +p[4], roughness: +p[5], _source: "INP" },
+            ...(linkVertices && { vertices: linkVertices }),
+            properties: {
+              length: +p[3], diameter: +p[4], roughness: +p[5],
+              ...(linkStatus && { status: linkStatus }),
+              ...(p[6] && { minorLoss: +p[6] }),
+              _source: "INP",
+            },
           });
         }
         break;
       case "[PUMPS]":
         if (p.length >= 3) {
           const powerIdx = p.findIndex(v => v.toUpperCase() === "POWER");
+          const headIdx = p.findIndex(v => v.toUpperCase() === "HEAD");
+          const speedIdx = p.findIndex(v => v.toUpperCase() === "SPEED");
+          const patIdx = p.findIndex(v => v.toUpperCase() === "PATTERN");
           const power = powerIdx >= 0 && p[powerIdx + 1] ? +p[powerIdx + 1] : (+p[3] || 10);
+          const linkVertices = verticesMap.get(p[0]);
+          const linkStatus = statusMap.get(p[0]);
           edges.push({
             id: p[0], startNodeId: p[1], endNodeId: p[2],
             dn: 0, material: "Bomba", tipoRede: "Recalque",
-            properties: { power, _source: "INP", _type: "pump" },
+            ...(linkVertices && { vertices: linkVertices }),
+            properties: {
+              power,
+              ...(headIdx >= 0 && p[headIdx + 1] && { headCurve: p[headIdx + 1] }),
+              ...(speedIdx >= 0 && p[speedIdx + 1] && { speed: +p[speedIdx + 1] }),
+              ...(patIdx >= 0 && p[patIdx + 1] && { pattern: p[patIdx + 1] }),
+              ...(linkStatus && { status: linkStatus }),
+              _source: "INP", _type: "pump",
+            },
           });
         }
         break;
       case "[VALVES]":
         if (p.length >= 6) {
+          const linkVertices = verticesMap.get(p[0]);
+          const linkStatus = statusMap.get(p[0]);
           edges.push({
             id: p[0], startNodeId: p[1], endNodeId: p[2],
             dn: +p[3], material: "Válvula", tipoRede: "Rede de Água",
-            properties: { valveType: p[4], setting: +p[5], _source: "INP", _type: "valve" },
+            ...(linkVertices && { vertices: linkVertices }),
+            properties: {
+              valveType: p[4], setting: +p[5],
+              ...(p[6] && { minorLoss: +p[6] }),
+              ...(linkStatus && { status: linkStatus }),
+              _source: "INP", _type: "valve",
+            },
           });
         }
         break;
     }
   }
 
-  return { nodes, edges };
+  return { nodes, edges, patterns, curves, options, times };
 }
 
 // ════════════════════════════════════════
