@@ -31,6 +31,7 @@ export interface ConnectionData {
   to: string;
   label?: string;
   color?: string;
+  vertices?: [number, number][];
 }
 
 interface NodeMapWidgetProps {
@@ -284,8 +285,14 @@ export const NodeMapWidget = ({
       const toCoords = getCoords(to.x, to.y);
       if (!isFinite(fromCoords[0]) || !isFinite(toCoords[0])) return;
       const isSelectedForDel = deleteMode === "connections" && selectedConnsForDelete.has(idx);
-      
-      const line = L.polyline([fromCoords, toCoords], {
+
+      // Build polyline path: start → intermediate vertices → end
+      const intermediatePts: [number, number][] = c.vertices
+        ? c.vertices.map(v => getCoords(v[0], v[1])).filter(pt => isFinite(pt[0]) && isFinite(pt[1]))
+        : [];
+      const pathPoints: [number, number][] = [fromCoords, ...intermediatePts, toCoords];
+
+      const line = L.polyline(pathPoints, {
         color: isSelectedForDel ? "#dc2626" : (c.color || accentColor),
         weight: isSelectedForDel ? 6 : 3,
         opacity: isSelectedForDel ? 1 : 0.8,

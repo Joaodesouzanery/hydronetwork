@@ -162,11 +162,17 @@ export interface ImportEngineResult {
   drawingLayers: SpatialLayer[];
   networkLayers: SpatialLayer[];
   validationIssues: ValidationIssue[];
+  patterns?: InpPattern[];
+  curves?: InpCurve[];
+  options?: InpOptions;
+  times?: InpTimes;
   stats: {
     nodesCreated: number;
     edgesCreated: number;
     drawingLayersCreated: number;
     networkLayersCreated: number;
+    patternsCount?: number;
+    curvesCount?: number;
   };
 }
 
@@ -1328,11 +1334,17 @@ export function importToSpatialCore(
     drawingLayers,
     networkLayers,
     validationIssues,
+    patterns: parsed.patterns,
+    curves: parsed.curves,
+    options: parsed.options,
+    times: parsed.times,
     stats: {
       nodesCreated: createdNodes.length,
       edgesCreated: createdEdges.length,
       drawingLayersCreated: drawingLayers.length,
       networkLayersCreated: networkLayers.length,
+      patternsCount: parsed.patterns?.length,
+      curvesCount: parsed.curves?.length,
     },
   };
 }

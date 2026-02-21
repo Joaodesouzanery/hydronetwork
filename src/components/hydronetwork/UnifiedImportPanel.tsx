@@ -42,6 +42,9 @@ interface ParseResult {
   edges: ParsedEdge[];
   layers: string[];
   fields: string[];
+  patternsCount?: number;
+  curvesCount?: number;
+  verticesCount?: number;
 }
 
 interface FileQueueItem {

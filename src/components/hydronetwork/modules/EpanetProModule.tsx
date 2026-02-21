@@ -411,12 +411,33 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
   const totalLinks = pipes.length + pumps.length + valves.length;
   const totalExtension = pipes.reduce((s, p) => s + p.length, 0);
 
-  // ── Rebuild map connections from pipes/pumps ──
-  const rebuildMapConnections = useCallback((p: Pipe[], pu: Pump[], v: Valve[]) => {
+  // ── Rebuild map connections from pipes/pumps (with polyline vertices) ──
+  const rebuildMapConnections = useCallback((p: Pipe[], pu: Pump[], v: Valve[], verts?: Vertex[]) => {
     const conns: ConnectionData[] = [
-      ...p.map(pipe => ({ from: pipe.node1, to: pipe.node2, color: "#3b82f6", label: `${pipe.id}: DN${pipe.diameter}` })),
-      ...pu.map(pump => ({ from: pump.node1, to: pump.node2, color: "#f59e0b", label: `${pump.id}: Bomba` })),
-      ...v.map(valve => ({ from: valve.node1, to: valve.node2, color: "#8b5cf6", label: `${valve.id}: Válvula` })),
+      ...p.map(pipe => {
+        const pipeVerts = verts?.filter(vt => vt.linkId === pipe.id).map(vt => [vt.x, vt.y] as [number, number]);
+        return {
+          from: pipe.node1, to: pipe.node2, color: "#3b82f6",
+          label: `${pipe.id}: DN${pipe.diameter}`,
+          ...(pipeVerts && pipeVerts.length > 0 && { vertices: pipeVerts }),
+        };
+      }),
+      ...pu.map(pump => {
+        const pumpVerts = verts?.filter(vt => vt.linkId === pump.id).map(vt => [vt.x, vt.y] as [number, number]);
+        return {
+          from: pump.node1, to: pump.node2, color: "#f59e0b",
+          label: `${pump.id}: Bomba`,
+          ...(pumpVerts && pumpVerts.length > 0 && { vertices: pumpVerts }),
+        };
+      }),
+      ...v.map(valve => {
+        const valveVerts = verts?.filter(vt => vt.linkId === valve.id).map(vt => [vt.x, vt.y] as [number, number]);
+        return {
+          from: valve.node1, to: valve.node2, color: "#8b5cf6",
+          label: `${valve.id}: Válvula`,
+          ...(valveVerts && valveVerts.length > 0 && { vertices: valveVerts }),
+        };
+      }),
     ];
     setMapConnections(conns);
   }, []);
@@ -459,7 +480,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
       setImportedPatterns(parsed.patterns || []);
       setImportedCurves(parsed.curves || []);
       setResults(null);
-      rebuildMapConnections(parsed.pipes, parsed.pumps, parsed.valves);
+      rebuildMapConnections(parsed.pipes, parsed.pumps, parsed.valves, parsed.vertices);
       const extras: string[] = [];
       if (parsed.vertices && parsed.vertices.length > 0) extras.push(`${parsed.vertices.length} vértices`);
       if (parsed.patterns && parsed.patterns.length > 0) extras.push(`${parsed.patterns.length} padrões`);
@@ -610,7 +631,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
     const u = [...junctions]; (u[idx] as any)[field] = val; setJunctions(u);
   };
   const updatePipe = (idx: number, field: keyof Pipe, val: string | number) => {
-    const u = [...pipes]; (u[idx] as any)[field] = val; setPipes(u); rebuildMapConnections(u, pumps, valves);
+    const u = [...pipes]; (u[idx] as any)[field] = val; setPipes(u); rebuildMapConnections(u, pumps, valves, pipeVertices);
   };
 
   return (
@@ -642,6 +663,13 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
               </div>
             ))}
           </div>
+          {(pipeVertices.length > 0 || importedPatterns.length > 0 || importedCurves.length > 0) && (
+            <div className="flex gap-2 flex-wrap mb-3">
+              {pipeVertices.length > 0 && <Badge variant="secondary" className="text-[10px]">📐 {pipeVertices.length} vértices</Badge>}
+              {importedPatterns.length > 0 && <Badge variant="secondary" className="text-[10px]">📊 {importedPatterns.length} padrões</Badge>}
+              {importedCurves.length > 0 && <Badge variant="secondary" className="text-[10px]">📈 {importedCurves.length} curvas</Badge>}
+            </div>
+          )}
           <div className="flex gap-2 flex-wrap">
             <input ref={fileInputRef} type="file" accept=".inp,.INP" className="hidden" onChange={handleFileUpload} key={fileInputKey} />
             <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4 mr-1" /> Importar .INP</Button>
@@ -652,7 +680,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
               const newCoords: Coord[] = topoPontos.map(p => ({ id: p.id, x: p.x, y: p.y }));
               const newPipes: Pipe[] = topoTrechos.map((t, i) => ({ id: `P${i + 1}`, node1: t.idInicio, node2: t.idFim, length: t.comprimento, diameter: t.diametroMm, roughness: 130, material: t.material, status: "Aberto" }));
               setJunctions(newJunctions); setReservoirs([]); setTanks([]); setPipes(newPipes); setPumps([]); setValves([]); setCoords(newCoords);
-              setResults(null); rebuildMapConnections(newPipes, [], []);
+              setResults(null); rebuildMapConnections(newPipes, [], [], []);
               toast.success(`Importado da Topografia: ${newJunctions.length} junções, ${newPipes.length} tubos`);
             }} disabled={topoPontos.length === 0}>
               <MapPin className="h-4 w-4 mr-1" /> Importar da Topografia
@@ -820,7 +848,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
                           </Select>
                         </TableCell>
                         <TableCell><Badge variant="outline" className="text-[10px]">{p.status}</Badge></TableCell>
-                        <TableCell><Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { const u = pipes.filter((_, i) => i !== idx); setPipes(u); rebuildMapConnections(u, pumps, valves); }}><X className="h-3 w-3" /></Button></TableCell>
+                        <TableCell><Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { const u = pipes.filter((_, i) => i !== idx); setPipes(u); rebuildMapConnections(u, pumps, valves, pipeVertices); }}><X className="h-3 w-3" /></Button></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -844,11 +872,11 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
                 {pumps.map((p, idx) => (
                   <div key={p.id} className="flex gap-2 items-center bg-muted/30 rounded p-2 mb-2">
                     <Input className="h-7 w-16 text-xs" value={p.id} onChange={e => { const u = [...pumps]; u[idx].id = e.target.value; setPumps(u); }} />
-                    <Input className="h-7 w-16 text-xs" placeholder="Nó1" value={p.node1} onChange={e => { const u = [...pumps]; u[idx].node1 = e.target.value; setPumps(u); rebuildMapConnections(pipes, u, valves); }} />
-                    <Input className="h-7 w-16 text-xs" placeholder="Nó2" value={p.node2} onChange={e => { const u = [...pumps]; u[idx].node2 = e.target.value; setPumps(u); rebuildMapConnections(pipes, u, valves); }} />
+                    <Input className="h-7 w-16 text-xs" placeholder="Nó1" value={p.node1} onChange={e => { const u = [...pumps]; u[idx].node1 = e.target.value; setPumps(u); rebuildMapConnections(pipes, u, valves, pipeVertices); }} />
+                    <Input className="h-7 w-16 text-xs" placeholder="Nó2" value={p.node2} onChange={e => { const u = [...pumps]; u[idx].node2 = e.target.value; setPumps(u); rebuildMapConnections(pipes, u, valves, pipeVertices); }} />
                     <Label className="text-xs">kW:</Label>
                     <Input className="h-7 w-20 text-xs" type="number" value={p.power} onChange={e => { const u = [...pumps]; u[idx].power = +e.target.value; setPumps(u); }} />
-                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { const u = pumps.filter((_, i) => i !== idx); setPumps(u); rebuildMapConnections(pipes, u, valves); }}><X className="h-3 w-3" /></Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { const u = pumps.filter((_, i) => i !== idx); setPumps(u); rebuildMapConnections(pipes, u, valves, pipeVertices); }}><X className="h-3 w-3" /></Button>
                   </div>
                 ))}
               </CardContent>
@@ -864,15 +892,15 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
                 {valves.map((v, idx) => (
                   <div key={v.id} className="flex gap-2 items-center bg-muted/30 rounded p-2 mb-2 flex-wrap">
                     <Input className="h-7 w-16 text-xs" value={v.id} onChange={e => { const u = [...valves]; u[idx].id = e.target.value; setValves(u); }} />
-                    <Input className="h-7 w-16 text-xs" placeholder="Nó1" value={v.node1} onChange={e => { const u = [...valves]; u[idx].node1 = e.target.value; setValves(u); rebuildMapConnections(pipes, pumps, u); }} />
-                    <Input className="h-7 w-16 text-xs" placeholder="Nó2" value={v.node2} onChange={e => { const u = [...valves]; u[idx].node2 = e.target.value; setValves(u); rebuildMapConnections(pipes, pumps, u); }} />
+                    <Input className="h-7 w-16 text-xs" placeholder="Nó1" value={v.node1} onChange={e => { const u = [...valves]; u[idx].node1 = e.target.value; setValves(u); rebuildMapConnections(pipes, pumps, u, pipeVertices); }} />
+                    <Input className="h-7 w-16 text-xs" placeholder="Nó2" value={v.node2} onChange={e => { const u = [...valves]; u[idx].node2 = e.target.value; setValves(u); rebuildMapConnections(pipes, pumps, u, pipeVertices); }} />
                     <Input className="h-7 w-20 text-xs" type="number" placeholder="DN" value={v.diameter} onChange={e => { const u = [...valves]; u[idx].diameter = +e.target.value; setValves(u); }} />
                     <Select value={v.type} onValueChange={val => { const u = [...valves]; u[idx].type = val; setValves(u); }}>
                       <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>{["PRV", "PSV", "FCV", "TCV"].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                     </Select>
                     <Input className="h-7 w-20 text-xs" type="number" placeholder="Setting" value={v.setting} onChange={e => { const u = [...valves]; u[idx].setting = +e.target.value; setValves(u); }} />
-                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { const u = valves.filter((_, i) => i !== idx); setValves(u); rebuildMapConnections(pipes, pumps, u); }}><X className="h-3 w-3" /></Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { const u = valves.filter((_, i) => i !== idx); setValves(u); rebuildMapConnections(pipes, pumps, u, pipeVertices); }}><X className="h-3 w-3" /></Button>
                   </div>
                 ))}
               </CardContent>
@@ -936,8 +964,40 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
                 {selectedPattern === "Comercial" && "Pico em horário comercial (8-17h)"}
                 {selectedPattern === "Industrial" && "Consumo constante durante operação (6-18h)"}
               </p>
+              {importedPatterns.length > 0 && (
+                <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <p className="text-xs font-medium text-blue-700 dark:text-blue-400">{importedPatterns.length} padrão(ões) importado(s) do arquivo INP</p>
+                </div>
+              )}
             </CardContent>
           </Card>
+
+          {/* Imported Curves */}
+          {importedCurves.length > 0 && (
+            <Card className="mt-4">
+              <CardHeader><CardTitle className="text-sm">Curvas Importadas ({importedCurves.length})</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {importedCurves.map(crv => (
+                    <div key={crv.id} className="p-3 bg-muted/50 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant="secondary" className="text-[10px]">{crv.type}</Badge>
+                        <span className="text-xs font-medium">{crv.id}</span>
+                        <span className="text-xs text-muted-foreground ml-auto">{crv.points.length} ponto(s)</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1">
+                        {crv.points.map((pt, i) => (
+                          <div key={i} className="text-[10px] text-muted-foreground font-mono">
+                            X: {pt.x} &mdash; Y: {pt.y}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Results */}
