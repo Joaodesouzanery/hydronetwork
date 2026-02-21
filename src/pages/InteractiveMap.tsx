@@ -761,13 +761,14 @@ export default function InteractiveMap() {
                     </div>
                   )}
 
-                  <Card className="overflow-hidden animate-fade-in">
-                    <div className="relative">
+                  <Card className="overflow-hidden animate-fade-in" style={{ position: "relative", zIndex: 0 }}>
+                    <div className="relative" style={{ zIndex: 0 }}>
                       {signedMapUrl ? (
                         <iframe
                           ref={iframeRef}
                           src={signedMapUrl}
                           className="w-full h-[600px] border-0"
+                          style={{ position: "relative", zIndex: 0 }}
                           title="Mapa Interativo"
                           allow="geolocation; fullscreen"
                           onLoad={() => {

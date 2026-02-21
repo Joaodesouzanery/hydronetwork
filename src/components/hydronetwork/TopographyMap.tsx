@@ -8,11 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   MapPin, Plus, Minus, Trash2, Undo2, Save,
-  FolderOpen, Maximize, Link2, Layers, X, Crosshair, MousePointerClick
+  FolderOpen, Maximize, Link2, Layers, X, Crosshair, MousePointerClick, Move, RefreshCw
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho, createTrechoFromPoints } from "@/engine/domain";
 import { detectBatchCRS, getMapCoordinatesWithCRS, setGlobalUtmZone, getGlobalUtmZone, DetectedCRS } from "@/engine/hydraulics";
+import { CoordinateTransformDialog } from "@/components/hydronetwork/CoordinateTransformDialog";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -46,6 +47,9 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   const [deleteMode, setDeleteMode] = useState<"nodes" | "trechos" | false>(false);
   const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
   const [selectedTrechosForDelete, setSelectedTrechosForDelete] = useState<Set<number>>(new Set());
+  const [bulkMoveMode, setBulkMoveMode] = useState(false);
+  const [bulkMoveStart, setBulkMoveStart] = useState<L.LatLng | null>(null);
+  const [showTransformDialog, setShowTransformDialog] = useState(false);
   const markersRef = useRef<L.CircleMarker[]>([]);
   const polylinesRef = useRef<L.Polyline[]>([]);
   const [tileKey, setTileKey] = useState("osm");
@@ -100,11 +104,12 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         if (drawMode) { setDrawMode(false); setDrawOrigin(null); toast.info("Modo ligação desativado"); }
         if (addNodeMode) { setAddNodeMode(false); toast.info("Modo adicionar ponto desativado"); }
         if (deleteMode) { setDeleteMode(false); setSelectedForDelete(new Set()); setSelectedTrechosForDelete(new Set()); toast.info("Modo exclusão desativado"); }
+        if (bulkMoveMode) { setBulkMoveMode(false); setBulkMoveStart(null); toast.info("Modo mover em massa desativado"); }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [drawMode, addNodeMode, deleteMode]);
+  }, [drawMode, addNodeMode, deleteMode, bulkMoveMode]);
 
   // UTM zone change handler
   const handleUtmZoneChange = useCallback((value: string) => {
@@ -124,7 +129,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    
+
     const handleMapClick = (e: L.LeafletMouseEvent) => {
       if (!addNodeMode || !onPontosChange) return;
       const { lat, lng } = e.latlng;
@@ -137,6 +142,71 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
     map.on("click", handleMapClick);
     return () => { map.off("click", handleMapClick); };
   }, [addNodeMode, pontos, onPontosChange]);
+
+  // Handle bulk move mode - click to set origin, then click to set destination
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !bulkMoveMode || !onPontosChange) return;
+
+    const handleBulkMoveClick = (e: L.LeafletMouseEvent) => {
+      if (!bulkMoveMode) return;
+
+      if (!bulkMoveStart) {
+        setBulkMoveStart(e.latlng);
+        toast.info("Ponto de origem marcado. Agora clique onde os pontos devem estar.");
+      } else {
+        // Calculate offset in map coordinates and apply to all pontos
+        const startLatLng = bulkMoveStart;
+        const endLatLng = e.latlng;
+
+        // For UTM data, we need the delta in UTM coords
+        // We'll use a simple approach: apply delta in lat/lng to get approximate offset
+        const deltaLat = endLatLng.lat - startLatLng.lat;
+        const deltaLng = endLatLng.lng - startLatLng.lng;
+
+        // Check if data is UTM (large coordinate values) or geographic
+        const isUTMData = pontos.length > 0 && (Math.abs(pontos[0].x) > 1000 || Math.abs(pontos[0].y) > 1000);
+
+        if (isUTMData) {
+          // For UTM data: convert both clicks to UTM space to get delta
+          // Approximate: 1 degree lat ≈ 111320m, 1 degree lng ≈ 111320 * cos(lat)
+          const cosLat = Math.cos(startLatLng.lat * Math.PI / 180);
+          const deltaXMeters = deltaLng * 111320 * cosLat;
+          const deltaYMeters = deltaLat * 111320;
+
+          const newPontos = pontos.map(p => ({
+            ...p,
+            x: p.x + deltaXMeters,
+            y: p.y + deltaYMeters,
+          }));
+          onPontosChange(newPontos);
+          toast.success(`${pontos.length} pontos movidos: dX=${deltaXMeters.toFixed(1)}m, dY=${deltaYMeters.toFixed(1)}m`);
+        } else {
+          // For geographic data, apply lat/lng delta directly
+          const newPontos = pontos.map(p => ({
+            ...p,
+            x: p.x + deltaLng,
+            y: p.y + deltaLat,
+          }));
+          onPontosChange(newPontos);
+          toast.success(`${pontos.length} pontos movidos: dLat=${deltaLat.toFixed(6)}, dLng=${deltaLng.toFixed(6)}`);
+        }
+
+        setBulkMoveMode(false);
+        setBulkMoveStart(null);
+      }
+    };
+
+    map.on("click", handleBulkMoveClick);
+    return () => { map.off("click", handleBulkMoveClick); };
+  }, [bulkMoveMode, bulkMoveStart, pontos, onPontosChange]);
+
+  // Handle transform dialog result
+  const handleTransformResult = useCallback((newPontos: PontoTopografico[], newTrechos: Trecho[]) => {
+    onPontosChange?.(newPontos);
+    onTrechosChange?.(newTrechos);
+    toast.success(`Coordenadas transformadas: ${newPontos.length} pontos e ${newTrechos.length} trechos atualizados.`);
+  }, [onPontosChange, onTrechosChange]);
 
   // Handle marker click - draw mode or select mode
   const handleTrechoClick = useCallback((idx: number) => {
@@ -453,6 +523,24 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
             className={deleteMode === "trechos" ? "bg-red-600 hover:bg-red-700 text-white" : ""}>
             <Trash2 className="h-3 w-3 mr-1" /> {deleteMode === "trechos" ? "Selecionando Trechos..." : "Excluir Trechos"}
           </Button>
+          {/* Bulk move button */}
+          {onPontosChange && (
+            <Button size="sm" variant={bulkMoveMode ? "default" : "outline"} onClick={() => {
+              const newMode = !bulkMoveMode;
+              setBulkMoveMode(newMode);
+              setBulkMoveStart(null);
+              if (newMode) {
+                setDrawMode(false); setDrawOrigin(null); setAddNodeMode(false); setDeleteMode(false);
+                toast.info("Mover em Massa: clique no ponto de referência (posição errada), depois clique onde deveria estar. ESC para cancelar.");
+              } else { toast.info("Modo mover em massa desativado."); }
+            }} className={bulkMoveMode ? "bg-purple-600 hover:bg-purple-700 text-white" : ""}>
+              <Move className="h-3 w-3 mr-1" /> {bulkMoveMode ? "Movendo..." : "Mover em Massa"}
+            </Button>
+          )}
+          {/* Transform Coordinates dialog trigger */}
+          <Button size="sm" variant="outline" onClick={() => setShowTransformDialog(true)}>
+            <RefreshCw className="h-3 w-3 mr-1" /> Transformar CRS
+          </Button>
           {/* UTM Zone selector */}
           <div className="flex items-center gap-1 ml-2">
             <span className="text-xs text-muted-foreground">UTM:</span>
@@ -537,11 +625,31 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           </div>
         )}
 
+        {/* Bulk move status bar */}
+        {bulkMoveMode && (
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200">
+            <Move className="h-4 w-4 text-purple-600" />
+            <span className="text-sm font-medium text-purple-700 dark:text-purple-400">
+              {bulkMoveStart
+                ? "Agora clique onde os pontos devem estar (posição correta)"
+                : "Clique no mapa na posição de referência (posição errada)"}
+            </span>
+            <div className="ml-auto flex gap-1">
+              {bulkMoveStart && (
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setBulkMoveStart(null)}>Resetar</Button>
+              )}
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setBulkMoveMode(false); setBulkMoveStart(null); }}>
+                <X className="h-3 w-3 mr-1" /> Sair (ESC)
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Map */}
         <div
           ref={mapContainerRef}
           className="w-full rounded-lg border border-border overflow-hidden"
-          style={{ height: 450 }}
+          style={{ height: 450, position: "relative", zIndex: 0 }}
         />
 
         {/* Selected point info (outside draw mode) */}
@@ -591,9 +699,19 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500" /> Selecionado</div>
           {drawMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-orange-500" /> Origem (ligação)</div>}
           {deleteMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-600" /> Selecionado p/ exclusão</div>}
+          {bulkMoveMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-purple-600" /> Mover em massa</div>}
           <div className="flex items-center gap-1"><div className="w-4 h-1 bg-green-500 rounded" /> Gravidade</div>
           <div className="flex items-center gap-1"><div className="w-4 h-1 bg-orange-500 rounded" /> Elevatória</div>
         </div>
+
+        {/* Coordinate Transform Dialog */}
+        <CoordinateTransformDialog
+          open={showTransformDialog}
+          onOpenChange={setShowTransformDialog}
+          pontos={pontos}
+          trechos={trechos}
+          onTransform={handleTransformResult}
+        />
       </CardContent>
     </Card>
   );

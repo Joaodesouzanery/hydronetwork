@@ -14,7 +14,9 @@ import { Button } from '@/components/ui/button';
 import { PontoTopografico, parseTopographyCSV } from '@/engine/reader';
 import { Trecho, createTrechoFromPoints, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from '@/engine/domain';
 import { parseINPToInternal, parseSWMMToInternal } from '@/engine/importEngine';
-import { Upload, Trash2, Check, X, FileText, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Upload, Trash2, Check, X, FileText, Loader2, ChevronDown, ChevronRight, Globe, AlertTriangle } from 'lucide-react';
+import { CRSSelector } from '@/components/hydronetwork/CRSSelector';
+import { ImportCRSConfig, validateUTMRange } from '@/engine/coordinateTransform';
 
 // ── Types ──
 
@@ -1000,6 +1002,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
   const [isDragging, setIsDragging] = useState(false);
   const [expandedEntities, setExpandedEntities] = useState<Set<string>>(new Set());
   const [showFields, setShowFields] = useState(false);
+  const [importCRS, setImportCRS] = useState<ImportCRSConfig | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const processingRef = useRef(false);
 
@@ -1154,7 +1157,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
     setFileQueue(prev => prev.filter(f => f.id !== id));
   };
 
-  const clearQueue = () => { setFileQueue([]); setSelectedEntities(new Set()); setExpandedEntities(new Set()); };
+  const clearQueue = () => { setFileQueue([]); setSelectedEntities(new Set()); setExpandedEntities(new Set()); setImportCRS(null); };
 
   const selectAll = () => {
     const ids = [...filteredPoints.map(p => p.id), ...filteredEdges.map(e => e.id)];
@@ -1537,14 +1540,39 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
             </div>
           )}
 
+          {/* CRS Selection — MANDATORY before import */}
+          <CRSSelector
+            onCRSSelected={setImportCRS}
+            sampleCoordinates={allPoints.slice(0, 20).map(p => ({ x: p.x, y: p.y }))}
+            initialConfig={importCRS || undefined}
+          />
+
+          {/* UTM Validation Warning */}
+          {importCRS?.type === 'utm' && allPoints.length > 0 && (() => {
+            const invalidPts = allPoints.slice(0, 50).filter(p => !validateUTMRange(p.x, p.y).valid);
+            if (invalidPts.length === 0) return null;
+            return (
+              <div className="flex items-start gap-2 border border-amber-500 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-2 text-xs text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                <span>
+                  {invalidPts.length} ponto(s) fora da faixa UTM esperada (X: 100.000-900.000, Y: 1.000.000-10.000.000).
+                  Verifique se o CRS está correto ou use "Transformar Coordenadas" após importar.
+                </span>
+              </div>
+            );
+          })()}
+
           {/* Confirm */}
           <Button
             className="w-full"
-            disabled={selectedEntities.size === 0}
+            disabled={selectedEntities.size === 0 || !importCRS}
             onClick={handleConfirm}
           >
             <Check className="h-4 w-4 mr-2" />
-            Confirmar Importacao ({selectedEntities.size} entidades selecionadas)
+            {!importCRS
+              ? 'Defina o CRS antes de importar'
+              : `Confirmar Importacao (${selectedEntities.size} entidades selecionadas)`
+            }
           </Button>
         </>
       )}
