@@ -1,6 +1,6 @@
 /**
  * UnifiedImportPanel - Painel unico de importacao multi-arquivo
- * Suporta: DXF, CSV, TXT, XLSX, GeoJSON, IFC
+ * Suporta: DXF, SHP, INP (EPANET/SWMM), CSV, TXT, XLSX, GeoJSON, IFC
  * Fila de processamento, selecao por camada, confirmar → pontos + trechos reais
  *
  * LEITURA INTEGRAL: parse completo com TODOS os atributos de cada formato.
@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PontoTopografico, parseTopographyCSV } from '@/engine/reader';
 import { Trecho, createTrechoFromPoints, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from '@/engine/domain';
+import { parseINPToInternal, parseSWMMToInternal } from '@/engine/importEngine';
 import { Upload, Trash2, Check, X, FileText, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 
 // ── Types ──
@@ -418,6 +419,73 @@ function parseDXFComplete(content: string, fileName: string): ParseResult {
         if (coords.length > 0) edges.push({ id: handle || `ellipse_${edges.length}`, type: 'ELLIPSE', coordinates: coords, isClosed: Math.abs(endParam - startParam - Math.PI * 2) < 0.01, layer, sourceFile: fileName, properties: props });
         continue;
       }
+
+      // ── 3DFACE ──
+      if (entityType === '3DFACE') {
+        let handle = '', layer = '0';
+        const faceCoords: Record<string, number> = {};
+        const props: Record<string, any> = { entityType };
+        i++;
+        while (i < lines.length - 1) {
+          const code = parseInt(lines[i]?.trim() || '');
+          const val = lines[i + 1]?.trim() || '';
+          if (code === 0) break;
+          if (code === 5) { handle = val; props.handle = val; }
+          if (code === 8) { layer = val; layersSet.add(val); props.layer = val; }
+          if (code === 62) { props.color = parseInt(val); fieldsSet.add('color'); }
+          if (code === 10) faceCoords.x1 = parseFloat(val);
+          if (code === 20) faceCoords.y1 = parseFloat(val);
+          if (code === 30) faceCoords.z1 = parseFloat(val);
+          if (code === 11) faceCoords.x2 = parseFloat(val);
+          if (code === 21) faceCoords.y2 = parseFloat(val);
+          if (code === 31) faceCoords.z2 = parseFloat(val);
+          if (code === 12) faceCoords.x3 = parseFloat(val);
+          if (code === 22) faceCoords.y3 = parseFloat(val);
+          if (code === 32) faceCoords.z3 = parseFloat(val);
+          if (code === 13) faceCoords.x4 = parseFloat(val);
+          if (code === 23) faceCoords.y4 = parseFloat(val);
+          if (code === 33) faceCoords.z4 = parseFloat(val);
+          i += 2;
+        }
+        const coords: number[][] = [];
+        if (faceCoords.x1 !== undefined) coords.push([faceCoords.x1, faceCoords.y1 || 0, faceCoords.z1 || 0]);
+        if (faceCoords.x2 !== undefined) coords.push([faceCoords.x2, faceCoords.y2 || 0, faceCoords.z2 || 0]);
+        if (faceCoords.x3 !== undefined) coords.push([faceCoords.x3, faceCoords.y3 || 0, faceCoords.z3 || 0]);
+        if (faceCoords.x4 !== undefined) coords.push([faceCoords.x4, faceCoords.y4 || 0, faceCoords.z4 || 0]);
+        if (coords.length >= 3) {
+          coords.push([...coords[0]]); // close the face
+          edges.push({ id: handle || `3df_${edges.length}`, type: '3DFACE', coordinates: coords, isClosed: true, layer, sourceFile: fileName, properties: props });
+        }
+        continue;
+      }
+
+      // ── TEXT / MTEXT → point with text content ──
+      if (entityType === 'TEXT' || entityType === 'MTEXT') {
+        let handle = '', layer = '0', x: number | null = null, y: number | null = null, z = 0;
+        const props: Record<string, any> = { entityType };
+        i++;
+        while (i < lines.length - 1) {
+          const code = parseInt(lines[i]?.trim() || '');
+          const val = lines[i + 1]?.trim() || '';
+          if (code === 0) break;
+          if (code === 1) { props.textContent = val; fieldsSet.add('textContent'); }
+          if (code === 5) { handle = val; props.handle = val; }
+          if (code === 7) { props.textStyle = val; fieldsSet.add('textStyle'); }
+          if (code === 8) { layer = val; layersSet.add(val); props.layer = val; }
+          if (code === 40) { props.textHeight = parseFloat(val); fieldsSet.add('textHeight'); }
+          if (code === 50) { props.rotation = parseFloat(val); fieldsSet.add('rotation'); }
+          if (code === 62) { props.color = parseInt(val); fieldsSet.add('color'); }
+          if (code === 10) x = parseFloat(val);
+          if (code === 20) y = parseFloat(val);
+          if (code === 30) z = parseFloat(val);
+          i += 2;
+        }
+        if (x !== null && y !== null) {
+          points.push({ id: handle || `txt_${points.length}`, x, y, z, layer, sourceFile: fileName, properties: props });
+          layersSet.add(layer);
+        }
+        continue;
+      }
     }
     i++;
   }
@@ -598,6 +666,7 @@ function parseIFCContent(content: string, fileName: string): ParseResult {
   const points: ParsedPoint[] = [];
   const edges: ParsedEdge[] = [];
   const fieldsSet = new Set<string>(['entityClass', 'ifcId']);
+  const layersSet = new Set<string>();
   const ifcLines = content.split(/\r?\n/);
 
   // First pass: collect IFCCARTESIANPOINT coordinates by #ID
@@ -609,33 +678,93 @@ function parseIFCContent(content: string, fileName: string): ParseResult {
     }
   }
 
+  // Collect IFCLOCALPLACEMENT → IFCAXIS2PLACEMENT3D → location point
+  const placementToPoint = new Map<string, string>(); // placementId → cartesianPointRef
+  const localPlacementMap = new Map<string, string>(); // localPlacementId → axis2placement ref
+  for (const line of ifcLines) {
+    // IFCAXIS2PLACEMENT3D(#point, ...)
+    const axis = line.match(/^(#\d+)\s*=\s*IFCAXIS2PLACEMENT3D\s*\(\s*(#\d+)/i);
+    if (axis) placementToPoint.set(axis[1], axis[2]);
+    // IFCLOCALPLACEMENT(relativeTo, #axis2placement)
+    const lp = line.match(/^(#\d+)\s*=\s*IFCLOCALPLACEMENT\s*\([^,]*,\s*(#\d+)/i);
+    if (lp) localPlacementMap.set(lp[1], lp[2]);
+  }
+
+  // Resolve placement → coordinates
+  const getPlacementCoords = (placementRef: string): [number, number, number] | null => {
+    const axisRef = localPlacementMap.get(placementRef);
+    if (!axisRef) return null;
+    const ptRef = placementToPoint.get(axisRef);
+    if (!ptRef) return null;
+    return cartesianPoints.get(ptRef) || null;
+  };
+
   // Extract IFC entity types for info
-  const entityTypeRegex = /^#\d+=\s*(IFC\w+)\s*\(/gm;
+  const entityTypeRegex = /^(#\d+)\s*=\s*(IFC\w+)\s*\(/gm;
   const entityCounts = new Map<string, number>();
+  const mepEntities: { id: string; type: string; name: string; placement: string }[] = [];
+  const mepTypes = new Set(['IFCPIPESEGMENT', 'IFCPIPEFITTING', 'IFCDUCTSEGMENT', 'IFCDUCTFITTING',
+    'IFCFLOWTERMINAL', 'IFCFLOWSEGMENT', 'IFCFLOWFITTING', 'IFCFLOWCONTROLLER',
+    'IFCPUMP', 'IFCVALVE', 'IFCFIRESUPPRESSIONTERMINAL', 'IFCSANITARYTERMINAL']);
+
   let eMatch;
   while ((eMatch = entityTypeRegex.exec(content)) !== null) {
-    const type = eMatch[1].toUpperCase();
+    const entId = eMatch[1];
+    const type = eMatch[2].toUpperCase();
     if (type.includes('PIPE') || type.includes('FLOW') || type.includes('DUCT') ||
       type.includes('FITTING') || type.includes('SEGMENT') || type.includes('TERMINAL') ||
       type.includes('VALVE') || type.includes('PUMP')) {
       entityCounts.set(type, (entityCounts.get(type) || 0) + 1);
     }
+    if (mepTypes.has(type)) {
+      // Try to extract name and placement from the line
+      const fullLine = content.substring(eMatch.index, content.indexOf('\n', eMatch.index));
+      const nameMatch = fullLine.match(/'([^']+)'/);
+      const placementMatch = fullLine.match(/,\s*(#\d+)\s*,/);
+      mepEntities.push({
+        id: entId, type,
+        name: nameMatch ? nameMatch[1] : type,
+        placement: placementMatch ? placementMatch[1] : '',
+      });
+    }
   }
   const ifcEntitySummary = Object.fromEntries(entityCounts);
   if (entityCounts.size > 0) fieldsSet.add('ifcEntityTypes');
 
-  // Second pass: extract points from cartesian coords
+  // Extract MEP entities as points with their placement coordinates
   let autoId = 1;
-  for (const [ifcId, coords] of cartesianPoints) {
-    if (autoId > 5000) break;
-    points.push({
-      id: `IFC_${autoId++}`, x: coords[0], y: coords[1], z: coords[2],
-      layer: 'IFC', sourceFile: fileName,
-      properties: { entityClass: 'IFCCARTESIANPOINT', ifcId, ...ifcEntitySummary },
-    });
+  for (const ent of mepEntities) {
+    const coords = getPlacementCoords(ent.placement);
+    if (coords) {
+      const layer = ent.type.includes('PIPE') ? 'Tubulações IFC'
+        : ent.type.includes('DUCT') ? 'Dutos IFC'
+        : ent.type.includes('PUMP') ? 'Bombas IFC'
+        : ent.type.includes('VALVE') ? 'Válvulas IFC'
+        : 'MEP IFC';
+      layersSet.add(layer);
+      fieldsSet.add('ifcName');
+      points.push({
+        id: `IFC_${autoId++}`, x: coords[0], y: coords[1], z: coords[2],
+        layer, sourceFile: fileName,
+        properties: { entityClass: ent.type, ifcId: ent.id, ifcName: ent.name },
+      });
+    }
   }
 
-  // Third pass: extract IFCPOLYLINE as edges
+  // Fallback: if no MEP entities found with placement, extract cartesian points
+  if (points.length === 0) {
+    layersSet.add('IFC');
+    for (const [ifcId, coords] of cartesianPoints) {
+      if (autoId > 5000) break;
+      points.push({
+        id: `IFC_${autoId++}`, x: coords[0], y: coords[1], z: coords[2],
+        layer: 'IFC', sourceFile: fileName,
+        properties: { entityClass: 'IFCCARTESIANPOINT', ifcId, ...ifcEntitySummary },
+      });
+    }
+  }
+
+  // Extract IFCPOLYLINE as edges
   const polylineRegex = /^(#\d+)\s*=\s*IFCPOLYLINE\s*\(\s*\(([^)]+)\)/gm;
   let plMatch;
   let edgeId = 1;
@@ -647,16 +776,208 @@ function parseIFCContent(content: string, fileName: string): ParseResult {
       if (pt) coords.push([...pt]);
     }
     if (coords.length >= 2) {
+      layersSet.add('IFC Polylines');
       fieldsSet.add('vertexCount'); fieldsSet.add('length');
       edges.push({
         id: `IFC_E${edgeId++}`, type: 'POLYLINE', coordinates: coords, isClosed: false,
-        layer: 'IFC', sourceFile: fileName,
+        layer: 'IFC Polylines', sourceFile: fileName,
         properties: { entityClass: 'IFCPOLYLINE', ifcId: plMatch[1], vertexCount: coords.length, length: calculateEdgeLength(coords) },
       });
     }
   }
 
-  return { points, edges, layers: points.length > 0 || edges.length > 0 ? ['IFC'] : [], fields: Array.from(fieldsSet) };
+  const layers = layersSet.size > 0 ? Array.from(layersSet) : (points.length > 0 || edges.length > 0 ? ['IFC'] : []);
+  return { points, edges, layers, fields: Array.from(fieldsSet) };
+}
+
+function parseINPContent(content: string, fileName: string): ParseResult {
+  const parsed = parseINPToInternal(content);
+  const points: ParsedPoint[] = [];
+  const edges: ParsedEdge[] = [];
+  const layersSet = new Set<string>();
+  const fieldsSet = new Set<string>(['elevation', 'type', 'diameter', 'roughness', 'length']);
+
+  for (const n of parsed.nodes) {
+    const layer = n.tipo === 'reservoir' ? 'Reservatórios' : 'Junções';
+    layersSet.add(layer);
+    points.push({
+      id: n.id, x: n.x, y: n.y, z: n.z,
+      layer, sourceFile: fileName,
+      properties: { ...n.properties, nodeType: n.tipo, elevation: n.z },
+    });
+  }
+  for (const e of parsed.edges) {
+    const layer = e.properties?._type === 'pump' ? 'Bombas' : e.properties?._type === 'valve' ? 'Válvulas' : 'Tubulações';
+    layersSet.add(layer);
+    // Build coordinates from start/end nodes + vertices
+    const startNode = parsed.nodes.find(n => n.id === e.startNodeId);
+    const endNode = parsed.nodes.find(n => n.id === e.endNodeId);
+    const coords: number[][] = [];
+    if (startNode) coords.push([startNode.x, startNode.y, startNode.z]);
+    if (e.vertices) e.vertices.forEach(v => coords.push([v[0], v[1], v[2]]));
+    if (endNode) coords.push([endNode.x, endNode.y, endNode.z]);
+    if (coords.length < 2 && startNode && endNode) {
+      // fallback if coords are still empty
+      coords.push([startNode.x, startNode.y, startNode.z], [endNode.x, endNode.y, endNode.z]);
+    }
+    edges.push({
+      id: e.id, type: e.properties?._type === 'pump' ? 'PUMP' : e.properties?._type === 'valve' ? 'VALVE' : 'PIPE',
+      coordinates: coords, isClosed: false, layer, sourceFile: fileName,
+      properties: { ...e.properties, from: e.startNodeId, to: e.endNodeId, diameter: e.dn, material: e.material },
+    });
+  }
+  const result: ParseResult = {
+    points, edges, layers: Array.from(layersSet), fields: Array.from(fieldsSet),
+    patternsCount: parsed.patterns?.length,
+    curvesCount: parsed.curves?.length,
+    verticesCount: parsed.edges.reduce((sum, e) => sum + (e.vertices?.length || 0), 0),
+  };
+  return result;
+}
+
+function parseSWMMContent(content: string, fileName: string): ParseResult {
+  const parsed = parseSWMMToInternal(content);
+  const points: ParsedPoint[] = [];
+  const edges: ParsedEdge[] = [];
+  const layersSet = new Set<string>();
+  const fieldsSet = new Set<string>(['elevation', 'type']);
+
+  for (const n of parsed.nodes) {
+    const layer = n.tipo === 'outfall' ? 'Exutórios' : 'Poços de Visita';
+    layersSet.add(layer);
+    points.push({
+      id: n.id, x: n.x, y: n.y, z: n.z,
+      layer, sourceFile: fileName,
+      properties: { ...n.properties, nodeType: n.tipo, elevation: n.z },
+    });
+  }
+  for (const e of parsed.edges) {
+    layersSet.add('Condutos');
+    const startNode = parsed.nodes.find(n => n.id === e.startNodeId);
+    const endNode = parsed.nodes.find(n => n.id === e.endNodeId);
+    const coords: number[][] = [];
+    if (startNode) coords.push([startNode.x, startNode.y, startNode.z]);
+    if (e.vertices) e.vertices.forEach(v => coords.push([v[0], v[1], v[2]]));
+    if (endNode) coords.push([endNode.x, endNode.y, endNode.z]);
+    edges.push({
+      id: e.id, type: 'CONDUIT', coordinates: coords, isClosed: false,
+      layer: 'Condutos', sourceFile: fileName,
+      properties: { ...e.properties, from: e.startNodeId, to: e.endNodeId, diameter: e.dn, material: e.material },
+    });
+  }
+  return { points, edges, layers: Array.from(layersSet), fields: Array.from(fieldsSet) };
+}
+
+function parseSHPContent(buffer: ArrayBuffer, fileName: string): ParseResult {
+  const points: ParsedPoint[] = [];
+  const edges: ParsedEdge[] = [];
+  const fieldsSet = new Set<string>(['shapeType']);
+
+  const view = new DataView(buffer);
+  // SHP file header: magic number 9994 at byte 0 (big-endian)
+  const magic = view.getInt32(0, false);
+  if (magic !== 9994) return { points, edges, layers: ['SHP'], fields: [] };
+
+  const shapeType = view.getInt32(32, true); // little-endian
+  let offset = 100; // records start after 100-byte header
+
+  let recIdx = 0;
+  while (offset + 12 < buffer.byteLength) {
+    try {
+      const contentLength = view.getInt32(offset + 4, false) * 2; // big-endian, in 16-bit words
+      const recStart = offset + 8;
+      if (recStart + 4 > buffer.byteLength) break;
+      const recShapeType = view.getInt32(recStart, true);
+
+      if (recShapeType === 0) {
+        // Null shape
+      } else if (recShapeType === 1 || recShapeType === 11 || recShapeType === 21) {
+        // Point / PointZ / PointM
+        const x = view.getFloat64(recStart + 4, true);
+        const y = view.getFloat64(recStart + 12, true);
+        const z = recShapeType === 11 && recStart + 28 <= buffer.byteLength ? view.getFloat64(recStart + 20, true) : 0;
+        points.push({
+          id: `SHP_P${recIdx}`, x, y, z,
+          layer: 'SHP', sourceFile: fileName,
+          properties: { shapeType: recShapeType === 1 ? 'Point' : recShapeType === 11 ? 'PointZ' : 'PointM' },
+        });
+      } else if (recShapeType === 3 || recShapeType === 13 || recShapeType === 23 ||
+                 recShapeType === 5 || recShapeType === 15 || recShapeType === 25) {
+        // PolyLine / PolyLineZ / PolyLineM / Polygon / PolygonZ / PolygonM
+        const numParts = view.getInt32(recStart + 36, true);
+        const numPoints = view.getInt32(recStart + 40, true);
+        const partsOffset = recStart + 44;
+        const pointsOffset = partsOffset + numParts * 4;
+
+        const parts: number[] = [];
+        for (let p = 0; p < numParts; p++) {
+          parts.push(view.getInt32(partsOffset + p * 4, true));
+        }
+
+        for (let p = 0; p < numParts; p++) {
+          const start = parts[p];
+          const end = p + 1 < numParts ? parts[p + 1] : numPoints;
+          const coords: number[][] = [];
+          for (let pt = start; pt < end; pt++) {
+            const ptOff = pointsOffset + pt * 16;
+            if (ptOff + 16 > buffer.byteLength) break;
+            const px = view.getFloat64(ptOff, true);
+            const py = view.getFloat64(ptOff + 8, true);
+            coords.push([px, py, 0]);
+          }
+          // Read Z values if available (PolyLineZ/PolygonZ)
+          if ((recShapeType === 13 || recShapeType === 15) && numPoints > 0) {
+            const zOffset = pointsOffset + numPoints * 16 + 16; // skip bbox min/max
+            for (let pt = start; pt < end; pt++) {
+              const zOff = zOffset + pt * 8;
+              if (zOff + 8 <= buffer.byteLength && coords[pt - start]) {
+                coords[pt - start][2] = view.getFloat64(zOff, true);
+              }
+            }
+          }
+          const isPolygon = recShapeType === 5 || recShapeType === 15 || recShapeType === 25;
+          if (coords.length >= 2) {
+            edges.push({
+              id: `SHP_E${recIdx}_${p}`,
+              type: isPolygon ? 'Polygon' : 'PolyLine',
+              coordinates: coords,
+              isClosed: isPolygon,
+              layer: 'SHP', sourceFile: fileName,
+              properties: {
+                shapeType: isPolygon ? 'Polygon' : 'PolyLine',
+                vertexCount: coords.length,
+                length: calculateEdgeLength(coords),
+              },
+            });
+            fieldsSet.add('vertexCount');
+            fieldsSet.add('length');
+          }
+        }
+      } else if (recShapeType === 8 || recShapeType === 18 || recShapeType === 28) {
+        // MultiPoint / MultiPointZ / MultiPointM
+        const numPoints = view.getInt32(recStart + 36, true);
+        const ptBase = recStart + 40;
+        for (let pt = 0; pt < numPoints; pt++) {
+          const ptOff = ptBase + pt * 16;
+          if (ptOff + 16 > buffer.byteLength) break;
+          const px = view.getFloat64(ptOff, true);
+          const py = view.getFloat64(ptOff + 8, true);
+          points.push({
+            id: `SHP_P${recIdx}_${pt}`, x: px, y: py, z: 0,
+            layer: 'SHP', sourceFile: fileName,
+            properties: { shapeType: 'MultiPoint' },
+          });
+        }
+      }
+
+      offset += 8 + contentLength;
+      recIdx++;
+    } catch {
+      break;
+    }
+  }
+
+  return { points, edges, layers: points.length > 0 || edges.length > 0 ? ['SHP'] : [], fields: Array.from(fieldsSet) };
 }
 
 // ── Persistence ──
@@ -727,7 +1048,11 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
   // File detection
   const detectFormat = (name: string): string => {
     const ext = name.split('.').pop()?.toLowerCase() || '';
-    const map: Record<string, string> = { dxf: 'DXF', csv: 'CSV', txt: 'TXT', xlsx: 'XLSX', xls: 'XLSX', geojson: 'GeoJSON', json: 'GeoJSON', ifc: 'IFC' };
+    const map: Record<string, string> = {
+      dxf: 'DXF', csv: 'CSV', txt: 'TXT', xlsx: 'XLSX', xls: 'XLSX',
+      geojson: 'GeoJSON', json: 'GeoJSON', ifc: 'IFC',
+      inp: 'INP', shp: 'SHP',
+    };
     return map[ext] || 'Desconhecido';
   };
 
@@ -752,6 +1077,14 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
       } else if (format === 'IFC') {
         const text = await item.file.text();
         result = parseIFCContent(text, item.file.name);
+      } else if (format === 'INP') {
+        const text = await item.file.text();
+        // Detect SWMM vs EPANET by checking for SWMM-specific sections
+        const isSWMM = /\[SUBCATCHMENTS\]|\[CONDUITS\]|\[OUTFALLS\]/i.test(text);
+        result = isSWMM ? parseSWMMContent(text, item.file.name) : parseINPContent(text, item.file.name);
+      } else if (format === 'SHP') {
+        const buffer = await item.file.arrayBuffer();
+        result = parseSHPContent(buffer, item.file.name);
       } else {
         return { ...item, status: 'erro', error: `Formato nao suportado: ${format}` };
       }
@@ -948,13 +1281,13 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
         <Upload className="h-8 w-8 mx-auto mb-1 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">Arraste ou clique para selecionar arquivos</p>
         <p className="text-xs text-muted-foreground mt-1">
-          <strong>DXF</strong>, CSV, TXT, <strong>XLSX</strong>, GeoJSON, <strong>IFC</strong> — selecao multipla
+          <strong>DXF</strong>, <strong>SHP</strong>, <strong>INP</strong>, CSV, TXT, <strong>XLSX</strong>, GeoJSON, <strong>IFC</strong> — selecao multipla
         </p>
         <input
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".dxf,.csv,.txt,.xlsx,.xls,.geojson,.json,.ifc"
+          accept=".dxf,.csv,.txt,.xlsx,.xls,.geojson,.json,.ifc,.inp,.shp"
           className="hidden"
           onChange={e => { if (e.target.files) handleFiles(e.target.files); e.target.value = ''; }}
         />
@@ -1009,6 +1342,21 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
               </div>
             ))}
           </div>
+          {/* Extra INP/SWMM counts */}
+          {(() => {
+            const extras = fileQueue.filter(f => f.status === 'ok' && f.result).map(f => f.result!);
+            const totalPatterns = extras.reduce((s, r) => s + (r.patternsCount || 0), 0);
+            const totalCurves = extras.reduce((s, r) => s + (r.curvesCount || 0), 0);
+            const totalVerts = extras.reduce((s, r) => s + (r.verticesCount || 0), 0);
+            if (totalPatterns === 0 && totalCurves === 0 && totalVerts === 0) return null;
+            return (
+              <div className="flex gap-2 flex-wrap">
+                {totalVerts > 0 && <Badge variant="secondary" className="text-[10px]">{totalVerts} vertices</Badge>}
+                {totalPatterns > 0 && <Badge variant="secondary" className="text-[10px]">{totalPatterns} padroes</Badge>}
+                {totalCurves > 0 && <Badge variant="secondary" className="text-[10px]">{totalCurves} curvas</Badge>}
+              </div>
+            );
+          })()}
 
           {/* Campos do Arquivo */}
           {allFieldInfo.length > 0 && (
