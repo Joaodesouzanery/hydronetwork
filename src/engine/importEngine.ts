@@ -235,14 +235,14 @@ export interface RawFileAnalysis {
 function classifyGeometryType(type: string): "point" | "line" | "polygon" | "solid" | "other" {
   const t = type.toUpperCase();
   // Point types
-  if (t === "POINT" || t === "INSERT" || t === "MULTIPOINT" ||
+  if (t === "POINT" || t === "INSERT" || t === "MULTIPOINT" || t === "TEXT" || t === "MTEXT" ||
     t.includes("POINT") || t.includes("TERMINAL") || t.includes("FITTING")) return "point";
   // Line types
   if (t === "LINE" || t === "LWPOLYLINE" || t === "POLYLINE" || t === "3DPOLYLINE" ||
-    t === "LINESTRING" || t === "MULTILINESTRING" ||
+    t === "LINESTRING" || t === "MULTILINESTRING" || t === "ARC" || t === "SPLINE" || t === "ELLIPSE" ||
     t.includes("PIPE") || t.includes("DUCT") || t.includes("CONDUIT") || t.includes("SEGMENT")) return "line";
   // Polygon types
-  if (t === "POLYGON" || t === "MULTIPOLYGON" || t === "CIRCLE" ||
+  if (t === "POLYGON" || t === "MULTIPOLYGON" || t === "CIRCLE" || t === "3DFACE" ||
     t.includes("SLAB") || t.includes("WALL")) return "polygon";
   // Solid types
   if (t.includes("SOLID") || t.includes("BEAM") || t.includes("COLUMN")) return "solid";

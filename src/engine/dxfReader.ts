@@ -83,7 +83,7 @@ export function parseDxfEntities(text: string): DxfEntity[] {
 
       if (value === "ENDSEC" || value === "EOF") break;
 
-      if (value === "POINT" || value === "LINE" || value === "LWPOLYLINE" || value === "POLYLINE" || value === "INSERT" || value === "CIRCLE" || value === "3DPOLYLINE") {
+      if (value === "POINT" || value === "LINE" || value === "LWPOLYLINE" || value === "POLYLINE" || value === "INSERT" || value === "CIRCLE" || value === "3DPOLYLINE" || value === "ARC" || value === "SPLINE" || value === "ELLIPSE" || value === "TEXT" || value === "MTEXT" || value === "3DFACE") {
         current = { type: value, vertices: [] };
         inVertex = false;
         if (value === "LWPOLYLINE") {
