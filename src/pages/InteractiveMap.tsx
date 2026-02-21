@@ -2,6 +2,8 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import JSZip from "jszip";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { supabase } from "@/lib/supabase";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -31,6 +33,12 @@ import {
   Globe,
   AlertTriangle,
   X,
+  Layers,
+  MousePointerClick,
+  Crosshair,
+  WifiOff,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -59,6 +67,53 @@ import {
   RadioGroupItem,
 } from "@/components/ui/radio-group";
 
+// ── Tile Layers ──
+const TILE_LAYERS: Record<string, { url: string; attribution: string; name: string }> = {
+  osm: { url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", attribution: "\u00a9 OpenStreetMap", name: "OpenStreetMap" },
+  satellite: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", attribution: "\u00a9 Esri", name: "Satelite (Esri)" },
+  topo: { url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", attribution: "\u00a9 OpenTopoMap", name: "Topografico" },
+  dark: { url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", attribution: "\u00a9 CartoDB", name: "Escuro" },
+  light: { url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", attribution: "\u00a9 CartoDB", name: "Claro" },
+};
+
+// ── Offline Tile Cache ──
+const TILE_CACHE_NAME = "hydronetwork-tiles-v1";
+
+async function cacheTileUrl(url: string): Promise<void> {
+  try {
+    const cache = await caches.open(TILE_CACHE_NAME);
+    const existing = await cache.match(url);
+    if (!existing) {
+      await cache.add(url);
+    }
+  } catch { /* cache API not available */ }
+}
+
+async function getCachedTileCount(): Promise<number> {
+  try {
+    const cache = await caches.open(TILE_CACHE_NAME);
+    const keys = await cache.keys();
+    return keys.length;
+  } catch { return 0; }
+}
+
+async function clearTileCache(): Promise<void> {
+  try {
+    await caches.delete(TILE_CACHE_NAME);
+  } catch { /* ignore */ }
+}
+
+// Annotation marker colors based on type
+function getAnnotationColor(tipo: string): string {
+  switch (tipo) {
+    case "ponto": return "#3b82f6";
+    case "area": return "#22c55e";
+    case "setor": return "#f59e0b";
+    case "inspecao": return "#ef4444";
+    default: return "#6366f1";
+  }
+}
+
 interface MapAnnotation {
   id: string;
   project_id: string;
@@ -82,7 +137,13 @@ export default function InteractiveMap() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  
+
+  // Leaflet map refs
+  const leafletMapRef = useRef<L.Map | null>(null);
+  const leafletContainerRef = useRef<HTMLDivElement>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const markersLayerRef = useRef<L.LayerGroup | null>(null);
+
   // Development notice state
   const [showDevNotice, setShowDevNotice] = useState(true);
 
@@ -103,6 +164,15 @@ export default function InteractiveMap() {
     service_front_id: "",
   });
   const [activeTab, setActiveTab] = useState("map");
+
+  // Leaflet map state
+  const [mapMode, setMapMode] = useState<"view" | "leaflet">("leaflet");
+  const [clickToAddMode, setClickToAddMode] = useState(false);
+  const [tileKey, setTileKey] = useState("osm");
+  const [showAnnotationLayer, setShowAnnotationLayer] = useState(true);
+  const [showLayerPanel, setShowLayerPanel] = useState(false);
+  const [cachedTileCount, setCachedTileCount] = useState(0);
+  const [annotationFilter, setAnnotationFilter] = useState<string>("all");
 
   const { data: session } = useQuery({
     queryKey: ["session"],
@@ -542,6 +612,119 @@ export default function InteractiveMap() {
     return "text-red-500";
   };
 
+  // Initialize Leaflet map
+  useEffect(() => {
+    if (!leafletContainerRef.current || leafletMapRef.current) return;
+    if (activeTab !== "map") return;
+
+    const map = L.map(leafletContainerRef.current, { zoomControl: true }).setView([-23.55, -46.63], 14);
+    const tile = L.tileLayer(TILE_LAYERS.osm.url, { attribution: TILE_LAYERS.osm.attribution, maxZoom: 19 }).addTo(map);
+    tileLayerRef.current = tile;
+    const markersLayer = L.layerGroup().addTo(map);
+    markersLayerRef.current = markersLayer;
+    leafletMapRef.current = map;
+
+    // Cache loaded tiles for offline use
+    map.on("tileload", (e: any) => {
+      if (e.tile?.src) {
+        cacheTileUrl(e.tile.src);
+      }
+    });
+
+    setTimeout(() => map.invalidateSize(), 200);
+    setTimeout(() => map.invalidateSize(), 500);
+
+    return () => {
+      map.remove();
+      leafletMapRef.current = null;
+      tileLayerRef.current = null;
+      markersLayerRef.current = null;
+    };
+  }, [activeTab]);
+
+  // Update tile layer when changed
+  useEffect(() => {
+    if (!leafletMapRef.current || !tileLayerRef.current) return;
+    const layerConfig = TILE_LAYERS[tileKey];
+    if (!layerConfig) return;
+    tileLayerRef.current.setUrl(layerConfig.url);
+  }, [tileKey]);
+
+  // Render annotations on Leaflet map
+  useEffect(() => {
+    if (!leafletMapRef.current || !markersLayerRef.current) return;
+    markersLayerRef.current.clearLayers();
+
+    if (!showAnnotationLayer) return;
+
+    const filtered = annotationFilter === "all"
+      ? annotations
+      : annotations.filter(a => a.tipo === annotationFilter);
+
+    filtered.forEach((annotation) => {
+      const color = getAnnotationColor(annotation.tipo);
+      const marker = L.circleMarker([annotation.latitude, annotation.longitude], {
+        radius: 10,
+        fillColor: color,
+        color: "#fff",
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.85,
+      }).addTo(markersLayerRef.current!);
+
+      marker.bindPopup(`
+        <div style="min-width:180px">
+          <strong>${annotation.tipo.charAt(0).toUpperCase() + annotation.tipo.slice(1)}</strong>
+          ${annotation.descricao ? `<br/><span style="color:#666">${annotation.descricao}</span>` : ""}
+          <br/><strong>Avanco:</strong> ${annotation.porcentagem}%
+          <br/><small>Lat: ${annotation.latitude.toFixed(6)}, Lng: ${annotation.longitude.toFixed(6)}</small>
+        </div>
+      `);
+    });
+
+    // Fit map to annotations if any
+    if (filtered.length > 0) {
+      const bounds = L.latLngBounds(filtered.map(a => [a.latitude, a.longitude] as [number, number]));
+      if (bounds.isValid()) {
+        leafletMapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+      }
+    }
+  }, [annotations, showAnnotationLayer, annotationFilter, activeTab]);
+
+  // Click-to-add annotation handler
+  useEffect(() => {
+    if (!leafletMapRef.current) return;
+    const map = leafletMapRef.current;
+
+    const handleClick = (e: L.LeafletMouseEvent) => {
+      if (!clickToAddMode) return;
+      setNewMarker(prev => ({
+        ...prev,
+        latitude: e.latlng.lat,
+        longitude: e.latlng.lng,
+      }));
+      setShowAddMarkerDialog(true);
+      setClickToAddMode(false);
+    };
+
+    map.on("click", handleClick);
+    if (clickToAddMode) {
+      map.getContainer().style.cursor = "crosshair";
+    } else {
+      map.getContainer().style.cursor = "";
+    }
+
+    return () => {
+      map.off("click", handleClick);
+      map.getContainer().style.cursor = "";
+    };
+  }, [clickToAddMode]);
+
+  // Load cached tile count
+  useEffect(() => {
+    getCachedTileCount().then(setCachedTileCount);
+  }, []);
+
   if (loadingProject) {
     return (
       <SidebarProvider>
@@ -612,195 +795,214 @@ export default function InteractiveMap() {
             </TabsList>
 
             <TabsContent value="map" className="space-y-4">
-              {!project?.interactive_map_url ? (
-                <Card className="border-dashed border-2">
-                  <CardContent className="flex flex-col items-center justify-center py-12">
-                    <Map className="h-16 w-16 text-muted-foreground mb-4" />
-                    <h3 className="text-xl font-semibold mb-2">Adicionar Mapa Interativo</h3>
-                    <p className="text-muted-foreground text-center mb-6 max-w-md">
-                      Escolha uma das opções abaixo para adicionar seu mapa interativo.
-                    </p>
-                    
-                    {isUploading ? (
-                      <div className="w-full max-w-xs space-y-2">
-                        <Progress value={uploadProgress} />
-                        <p className="text-sm text-center text-muted-foreground">
-                          Processando... {uploadProgress}%
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col sm:flex-row gap-4">
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept=".zip"
-                          onChange={handleFileUpload}
-                          className="hidden"
-                        />
-                        <Card 
-                          className="cursor-pointer hover:border-primary hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all duration-200 p-4 w-64"
-                          onClick={() => fileInputRef.current?.click()}
-                        >
-                          <div className="flex flex-col items-center text-center">
-                            <FileArchive className="h-10 w-10 text-primary mb-3" />
-                            <h4 className="font-semibold mb-1">Upload ZIP (QGIS)</h4>
-                            <p className="text-xs text-muted-foreground">
-                              Envie o arquivo ZIP exportado pelo qgis2web
-                            </p>
-                          </div>
-                        </Card>
-
-                        <Card 
-                          className="cursor-pointer hover:border-primary hover:shadow-lg hover:-translate-y-1 active:scale-[0.98] transition-all duration-200 p-4 w-64"
-                          onClick={() => {
-                            setMapSourceType("url");
-                            setShowMapSourceDialog(true);
-                          }}
-                        >
-                          <div className="flex flex-col items-center text-center">
-                            <Globe className="h-10 w-10 text-primary mb-3" />
-                            <h4 className="font-semibold mb-1">URL Externa (iframe)</h4>
-                            <p className="text-xs text-muted-foreground">
-                              Cole a URL de um mapa hospedado externamente
-                            </p>
-                          </div>
-                        </Card>
-                      </div>
-                    )}
-
-                    <div className="mt-8 grid md:grid-cols-2 gap-4 max-w-2xl">
-                      <div className="text-left bg-muted/50 p-4 rounded-lg">
-                        <h4 className="font-semibold mb-2 flex items-center gap-2">
-                          <FileArchive className="h-4 w-4" />
-                          Como exportar do QGIS:
-                        </h4>
-                        <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                          <li>Instale o plugin <strong>qgis2web</strong></li>
-                          <li>Vá em <strong>Web → qgis2web → Create web map</strong></li>
-                          <li>Escolha <strong>Leaflet</strong> como saída</li>
-                          <li>Exporte e compacte em <strong>.zip</strong></li>
-                        </ol>
-                      </div>
-
-                      <div className="text-left bg-muted/50 p-4 rounded-lg">
-                        <h4 className="font-semibold mb-2 flex items-center gap-2">
-                          <Globe className="h-4 w-4" />
-                          URL Externa:
-                        </h4>
-                        <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-                          <li>Suporta qualquer mapa web (ArcGIS, Mapbox, etc.)</li>
-                          <li>O mapa deve permitir embed via iframe</li>
-                          <li>Ideal para mapas já hospedados</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
+              {/* Map Controls Toolbar */}
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  {project?.interactive_map_url && (
+                    <>
                       {isStorageUrl(project.interactive_map_url) ? (
                         <Badge variant="secondary">
                           <FileArchive className="h-3 w-3 mr-1" />
                           Mapa ZIP (QGIS)
                         </Badge>
-                      ) : (
+                      ) : isExternalUrl(project.interactive_map_url) ? (
                         <Badge variant="outline">
                           <Globe className="h-3 w-3 mr-1" />
                           URL Externa
                         </Badge>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <input
-                        ref={replaceInputRef}
-                        type="file"
-                        accept=".zip"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                      />
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => replaceInputRef.current?.click()}
-                        disabled={isUploading}
-                      >
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Atualizar (ZIP)
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => {
-                          setMapSourceType("url");
-                          setExternalMapUrl(isExternalUrl(project.interactive_map_url) && !isStorageUrl(project.interactive_map_url) ? project.interactive_map_url || "" : "");
-                          setShowMapSourceDialog(true);
-                        }}
-                      >
-                        <Link className="h-4 w-4 mr-2" />
-                        Alterar URL
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => setShowAddMarkerDialog(true)}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Nova Anotação
-                      </Button>
-                    </div>
-                  </div>
-
-                  {isUploading && (
-                    <div className="space-y-2">
-                      <Progress value={uploadProgress} />
-                      <p className="text-sm text-center text-muted-foreground">
-                        Processando... {uploadProgress}%
-                      </p>
-                    </div>
+                      ) : null}
+                    </>
                   )}
+                  <Badge variant={mapMode === "leaflet" ? "default" : "outline"} className="cursor-pointer" onClick={() => setMapMode("leaflet")}>
+                    <Map className="h-3 w-3 mr-1" />Leaflet
+                  </Badge>
+                  {project?.interactive_map_url && (
+                    <Badge variant={mapMode === "view" ? "default" : "outline"} className="cursor-pointer" onClick={() => setMapMode("view")}>
+                      <Globe className="h-3 w-3 mr-1" />QGIS/iframe
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <input ref={fileInputRef} type="file" accept=".zip" onChange={handleFileUpload} className="hidden" />
+                  <input ref={replaceInputRef} type="file" accept=".zip" onChange={handleFileUpload} className="hidden" />
+                  {project?.interactive_map_url && (
+                    <Button variant="outline" size="sm" onClick={() => replaceInputRef.current?.click()} disabled={isUploading}>
+                      <RefreshCw className="h-4 w-4 mr-2" />Atualizar (ZIP)
+                    </Button>
+                  )}
+                  {!project?.interactive_map_url && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                        <FileArchive className="h-4 w-4 mr-2" />Upload ZIP
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => { setMapSourceType("url"); setShowMapSourceDialog(true); }}>
+                        <Globe className="h-4 w-4 mr-2" />URL Externa
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    variant={clickToAddMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setClickToAddMode(!clickToAddMode)}
+                  >
+                    {clickToAddMode ? <Crosshair className="h-4 w-4 mr-2 animate-pulse" /> : <MousePointerClick className="h-4 w-4 mr-2" />}
+                    {clickToAddMode ? "Clique no mapa..." : "Adicionar no Mapa"}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowAddMarkerDialog(true)}>
+                    <Plus className="h-4 w-4 mr-2" />Manual
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowLayerPanel(!showLayerPanel)}>
+                    <Layers className="h-4 w-4 mr-2" />Camadas
+                  </Button>
+                </div>
+              </div>
 
-                  <Card className="overflow-hidden animate-fade-in" style={{ position: "relative", zIndex: 0 }}>
-                    <div className="relative" style={{ zIndex: 0 }}>
-                      {signedMapUrl ? (
-                        <iframe
-                          ref={iframeRef}
-                          src={signedMapUrl}
-                          className="w-full h-[600px] border-0"
-                          style={{ position: "relative", zIndex: 0 }}
-                          title="Mapa Interativo"
-                          allow="geolocation; fullscreen"
-                          onLoad={() => {
-                            // Iframe loaded successfully
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-[600px] flex items-center justify-center">
-                          <Loader2 className="h-8 w-8 animate-spin" />
+              {isUploading && (
+                <div className="space-y-2">
+                  <Progress value={uploadProgress} />
+                  <p className="text-sm text-center text-muted-foreground">Processando... {uploadProgress}%</p>
+                </div>
+              )}
+
+              {/* Layer Control Panel */}
+              {showLayerPanel && (
+                <Card>
+                  <CardContent className="p-4 space-y-3">
+                    <h4 className="text-sm font-semibold flex items-center gap-2">
+                      <Layers className="h-4 w-4" /> Camadas de Visualizacao
+                    </h4>
+                    {/* Tile Layer Selection */}
+                    <div className="space-y-1">
+                      <Label className="text-xs">Mapa Base</Label>
+                      <div className="flex flex-wrap gap-1">
+                        {Object.entries(TILE_LAYERS).map(([key, cfg]) => (
+                          <Badge
+                            key={key}
+                            variant={tileKey === key ? "default" : "outline"}
+                            className="cursor-pointer text-xs"
+                            onClick={() => setTileKey(key)}
+                          >
+                            {cfg.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Annotation Layer Toggle */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" className="h-7 p-1" onClick={() => setShowAnnotationLayer(!showAnnotationLayer)}>
+                          {showAnnotationLayer ? <Eye className="h-4 w-4 text-blue-500" /> : <EyeOff className="h-4 w-4 text-muted-foreground" />}
+                        </Button>
+                        <span className="text-sm">Anotacoes ({annotations.length})</span>
+                      </div>
+                      <Select value={annotationFilter} onValueChange={setAnnotationFilter}>
+                        <SelectTrigger className="h-7 w-[130px] text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos os Tipos</SelectItem>
+                          <SelectItem value="ponto">Ponto</SelectItem>
+                          <SelectItem value="area">Area</SelectItem>
+                          <SelectItem value="setor">Setor</SelectItem>
+                          <SelectItem value="inspecao">Inspecao</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {/* Offline Cache */}
+                    <div className="flex items-center justify-between border-t pt-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <WifiOff className="h-4 w-4 text-muted-foreground" />
+                        <span>Cache Offline: {cachedTileCount} tiles</span>
+                      </div>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={async () => {
+                        await clearTileCache();
+                        setCachedTileCount(0);
+                        toast({ title: "Cache de tiles limpo!" });
+                      }}>
+                        Limpar Cache
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Map Display */}
+              {mapMode === "leaflet" ? (
+                <Card className="overflow-hidden" style={{ position: "relative", zIndex: 0 }}>
+                  <div ref={leafletContainerRef} className="w-full h-[600px]" style={{ position: "relative", zIndex: 0 }} />
+                </Card>
+              ) : (
+                <>
+                  {!project?.interactive_map_url ? (
+                    <Card className="border-dashed border-2">
+                      <CardContent className="flex flex-col items-center justify-center py-12">
+                        <Map className="h-16 w-16 text-muted-foreground mb-4" />
+                        <h3 className="text-xl font-semibold mb-2">Nenhum Mapa QGIS Carregado</h3>
+                        <p className="text-muted-foreground text-center mb-6 max-w-md">
+                          Envie um ZIP do qgis2web ou use uma URL externa para visualizar aqui.
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          <Button onClick={() => fileInputRef.current?.click()}>
+                            <FileArchive className="h-4 w-4 mr-2" />Upload ZIP (QGIS)
+                          </Button>
+                          <Button variant="outline" onClick={() => { setMapSourceType("url"); setShowMapSourceDialog(true); }}>
+                            <Globe className="h-4 w-4 mr-2" />URL Externa
+                          </Button>
                         </div>
-                      )}
-                    </div>
-                  </Card>
-
-                  {isExternalUrl(project.interactive_map_url) && !isStorageUrl(project.interactive_map_url) && (
-                    <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
-                      <span>URL:</span>
-                      <code className="bg-muted px-2 py-1 rounded text-xs max-w-md truncate">
-                        {project.interactive_map_url}
-                      </code>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        asChild
-                      >
-                        <a href={project.interactive_map_url} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      </Button>
-                    </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card className="overflow-hidden animate-fade-in" style={{ position: "relative", zIndex: 0 }}>
+                      <div className="relative" style={{ zIndex: 0 }}>
+                        {signedMapUrl ? (
+                          <iframe
+                            ref={iframeRef}
+                            src={signedMapUrl}
+                            className="w-full h-[600px] border-0"
+                            style={{ position: "relative", zIndex: 0 }}
+                            title="Mapa Interativo"
+                            allow="geolocation; fullscreen"
+                          />
+                        ) : (
+                          <div className="w-full h-[600px] flex items-center justify-center">
+                            <Loader2 className="h-8 w-8 animate-spin" />
+                          </div>
+                        )}
+                      </div>
+                    </Card>
                   )}
+                </>
+              )}
+
+              {isExternalUrl(project?.interactive_map_url) && !isStorageUrl(project?.interactive_map_url) && (
+                <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
+                  <span>URL:</span>
+                  <code className="bg-muted px-2 py-1 rounded text-xs max-w-md truncate">
+                    {project?.interactive_map_url}
+                  </code>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" asChild>
+                    <a href={project?.interactive_map_url || ""} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </Button>
+                </div>
+              )}
+
+              {/* Annotation Legend */}
+              {annotations.length > 0 && (
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="font-medium">Legenda:</span>
+                  {[
+                    { tipo: "ponto", label: "Ponto" },
+                    { tipo: "area", label: "Area" },
+                    { tipo: "setor", label: "Setor" },
+                    { tipo: "inspecao", label: "Inspecao" },
+                  ].map(item => (
+                    <span key={item.tipo} className="flex items-center gap-1">
+                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: getAnnotationColor(item.tipo) }} />
+                      {item.label}
+                    </span>
+                  ))}
                 </div>
               )}
             </TabsContent>
@@ -1027,12 +1229,15 @@ export default function InteractiveMap() {
           </Dialog>
 
           {/* Dialog para Anotações */}
-          <Dialog open={showAddMarkerDialog} onOpenChange={setShowAddMarkerDialog}>
+          <Dialog open={showAddMarkerDialog} onOpenChange={(open) => { setShowAddMarkerDialog(open); if (!open) setClickToAddMode(false); }}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Nova Anotação no Mapa</DialogTitle>
+                <DialogTitle>Nova Anotacao no Mapa</DialogTitle>
                 <DialogDescription>
-                  Adicione uma anotação com coordenadas e informações de progresso.
+                  {newMarker.latitude !== 0 || newMarker.longitude !== 0
+                    ? "Coordenadas capturadas do mapa. Ajuste se necessario."
+                    : "Adicione uma anotacao com coordenadas e informacoes de progresso."
+                  }
                 </DialogDescription>
               </DialogHeader>
 

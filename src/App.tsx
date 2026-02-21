@@ -34,6 +34,7 @@ import ModulesCatalog from "./pages/ModulesCatalog";
 import Projects from "./pages/Projects";
 import ProjectHistory from "./pages/ProjectHistory";
 import ProjectDelays from "./pages/ProjectDelays";
+import InteractiveMap from "./pages/InteractiveMap";
 
 const queryClient = new QueryClient();
 
@@ -67,6 +68,7 @@ const AppContent = () => {
         <Route path="/projects" element={<Projects />} />
         <Route path="/projects/:id/history" element={<ProjectHistory />} />
         <Route path="/project-delays" element={<ProjectDelays />} />
+        <Route path="/projects/:projectId/map" element={<InteractiveMap />} />
         <Route path="/hydronetwork" element={<HydroNetwork />} />
         <Route path="/hydronetwork/:module" element={<HydroNetwork />} />
         <Route path="/hydronetwork-landing" element={<HydroNetworkLanding />} />
