@@ -163,18 +163,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
 
       if (!projects || projects.length === 0) return;
 
-      const { data: activeConstraints } = await supabase
-        .from('lps_constraints')
-        .select('id, tipo_restricao, descricao')
-        .eq('project_id', projects[0].id)
-        .in('status', ['ativa', 'critica']);
-
-      if (activeConstraints && activeConstraints.length > 0) {
-        toast.warning(
-          `${activeConstraints.length} restricao(oes) ativa(s) podem impactar o planejamento. Verifique em Restricoes Lean.`,
-          { duration: 6000 }
-        );
-      }
+      // LPS constraint check uses localStorage — no Supabase query needed
     } catch {
       // Silently ignore constraint check errors
     }

@@ -4,9 +4,10 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { History, Plus, Edit, CheckCircle, Trash2, ArrowRight, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { History, Plus, Edit, CheckCircle, Trash2, ArrowRight } from 'lucide-react';
 import type { ConstraintAuditEntry } from '@/types/lean-constraints';
+
+const STORAGE_KEY = 'lps_audit_data';
 
 const ACTION_CONFIG: Record<string, { label: string; icon: typeof Plus; color: string }> = {
   created: { label: 'Criada', icon: Plus, color: 'text-green-600' },
@@ -23,7 +24,7 @@ interface ConstraintHistoryProps {
   constraintDescription: string;
 }
 
-export async function addHistoryEntry(entry: {
+export function addHistoryEntry(entry: {
   constraint_id: string;
   action: string;
   field?: string;
@@ -31,33 +32,41 @@ export async function addHistoryEntry(entry: {
   new_value?: string;
   user_name: string;
 }) {
-  await supabase.from('lps_constraint_audit').insert([{
-    constraint_id: entry.constraint_id,
-    action: entry.action,
-    field: entry.field || null,
-    old_value: entry.old_value || null,
-    new_value: entry.new_value || null,
-    user_name: entry.user_name,
-  }]);
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const items: ConstraintAuditEntry[] = raw ? JSON.parse(raw) : [];
+    items.push({
+      id: crypto.randomUUID(),
+      constraint_id: entry.constraint_id,
+      action: entry.action as ConstraintAuditEntry['action'],
+      field: entry.field || null,
+      old_value: entry.old_value || null,
+      new_value: entry.new_value || null,
+      user_name: entry.user_name,
+      created_at: new Date().toISOString(),
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  } catch {
+    // Ignore localStorage errors
+  }
 }
 
 export function ConstraintHistory({ open, onOpenChange, constraintId, constraintDescription }: ConstraintHistoryProps) {
   const [entries, setEntries] = useState<ConstraintAuditEntry[]>([]);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setLoading(true);
-    supabase
-      .from('lps_constraint_audit')
-      .select('*')
-      .eq('constraint_id', constraintId)
-      .order('created_at', { ascending: false })
-      .limit(100)
-      .then(({ data }) => {
-        setEntries((data ?? []) as ConstraintAuditEntry[]);
-        setLoading(false);
-      });
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const items: ConstraintAuditEntry[] = raw ? JSON.parse(raw) : [];
+      const filtered = items
+        .filter(e => e.constraint_id === constraintId)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .slice(0, 100);
+      setEntries(filtered);
+    } catch {
+      setEntries([]);
+    }
   }, [open, constraintId]);
 
   return (
@@ -71,11 +80,7 @@ export function ConstraintHistory({ open, onOpenChange, constraintId, constraint
         </DialogHeader>
 
         <ScrollArea className="max-h-[400px]">
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : entries.length === 0 ? (
+          {entries.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
               Nenhuma alteração registrada.
             </p>

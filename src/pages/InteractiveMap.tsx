@@ -214,24 +214,7 @@ export default function InteractiveMap() {
     enabled: !!projectId && !!session,
   });
 
-  const { data: mapConstraints = [] } = useQuery({
-    queryKey: ["lps-constraints-map", projectId],
-    queryFn: async () => {
-      if (!projectId) return [];
-      const { data, error } = await supabase
-        .from("lps_constraints")
-        .select("id, tipo_restricao, descricao, status, impacto, latitude, longitude, responsavel_nome, data_identificacao, service_fronts(name), employees(name)")
-        .eq("project_id", projectId)
-        .not("latitude", "is", null);
-      if (error) {
-        if (String(error.message || '').includes('schema cache')) return [];
-        throw error;
-      }
-      return data || [];
-    },
-    enabled: !!projectId && !!session && showConstraintLayer,
-    retry: (count, err) => !String((err as any)?.message || '').includes('schema cache') && count < 2,
-  });
+  const mapConstraints: any[] = [];
 
   const { data: serviceFronts = [] } = useQuery({
     queryKey: ["service-fronts", projectId],

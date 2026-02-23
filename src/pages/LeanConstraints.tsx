@@ -101,11 +101,7 @@ const LeanConstraints = () => {
   const currentProjectName = projects.find(p => p.id === filters.projectId)?.name || 'Projeto';
 
   const formatMutationError = (e: Error) => {
-    const msg = e.message || '';
-    if (msg.includes('schema cache') || msg.includes('does not exist') || msg.includes('TABELA_NAO_CONFIGURADA')) {
-      return 'Tabela nao encontrada no banco. Execute o SQL de configuracao (veja o banner acima).';
-    }
-    return `Erro: ${msg}`;
+    return `Erro: ${e.message || 'Erro desconhecido'}`;
   };
 
   const handleCreate = (data: ConstraintPayload) => {
