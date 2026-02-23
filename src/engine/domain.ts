@@ -19,6 +19,7 @@ export const DEFAULT_MATERIAL = "PVC";
 export interface Trecho {
   idInicio: string;
   idFim: string;
+  nome?: string;
   comprimento: number;
   declividade: number;
   tipoRede: TipoRede;

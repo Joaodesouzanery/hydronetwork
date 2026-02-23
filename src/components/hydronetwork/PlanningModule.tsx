@@ -10,8 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   Calendar, Users, Zap, ClipboardList, AlertTriangle, Download,
-  BarChart3, TrendingUp, Plus, Trash2, FileText
+  BarChart3, TrendingUp, Plus, Trash2, FileText, Save, FolderOpen,
+  Copy, Edit, ChevronDown, ChevronUp, Pencil
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, Legend, ResponsiveContainer, ReferenceLine,
@@ -43,6 +45,63 @@ type GanttMode = "segment" | "trecho" | "trecho_activity";
 type HistogramView = "daily" | "weekly" | "monthly";
 type HistogramFilter = "all" | "labor" | "equipment" | "cost";
 type WorkDays = 5 | 6 | 7;
+
+// ── Saved Planning Types ──
+interface SavedPlanning {
+  id: string;
+  nome: string;
+  criadoEm: string;
+  atualizadoEm: string;
+  numEquipes: number;
+  teamConfig: TeamConfig;
+  metrosDia: number;
+  dataInicio: string;
+  dataTermino: string;
+  horasTrabalho: number;
+  workDays: WorkDays;
+  holidays: Holiday[];
+  productivity: ProductivityEntry[];
+  trechoOverrides: Record<string, TrechoOverride>;
+  serviceNotes: ServiceNote[];
+  totalMetros?: number;
+  totalDias?: number;
+  custoTotal?: number;
+}
+
+interface TrechoOverride {
+  nome?: string;
+  comprimento?: number;
+  profundidade?: number;
+  diametroMm?: number;
+  produtividadeDia?: number;
+  prioridade?: number;
+}
+
+interface ServiceNote {
+  id: string;
+  trechoIndex: number;
+  trechoNome: string;
+  descricao: string;
+  dataInicio: string;
+  dataFim: string;
+  responsavel: string;
+  status: "pendente" | "em_execucao" | "concluida" | "aprovada";
+  servicos: string[];
+  observacoes: string;
+}
+
+const SAVED_PLANS_KEY = "hydronetwork_saved_plans";
+
+function loadSavedPlans(): SavedPlanning[] {
+  try {
+    const raw = localStorage.getItem(SAVED_PLANS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function savePlansToStorage(plans: SavedPlanning[]) {
+  localStorage.setItem(SAVED_PLANS_KEY, JSON.stringify(plans));
+}
 
 interface PlanningModuleProps {
   pontos: PontoTopografico[];
@@ -119,6 +178,29 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
   const [histView, setHistView] = useState<HistogramView>("daily");
   const [histFilter, setHistFilter] = useState<HistogramFilter>("all");
 
+  // ── Saved Plans ──
+  const [savedPlans, setSavedPlans] = useState<SavedPlanning[]>(loadSavedPlans());
+  const [showSavedPlans, setShowSavedPlans] = useState(false);
+  const [savePlanName, setSavePlanName] = useState("");
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+
+  // ── Trecho Overrides (editable trechos in planning) ──
+  const [trechoOverrides, setTrechoOverrides] = useState<Record<string, TrechoOverride>>({});
+  const [showTrechoEditor, setShowTrechoEditor] = useState(false);
+
+  // ── Service Notes ──
+  const [serviceNotes, setServiceNotes] = useState<ServiceNote[]>([]);
+  const [showServiceNotes, setShowServiceNotes] = useState(false);
+  const [editingNote, setEditingNote] = useState<ServiceNote | null>(null);
+  const [showNoteDialog, setShowNoteDialog] = useState(false);
+
+  // ── Add Service Form ──
+  const [showAddServiceForm, setShowAddServiceForm] = useState(false);
+
+  // ── Selected Gantt cell for interactivity ──
+  const [selectedGanttCell, setSelectedGanttCell] = useState<{ trechoId: string; day: number } | null>(null);
+
   // ── Load platform data ──
   const handleLoadPlatformData = useCallback(() => {
     if (trechos.length === 0) {
@@ -168,6 +250,95 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
       // Silently ignore constraint check errors
     }
   }, []);
+
+  // ── Save/Load Plans ──
+  const handleSavePlan = useCallback((name: string) => {
+    const plan: SavedPlanning = {
+      id: editingPlanId || crypto.randomUUID(),
+      nome: name,
+      criadoEm: editingPlanId ? savedPlans.find(p => p.id === editingPlanId)?.criadoEm || new Date().toISOString() : new Date().toISOString(),
+      atualizadoEm: new Date().toISOString(),
+      numEquipes,
+      teamConfig: { ...teamConfig },
+      metrosDia,
+      dataInicio,
+      dataTermino,
+      horasTrabalho,
+      workDays,
+      holidays: [...holidays],
+      productivity: [...productivity],
+      trechoOverrides: { ...trechoOverrides },
+      serviceNotes: [...serviceNotes],
+      totalMetros: trechos.reduce((s, t) => s + t.comprimento, 0),
+      totalDias: scheduleResult?.totalDays,
+      custoTotal: scheduleResult?.allSegments.reduce((s, seg) => s + seg.custoTotal, 0),
+    };
+    const updated = editingPlanId
+      ? savedPlans.map(p => p.id === editingPlanId ? plan : p)
+      : [...savedPlans, plan];
+    setSavedPlans(updated);
+    savePlansToStorage(updated);
+    setEditingPlanId(plan.id);
+    setShowSaveDialog(false);
+    setSavePlanName("");
+    toast.success(editingPlanId ? `Planejamento "${name}" atualizado!` : `Planejamento "${name}" salvo!`);
+  }, [editingPlanId, savedPlans, numEquipes, teamConfig, metrosDia, dataInicio, dataTermino, horasTrabalho, workDays, holidays, productivity, trechoOverrides, serviceNotes, trechos, scheduleResult]);
+
+  const handleLoadPlan = useCallback((plan: SavedPlanning) => {
+    setNumEquipes(plan.numEquipes);
+    setTeamConfig({ ...plan.teamConfig });
+    setMetrosDia(plan.metrosDia);
+    setDataInicio(plan.dataInicio);
+    setDataTermino(plan.dataTermino);
+    setHorasTrabalho(plan.horasTrabalho);
+    setWorkDays(plan.workDays);
+    setHolidays([...plan.holidays]);
+    setProductivity([...plan.productivity]);
+    setTrechoOverrides({ ...plan.trechoOverrides });
+    setServiceNotes([...plan.serviceNotes]);
+    setEditingPlanId(plan.id);
+    setDataLoaded(true);
+    setShowSavedPlans(false);
+    toast.success(`Planejamento "${plan.nome}" carregado!`);
+  }, []);
+
+  const handleDuplicatePlan = useCallback((plan: SavedPlanning) => {
+    const dup: SavedPlanning = {
+      ...plan,
+      id: crypto.randomUUID(),
+      nome: `${plan.nome} (Cópia)`,
+      criadoEm: new Date().toISOString(),
+      atualizadoEm: new Date().toISOString(),
+    };
+    const updated = [...savedPlans, dup];
+    setSavedPlans(updated);
+    savePlansToStorage(updated);
+    toast.success(`Planejamento duplicado: "${dup.nome}"`);
+  }, [savedPlans]);
+
+  const handleDeletePlan = useCallback((planId: string) => {
+    const updated = savedPlans.filter(p => p.id !== planId);
+    setSavedPlans(updated);
+    savePlansToStorage(updated);
+    if (editingPlanId === planId) setEditingPlanId(null);
+    toast.success("Planejamento excluído!");
+  }, [savedPlans, editingPlanId]);
+
+  // ── Service Note handlers ──
+  const handleSaveNote = useCallback((note: ServiceNote) => {
+    const updated = note.id && serviceNotes.find(n => n.id === note.id)
+      ? serviceNotes.map(n => n.id === note.id ? note : n)
+      : [...serviceNotes, { ...note, id: note.id || crypto.randomUUID() }];
+    setServiceNotes(updated);
+    setShowNoteDialog(false);
+    setEditingNote(null);
+    toast.success("Nota de serviço salva!");
+  }, [serviceNotes]);
+
+  const handleDeleteNote = useCallback((noteId: string) => {
+    setServiceNotes(serviceNotes.filter(n => n.id !== noteId));
+    toast.success("Nota de serviço excluída!");
+  }, [serviceNotes]);
 
   // ── Generate schedule ──
   const handleGenerateSchedule = useCallback(() => {
@@ -506,12 +677,15 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
                     <TableHead>Unidade</TableHead>
                     <TableHead>Produtividade/Dia</TableHead>
                     <TableHead>Fonte</TableHead>
+                    <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {productivity.map((p, i) => (
                     <TableRow key={i}>
-                      <TableCell className="text-sm">{p.servico}</TableCell>
+                      <TableCell className="text-sm">
+                        <Input className="h-8 w-full min-w-[120px]" value={p.servico} onChange={e => { const np = [...productivity]; np[i].servico = e.target.value; setProductivity(np); }} />
+                      </TableCell>
                       <TableCell>
                         <Select value={p.unidade} onValueChange={v => { const np = [...productivity]; np[i].unidade = v; setProductivity(np); }}>
                           <SelectTrigger className="h-8 w-16"><SelectValue /></SelectTrigger>
@@ -531,18 +705,65 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
                           </SelectContent>
                         </Select>
                       </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setProductivity(productivity.filter((_, j) => j !== i))}>
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-            <Button size="sm" variant="outline" onClick={() => {
-              if (!newServico) return;
-              setProductivity([...productivity, { servico: newServico, unidade: newUnidade, produtividade: newProd, fonte: newFonte }]);
-              setNewServico("");
-            }}>
-              <Plus className="h-4 w-4 mr-1" /> Adicionar Serviço
-            </Button>
+            {showAddServiceForm ? (
+              <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
+                <p className="text-sm font-semibold">Novo Serviço</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Nome do Serviço</Label>
+                    <Input placeholder="Ex: Escavação manual" value={newServico} onChange={e => setNewServico(e.target.value)} className="h-8" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Unidade</Label>
+                    <Select value={newUnidade} onValueChange={setNewUnidade}>
+                      <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {["m", "m²", "m³", "un", "h", "vb"].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Produtividade/Dia</Label>
+                    <Input type="number" value={newProd} onChange={e => setNewProd(Number(e.target.value))} className="h-8" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Fonte</Label>
+                    <Select value={newFonte} onValueChange={setNewFonte}>
+                      <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {["SINAPI", "SEINFRA", "TCPO", "Mercado", "Histórico"].map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => {
+                    if (!newServico.trim()) { toast.error("Digite o nome do serviço."); return; }
+                    setProductivity([...productivity, { servico: newServico, unidade: newUnidade, produtividade: newProd, fonte: newFonte }]);
+                    setNewServico(""); setNewProd(10);
+                    setShowAddServiceForm(false);
+                    toast.success("Serviço adicionado!");
+                  }}>
+                    <Plus className="h-4 w-4 mr-1" /> Adicionar
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setShowAddServiceForm(false)}>Cancelar</Button>
+                </div>
+              </div>
+            ) : (
+              <Button size="sm" variant="outline" onClick={() => setShowAddServiceForm(true)}>
+                <Plus className="h-4 w-4 mr-1" /> Adicionar Serviço
+              </Button>
+            )}
           </CardContent>
         </Card>
 
@@ -625,12 +846,12 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
                         {Array.from({ length: scheduleResult.totalDays }, (_, d) => {
                           const dayNum = d + 1;
                           const dayData = row.days[dayNum];
-                          if (!dayData) return <td key={d} className="border px-0 py-0" />;
+                          if (!dayData) return <td key={d} className="border px-0 py-0 cursor-pointer hover:bg-muted/50" onClick={() => setSelectedGanttCell({ trechoId: row.id, day: dayNum })} />;
                           if (dayData.isTest) return (
-                            <td key={d} className="border px-0 py-0 bg-yellow-300 dark:bg-yellow-700 text-center font-bold text-yellow-800 dark:text-yellow-200">T</td>
+                            <td key={d} className="border px-0 py-0 bg-yellow-300 dark:bg-yellow-700 text-center font-bold text-yellow-800 dark:text-yellow-200 cursor-pointer hover:opacity-80" onClick={() => setSelectedGanttCell({ trechoId: row.id, day: dayNum })}>T</td>
                           );
                           return (
-                            <td key={d} className="border px-0 py-0 bg-primary/80 text-primary-foreground text-center text-[10px] font-medium">
+                            <td key={d} className="border px-0 py-0 bg-primary/80 text-primary-foreground text-center text-[10px] font-medium cursor-pointer hover:bg-primary" onClick={() => setSelectedGanttCell({ trechoId: row.id, day: dayNum })}>
                               {dayData.meters > 0 ? Math.round(dayData.meters) : ""}
                             </td>
                           );
@@ -855,27 +1076,415 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
         </>
       )}
 
+      {/* ── EDITABLE TRECHOS ── */}
+      {dataLoaded && trechos.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Pencil className="h-5 w-5" /> Trechos do Planejamento
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={() => setShowTrechoEditor(!showTrechoEditor)}>
+                {showTrechoEditor ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+                {showTrechoEditor ? "Recolher" : "Editar Trechos"}
+              </Button>
+            </div>
+          </CardHeader>
+          {showTrechoEditor && (
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-3">
+                Edite os nomes, comprimentos e produtividade dos trechos. Alterações ficam apenas no planejamento.
+              </p>
+              <div className="max-h-[400px] overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[50px]">#</TableHead>
+                      <TableHead className="min-w-[140px]">Nome do Trecho</TableHead>
+                      <TableHead>Inicio</TableHead>
+                      <TableHead>Fim</TableHead>
+                      <TableHead>Comp. (m)</TableHead>
+                      <TableHead>Prof. (m)</TableHead>
+                      <TableHead>DN (mm)</TableHead>
+                      <TableHead>Prod. (m/dia)</TableHead>
+                      <TableHead>Prioridade</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {trechos.map((t, i) => {
+                      const key = `${t.idInicio}-${t.idFim}`;
+                      const ov = trechoOverrides[key] || {};
+                      const prof = Math.abs(t.cotaInicio - t.cotaFim) || 1.5;
+                      return (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium text-muted-foreground">T{String(i + 1).padStart(2, "0")}</TableCell>
+                          <TableCell>
+                            <Input className="h-8 min-w-[120px]" placeholder={`Trecho ${i + 1}`}
+                              value={ov.nome ?? t.nome ?? ""}
+                              onChange={e => setTrechoOverrides({ ...trechoOverrides, [key]: { ...ov, nome: e.target.value } })}
+                            />
+                          </TableCell>
+                          <TableCell className="text-sm">{t.idInicio}</TableCell>
+                          <TableCell className="text-sm">{t.idFim}</TableCell>
+                          <TableCell>
+                            <Input type="number" className="h-8 w-20" step={0.1}
+                              value={ov.comprimento ?? t.comprimento}
+                              onChange={e => setTrechoOverrides({ ...trechoOverrides, [key]: { ...ov, comprimento: Number(e.target.value) } })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" className="h-8 w-20" step={0.1}
+                              value={ov.profundidade ?? prof}
+                              onChange={e => setTrechoOverrides({ ...trechoOverrides, [key]: { ...ov, profundidade: Number(e.target.value) } })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" className="h-8 w-20"
+                              value={ov.diametroMm ?? t.diametroMm}
+                              onChange={e => setTrechoOverrides({ ...trechoOverrides, [key]: { ...ov, diametroMm: Number(e.target.value) } })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" className="h-8 w-16" step={0.5}
+                              value={ov.produtividadeDia ?? metrosDia}
+                              onChange={e => setTrechoOverrides({ ...trechoOverrides, [key]: { ...ov, produtividadeDia: Number(e.target.value) } })}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input type="number" className="h-8 w-14" min={1}
+                              value={ov.prioridade ?? i + 1}
+                              onChange={e => setTrechoOverrides({ ...trechoOverrides, [key]: { ...ov, prioridade: Number(e.target.value) } })}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <Button size="sm" variant="outline" onClick={() => { setTrechoOverrides({}); toast.success("Edições dos trechos resetadas."); }}>
+                  Resetar Edições
+                </Button>
+              </div>
+            </CardContent>
+          )}
+        </Card>
+      )}
+
+      {/* ── NOTAS DE SERVIÇO ── */}
+      {dataLoaded && trechos.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileText className="h-5 w-5" /> Planejamento por Nota de Serviço
+              </CardTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setShowServiceNotes(!showServiceNotes)}>
+                  {showServiceNotes ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+                  {showServiceNotes ? "Recolher" : "Ver Notas"}
+                </Button>
+                <Button size="sm" onClick={() => {
+                  setEditingNote({
+                    id: "", trechoIndex: 0, trechoNome: "", descricao: "",
+                    dataInicio: dataInicio, dataFim: "", responsavel: "",
+                    status: "pendente", servicos: [], observacoes: ""
+                  });
+                  setShowNoteDialog(true);
+                }}>
+                  <Plus className="h-4 w-4 mr-1" /> Nova Nota de Serviço
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          {showServiceNotes && (
+            <CardContent>
+              {serviceNotes.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">Nenhuma nota de serviço cadastrada.</p>
+              ) : (
+                <div className="max-h-[400px] overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Trecho</TableHead>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead>Data Início</TableHead>
+                        <TableHead>Data Fim</TableHead>
+                        <TableHead>Responsável</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {serviceNotes.map(note => (
+                        <TableRow key={note.id}>
+                          <TableCell className="font-semibold">{note.trechoNome || `Trecho ${note.trechoIndex + 1}`}</TableCell>
+                          <TableCell className="text-sm max-w-[200px] truncate">{note.descricao}</TableCell>
+                          <TableCell className="text-sm">{note.dataInicio ? new Date(note.dataInicio + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</TableCell>
+                          <TableCell className="text-sm">{note.dataFim ? new Date(note.dataFim + "T12:00:00").toLocaleDateString("pt-BR") : "-"}</TableCell>
+                          <TableCell className="text-sm">{note.responsavel || "-"}</TableCell>
+                          <TableCell>
+                            <Badge className={
+                              note.status === "aprovada" ? "bg-green-600" :
+                              note.status === "concluida" ? "bg-blue-600" :
+                              note.status === "em_execucao" ? "bg-yellow-600" : "bg-gray-500"
+                            }>
+                              {note.status === "pendente" ? "Pendente" : note.status === "em_execucao" ? "Em Execução" : note.status === "concluida" ? "Concluída" : "Aprovada"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingNote(note); setShowNoteDialog(true); }}>
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDeleteNote(note.id)}>
+                                <Trash2 className="h-3 w-3 text-destructive" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      )}
+
       {/* Action Buttons */}
       <div className="flex gap-3 flex-wrap justify-center">
         <Button size="lg" className="bg-primary" onClick={handleGenerateSchedule} disabled={trechos.length === 0}>
           <Calendar className="h-4 w-4 mr-2" /> Gerar Planejamento
         </Button>
         <Button size="lg" variant="secondary" onClick={() => {
+          if (!dataLoaded && trechos.length === 0) { toast.error("Carregue os dados primeiro."); return; }
+          setSavePlanName(editingPlanId ? savedPlans.find(p => p.id === editingPlanId)?.nome || "" : "");
+          setShowSaveDialog(true);
+        }}>
+          <Save className="h-4 w-4 mr-2" /> Salvar Planejamento
+        </Button>
+        <Button size="lg" variant="outline" onClick={() => setShowSavedPlans(true)}>
+          <FolderOpen className="h-4 w-4 mr-2" /> Planejamentos Salvos
+          {savedPlans.length > 0 && <Badge className="ml-2 bg-primary">{savedPlans.length}</Badge>}
+        </Button>
+        <Button size="lg" variant="outline" onClick={() => {
           if (!scheduleResult) { toast.error("Gere o planejamento primeiro."); return; }
           toast.info("Exportação em desenvolvimento.");
         }}>
           <Download className="h-4 w-4 mr-2" /> Exportar Planejamento
         </Button>
-        <Button size="lg" variant="outline" onClick={async () => {
-          try {
-            const res = await fetch("/demo/pontos_criadores.txt");
-            const text = await res.text();
-            toast.success("Demo disponível - carregue os dados na aba Topografia primeiro.");
-          } catch { toast.error("Erro ao carregar demo."); }
-        }}>
-          <BarChart3 className="h-4 w-4 mr-2" /> Carregar Demo
-        </Button>
       </div>
+
+      {editingPlanId && (
+        <p className="text-center text-sm text-muted-foreground">
+          Editando: <strong>{savedPlans.find(p => p.id === editingPlanId)?.nome}</strong>
+        </p>
+      )}
+
+      {/* ── DIALOGS ── */}
+
+      {/* Save Plan Dialog */}
+      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>{editingPlanId ? "Atualizar Planejamento" : "Salvar Planejamento"}</DialogTitle>
+            <DialogDescription>Salve todas as configurações para poder restaurar depois.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Nome do Planejamento</Label>
+              <Input placeholder="Ex: Cenário 3 equipes - Otimista" value={savePlanName} onChange={e => setSavePlanName(e.target.value)} autoFocus />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowSaveDialog(false)}>Cancelar</Button>
+              <Button onClick={() => {
+                if (!savePlanName.trim()) { toast.error("Digite um nome."); return; }
+                handleSavePlan(savePlanName.trim());
+              }}>
+                <Save className="h-4 w-4 mr-1" /> {editingPlanId ? "Atualizar" : "Salvar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Saved Plans Dialog */}
+      <Dialog open={showSavedPlans} onOpenChange={setShowSavedPlans}>
+        <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Planejamentos Salvos</DialogTitle>
+            <DialogDescription>Carregue, edite, duplique ou exclua planejamentos salvos.</DialogDescription>
+          </DialogHeader>
+          {savedPlans.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">Nenhum planejamento salvo ainda.</p>
+          ) : (
+            <div className="space-y-3">
+              {savedPlans.map(plan => (
+                <Card key={plan.id} className={`${editingPlanId === plan.id ? "border-primary border-2" : ""}`}>
+                  <CardContent className="pt-4 pb-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-semibold">{plan.nome}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Criado: {new Date(plan.criadoEm).toLocaleDateString("pt-BR")} | Atualizado: {new Date(plan.atualizadoEm).toLocaleDateString("pt-BR")}
+                        </p>
+                        <div className="flex gap-3 mt-1 text-xs">
+                          <span>{plan.numEquipes} equipes</span>
+                          {plan.totalMetros && <span>{Math.round(plan.totalMetros)}m</span>}
+                          {plan.totalDias && <span>{plan.totalDias} dias</span>}
+                          {plan.custoTotal && <span>{fmtCurrency(plan.custoTotal)}</span>}
+                          {plan.serviceNotes?.length > 0 && <span>{plan.serviceNotes.length} notas</span>}
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button size="sm" onClick={() => handleLoadPlan(plan)}>
+                          <FolderOpen className="h-3 w-3 mr-1" /> Carregar
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleDuplicatePlan(plan)}>
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleDeletePlan(plan.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Service Note Dialog */}
+      <Dialog open={showNoteDialog} onOpenChange={v => { setShowNoteDialog(v); if (!v) setEditingNote(null); }}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>{editingNote?.id ? "Editar Nota de Serviço" : "Nova Nota de Serviço"}</DialogTitle>
+            <DialogDescription>Planeje a execução por trecho com datas e responsável.</DialogDescription>
+          </DialogHeader>
+          {editingNote && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Trecho</Label>
+                  <Select value={String(editingNote.trechoIndex)} onValueChange={v => {
+                    const idx = Number(v);
+                    const t = trechos[idx];
+                    const key = t ? `${t.idInicio}-${t.idFim}` : "";
+                    const ov = trechoOverrides[key] || {};
+                    setEditingNote({ ...editingNote, trechoIndex: idx, trechoNome: ov.nome || t?.nome || `T${String(idx + 1).padStart(2, "0")} (${t?.idInicio}→${t?.idFim})` });
+                  }}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {trechos.map((t, i) => {
+                        const key = `${t.idInicio}-${t.idFim}`;
+                        const ov = trechoOverrides[key] || {};
+                        return <SelectItem key={i} value={String(i)}>T{String(i + 1).padStart(2, "0")} - {ov.nome || t.nome || `${t.idInicio}→${t.idFim}`}</SelectItem>;
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Responsável</Label>
+                  <Input value={editingNote.responsavel} onChange={e => setEditingNote({ ...editingNote, responsavel: e.target.value })} placeholder="Nome do responsável" />
+                </div>
+              </div>
+              <div>
+                <Label>Descrição da Nota de Serviço</Label>
+                <Input value={editingNote.descricao} onChange={e => setEditingNote({ ...editingNote, descricao: e.target.value })} placeholder="Ex: NS-001 - Assentamento PVC DN200" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Data Início</Label>
+                  <Input type="date" value={editingNote.dataInicio} onChange={e => setEditingNote({ ...editingNote, dataInicio: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Data Fim</Label>
+                  <Input type="date" value={editingNote.dataFim} onChange={e => setEditingNote({ ...editingNote, dataFim: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <Label>Status</Label>
+                <Select value={editingNote.status} onValueChange={v => setEditingNote({ ...editingNote, status: v as ServiceNote["status"] })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pendente">Pendente</SelectItem>
+                    <SelectItem value="em_execucao">Em Execução</SelectItem>
+                    <SelectItem value="concluida">Concluída</SelectItem>
+                    <SelectItem value="aprovada">Aprovada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Serviços Incluídos</Label>
+                <Input value={editingNote.servicos.join(", ")} onChange={e => setEditingNote({ ...editingNote, servicos: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
+                  placeholder="Escavação, Assentamento, Reaterro (separados por vírgula)" />
+              </div>
+              <div>
+                <Label>Observações</Label>
+                <Input value={editingNote.observacoes} onChange={e => setEditingNote({ ...editingNote, observacoes: e.target.value })} placeholder="Observações adicionais..." />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => { setShowNoteDialog(false); setEditingNote(null); }}>Cancelar</Button>
+                <Button onClick={() => {
+                  if (!editingNote.descricao.trim()) { toast.error("Preencha a descrição."); return; }
+                  handleSaveNote(editingNote);
+                }}>
+                  <Save className="h-4 w-4 mr-1" /> Salvar Nota
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Gantt Cell Detail Dialog */}
+      <Dialog open={!!selectedGanttCell} onOpenChange={() => setSelectedGanttCell(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Detalhe do Dia</DialogTitle>
+          </DialogHeader>
+          {selectedGanttCell && scheduleResult && (() => {
+            const segs = scheduleResult.allSegments.filter(s => s.day === selectedGanttCell.day);
+            return (
+              <div className="space-y-3">
+                <p className="text-sm font-semibold">Dia {selectedGanttCell.day} - {new Date(new Date(dataInicio).getTime() + (selectedGanttCell.day - 1) * 86400000).toLocaleDateString("pt-BR")}</p>
+                {segs.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Sem atividade neste dia.</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Trecho</TableHead>
+                        <TableHead>Metros</TableHead>
+                        <TableHead>Equipe</TableHead>
+                        <TableHead>Custo</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {segs.map((seg, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-sm font-medium">{seg.trechoId}</TableCell>
+                          <TableCell className="text-sm">{fmt(seg.meters, 1)}m</TableCell>
+                          <TableCell className="text-sm">Eq. {seg.team}</TableCell>
+                          <TableCell className="text-sm">{fmtCurrency(seg.custoTotal)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Total: {fmt(segs.reduce((s, seg) => s + seg.meters, 0), 1)}m | {fmtCurrency(segs.reduce((s, seg) => s + seg.custoTotal, 0))}
+                </p>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

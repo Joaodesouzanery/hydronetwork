@@ -421,12 +421,27 @@ const HydroNetwork = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="min-w-[40px]">#</TableHead>
+                      <TableHead className="min-w-[120px]">Nome</TableHead>
                       <TableHead>Inicio</TableHead><TableHead>Fim</TableHead><TableHead>Comp.</TableHead>
                       <TableHead>Decliv.</TableHead><TableHead>Desnivel</TableHead><TableHead>Material</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>{trechos.map((t, i) => (
                     <TableRow key={i}>
+                      <TableCell className="text-muted-foreground text-xs">T{String(i + 1).padStart(2, "0")}</TableCell>
+                      <TableCell>
+                        <input
+                          className="bg-transparent border-b border-dashed border-muted-foreground/30 hover:border-primary focus:border-primary outline-none text-sm w-full px-0 py-0.5"
+                          placeholder={`Trecho ${i + 1}`}
+                          value={t.nome || ""}
+                          onChange={e => {
+                            const updated = [...trechos];
+                            updated[i] = { ...updated[i], nome: e.target.value };
+                            setTrechos(updated);
+                          }}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">{t.idInicio}</TableCell>
                       <TableCell className="font-medium">{t.idFim}</TableCell>
                       <TableCell>{fmt(t.comprimento, 2)}m</TableCell>
