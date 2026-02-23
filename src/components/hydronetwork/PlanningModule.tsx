@@ -18,6 +18,7 @@ import {
   Line, ComposedChart
 } from "recharts";
 import { PontoTopografico } from "@/engine/reader";
+import { supabase } from "@/lib/supabase";
 import { Trecho, NetworkSummary } from "@/engine/domain";
 import {
   generateFullSchedule, TeamConfig, DEFAULT_TEAM_CONFIG,
@@ -148,6 +149,37 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
     toast.success(`${count} dias úteis calculados.`);
   }, [dataInicio, dataTermino, workDays, holidays]);
 
+  // ── Check active lean constraints ──
+  const checkActiveConstraints = useCallback(async () => {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session) return;
+
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('id')
+        .in('status', ['active'])
+        .limit(1);
+
+      if (!projects || projects.length === 0) return;
+
+      const { data: activeConstraints } = await supabase
+        .from('lps_constraints')
+        .select('id, tipo_restricao, descricao')
+        .eq('project_id', projects[0].id)
+        .in('status', ['ativa', 'critica']);
+
+      if (activeConstraints && activeConstraints.length > 0) {
+        toast.warning(
+          `${activeConstraints.length} restricao(oes) ativa(s) podem impactar o planejamento. Verifique em Restricoes Lean.`,
+          { duration: 6000 }
+        );
+      }
+    } catch {
+      // Silently ignore constraint check errors
+    }
+  }, []);
+
   // ── Generate schedule ──
   const handleGenerateSchedule = useCallback(() => {
     if (trechos.length === 0) { toast.error("Carregue dados primeiro."); return; }
@@ -162,7 +194,10 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
     setScheduleResult(result);
     setDataLoaded(true);
     toast.success(`Planejamento gerado: ${result.totalDays} dias, ${trechos.length} trechos.`);
-  }, [trechos, numEquipes, teamConfig, metrosDia, horasTrabalho, dataInicio, setScheduleResult]);
+
+    // Check for active lean constraints
+    checkActiveConstraints();
+  }, [trechos, numEquipes, teamConfig, metrosDia, horasTrabalho, dataInicio, setScheduleResult, checkActiveConstraints]);
 
   // ── Computed ──
   const totalMetros = useMemo(() => trechos.reduce((s, t) => s + t.comprimento, 0), [trechos]);

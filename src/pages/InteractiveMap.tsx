@@ -41,6 +41,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { CONSTRAINT_TYPES, STATUS_LABELS } from "@/types/lean-constraints";
 import {
   Dialog,
   DialogContent,
@@ -170,6 +171,7 @@ export default function InteractiveMap() {
   const [clickToAddMode, setClickToAddMode] = useState(false);
   const [tileKey, setTileKey] = useState("osm");
   const [showAnnotationLayer, setShowAnnotationLayer] = useState(true);
+  const [showConstraintLayer, setShowConstraintLayer] = useState(false);
   const [showLayerPanel, setShowLayerPanel] = useState(false);
   const [cachedTileCount, setCachedTileCount] = useState(0);
   const [annotationFilter, setAnnotationFilter] = useState<string>("all");
@@ -210,6 +212,21 @@ export default function InteractiveMap() {
       return data as MapAnnotation[];
     },
     enabled: !!projectId && !!session,
+  });
+
+  const { data: mapConstraints = [] } = useQuery({
+    queryKey: ["lps-constraints-map", projectId],
+    queryFn: async () => {
+      if (!projectId) return [];
+      const { data, error } = await supabase
+        .from("lps_constraints")
+        .select("id, tipo_restricao, descricao, status, impacto, latitude, longitude, responsavel_nome, data_identificacao, service_fronts(name), employees(name)")
+        .eq("project_id", projectId)
+        .not("latitude", "is", null);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!projectId && !!session && showConstraintLayer,
   });
 
   const { data: serviceFronts = [] } = useQuery({
@@ -691,6 +708,52 @@ export default function InteractiveMap() {
     }
   }, [annotations, showAnnotationLayer, annotationFilter, activeTab]);
 
+  // Render constraint markers on Leaflet map
+  useEffect(() => {
+    if (!leafletMapRef.current || !markersLayerRef.current) return;
+    if (!showConstraintLayer || mapConstraints.length === 0) return;
+
+    const constraintMarkers: L.CircleMarker[] = [];
+    const statusColors: Record<string, string> = { ativa: '#f59e0b', critica: '#ef4444', resolvida: '#22c55e' };
+
+    mapConstraints.forEach((c: any) => {
+      if (c.latitude == null || c.longitude == null) return;
+      const color = statusColors[c.status] || '#6b7280';
+      const radius = c.status === 'critica' ? 12 : c.status === 'ativa' ? 9 : 7;
+
+      const marker = L.circleMarker([c.latitude, c.longitude], {
+        radius,
+        fillColor: color,
+        color: '#fff',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.85,
+        className: c.status === 'critica' ? 'pulse-marker' : '',
+      }).addTo(markersLayerRef.current!);
+
+      const tipo = CONSTRAINT_TYPES[c.tipo_restricao as keyof typeof CONSTRAINT_TYPES] || c.tipo_restricao;
+      const status = STATUS_LABELS[c.status as keyof typeof STATUS_LABELS] || c.status;
+      const resp = c.employees?.name || c.responsavel_nome || '';
+
+      marker.bindPopup(`
+        <div style="min-width:200px">
+          <strong>${tipo}</strong>
+          <br/><span style="color:${color}">${status}</span>
+          <hr style="margin:4px 0"/>
+          <small>${c.descricao}</small>
+          ${resp ? `<br/><small><strong>Resp:</strong> ${resp}</small>` : ''}
+          <br/><small><strong>Data:</strong> ${c.data_identificacao}</small>
+        </div>
+      `);
+
+      constraintMarkers.push(marker);
+    });
+
+    return () => {
+      constraintMarkers.forEach(m => m.remove());
+    };
+  }, [mapConstraints, showConstraintLayer]);
+
   // Click-to-add annotation handler
   useEffect(() => {
     if (!leafletMapRef.current) return;
@@ -907,6 +970,15 @@ export default function InteractiveMap() {
                           <SelectItem value="inspecao">Inspecao</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                    {/* Constraint Layer Toggle */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" className="h-7 p-1" onClick={() => setShowConstraintLayer(!showConstraintLayer)}>
+                          {showConstraintLayer ? <Eye className="h-4 w-4 text-red-500" /> : <EyeOff className="h-4 w-4 text-muted-foreground" />}
+                        </Button>
+                        <span className="text-sm">Restricoes Lean ({mapConstraints.length})</span>
+                      </div>
                     </div>
                     {/* Offline Cache */}
                     <div className="flex items-center justify-between border-t pt-2">

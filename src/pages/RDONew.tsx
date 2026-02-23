@@ -17,6 +17,7 @@ import { AddServiceDialog } from "@/components/rdo/AddServiceDialog";
 import { RDOHistoryView } from "@/components/rdo/RDOHistoryView";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CONSTRAINT_TYPES, type ConstraintType } from "@/types/lean-constraints";
 interface ExecutedService {
   service_id: string;
   quantity: string;
@@ -24,6 +25,7 @@ interface ExecutedService {
   equipment_used: string;
   employee_id?: string;
   justification?: string;
+  justification_type?: string;
 }
 
 interface CustomQuestion {
@@ -316,11 +318,11 @@ const RDONew = () => {
     // Check for below target services that need justification
     const servicesNeedingJustification = validServices.filter(s => {
       const qty = parseFloat(s.quantity);
-      return checkBelowTarget(s.service_id, qty) && !s.justification;
+      return checkBelowTarget(s.service_id, qty) && (!s.justification_type || !s.justification);
     });
 
     if (servicesNeedingJustification.length > 0) {
-      toast.error("Preencha as justificativas para serviços abaixo da meta");
+      toast.error("Preencha o tipo e a justificativa para serviços abaixo da meta");
       return;
     }
 
@@ -434,16 +436,34 @@ const RDONew = () => {
 
         // Add justification if below target
         if (service.justification) {
-          const { error: justError } = await supabase
+          const { data: justData, error: justError } = await supabase
             .from('justifications')
             .insert([{
               daily_report_id: dailyReport.id,
               executed_service_id: executedService.id,
               reason: service.justification,
               created_by_user_id: user.id
-            }]);
+            }])
+            .select()
+            .single();
 
           if (justError) throw justError;
+
+          // Auto-create lean constraint from RDO justification
+          const constraintType = (service.justification_type || 'restricao_externa') as ConstraintType;
+          await supabase.from('lps_constraints').insert([{
+            created_by_user_id: user.id,
+            project_id: selectedProject,
+            service_front_id: selectedServiceFronts[0] || null,
+            tipo_restricao: constraintType,
+            descricao: `RDO ${reportDate}: ${service.justification}`,
+            status: 'ativa',
+            impacto: 'medio',
+            origem: 'rdo_justificativa',
+            justification_id: justData?.id || null,
+            daily_report_id: dailyReport.id,
+            data_identificacao: reportDate,
+          }]);
         }
       }
 
@@ -1051,12 +1071,26 @@ const RDONew = () => {
                           </div>
 
                           {service.service_id && service.quantity && checkBelowTarget(service.service_id, parseFloat(service.quantity)) && (
-                            <div className="space-y-2 border-t pt-4">
-                              <Label className="text-destructive">Justificativa (Produção Abaixo da Meta) *</Label>
+                            <div className="space-y-3 border-t pt-4">
+                              <Label className="text-destructive">Tipo de Restrição (Produção Abaixo da Meta) *</Label>
+                              <Select
+                                value={service.justification_type || ""}
+                                onValueChange={(value) => updateExecutedService(index, 'justification_type', value)}
+                              >
+                                <SelectTrigger className="border-destructive">
+                                  <SelectValue placeholder="Selecione o tipo de restrição..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {(Object.keys(CONSTRAINT_TYPES) as ConstraintType[]).map((t) => (
+                                    <SelectItem key={t} value={t}>{CONSTRAINT_TYPES[t]}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Label className="text-destructive">Justificativa *</Label>
                               <Textarea
                                 value={service.justification || ""}
                                 onChange={(e) => updateExecutedService(index, 'justification', e.target.value)}
-                                placeholder="Explique o motivo da produção estar abaixo da meta..."
+                                placeholder="Descreva o motivo da produção estar abaixo da meta..."
                                 rows={3}
                                 className="border-destructive"
                               />

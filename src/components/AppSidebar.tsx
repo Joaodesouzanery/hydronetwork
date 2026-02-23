@@ -27,6 +27,11 @@ const monitoringItems = [
   { title: "Atrasos de Projeto", url: "/project-delays", icon: Clock },
 ];
 
+const leanItems = [
+  { title: "Restrições Lean", url: "/lean-constraints", icon: Shield },
+  { title: "Dashboard LPS", url: "/lean-dashboard", icon: BarChart3 },
+];
+
 const hydroModules = [
   { title: "Topografia", url: "/hydronetwork/topografia", icon: Upload },
   { title: "Esgoto", url: "/hydronetwork/esgoto", icon: Droplets },
@@ -107,6 +112,7 @@ export function AppSidebar() {
       <SidebarContent>
         {renderSection("Menu Principal", dashboardItems)}
         {renderSection("Monitoramento", monitoringItems)}
+        {renderSection("Lean / LPS", leanItems)}
         {renderSection("HydroNetwork", hydroModules)}
         {renderSection("Diário de Obra", rdoItems)}
         {renderSection("Sistema", settingsItems, false)}

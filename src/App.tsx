@@ -35,6 +35,8 @@ import Projects from "./pages/Projects";
 import ProjectHistory from "./pages/ProjectHistory";
 import ProjectDelays from "./pages/ProjectDelays";
 import InteractiveMap from "./pages/InteractiveMap";
+import LeanConstraints from "./pages/LeanConstraints";
+import LeanDashboard from "./pages/LeanDashboard";
 
 const queryClient = new QueryClient();
 
@@ -69,6 +71,8 @@ const AppContent = () => {
         <Route path="/projects/:id/history" element={<ProjectHistory />} />
         <Route path="/project-delays" element={<ProjectDelays />} />
         <Route path="/projects/:projectId/map" element={<InteractiveMap />} />
+        <Route path="/lean-constraints" element={<LeanConstraints />} />
+        <Route path="/lean-dashboard" element={<LeanDashboard />} />
         <Route path="/hydronetwork" element={<HydroNetwork />} />
         <Route path="/hydronetwork/:module" element={<HydroNetwork />} />
         <Route path="/hydronetwork-landing" element={<HydroNetworkLanding />} />
