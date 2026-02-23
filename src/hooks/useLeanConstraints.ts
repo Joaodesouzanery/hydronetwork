@@ -17,12 +17,45 @@ import {
 
 function isSchemaError(error: unknown): boolean {
   const msg = String((error as any)?.message || error || '');
-  return msg.includes('schema cache') || msg.includes('relation') && msg.includes('does not exist');
+  return msg.includes('schema cache') || (msg.includes('relation') && msg.includes('does not exist'));
 }
 
 async function getCurrentUserId(): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser();
   return user?.id ?? null;
+}
+
+/** Delay helper */
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Tries a Supabase query with automatic retry on schema cache errors.
+ * PostgREST schema cache can take up to 60s to refresh after table creation.
+ * We retry up to 2 times with a 4-second delay between attempts.
+ */
+async function withSchemaRetry<T>(
+  queryFn: () => Promise<{ data: T | null; error: any }>,
+  maxRetries = 2,
+  retryDelay = 4000,
+): Promise<{ data: T | null; error: any }> {
+  let lastResult = await queryFn();
+
+  if (!lastResult.error || !isSchemaError(lastResult.error)) {
+    return lastResult;
+  }
+
+  // Schema cache error: retry with delay
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    await delay(retryDelay);
+    lastResult = await queryFn();
+    if (!lastResult.error || !isSchemaError(lastResult.error)) {
+      return lastResult;
+    }
+  }
+
+  return lastResult;
 }
 
 export function useLeanConstraints(filters: ConstraintFilters) {
@@ -34,35 +67,39 @@ export function useLeanConstraints(filters: ConstraintFilters) {
       const userId = await getCurrentUserId();
       if (!userId || !filters.projectId) return [];
 
-      let query = supabase
-        .from('lps_constraints')
-        .select('*, service_fronts(id, name), employees(id, name), lps_five_whys(*)')
-        .eq('project_id', filters.projectId)
-        .order('data_identificacao', { ascending: false });
+      const buildQuery = () => {
+        let query = supabase
+          .from('lps_constraints')
+          .select('*, service_fronts(id, name), employees(id, name), lps_five_whys(*)')
+          .eq('project_id', filters.projectId)
+          .order('data_identificacao', { ascending: false });
 
-      if (filters.serviceFrontId) {
-        query = query.eq('service_front_id', filters.serviceFrontId);
-      }
-      if (filters.status && filters.status !== 'todas') {
-        query = query.eq('status', filters.status);
-      }
-      if (filters.tipo && filters.tipo !== 'todos') {
-        query = query.eq('tipo_restricao', filters.tipo);
-      }
-      if (filters.impacto && filters.impacto !== 'todos') {
-        query = query.eq('impacto', filters.impacto);
-      }
-      if (filters.responsavelId) {
-        query = query.eq('responsavel_id', filters.responsavelId);
-      }
-      if (filters.dateFrom) {
-        query = query.gte('data_identificacao', filters.dateFrom);
-      }
-      if (filters.dateTo) {
-        query = query.lte('data_identificacao', filters.dateTo);
-      }
+        if (filters.serviceFrontId) {
+          query = query.eq('service_front_id', filters.serviceFrontId);
+        }
+        if (filters.status && filters.status !== 'todas') {
+          query = query.eq('status', filters.status);
+        }
+        if (filters.tipo && filters.tipo !== 'todos') {
+          query = query.eq('tipo_restricao', filters.tipo);
+        }
+        if (filters.impacto && filters.impacto !== 'todos') {
+          query = query.eq('impacto', filters.impacto);
+        }
+        if (filters.responsavelId) {
+          query = query.eq('responsavel_id', filters.responsavelId);
+        }
+        if (filters.dateFrom) {
+          query = query.gte('data_identificacao', filters.dateFrom);
+        }
+        if (filters.dateTo) {
+          query = query.lte('data_identificacao', filters.dateTo);
+        }
+        return query;
+      };
 
-      const { data, error } = await query;
+      const { data, error } = await withSchemaRetry(() => buildQuery());
+
       if (error) {
         if (isSchemaError(error)) {
           const err = new Error('TABELA_NAO_CONFIGURADA');
@@ -86,11 +123,13 @@ export function useLeanConstraints(filters: ConstraintFilters) {
       const userId = await getCurrentUserId();
       if (!userId || !filters.projectId) return [];
 
-      const { data, error } = await supabase
-        .from('lps_weekly_commitments')
-        .select('*, service_fronts(id, name), lps_constraints(id, descricao)')
-        .eq('project_id', filters.projectId)
-        .order('semana_inicio', { ascending: false });
+      const { data, error } = await withSchemaRetry(() =>
+        supabase
+          .from('lps_weekly_commitments')
+          .select('*, service_fronts(id, name), lps_constraints(id, descricao)')
+          .eq('project_id', filters.projectId)
+          .order('semana_inicio', { ascending: false })
+      );
 
       if (error) {
         if (isSchemaError(error)) return [];
