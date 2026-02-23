@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   MapPin, Plus, Minus, Trash2, Undo2, Save,
-  FolderOpen, Maximize, Link2, Layers, X, Crosshair, MousePointerClick
+  FolderOpen, Maximize, Link2, Layers, X, Crosshair, MousePointerClick, Move
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho, createTrechoFromPoints } from "@/engine/domain";
@@ -60,6 +60,10 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   const [tileKey, setTileKey] = useState("osm");
   const [utmZone, setUtmZone] = useState<string>(String(getGlobalUtmZone() || "auto"));
   const [utmZoneVersion, setUtmZoneVersion] = useState(0);
+
+  // Bulk move mode state
+  const [bulkMoveMode, setBulkMoveMode] = useState(false);
+  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
 
   // Structure mode state
   const [structureMode, setStructureMode] = useState(false);
@@ -116,12 +120,13 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         if (drawMode) { setDrawMode(false); setDrawOrigin(null); toast.info("Modo ligação desativado"); }
         if (addNodeMode) { setAddNodeMode(false); toast.info("Modo adicionar ponto desativado"); }
         if (deleteMode) { setDeleteMode(false); setSelectedForDelete(new Set()); setSelectedTrechosForDelete(new Set()); toast.info("Modo exclusão desativado"); }
+        if (bulkMoveMode) { setBulkMoveMode(false); setDraggedNodeId(null); toast.info("Modo mover em massa desativado"); }
         if (structureMode) { setStructureMode(false); setSelectedTrechoIdx(null); toast.info("Modo Estrutura desativado"); }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [drawMode, addNodeMode, deleteMode, structureMode]);
+  }, [drawMode, addNodeMode, deleteMode, bulkMoveMode, structureMode]);
 
   // UTM zone change handler
   const handleUtmZoneChange = useCallback((value: string) => {
@@ -155,6 +160,38 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
     return () => { map.off("click", handleMapClick); };
   }, [addNodeMode, pontos, onPontosChange]);
 
+  // Handle bulk move dragging
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !bulkMoveMode || !draggedNodeId || !onPontosChange) return;
+
+    const handleMouseMove = (e: L.LeafletMouseEvent) => {
+      const { lat, lng } = e.latlng;
+      const updatedPontos = pontos.map(p =>
+        p.id === draggedNodeId ? { ...p, x: lng, y: lat } : p
+      );
+      onPontosChange(updatedPontos);
+    };
+
+    const handleMapClick = (e: L.LeafletMouseEvent) => {
+      // Drop the node at the clicked position
+      const { lat, lng } = e.latlng;
+      const updatedPontos = pontos.map(p =>
+        p.id === draggedNodeId ? { ...p, x: lng, y: lat } : p
+      );
+      onPontosChange(updatedPontos);
+      setDraggedNodeId(null);
+      toast.success(`Ponto ${draggedNodeId} reposicionado.`);
+    };
+
+    map.on("mousemove", handleMouseMove);
+    map.on("click", handleMapClick);
+    return () => {
+      map.off("mousemove", handleMouseMove);
+      map.off("click", handleMapClick);
+    };
+  }, [bulkMoveMode, draggedNodeId, pontos, onPontosChange]);
+
   // Handle marker click - draw mode or select mode
   const handleTrechoClick = useCallback((idx: number) => {
     if (structureMode) {
@@ -177,6 +214,22 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   }, [deleteMode, structureMode, trechos]);
 
   const handleMarkerClick = useCallback((pointId: string) => {
+    if (bulkMoveMode) {
+      if (draggedNodeId === pointId) {
+        // Drop the node
+        setDraggedNodeId(null);
+        toast.success(`Ponto ${pointId} reposicionado.`);
+      } else if (draggedNodeId) {
+        // Already dragging another, drop it and pick this one
+        setDraggedNodeId(pointId);
+        toast.info(`Arrastando ponto ${pointId}...`);
+      } else {
+        // Start dragging
+        setDraggedNodeId(pointId);
+        toast.info(`Arrastando ponto ${pointId}... Clique para soltar.`);
+      }
+      return;
+    }
     if (deleteMode === "nodes") {
       setSelectedForDelete(prev => {
         const next = new Set(prev);
@@ -248,15 +301,17 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       if (drawMode && drawOrigin === p.id) color = "#f97316";
       if (!drawMode && !deleteMode && selectedPoint === p.id) color = "#f59e0b";
       if (deleteMode === "nodes" && selectedForDelete.has(p.id)) color = "#dc2626";
+      if (bulkMoveMode) color = "#06b6d4"; // cyan for bulk move mode
+      if (bulkMoveMode && draggedNodeId === p.id) color = "#f97316"; // orange for dragged node
 
-      const radius = (drawMode || deleteMode) ? 11 : 8;
+      const radius = (drawMode || deleteMode) ? 11 : bulkMoveMode ? 12 : 8;
 
       const marker = L.circleMarker(coords, {
         radius, fillColor: color, color: "#fff", weight: 2, fillOpacity: 0.9,
       }).addTo(map);
 
-      // In draw/delete mode, use tooltips (don't block clicks). Otherwise popups.
-      if (drawMode || deleteMode) {
+      // In draw/delete/bulkMove mode, use tooltips (don't block clicks). Otherwise popups.
+      if (drawMode || deleteMode || bulkMoveMode) {
         marker.bindTooltip(p.id, { permanent: false, direction: "top", offset: [0, -10] });
       } else {
         marker.bindPopup(`
@@ -336,7 +391,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       setTimeout(() => map.invalidateSize(), 200);
       setTimeout(() => map.invalidateSize(), 500);
     }
-  }, [pontos, trechos, getPointCoords, handleMarkerClick, handleTrechoClick, drawMode, drawOrigin, selectedPoint, deleteMode, selectedForDelete, selectedTrechosForDelete, structureMode, selectedTrechoIdx]);
+  }, [pontos, trechos, getPointCoords, handleMarkerClick, handleTrechoClick, drawMode, drawOrigin, selectedPoint, deleteMode, selectedForDelete, selectedTrechosForDelete, bulkMoveMode, draggedNodeId, structureMode, selectedTrechoIdx]);
 
   const handleFitBounds = () => {
     if (pontos.length === 0) return;
@@ -377,6 +432,8 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
   const toggleDrawMode = () => {
     if (deleteMode) { setDeleteMode(false); setSelectedForDelete(new Set()); }
+    if (bulkMoveMode) { setBulkMoveMode(false); setDraggedNodeId(null); }
+    if (structureMode) { setStructureMode(false); setSelectedTrechoIdx(null); }
     const newMode = !drawMode;
     setDrawMode(newMode);
     setDrawOrigin(null);
@@ -388,6 +445,8 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   const toggleDeleteMode = (mode: "nodes" | "trechos") => {
     if (drawMode) { setDrawMode(false); setDrawOrigin(null); }
     if (addNodeMode) setAddNodeMode(false);
+    if (bulkMoveMode) { setBulkMoveMode(false); setDraggedNodeId(null); }
+    if (structureMode) { setStructureMode(false); setSelectedTrechoIdx(null); }
     if (deleteMode === mode) {
       setDeleteMode(false);
       setSelectedForDelete(new Set());
@@ -474,7 +533,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           <Button size="sm" variant={addNodeMode ? "default" : "outline"} onClick={() => {
             const newMode = !addNodeMode;
             setAddNodeMode(newMode);
-            if (newMode) { setDrawMode(false); setDrawOrigin(null); }
+            if (newMode) { setDrawMode(false); setDrawOrigin(null); setBulkMoveMode(false); setDraggedNodeId(null); setStructureMode(false); setSelectedTrechoIdx(null); setDeleteMode(false); }
             toast.info(newMode ? "Clique no mapa para adicionar pontos. ESC para sair." : "Modo adicionar ponto desativado.");
           }} className={addNodeMode ? "bg-green-600 hover:bg-green-700 text-white" : ""} disabled={!onPontosChange}>
             <Crosshair className="h-3 w-3 mr-1" /> {addNodeMode ? "Adicionando..." : "Adicionar Ponto"}
@@ -489,12 +548,33 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
             className={deleteMode === "trechos" ? "bg-red-600 hover:bg-red-700 text-white" : ""}>
             <Trash2 className="h-3 w-3 mr-1" /> {deleteMode === "trechos" ? "Selecionando Trechos..." : "Excluir Trechos"}
           </Button>
+          {/* Bulk Move Mode Button */}
+          <Button
+            size="sm"
+            variant={bulkMoveMode ? "default" : "outline"}
+            onClick={() => {
+              const newMode = !bulkMoveMode;
+              setBulkMoveMode(newMode);
+              if (newMode) {
+                setDrawMode(false); setDrawOrigin(null); setAddNodeMode(false); setDeleteMode(false); setStructureMode(false); setSelectedTrechoIdx(null);
+                toast.info("Modo mover em massa: arraste os pontos no mapa. ESC para sair.");
+              } else {
+                setDraggedNodeId(null);
+                toast.info("Modo mover em massa desativado.");
+              }
+            }}
+            className={bulkMoveMode ? "bg-cyan-600 hover:bg-cyan-700 text-white" : ""}
+            title="Mover trechos em massa"
+            disabled={!onPontosChange}
+          >
+            <Move className="h-3 w-3 mr-1" /> {bulkMoveMode ? "Movendo..." : "Mover em Massa"}
+          </Button>
           {/* Structure mode */}
           <Button size="sm" variant={structureMode ? "default" : "outline"} onClick={() => {
             const newMode = !structureMode;
             setStructureMode(newMode);
             if (newMode) {
-              setDrawMode(false); setDrawOrigin(null); setDeleteMode(false); setAddNodeMode(false);
+              setDrawMode(false); setDrawOrigin(null); setDeleteMode(false); setAddNodeMode(false); setBulkMoveMode(false); setDraggedNodeId(null);
               toast.info("Modo Estrutura: clique em um trecho para editar nome, rede e frente.");
             } else {
               setSelectedTrechoIdx(null);
@@ -584,6 +664,19 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
                 <X className="h-3 w-3 mr-1" /> Sair (ESC)
               </Button>
             </div>
+          </div>
+        )}
+
+        {/* Bulk move mode status bar */}
+        {bulkMoveMode && (
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-cyan-50 dark:bg-cyan-950/20 border border-cyan-200">
+            <Move className="h-4 w-4 text-cyan-600" />
+            <span className="text-sm font-medium text-cyan-700 dark:text-cyan-400">
+              Modo Mover em Massa: arraste os pontos para reposicioná-los no mapa
+            </span>
+            <Button size="sm" variant="ghost" className="h-6 text-xs ml-auto" onClick={() => { setBulkMoveMode(false); setDraggedNodeId(null); }}>
+              <X className="h-3 w-3 mr-1" /> Sair (ESC)
+            </Button>
           </div>
         )}
 
