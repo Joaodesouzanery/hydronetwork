@@ -24,6 +24,15 @@ interface TopographyMapProps {
   onPontosChange?: (pontos: PontoTopografico[]) => void;
 }
 
+type TipoRedeManualMap = "agua" | "esgoto" | "drenagem" | "recalque" | "outro";
+const REDE_COLORS: Record<TipoRedeManualMap, string> = {
+  agua: "#60a5fa",
+  esgoto: "#22c55e",
+  drenagem: "#f59e0b",
+  recalque: "#a855f7",
+  outro: "#6b7280",
+};
+
 const STORAGE_KEY = "hydronetwork_trechos";
 
 const TILE_LAYERS: Record<string, { url: string; attribution: string; name: string }> = {
@@ -51,6 +60,13 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   const [tileKey, setTileKey] = useState("osm");
   const [utmZone, setUtmZone] = useState<string>(String(getGlobalUtmZone() || "auto"));
   const [utmZoneVersion, setUtmZoneVersion] = useState(0);
+
+  // Structure mode state
+  const [structureMode, setStructureMode] = useState(false);
+  const [selectedTrechoIdx, setSelectedTrechoIdx] = useState<number | null>(null);
+  const [editingTrechoName, setEditingTrechoName] = useState("");
+  const [editingTrechoRede, setEditingTrechoRede] = useState<TipoRedeManualMap>("esgoto");
+  const [editingTrechoFrente, setEditingTrechoFrente] = useState("");
 
   // Batch CRS detection: analyze ALL points together for consistent conversion
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -100,11 +116,12 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         if (drawMode) { setDrawMode(false); setDrawOrigin(null); toast.info("Modo ligação desativado"); }
         if (addNodeMode) { setAddNodeMode(false); toast.info("Modo adicionar ponto desativado"); }
         if (deleteMode) { setDeleteMode(false); setSelectedForDelete(new Set()); setSelectedTrechosForDelete(new Set()); toast.info("Modo exclusão desativado"); }
+        if (structureMode) { setStructureMode(false); setSelectedTrechoIdx(null); toast.info("Modo Estrutura desativado"); }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [drawMode, addNodeMode, deleteMode]);
+  }, [drawMode, addNodeMode, deleteMode, structureMode]);
 
   // UTM zone change handler
   const handleUtmZoneChange = useCallback((value: string) => {
@@ -140,6 +157,16 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
   // Handle marker click - draw mode or select mode
   const handleTrechoClick = useCallback((idx: number) => {
+    if (structureMode) {
+      setSelectedTrechoIdx(idx);
+      const t = trechos[idx];
+      if (t) {
+        setEditingTrechoName(t.nomeTrecho || "");
+        setEditingTrechoRede((t.tipoRedeManual || "esgoto") as TipoRedeManualMap);
+        setEditingTrechoFrente(t.frenteServico || "");
+      }
+      return;
+    }
     if (deleteMode === "trechos") {
       setSelectedTrechosForDelete(prev => {
         const next = new Set(prev);
@@ -147,7 +174,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         return next;
       });
     }
-  }, [deleteMode]);
+  }, [deleteMode, structureMode, trechos]);
 
   const handleMarkerClick = useCallback((pointId: string) => {
     if (deleteMode === "nodes") {
@@ -258,14 +285,23 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       if (!pInicio || !pFim) return;
       const isGravity = t.tipoRede === "Esgoto por Gravidade";
       const isSelectedForDel = deleteMode === "trechos" && selectedTrechosForDelete.has(idx);
+      const isStructureSelected = structureMode && selectedTrechoIdx === idx;
+
+      // Color logic: structure mode uses rede colors, otherwise default
+      let lineColor = isGravity ? "#22c55e" : "#f59e0b";
+      if (isSelectedForDel) lineColor = "#dc2626";
+      else if (structureMode && t.tipoRedeManual) lineColor = REDE_COLORS[t.tipoRedeManual as TipoRedeManualMap] || lineColor;
+      if (isStructureSelected) lineColor = "#818cf8";
 
       const polyline = L.polyline([getPointCoords(pInicio), getPointCoords(pFim)], {
-        color: isSelectedForDel ? "#dc2626" : isGravity ? "#22c55e" : "#f59e0b",
-        weight: isSelectedForDel ? 6 : 4,
-        opacity: isSelectedForDel ? 1 : 0.8,
+        color: lineColor,
+        weight: isSelectedForDel ? 6 : isStructureSelected ? 6 : structureMode ? 5 : 4,
+        opacity: isSelectedForDel ? 1 : isStructureSelected ? 1 : 0.8,
       }).addTo(map);
 
-      polyline.bindTooltip(`${t.idInicio} → ${t.idFim} (${t.comprimento.toFixed(1)}m)`, { sticky: true });
+      const displayName = t.nomeTrecho || `${t.idInicio} → ${t.idFim}`;
+      const redeLabel = t.tipoRedeManual ? ` [${t.tipoRedeManual}]` : "";
+      polyline.bindTooltip(`${displayName}${redeLabel} (${t.comprimento.toFixed(1)}m)`, { sticky: true });
       if (deleteMode !== "trechos") {
         polyline.bindPopup(`
           <div style="font-family:sans-serif;min-width:180px;">
@@ -300,7 +336,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       setTimeout(() => map.invalidateSize(), 200);
       setTimeout(() => map.invalidateSize(), 500);
     }
-  }, [pontos, trechos, getPointCoords, handleMarkerClick, handleTrechoClick, drawMode, drawOrigin, selectedPoint, deleteMode, selectedForDelete, selectedTrechosForDelete]);
+  }, [pontos, trechos, getPointCoords, handleMarkerClick, handleTrechoClick, drawMode, drawOrigin, selectedPoint, deleteMode, selectedForDelete, selectedTrechosForDelete, structureMode, selectedTrechoIdx]);
 
   const handleFitBounds = () => {
     if (pontos.length === 0) return;
@@ -453,6 +489,20 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
             className={deleteMode === "trechos" ? "bg-red-600 hover:bg-red-700 text-white" : ""}>
             <Trash2 className="h-3 w-3 mr-1" /> {deleteMode === "trechos" ? "Selecionando Trechos..." : "Excluir Trechos"}
           </Button>
+          {/* Structure mode */}
+          <Button size="sm" variant={structureMode ? "default" : "outline"} onClick={() => {
+            const newMode = !structureMode;
+            setStructureMode(newMode);
+            if (newMode) {
+              setDrawMode(false); setDrawOrigin(null); setDeleteMode(false); setAddNodeMode(false);
+              toast.info("Modo Estrutura: clique em um trecho para editar nome, rede e frente.");
+            } else {
+              setSelectedTrechoIdx(null);
+              toast.info("Modo Estrutura desativado.");
+            }
+          }} className={structureMode ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""}>
+            <Layers className="h-3 w-3 mr-1" /> {structureMode ? "Estrutura..." : "Modo Estrutura"}
+          </Button>
           {/* UTM Zone selector */}
           <div className="flex items-center gap-1 ml-2">
             <span className="text-xs text-muted-foreground">UTM:</span>
@@ -537,6 +587,81 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           </div>
         )}
 
+        {/* Structure mode bar */}
+        {structureMode && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200">
+              <Layers className="h-4 w-4 text-indigo-600" />
+              <span className="text-sm font-medium text-indigo-700 dark:text-indigo-400">
+                Modo Estrutura: Clique em um trecho no mapa para editar seus atributos
+              </span>
+              <Button size="sm" variant="ghost" className="h-6 text-xs ml-auto" onClick={() => { setStructureMode(false); setSelectedTrechoIdx(null); }}>
+                <X className="h-3 w-3 mr-1" /> Sair (ESC)
+              </Button>
+            </div>
+
+            {selectedTrechoIdx !== null && selectedTrechoIdx < trechos.length && (() => {
+              const t = trechos[selectedTrechoIdx];
+              return (
+                <div className="grid grid-cols-5 gap-2 p-2 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/10 border border-indigo-100">
+                  <div>
+                    <Label className="text-xs">Trecho</Label>
+                    <p className="text-sm font-mono font-semibold">{t.idInicio} → {t.idFim}</p>
+                    <p className="text-xs text-muted-foreground">{t.comprimento.toFixed(1)}m</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Nome</Label>
+                    <Input
+                      value={editingTrechoName}
+                      onChange={e => setEditingTrechoName(e.target.value)}
+                      placeholder="Nome do trecho"
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Tipo de Rede</Label>
+                    <Select value={editingTrechoRede} onValueChange={v => setEditingTrechoRede(v as TipoRedeManualMap)}>
+                      <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="agua">💧 Agua</SelectItem>
+                        <SelectItem value="esgoto">🚰 Esgoto</SelectItem>
+                        <SelectItem value="drenagem">🌧️ Drenagem</SelectItem>
+                        <SelectItem value="recalque">⬆️ Recalque</SelectItem>
+                        <SelectItem value="outro">📌 Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Frente de Servico</Label>
+                    <Input
+                      value={editingTrechoFrente}
+                      onChange={e => setEditingTrechoFrente(e.target.value)}
+                      placeholder="Frente"
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button size="sm" className="h-7 text-xs" onClick={() => {
+                      if (!onTrechosChange) return;
+                      const updated = [...trechos];
+                      updated[selectedTrechoIdx] = {
+                        ...updated[selectedTrechoIdx],
+                        nomeTrecho: editingTrechoName,
+                        tipoRedeManual: editingTrechoRede,
+                        frenteServico: editingTrechoFrente,
+                      };
+                      onTrechosChange(updated);
+                      toast.success(`Trecho ${t.idInicio} → ${t.idFim} atualizado!`);
+                    }}>
+                      <Save className="h-3 w-3 mr-1" /> Salvar
+                    </Button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         {/* Map */}
         <div
           ref={mapContainerRef}
@@ -569,7 +694,12 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
             <div className="space-y-1">
               {trechos.map((t, i) => (
                 <div key={i} className="flex items-center justify-between text-xs bg-muted/30 rounded px-2 py-1">
-                  <span>{t.idInicio} → {t.idFim} ({t.comprimento.toFixed(1)}m)</span>
+                  <span>
+                    {t.nomeTrecho ? <strong>{t.nomeTrecho}: </strong> : null}
+                    {t.idInicio} → {t.idFim} ({t.comprimento.toFixed(1)}m)
+                    {t.tipoRedeManual && <span className="ml-1 text-muted-foreground">[{t.tipoRedeManual}]</span>}
+                    {t.frenteServico && <span className="ml-1 text-muted-foreground">({t.frenteServico})</span>}
+                  </span>
                   <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => {
                     const updated = trechos.filter((_, idx) => idx !== i);
                     onTrechosChange?.(updated);
@@ -591,8 +721,20 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500" /> Selecionado</div>
           {drawMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-orange-500" /> Origem (ligação)</div>}
           {deleteMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-600" /> Selecionado p/ exclusão</div>}
-          <div className="flex items-center gap-1"><div className="w-4 h-1 bg-green-500 rounded" /> Gravidade</div>
-          <div className="flex items-center gap-1"><div className="w-4 h-1 bg-orange-500 rounded" /> Elevatória</div>
+          {structureMode ? (
+            <>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-blue-400 rounded" /> Agua</div>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-green-500 rounded" /> Esgoto</div>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-yellow-500 rounded" /> Drenagem</div>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-purple-500 rounded" /> Recalque</div>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-indigo-400 rounded" /> Selecionado</div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-green-500 rounded" /> Gravidade</div>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-orange-500 rounded" /> Elevatória</div>
+            </>
+          )}
         </div>
       </CardContent>
     </Card>

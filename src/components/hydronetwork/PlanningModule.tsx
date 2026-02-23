@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   Calendar, Users, Zap, ClipboardList, AlertTriangle, Download,
-  BarChart3, TrendingUp, Plus, Trash2, FileText
+  BarChart3, TrendingUp, Plus, Trash2, FileText, Save, FolderOpen, Edit, Layers
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -24,6 +24,11 @@ import {
   ScheduleResult, DailySegment, generateCurveSData, generateHistogramData
 } from "@/engine/planning";
 import { exportToExcel as exportPlanningExcel } from "@/components/planning/planningExport";
+import {
+  SavedPlan, getSavedPlans, savePlan, generatePlanId, TrechoMetadata,
+} from "@/engine/savedPlanning";
+import { SavedPlansDialog } from "./SavedPlansDialog";
+import { TrechoEditorPanel } from "./TrechoEditorPanel";
 
 // ── Types ──
 interface Holiday {
@@ -42,6 +47,7 @@ type GanttMode = "segment" | "trecho" | "trecho_activity";
 type HistogramView = "daily" | "weekly" | "monthly";
 type HistogramFilter = "all" | "labor" | "equipment" | "cost";
 type WorkDays = 5 | 6 | 7;
+type GroupingMode = "trecho" | "frente" | "lote" | "area" | "rede";
 
 interface PlanningModuleProps {
   pontos: PontoTopografico[];
@@ -118,6 +124,21 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
   const [histView, setHistView] = useState<HistogramView>("daily");
   const [histFilter, setHistFilter] = useState<HistogramFilter>("all");
 
+  // ── Saved Plans ──
+  const [showSavedPlans, setShowSavedPlans] = useState(false);
+  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
+  const [currentPlanName, setCurrentPlanName] = useState("");
+
+  // ── Trecho Metadata ──
+  const [trechoMetadata, setTrechoMetadata] = useState<TrechoMetadata[]>([]);
+  const [showTrechoEditor, setShowTrechoEditor] = useState(false);
+
+  // ── Grouping Mode ──
+  const [groupingMode, setGroupingMode] = useState<GroupingMode>("trecho");
+
+  // ── Add service form visible ──
+  const [showAddService, setShowAddService] = useState(false);
+
   // ── Load platform data ──
   const handleLoadPlatformData = useCallback(() => {
     if (trechos.length === 0) {
@@ -164,6 +185,65 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
     toast.success(`Planejamento gerado: ${result.totalDays} dias, ${trechos.length} trechos.`);
   }, [trechos, numEquipes, teamConfig, metrosDia, horasTrabalho, dataInicio, setScheduleResult]);
 
+  // ── Save current plan ──
+  const handleSavePlan = useCallback(() => {
+    const name = currentPlanName || `Planejamento ${new Date().toLocaleDateString("pt-BR")}`;
+    const plan: SavedPlan = {
+      id: currentPlanId || generatePlanId(),
+      name,
+      description: "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      numEquipes,
+      teamConfig,
+      metrosDia,
+      horasTrabalho,
+      workDays,
+      dataInicio,
+      dataTermino,
+      productivity,
+      holidays,
+      trechoMetadata,
+      groupingMode,
+      scheduleSnapshot: scheduleResult ? {
+        totalDays: scheduleResult.totalDays,
+        totalMetros: trechos.reduce((s, t) => s + t.comprimento, 0),
+        totalCost: scheduleResult.allSegments.reduce((s, seg) => s + seg.custoTotal, 0),
+        trechosCount: trechos.length,
+      } : undefined,
+    };
+    savePlan(plan);
+    setCurrentPlanId(plan.id);
+    setCurrentPlanName(name);
+    toast.success(`Planejamento "${name}" salvo!`);
+  }, [currentPlanId, currentPlanName, numEquipes, teamConfig, metrosDia, horasTrabalho, workDays, dataInicio, dataTermino, productivity, holidays, trechoMetadata, groupingMode, scheduleResult, trechos]);
+
+  // ── Load plan from saved ──
+  const handleLoadPlan = useCallback((plan: SavedPlan) => {
+    setNumEquipes(plan.numEquipes);
+    setTeamConfig(plan.teamConfig);
+    setMetrosDia(plan.metrosDia);
+    setHorasTrabalho(plan.horasTrabalho);
+    setWorkDays(plan.workDays);
+    setDataInicio(plan.dataInicio);
+    setDataTermino(plan.dataTermino);
+    setProductivity(plan.productivity);
+    setHolidays(plan.holidays);
+    setTrechoMetadata(plan.trechoMetadata);
+    setGroupingMode(plan.groupingMode);
+    setCurrentPlanId(plan.id);
+    setCurrentPlanName(plan.name);
+    setShowSavedPlans(false);
+    toast.success(`Planejamento "${plan.name}" carregado!`);
+  }, []);
+
+  // ── Get trecho display name ──
+  const getTrechoDisplayName = useCallback((trechoId: string, fallbackIdx: number) => {
+    const meta = trechoMetadata.find(m => m.trechoKey === trechoId);
+    if (meta?.nomeTrecho) return meta.nomeTrecho;
+    return `T${String(fallbackIdx + 1).padStart(2, "0")}`;
+  }, [trechoMetadata]);
+
   // ── Computed ──
   const totalMetros = useMemo(() => trechos.reduce((s, t) => s + t.comprimento, 0), [trechos]);
   const totalEscavacao = useMemo(() => {
@@ -196,10 +276,11 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
       // Add test day after last execution day
       const lastDay = Math.max(...segs.map(s => s.day));
       if (lastDay + 1 <= totalDays) days[lastDay + 1] = { meters: 0, isTest: true };
-      
-      return { id: `T${String(idx + 1).padStart(2, "0")}`, meters: Math.round(totalMeters), days, totalDays };
+
+      const displayName = getTrechoDisplayName(trechoId, idx);
+      return { id: displayName, trechoId, meters: Math.round(totalMeters), days, totalDays };
     });
-  }, [scheduleResult]);
+  }, [scheduleResult, getTrechoDisplayName]);
 
   // ── Histogram stats ──
   const histStats = useMemo(() => {
@@ -223,6 +304,68 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
 
   return (
     <div className="space-y-6">
+      {/* Saved Plans Toolbar */}
+      <div className="flex gap-2 flex-wrap items-center">
+        <Button variant="outline" size="sm" onClick={() => setShowSavedPlans(!showSavedPlans)}>
+          <FolderOpen className="h-4 w-4 mr-1" /> Planejamentos Salvos
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleSavePlan}>
+          <Save className="h-4 w-4 mr-1" /> {currentPlanId ? "Salvar" : "Salvar Como"}
+        </Button>
+        {currentPlanName && (
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">
+              Ativo: {currentPlanName}
+            </Badge>
+            <Input
+              value={currentPlanName}
+              onChange={e => setCurrentPlanName(e.target.value)}
+              className="h-7 w-48 text-xs"
+              placeholder="Nome do planejamento"
+            />
+          </div>
+        )}
+        <div className="ml-auto flex gap-2">
+          <Button
+            variant={showTrechoEditor ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowTrechoEditor(!showTrechoEditor)}
+          >
+            <Edit className="h-4 w-4 mr-1" /> Editor de Trechos
+          </Button>
+          <Select value={groupingMode} onValueChange={v => setGroupingMode(v as GroupingMode)}>
+            <SelectTrigger className="h-8 w-48 text-sm">
+              <Layers className="h-3 w-3 mr-1" />
+              <SelectValue placeholder="Agrupamento" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="trecho">Detalhado (por trecho)</SelectItem>
+              <SelectItem value="frente">Agrupado por Frente</SelectItem>
+              <SelectItem value="lote">Agrupado por Lote/Area</SelectItem>
+              <SelectItem value="rede">Agrupado por Tipo de Rede</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Saved Plans Dialog */}
+      {showSavedPlans && (
+        <SavedPlansDialog
+          onLoadPlan={handleLoadPlan}
+          onClose={() => setShowSavedPlans(false)}
+          currentPlanId={currentPlanId || undefined}
+        />
+      )}
+
+      {/* Trecho Editor Panel */}
+      {showTrechoEditor && trechos.length > 0 && (
+        <TrechoEditorPanel
+          trechos={trechos}
+          metadata={trechoMetadata}
+          onMetadataChange={setTrechoMetadata}
+        />
+      )}
+
       {/* Same-Day Completion Rule */}
       <Card className="border-yellow-500/30 bg-yellow-500/5">
         <CardContent className="pt-4">
@@ -482,6 +625,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
                     <TableHead>Unidade</TableHead>
                     <TableHead>Produtividade/Dia</TableHead>
                     <TableHead>Fonte</TableHead>
+                    <TableHead className="w-8"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -507,18 +651,73 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
                           </SelectContent>
                         </Select>
                       </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setProductivity(productivity.filter((_, j) => j !== i))}>
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-            <Button size="sm" variant="outline" onClick={() => {
-              if (!newServico) return;
-              setProductivity([...productivity, { servico: newServico, unidade: newUnidade, produtividade: newProd, fonte: newFonte }]);
-              setNewServico("");
-            }}>
-              <Plus className="h-4 w-4 mr-1" /> Adicionar Serviço
-            </Button>
+            {!showAddService ? (
+              <Button size="sm" variant="outline" onClick={() => setShowAddService(true)}>
+                <Plus className="h-4 w-4 mr-1" /> Adicionar Serviço
+              </Button>
+            ) : (
+              <Card className="bg-primary/5 border-primary/30">
+                <CardContent className="pt-3 pb-3 space-y-2">
+                  <p className="font-semibold text-xs">Novo Serviço:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Nome do Serviço</Label>
+                      <Input
+                        value={newServico}
+                        onChange={e => setNewServico(e.target.value)}
+                        placeholder="Ex: Escoramento madeira"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Unidade</Label>
+                      <Select value={newUnidade} onValueChange={setNewUnidade}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {["m", "m²", "m³", "un", "h", "vb", "kg"].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Produtividade/Dia</Label>
+                      <Input type="number" value={newProd} onChange={e => setNewProd(Number(e.target.value))} className="h-8 text-sm" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Fonte</Label>
+                      <Select value={newFonte} onValueChange={setNewFonte}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {["SINAPI", "SEINFRA", "TCPO", "Mercado", "Histórico"].map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => {
+                      if (!newServico.trim()) { toast.error("Digite o nome do serviço."); return; }
+                      setProductivity([...productivity, { servico: newServico.trim(), unidade: newUnidade, produtividade: newProd, fonte: newFonte }]);
+                      setNewServico("");
+                      setNewProd(10);
+                      setShowAddService(false);
+                      toast.success("Serviço adicionado!");
+                    }}>
+                      <Plus className="h-3 w-3 mr-1" /> Adicionar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setShowAddService(false)}>Cancelar</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </CardContent>
         </Card>
 

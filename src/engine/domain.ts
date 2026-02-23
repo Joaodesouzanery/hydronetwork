@@ -16,6 +16,8 @@ import { PontoTopografico } from "./reader";
 export const DEFAULT_DIAMETRO_MM = 200;
 export const DEFAULT_MATERIAL = "PVC";
 
+export type TipoRedeManual = "agua" | "esgoto" | "drenagem" | "recalque" | "outro";
+
 export interface Trecho {
   idInicio: string;
   idFim: string;
@@ -30,6 +32,13 @@ export interface Trecho {
   xFim: number;
   yFim: number;
   cotaFim: number;
+  // Editable identity fields
+  nomeTrecho?: string;
+  codigoTrecho?: string;
+  tipoRedeManual?: TipoRedeManual;
+  frenteServico?: string;
+  lote?: string;
+  grupo?: string;
 }
 
 export function trechoToRecord(t: Trecho, includeCoordinates = false) {

@@ -6,12 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, MapPin } from "lucide-react";
+import { Plus, Trash2, MapPin, Filter } from "lucide-react";
 import {
   RDO, ExecutedService, SegmentProgress, ServiceUnit, RDOStatus, SystemType,
   generateId, saveRDOs, validateRDO,
 } from "@/engine/rdo";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 type ClimaCond = "bom" | "nublado" | "chuva" | "impraticavel";
 
@@ -196,13 +196,32 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
 
       {/* 4. Equipamentos */}
       <Card>
-        <CardHeader><CardTitle>🚜 4. Equipamentos</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>🚜 4. Equipamentos</CardTitle>
+          <Button size="sm" variant="outline" onClick={() => {
+            setForm(p => ({
+              ...p,
+              equipamentos: [...p.equipamentos, { nome: "", quantidade: 1, horas: 8 }],
+            }));
+          }}>
+            <Plus className="h-4 w-4 mr-1" /> Adicionar Equipamento
+          </Button>
+        </CardHeader>
         <CardContent>
           <div className="space-y-2">
             {form.equipamentos.map((eq, idx) => (
-              <div key={idx} className="grid grid-cols-3 gap-3 items-end">
+              <div key={idx} className="grid grid-cols-4 gap-3 items-end">
                 <div>
-                  <Label className="text-xs">{eq.nome}</Label>
+                  <Label className="text-xs">Equipamento</Label>
+                  <Input
+                    value={eq.nome}
+                    onChange={e => {
+                      const eqs = [...form.equipamentos];
+                      eqs[idx] = { ...eqs[idx], nome: e.target.value };
+                      setForm(p => ({ ...p, equipamentos: eqs }));
+                    }}
+                    placeholder="Nome do equipamento"
+                  />
                 </div>
                 <div>
                   <Label className="text-xs">Quantidade</Label>
@@ -222,9 +241,25 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
                       setForm(p => ({ ...p, equipamentos: eqs }));
                     }} />
                 </div>
+                <div>
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => {
+                    setForm(p => ({ ...p, equipamentos: p.equipamentos.filter((_, i) => i !== idx) }));
+                  }}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
+          {form.equipamentos.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Nenhum equipamento. Clique em "Adicionar Equipamento" acima.
+            </p>
+          )}
+          <Badge variant="outline" className="mt-3">
+            Total: {form.equipamentos.reduce((s, eq) => s + eq.quantidade, 0)} equipamentos,{" "}
+            {form.equipamentos.reduce((s, eq) => s + eq.quantidade * eq.horas, 0)} horas-máquina
+          </Badge>
         </CardContent>
       </Card>
 
@@ -282,10 +317,10 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
             <Button size="sm" variant="outline" onClick={addSegment}><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
             {trechos.length > 0 && form.segments.length === 0 && (
               <Button size="sm" variant="secondary" onClick={() => {
-                const segs: SegmentProgress[] = trechos.map(t => ({
+                const segs: SegmentProgress[] = trechos.map((t, i) => ({
                   id: generateId(),
-                  segmentName: `${t.idInicio}-${t.idFim}`,
-                  system: "esgoto" as SystemType,
+                  segmentName: t.nomeTrecho || `${t.idInicio}-${t.idFim}`,
+                  system: (t.tipoRedeManual === "agua" ? "agua" : t.tipoRedeManual === "drenagem" ? "drenagem" : "esgoto") as SystemType,
                   plannedTotal: t.comprimento,
                   executedBefore: 0,
                   executedToday: 0,
@@ -299,6 +334,31 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* Segment filters */}
+          {form.segments.length > 0 && (
+            <div className="flex gap-2 flex-wrap items-center border-b pb-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => {
+                const incomplete = form.segments.filter(s => (s.executedBefore + s.executedToday) < s.plannedTotal);
+                if (incomplete.length === form.segments.length) return;
+                setForm(p => ({ ...p, segments: incomplete }));
+                toast.info(`Filtrado: ${incomplete.length} trechos nao concluidos.`);
+              }}>Nao Concluidos</Button>
+              {["agua", "esgoto", "drenagem"].map(sys => {
+                const count = form.segments.filter(s => s.system === sys).length;
+                if (count === 0) return null;
+                return (
+                  <Badge key={sys} variant="outline" className="text-xs cursor-default">
+                    {sys === "agua" ? "💧" : sys === "esgoto" ? "🚰" : "🌧️"} {sys}: {count}
+                  </Badge>
+                );
+              })}
+              <Badge variant="outline" className="text-xs">
+                Total: {form.segments.length} trechos
+              </Badge>
+            </div>
+          )}
+
           {form.segments.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">
               {trechos.length > 0
@@ -307,13 +367,25 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
             </p>
           )}
           {form.segments.map((seg, idx) => (
-            <div key={seg.id} className="grid grid-cols-6 gap-2 items-end">
+            <div key={seg.id} className="grid grid-cols-7 gap-2 items-end">
               <Input placeholder="Trecho" value={seg.segmentName}
                 onChange={e => {
                   const s = [...form.segments];
                   s[idx] = { ...s[idx], segmentName: e.target.value };
                   setForm(p => ({ ...p, segments: s }));
                 }} />
+              <Select value={seg.system} onValueChange={v => {
+                const s = [...form.segments];
+                s[idx] = { ...s[idx], system: v as SystemType };
+                setForm(p => ({ ...p, segments: s }));
+              }}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="agua">💧 Agua</SelectItem>
+                  <SelectItem value="esgoto">🚰 Esgoto</SelectItem>
+                  <SelectItem value="drenagem">🌧️ Drenagem</SelectItem>
+                </SelectContent>
+              </Select>
               <Input type="number" placeholder="Planej." value={seg.plannedTotal || ""}
                 onChange={e => {
                   const s = [...form.segments];
