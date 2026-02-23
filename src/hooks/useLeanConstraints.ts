@@ -98,7 +98,7 @@ export function useLeanConstraints(filters: ConstraintFilters) {
   };
 
   const createConstraint = useMutation({
-    mutationFn: async (data: Omit<LpsConstraint, 'id' | 'created_at' | 'updated_at' | 'service_fronts' | 'employees' | 'projects' | 'lps_five_whys'>) => {
+    mutationFn: async (data: Omit<LpsConstraint, 'id' | 'created_at' | 'updated_at' | 'service_fronts' | 'employees' | 'projects' | 'lps_five_whys' | 'parent_constraint' | 'child_constraints'>) => {
       const { data: result, error } = await supabase
         .from('lps_constraints')
         .insert([data])
@@ -112,9 +112,10 @@ export function useLeanConstraints(filters: ConstraintFilters) {
 
   const updateConstraint = useMutation({
     mutationFn: async ({ id, ...data }: Partial<LpsConstraint> & { id: string }) => {
+      const { service_fronts, employees, projects, lps_five_whys, parent_constraint, child_constraints, ...cleanData } = data as any;
       const { data: result, error } = await supabase
         .from('lps_constraints')
-        .update(data)
+        .update(cleanData)
         .eq('id', id)
         .select()
         .single();
@@ -164,9 +165,10 @@ export function useLeanConstraints(filters: ConstraintFilters) {
 
   const updateCommitment = useMutation({
     mutationFn: async ({ id, ...data }: Partial<LpsWeeklyCommitment> & { id: string }) => {
+      const { service_fronts, lps_constraints, ...cleanData } = data as any;
       const { data: result, error } = await supabase
         .from('lps_weekly_commitments')
-        .update(data)
+        .update(cleanData)
         .eq('id', id)
         .select()
         .single();
@@ -181,6 +183,20 @@ export function useLeanConstraints(filters: ConstraintFilters) {
       const { data: result, error } = await supabase
         .from('lps_five_whys')
         .insert([data])
+        .select()
+        .single();
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: invalidateAll,
+  });
+
+  const updateFiveWhys = useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; status_acao: string }) => {
+      const { data: result, error } = await supabase
+        .from('lps_five_whys')
+        .update(data)
+        .eq('id', id)
         .select()
         .single();
       if (error) throw error;
@@ -206,6 +222,7 @@ export function useLeanConstraints(filters: ConstraintFilters) {
     createCommitment,
     updateCommitment,
     createFiveWhys,
+    updateFiveWhys,
     refreshData: invalidateAll,
   };
 }

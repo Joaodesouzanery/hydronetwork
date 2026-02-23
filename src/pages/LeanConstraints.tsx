@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-import { Shield, Plus, Loader2, FileBarChart, BarChart3 } from 'lucide-react';
+import { Shield, Plus, Loader2, FileBarChart, BarChart3, ClipboardCheck } from 'lucide-react';
 import { useLeanConstraints } from '@/hooks/useLeanConstraints';
 import type { ConstraintFilters, LpsConstraint } from '@/types/lean-constraints';
 import { LeanKPICards } from '@/components/lean-constraints/LeanKPICards';
@@ -31,9 +31,10 @@ import { DeadlineNotifications } from '@/components/lean-constraints/DeadlineNot
 import { ExportLeanData } from '@/components/lean-constraints/ExportLeanData';
 import { ConstraintHistory, addHistoryEntry } from '@/components/lean-constraints/ConstraintHistory';
 import { WeeklyReportDialog } from '@/components/lean-constraints/WeeklyReportDialog';
+import { CorrectiveActionsPanel } from '@/components/lean-constraints/CorrectiveActionsPanel';
 import { generateWeeklyReport } from '@/engine/lean-constraints';
 
-type ConstraintPayload = Omit<LpsConstraint, 'id' | 'created_at' | 'updated_at' | 'service_fronts' | 'employees' | 'projects' | 'lps_five_whys'>;
+type ConstraintPayload = Omit<LpsConstraint, 'id' | 'created_at' | 'updated_at' | 'service_fronts' | 'employees' | 'projects' | 'lps_five_whys' | 'parent_constraint' | 'child_constraints'>;
 
 const LeanConstraints = () => {
   const navigate = useNavigate();
@@ -42,6 +43,7 @@ const LeanConstraints = () => {
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [serviceFronts, setServiceFronts] = useState<{ id: string; name: string }[]>([]);
   const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
+  const [services, setServices] = useState<{ id: string; name: string }[]>([]);
   const [filters, setFilters] = useState<ConstraintFilters>({ status: 'todas', tipo: 'todos', impacto: 'todos' });
   const [createOpen, setCreateOpen] = useState(false);
   const [editingConstraint, setEditingConstraint] = useState<LpsConstraint | null>(null);
@@ -50,11 +52,12 @@ const LeanConstraints = () => {
   const [reportOpen, setReportOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [resolveTarget, setResolveTarget] = useState<string | null>(null);
+  const [mapCoordinates, setMapCoordinates] = useState<{ lat: number; lng: number } | null>(null);
 
   const {
     constraints, commitments, loading, currentPPC, ppcData,
     createConstraint, updateConstraint, deleteConstraint, resolveConstraint,
-    createCommitment, updateCommitment, createFiveWhys,
+    createCommitment, updateCommitment, createFiveWhys, updateFiveWhys,
   } = useLeanConstraints(filters);
 
   useEffect(() => {
@@ -82,12 +85,14 @@ const LeanConstraints = () => {
   useEffect(() => {
     if (!filters.projectId) return;
     const loadRelated = async () => {
-      const [frontsRes, empsRes] = await Promise.all([
+      const [frontsRes, empsRes, svcRes] = await Promise.all([
         supabase.from('service_fronts').select('id, name').eq('project_id', filters.projectId!).order('name'),
         supabase.from('employees').select('id, name').order('name'),
+        supabase.from('services_catalog').select('id, name').order('name').limit(100),
       ]);
       setServiceFronts(frontsRes.data ?? []);
       setEmployees(empsRes.data ?? []);
+      setServices(svcRes.data ?? []);
     };
     loadRelated();
   }, [filters.projectId]);
@@ -99,10 +104,11 @@ const LeanConstraints = () => {
       onSuccess: (result) => {
         toast.success('Restrição criada com sucesso');
         addHistoryEntry({
-          constraintId: result?.id || '',
+          constraint_id: result?.id || '',
           action: 'created',
-          userName,
+          user_name: userName,
         });
+        setMapCoordinates(null);
       },
       onError: (e: Error) => toast.error(`Erro: ${e.message}`),
     });
@@ -114,9 +120,9 @@ const LeanConstraints = () => {
       onSuccess: () => {
         toast.success('Restrição atualizada');
         addHistoryEntry({
-          constraintId: editingConstraint.id,
+          constraint_id: editingConstraint.id,
           action: 'updated',
-          userName,
+          user_name: userName,
         });
         setEditingConstraint(null);
       },
@@ -130,9 +136,9 @@ const LeanConstraints = () => {
       onSuccess: () => {
         toast.success('Restrição resolvida');
         addHistoryEntry({
-          constraintId: resolveTarget,
+          constraint_id: resolveTarget,
           action: 'resolved',
-          userName,
+          user_name: userName,
         });
         setResolveTarget(null);
       },
@@ -146,14 +152,20 @@ const LeanConstraints = () => {
       onSuccess: () => {
         toast.success('Restrição excluída');
         addHistoryEntry({
-          constraintId: deleteTarget,
+          constraint_id: deleteTarget,
           action: 'deleted',
-          userName,
+          user_name: userName,
         });
         setDeleteTarget(null);
       },
       onError: (e: Error) => { toast.error(`Erro: ${e.message}`); setDeleteTarget(null); },
     });
+  };
+
+  const handleMapCreate = (lat: number, lng: number) => {
+    setMapCoordinates({ lat, lng });
+    setEditingConstraint(null);
+    setCreateOpen(true);
   };
 
   const weeklyReport = generateWeeklyReport(constraints, commitments);
@@ -235,7 +247,7 @@ const LeanConstraints = () => {
                       <BarChart3 className="h-4 w-4 mr-1" /> Dashboard
                     </Link>
                   </Button>
-                  <Button onClick={() => { setEditingConstraint(null); setCreateOpen(true); }}>
+                  <Button onClick={() => { setEditingConstraint(null); setMapCoordinates(null); setCreateOpen(true); }}>
                     <Plus className="h-4 w-4 mr-1" /> Nova Restrição
                   </Button>
                 </div>
@@ -266,6 +278,9 @@ const LeanConstraints = () => {
                   <TabsTrigger value="lista">Lista ({constraints.length})</TabsTrigger>
                   <TabsTrigger value="mapa">Mapa</TabsTrigger>
                   <TabsTrigger value="compromissos">Compromissos Semanais</TabsTrigger>
+                  <TabsTrigger value="acoes" className="flex items-center gap-1">
+                    <ClipboardCheck className="h-3.5 w-3.5" /> Ações Corretivas
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="lista" className="mt-4">
@@ -285,7 +300,10 @@ const LeanConstraints = () => {
                 </TabsContent>
 
                 <TabsContent value="mapa" className="mt-4">
-                  <ConstraintMapLayer constraints={constraints} />
+                  <ConstraintMapLayer
+                    constraints={constraints}
+                    onCreateAtLocation={handleMapCreate}
+                  />
                 </TabsContent>
 
                 <TabsContent value="compromissos" className="mt-4 space-y-4">
@@ -301,8 +319,20 @@ const LeanConstraints = () => {
                     })}
                     projectId={filters.projectId || ''}
                     userId={userId}
+                    serviceFronts={serviceFronts}
+                    services={services}
                   />
                   <PPCCalculator ppcData={ppcData} currentPPC={currentPPC} />
+                </TabsContent>
+
+                <TabsContent value="acoes" className="mt-4">
+                  <CorrectiveActionsPanel
+                    constraints={constraints}
+                    onUpdateFiveWhys={(data) => updateFiveWhys.mutate(data, {
+                      onSuccess: () => toast.success('Status da ação atualizado'),
+                      onError: (e: Error) => toast.error(`Erro: ${e.message}`),
+                    })}
+                  />
                 </TabsContent>
               </Tabs>
             </div>
@@ -310,13 +340,15 @@ const LeanConstraints = () => {
             {/* Create/Edit Dialog */}
             <CreateConstraintDialog
               open={createOpen}
-              onOpenChange={(o) => { setCreateOpen(o); if (!o) setEditingConstraint(null); }}
+              onOpenChange={(o) => { setCreateOpen(o); if (!o) { setEditingConstraint(null); setMapCoordinates(null); } }}
               onSubmit={editingConstraint ? handleUpdate : handleCreate}
               editingConstraint={editingConstraint}
               serviceFronts={serviceFronts}
               employees={employees}
               projectId={filters.projectId || ''}
               userId={userId}
+              initialCoordinates={mapCoordinates}
+              constraints={constraints}
             />
 
             {/* Five Whys Dialog */}

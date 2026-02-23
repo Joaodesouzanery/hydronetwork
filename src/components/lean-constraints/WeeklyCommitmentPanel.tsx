@@ -23,6 +23,8 @@ interface WeeklyCommitmentPanelProps {
   onUpdateCommitment: (data: Partial<LpsWeeklyCommitment> & { id: string }) => void;
   projectId: string;
   userId: string;
+  serviceFronts?: { id: string; name: string }[];
+  services?: { id: string; name: string }[];
 }
 
 const STATUS_COLORS: Record<CommitmentStatus, string> = {
@@ -34,11 +36,14 @@ const STATUS_COLORS: Record<CommitmentStatus, string> = {
 
 export function WeeklyCommitmentPanel({
   commitments, onCreateCommitment, onUpdateCommitment, projectId, userId,
+  serviceFronts = [], services = [],
 }: WeeklyCommitmentPanelProps) {
   const [showForm, setShowForm] = useState(false);
   const [descricao, setDescricao] = useState('');
   const [qtdPlanejada, setQtdPlanejada] = useState('');
   const [unidade, setUnidade] = useState('');
+  const [serviceFrontId, setServiceFrontId] = useState('');
+  const [serviceId, setServiceId] = useState('');
   const [weekOffset, setWeekOffset] = useState(0);
 
   const getOffsetDate = () => {
@@ -55,8 +60,8 @@ export function WeeklyCommitmentPanel({
     onCreateCommitment({
       created_by_user_id: userId,
       project_id: projectId,
-      service_front_id: null,
-      service_id: null,
+      service_front_id: serviceFrontId || null,
+      service_id: serviceId || null,
       semana_inicio: currentWeek.start,
       semana_fim: currentWeek.end,
       descricao_tarefa: descricao.trim(),
@@ -70,6 +75,8 @@ export function WeeklyCommitmentPanel({
     setDescricao('');
     setQtdPlanejada('');
     setUnidade('');
+    setServiceFrontId('');
+    setServiceId('');
     setShowForm(false);
   };
 
@@ -117,32 +124,63 @@ export function WeeklyCommitmentPanel({
       </CardHeader>
       <CardContent>
         {showForm && (
-          <div className="flex gap-2 mb-4 p-3 bg-muted rounded-md">
-            <Input
-              placeholder="Descrição da tarefa..."
-              value={descricao}
-              onChange={(e) => setDescricao(e.target.value)}
-              className="flex-1"
-            />
-            <Input
-              type="number"
-              placeholder="Qtd"
-              value={qtdPlanejada}
-              onChange={(e) => setQtdPlanejada(e.target.value)}
-              className="w-24"
-            />
-            <Input
-              placeholder="Un."
-              value={unidade}
-              onChange={(e) => setUnidade(e.target.value)}
-              className="w-20"
-            />
-            <Button size="sm" onClick={handleCreate} disabled={!descricao.trim()}>
-              <Check className="h-4 w-4" />
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setShowForm(false)}>
-              <X className="h-4 w-4" />
-            </Button>
+          <div className="space-y-2 mb-4 p-3 bg-muted rounded-md">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Descrição da tarefa..."
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value)}
+                className="flex-1"
+              />
+              <Input
+                type="number"
+                placeholder="Qtd"
+                value={qtdPlanejada}
+                onChange={(e) => setQtdPlanejada(e.target.value)}
+                className="w-24"
+              />
+              <Input
+                placeholder="Un."
+                value={unidade}
+                onChange={(e) => setUnidade(e.target.value)}
+                className="w-20"
+              />
+            </div>
+            <div className="flex gap-2">
+              {serviceFronts.length > 0 && (
+                <Select value={serviceFrontId || 'none'} onValueChange={(v) => setServiceFrontId(v === 'none' ? '' : v)}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Frente de serviço..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhuma frente</SelectItem>
+                    {serviceFronts.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {services.length > 0 && (
+                <Select value={serviceId || 'none'} onValueChange={(v) => setServiceId(v === 'none' ? '' : v)}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Serviço..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum serviço</SelectItem>
+                    {services.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <div className="flex-1" />
+              <Button size="sm" onClick={handleCreate} disabled={!descricao.trim()}>
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
 
@@ -159,6 +197,7 @@ export function WeeklyCommitmentPanel({
             <TableHeader>
               <TableRow>
                 <TableHead>Tarefa</TableHead>
+                <TableHead>Frente</TableHead>
                 <TableHead>Planejado</TableHead>
                 <TableHead>Executado</TableHead>
                 <TableHead>Status</TableHead>
@@ -169,6 +208,9 @@ export function WeeklyCommitmentPanel({
               {weekCommitments.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell className="text-sm">{c.descricao_tarefa}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {c.service_fronts?.name || '—'}
+                  </TableCell>
                   <TableCell className="text-sm">
                     {c.quantidade_planejada != null ? `${c.quantidade_planejada} ${c.unidade || ''}` : '—'}
                   </TableCell>

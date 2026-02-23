@@ -2109,6 +2109,313 @@ export type Database = {
           },
         ]
       }
+      lps_constraints: {
+        Row: {
+          id: string
+          created_by_user_id: string
+          project_id: string
+          service_front_id: string | null
+          tipo_restricao: string
+          descricao: string
+          responsavel_id: string | null
+          responsavel_nome: string | null
+          data_identificacao: string
+          data_prevista_resolucao: string | null
+          data_resolvida: string | null
+          status: string
+          impacto: string
+          latitude: number | null
+          longitude: number | null
+          origem: string
+          justification_id: string | null
+          daily_report_id: string | null
+          parent_constraint_id: string | null
+          notas: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          created_by_user_id: string
+          project_id: string
+          service_front_id?: string | null
+          tipo_restricao: string
+          descricao: string
+          responsavel_id?: string | null
+          responsavel_nome?: string | null
+          data_identificacao?: string
+          data_prevista_resolucao?: string | null
+          data_resolvida?: string | null
+          status?: string
+          impacto?: string
+          latitude?: number | null
+          longitude?: number | null
+          origem?: string
+          justification_id?: string | null
+          daily_report_id?: string | null
+          parent_constraint_id?: string | null
+          notas?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          created_by_user_id?: string
+          project_id?: string
+          service_front_id?: string | null
+          tipo_restricao?: string
+          descricao?: string
+          responsavel_id?: string | null
+          responsavel_nome?: string | null
+          data_identificacao?: string
+          data_prevista_resolucao?: string | null
+          data_resolvida?: string | null
+          status?: string
+          impacto?: string
+          latitude?: number | null
+          longitude?: number | null
+          origem?: string
+          justification_id?: string | null
+          daily_report_id?: string | null
+          parent_constraint_id?: string | null
+          notas?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lps_constraints_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lps_constraints_service_front_id_fkey"
+            columns: ["service_front_id"]
+            isOneToOne: false
+            referencedRelation: "service_fronts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lps_constraints_responsavel_id_fkey"
+            columns: ["responsavel_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lps_constraints_justification_id_fkey"
+            columns: ["justification_id"]
+            isOneToOne: false
+            referencedRelation: "justifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lps_constraints_daily_report_id_fkey"
+            columns: ["daily_report_id"]
+            isOneToOne: false
+            referencedRelation: "daily_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lps_constraints_parent_constraint_id_fkey"
+            columns: ["parent_constraint_id"]
+            isOneToOne: false
+            referencedRelation: "lps_constraints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lps_weekly_commitments: {
+        Row: {
+          id: string
+          created_by_user_id: string
+          project_id: string
+          service_front_id: string | null
+          semana_inicio: string
+          semana_fim: string
+          descricao_tarefa: string
+          service_id: string | null
+          quantidade_planejada: number | null
+          quantidade_executada: number | null
+          unidade: string | null
+          status: string
+          motivo_nao_cumprimento: string | null
+          constraint_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          created_by_user_id: string
+          project_id: string
+          service_front_id?: string | null
+          semana_inicio: string
+          semana_fim: string
+          descricao_tarefa: string
+          service_id?: string | null
+          quantidade_planejada?: number | null
+          quantidade_executada?: number | null
+          unidade?: string | null
+          status?: string
+          motivo_nao_cumprimento?: string | null
+          constraint_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          created_by_user_id?: string
+          project_id?: string
+          service_front_id?: string | null
+          semana_inicio?: string
+          semana_fim?: string
+          descricao_tarefa?: string
+          service_id?: string | null
+          quantidade_planejada?: number | null
+          quantidade_executada?: number | null
+          unidade?: string | null
+          status?: string
+          motivo_nao_cumprimento?: string | null
+          constraint_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lps_weekly_commitments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lps_weekly_commitments_service_front_id_fkey"
+            columns: ["service_front_id"]
+            isOneToOne: false
+            referencedRelation: "service_fronts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lps_weekly_commitments_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lps_weekly_commitments_constraint_id_fkey"
+            columns: ["constraint_id"]
+            isOneToOne: false
+            referencedRelation: "lps_constraints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lps_five_whys: {
+        Row: {
+          id: string
+          created_by_user_id: string
+          constraint_id: string
+          why_1: string
+          why_2: string | null
+          why_3: string | null
+          why_4: string | null
+          why_5: string | null
+          causa_raiz: string
+          acao_corretiva: string
+          responsavel_acao: string | null
+          prazo_acao: string | null
+          status_acao: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          created_by_user_id: string
+          constraint_id: string
+          why_1: string
+          why_2?: string | null
+          why_3?: string | null
+          why_4?: string | null
+          why_5?: string | null
+          causa_raiz: string
+          acao_corretiva: string
+          responsavel_acao?: string | null
+          prazo_acao?: string | null
+          status_acao?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          created_by_user_id?: string
+          constraint_id?: string
+          why_1?: string
+          why_2?: string | null
+          why_3?: string | null
+          why_4?: string | null
+          why_5?: string | null
+          causa_raiz?: string
+          acao_corretiva?: string
+          responsavel_acao?: string | null
+          prazo_acao?: string | null
+          status_acao?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lps_five_whys_constraint_id_fkey"
+            columns: ["constraint_id"]
+            isOneToOne: false
+            referencedRelation: "lps_constraints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lps_constraint_audit: {
+        Row: {
+          id: string
+          constraint_id: string
+          action: string
+          field: string | null
+          old_value: string | null
+          new_value: string | null
+          user_name: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          constraint_id: string
+          action: string
+          field?: string | null
+          old_value?: string | null
+          new_value?: string | null
+          user_name: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          constraint_id?: string
+          action?: string
+          field?: string | null
+          old_value?: string | null
+          new_value?: string | null
+          user_name?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lps_constraint_audit_constraint_id_fkey"
+            columns: ["constraint_id"]
+            isOneToOne: false
+            referencedRelation: "lps_constraints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       labor_tracking: {
         Row: {
           activity_description: string | null

@@ -4,7 +4,8 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { History, Plus, Edit, CheckCircle, Trash2, ArrowRight } from 'lucide-react';
+import { History, Plus, Edit, CheckCircle, Trash2, ArrowRight, Loader2 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import type { ConstraintAuditEntry } from '@/types/lean-constraints';
 
 const ACTION_CONFIG: Record<string, { label: string; icon: typeof Plus; color: string }> = {
@@ -22,36 +23,41 @@ interface ConstraintHistoryProps {
   constraintDescription: string;
 }
 
-const STORAGE_KEY = 'lean-constraint-history';
-
-export function getStoredHistory(): ConstraintAuditEntry[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function addHistoryEntry(entry: Omit<ConstraintAuditEntry, 'id' | 'timestamp'>) {
-  const history = getStoredHistory();
-  history.unshift({
-    ...entry,
-    id: crypto.randomUUID(),
-    timestamp: new Date().toISOString(),
-  });
-  // Keep last 500 entries
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, 500)));
+export async function addHistoryEntry(entry: {
+  constraint_id: string;
+  action: string;
+  field?: string;
+  old_value?: string;
+  new_value?: string;
+  user_name: string;
+}) {
+  await supabase.from('lps_constraint_audit').insert([{
+    constraint_id: entry.constraint_id,
+    action: entry.action,
+    field: entry.field || null,
+    old_value: entry.old_value || null,
+    new_value: entry.new_value || null,
+    user_name: entry.user_name,
+  }]);
 }
 
 export function ConstraintHistory({ open, onOpenChange, constraintId, constraintDescription }: ConstraintHistoryProps) {
   const [entries, setEntries] = useState<ConstraintAuditEntry[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      const all = getStoredHistory();
-      setEntries(all.filter(e => e.constraintId === constraintId));
-    }
+    if (!open) return;
+    setLoading(true);
+    supabase
+      .from('lps_constraint_audit')
+      .select('*')
+      .eq('constraint_id', constraintId)
+      .order('created_at', { ascending: false })
+      .limit(100)
+      .then(({ data }) => {
+        setEntries((data ?? []) as ConstraintAuditEntry[]);
+        setLoading(false);
+      });
   }, [open, constraintId]);
 
   return (
@@ -65,7 +71,11 @@ export function ConstraintHistory({ open, onOpenChange, constraintId, constraint
         </DialogHeader>
 
         <ScrollArea className="max-h-[400px]">
-          {entries.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : entries.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
               Nenhuma alteração registrada.
             </p>
@@ -83,15 +93,15 @@ export function ConstraintHistory({ open, onOpenChange, constraintId, constraint
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="text-xs">{config.label}</Badge>
                         <span className="text-muted-foreground text-xs">
-                          {new Date(entry.timestamp).toLocaleString('pt-BR')}
+                          {new Date(entry.created_at).toLocaleString('pt-BR')}
                         </span>
                       </div>
                       {entry.field && (
                         <p className="text-muted-foreground mt-0.5">
-                          <strong>{entry.field}:</strong> {entry.oldValue} → {entry.newValue}
+                          <strong>{entry.field}:</strong> {entry.old_value} → {entry.new_value}
                         </p>
                       )}
-                      <p className="text-xs text-muted-foreground">{entry.userName}</p>
+                      <p className="text-xs text-muted-foreground">{entry.user_name}</p>
                     </div>
                   </div>
                 );
