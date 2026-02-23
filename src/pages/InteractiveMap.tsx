@@ -223,10 +223,14 @@ export default function InteractiveMap() {
         .select("id, tipo_restricao, descricao, status, impacto, latitude, longitude, responsavel_nome, data_identificacao, service_fronts(name), employees(name)")
         .eq("project_id", projectId)
         .not("latitude", "is", null);
-      if (error) throw error;
+      if (error) {
+        if (String(error.message || '').includes('schema cache')) return [];
+        throw error;
+      }
       return data || [];
     },
     enabled: !!projectId && !!session && showConstraintLayer,
+    retry: (count, err) => !String((err as any)?.message || '').includes('schema cache') && count < 2,
   });
 
   const { data: serviceFronts = [] } = useQuery({

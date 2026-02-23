@@ -32,6 +32,7 @@ import { ExportLeanData } from '@/components/lean-constraints/ExportLeanData';
 import { ConstraintHistory, addHistoryEntry } from '@/components/lean-constraints/ConstraintHistory';
 import { WeeklyReportDialog } from '@/components/lean-constraints/WeeklyReportDialog';
 import { CorrectiveActionsPanel } from '@/components/lean-constraints/CorrectiveActionsPanel';
+import { LpsSetupBanner } from '@/components/lean-constraints/LpsSetupBanner';
 import { generateWeeklyReport } from '@/engine/lean-constraints';
 
 type ConstraintPayload = Omit<LpsConstraint, 'id' | 'created_at' | 'updated_at' | 'service_fronts' | 'employees' | 'projects' | 'lps_five_whys' | 'parent_constraint' | 'child_constraints'>;
@@ -55,9 +56,10 @@ const LeanConstraints = () => {
   const [mapCoordinates, setMapCoordinates] = useState<{ lat: number; lng: number } | null>(null);
 
   const {
-    constraints, commitments, loading, currentPPC, ppcData,
+    constraints, commitments, loading, needsSetup, currentPPC, ppcData,
     createConstraint, updateConstraint, deleteConstraint, resolveConstraint,
     createCommitment, updateCommitment, createFiveWhys, updateFiveWhys,
+    refreshData,
   } = useLeanConstraints(filters);
 
   useEffect(() => {
@@ -99,6 +101,14 @@ const LeanConstraints = () => {
 
   const currentProjectName = projects.find(p => p.id === filters.projectId)?.name || 'Projeto';
 
+  const formatMutationError = (e: Error) => {
+    const msg = e.message || '';
+    if (msg.includes('schema cache') || msg.includes('does not exist') || msg.includes('TABELA_NAO_CONFIGURADA')) {
+      return 'Tabela nao encontrada no banco. Execute o SQL de configuracao (veja o banner acima).';
+    }
+    return `Erro: ${msg}`;
+  };
+
   const handleCreate = (data: ConstraintPayload) => {
     createConstraint.mutate(data, {
       onSuccess: (result) => {
@@ -110,7 +120,7 @@ const LeanConstraints = () => {
         });
         setMapCoordinates(null);
       },
-      onError: (e: Error) => toast.error(`Erro: ${e.message}`),
+      onError: (e: Error) => toast.error(formatMutationError(e)),
     });
   };
 
@@ -126,7 +136,7 @@ const LeanConstraints = () => {
         });
         setEditingConstraint(null);
       },
-      onError: (e: Error) => toast.error(`Erro: ${e.message}`),
+      onError: (e: Error) => toast.error(formatMutationError(e)),
     });
   };
 
@@ -142,7 +152,7 @@ const LeanConstraints = () => {
         });
         setResolveTarget(null);
       },
-      onError: (e: Error) => { toast.error(`Erro: ${e.message}`); setResolveTarget(null); },
+      onError: (e: Error) => { toast.error(formatMutationError(e)); setResolveTarget(null); },
     });
   };
 
@@ -158,7 +168,7 @@ const LeanConstraints = () => {
         });
         setDeleteTarget(null);
       },
-      onError: (e: Error) => { toast.error(`Erro: ${e.message}`); setDeleteTarget(null); },
+      onError: (e: Error) => { toast.error(formatMutationError(e)); setDeleteTarget(null); },
     });
   };
 
@@ -253,6 +263,11 @@ const LeanConstraints = () => {
                 </div>
               </div>
 
+              {/* Setup Banner */}
+              {needsSetup && (
+                <LpsSetupBanner onRetry={refreshData} />
+              )}
+
               {/* Deadline Notifications */}
               <DeadlineNotifications
                 constraints={constraints}
@@ -311,11 +326,11 @@ const LeanConstraints = () => {
                     commitments={commitments}
                     onCreateCommitment={(data) => createCommitment.mutate(data, {
                       onSuccess: () => toast.success('Compromisso criado'),
-                      onError: (e: Error) => toast.error(`Erro: ${e.message}`),
+                      onError: (e: Error) => toast.error(formatMutationError(e)),
                     })}
                     onUpdateCommitment={(data) => updateCommitment.mutate(data, {
                       onSuccess: () => toast.success('Compromisso atualizado'),
-                      onError: (e: Error) => toast.error(`Erro: ${e.message}`),
+                      onError: (e: Error) => toast.error(formatMutationError(e)),
                     })}
                     projectId={filters.projectId || ''}
                     userId={userId}
@@ -330,7 +345,7 @@ const LeanConstraints = () => {
                     constraints={constraints}
                     onUpdateFiveWhys={(data) => updateFiveWhys.mutate(data, {
                       onSuccess: () => toast.success('Status da ação atualizado'),
-                      onError: (e: Error) => toast.error(`Erro: ${e.message}`),
+                      onError: (e: Error) => toast.error(formatMutationError(e)),
                     })}
                   />
                 </TabsContent>
@@ -360,7 +375,7 @@ const LeanConstraints = () => {
                 existingAnalysis={fiveWhysConstraint.lps_five_whys?.[0]}
                 onSubmit={(data) => createFiveWhys.mutate(data, {
                   onSuccess: () => { toast.success('Análise salva'); setFiveWhysConstraint(null); },
-                  onError: (e: Error) => toast.error(`Erro: ${e.message}`),
+                  onError: (e: Error) => toast.error(formatMutationError(e)),
                 })}
                 userId={userId}
               />

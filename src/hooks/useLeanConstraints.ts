@@ -15,6 +15,11 @@ import {
   calculateWeeklyEvolution,
 } from '@/engine/lean-constraints';
 
+function isSchemaError(error: unknown): boolean {
+  const msg = String((error as any)?.message || error || '');
+  return msg.includes('schema cache') || msg.includes('relation') && msg.includes('does not exist');
+}
+
 async function getCurrentUserId(): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser();
   return user?.id ?? null;
@@ -58,10 +63,21 @@ export function useLeanConstraints(filters: ConstraintFilters) {
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+      if (error) {
+        if (isSchemaError(error)) {
+          const err = new Error('TABELA_NAO_CONFIGURADA');
+          (err as any).isSetupError = true;
+          throw err;
+        }
+        throw error;
+      }
       return (data ?? []) as LpsConstraint[];
     },
     enabled: !!filters.projectId,
+    retry: (failureCount, error) => {
+      if (isSchemaError(error)) return false;
+      return failureCount < 2;
+    },
   });
 
   const commitmentsQuery = useQuery({
@@ -76,10 +92,17 @@ export function useLeanConstraints(filters: ConstraintFilters) {
         .eq('project_id', filters.projectId)
         .order('semana_inicio', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        if (isSchemaError(error)) return [];
+        throw error;
+      }
       return (data ?? []) as LpsWeeklyCommitment[];
     },
     enabled: !!filters.projectId,
+    retry: (failureCount, error) => {
+      if (isSchemaError(error)) return false;
+      return failureCount < 2;
+    },
   });
 
   const constraints = constraintsQuery.data ?? [];
@@ -205,10 +228,13 @@ export function useLeanConstraints(filters: ConstraintFilters) {
     onSuccess: invalidateAll,
   });
 
+  const needsSetup = !!(constraintsQuery.error && (constraintsQuery.error as any).isSetupError);
+
   return {
     constraints,
     commitments,
     loading: constraintsQuery.isLoading || commitmentsQuery.isLoading,
+    needsSetup,
     ppcData,
     currentPPC,
     constraintsByArea,
