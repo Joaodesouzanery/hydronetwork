@@ -32,7 +32,6 @@ import { ExportLeanData } from '@/components/lean-constraints/ExportLeanData';
 import { ConstraintHistory, addHistoryEntry } from '@/components/lean-constraints/ConstraintHistory';
 import { WeeklyReportDialog } from '@/components/lean-constraints/WeeklyReportDialog';
 import { CorrectiveActionsPanel } from '@/components/lean-constraints/CorrectiveActionsPanel';
-import { LpsSetupBanner } from '@/components/lean-constraints/LpsSetupBanner';
 import { generateWeeklyReport } from '@/engine/lean-constraints';
 
 type ConstraintPayload = Omit<LpsConstraint, 'id' | 'created_at' | 'updated_at' | 'service_fronts' | 'employees' | 'projects' | 'lps_five_whys' | 'parent_constraint' | 'child_constraints'>;
@@ -56,7 +55,7 @@ const LeanConstraints = () => {
   const [mapCoordinates, setMapCoordinates] = useState<{ lat: number; lng: number } | null>(null);
 
   const {
-    constraints, commitments, loading, needsSetup, currentPPC, ppcData,
+    constraints, commitments, loading, usingLocalStorage, currentPPC, ppcData,
     createConstraint, updateConstraint, deleteConstraint, resolveConstraint,
     createCommitment, updateCommitment, createFiveWhys, updateFiveWhys,
     refreshData,
@@ -263,16 +262,12 @@ const LeanConstraints = () => {
                 </div>
               </div>
 
-              {/* Setup Banner - when tables don't exist */}
-              {needsSetup && (
-                <>
-                  <LpsSetupBanner onRetry={refreshData} />
-                </>
+              {usingLocalStorage && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-sm text-blue-700 flex items-center gap-2">
+                  <span>Dados salvos localmente no navegador.</span>
+                </div>
               )}
 
-              {/* Content only shown when tables exist */}
-              {!needsSetup && (
-              <>
               {/* Deadline Notifications */}
               <DeadlineNotifications
                 constraints={constraints}
@@ -355,8 +350,6 @@ const LeanConstraints = () => {
                   />
                 </TabsContent>
               </Tabs>
-              </>
-              )}
             </div>
 
             {/* Create/Edit Dialog */}
