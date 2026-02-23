@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { CONSTRAINT_TYPES, type LpsConstraint, STATUS_LABELS } from '@/types/lean-constraints';
+import { MapPin } from 'lucide-react';
 
 interface ConstraintMapLayerProps {
   constraints: LpsConstraint[];
@@ -17,10 +18,16 @@ export function ConstraintMapLayer({ constraints }: ConstraintMapLayerProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
 
+  const geoConstraints = constraints.filter(c => c.latitude != null && c.longitude != null);
+
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
-    const map = L.map(mapRef.current).setView([-15.7801, -47.9292], 12);
+    const defaultCenter: [number, number] = geoConstraints.length > 0
+      ? [geoConstraints[0].latitude!, geoConstraints[0].longitude!]
+      : [-15.7801, -47.9292];
+
+    const map = L.map(mapRef.current).setView(defaultCenter, 12);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap',
@@ -37,8 +44,6 @@ export function ConstraintMapLayer({ constraints }: ConstraintMapLayerProps) {
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
-
-    const geoConstraints = constraints.filter(c => c.latitude != null && c.longitude != null);
 
     const markers: L.CircleMarker[] = [];
 
@@ -82,7 +87,34 @@ export function ConstraintMapLayer({ constraints }: ConstraintMapLayerProps) {
     };
   }, [constraints]);
 
+  if (geoConstraints.length === 0) {
+    return (
+      <div className="w-full h-[500px] rounded-md border flex flex-col items-center justify-center gap-3 text-muted-foreground bg-muted/30">
+        <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+          <MapPin className="h-8 w-8 text-muted-foreground/50" />
+        </div>
+        <p className="font-medium text-foreground">Nenhuma restrição geolocalizada</p>
+        <p className="text-sm text-center max-w-sm">
+          Ao criar restrições com coordenadas (latitude/longitude), elas aparecerão neste mapa.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div ref={mapRef} className="w-full h-[500px] rounded-md border" />
+    <div className="space-y-2">
+      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+        <div className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded-full bg-red-500" /> Críticas ({geoConstraints.filter(c => c.status === 'critica').length})
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded-full bg-amber-500" /> Ativas ({geoConstraints.filter(c => c.status === 'ativa').length})
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded-full bg-green-500" /> Resolvidas ({geoConstraints.filter(c => c.status === 'resolvida').length})
+        </div>
+      </div>
+      <div ref={mapRef} className="w-full h-[500px] rounded-md border" />
+    </div>
   );
 }

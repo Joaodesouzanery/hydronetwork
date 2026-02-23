@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Plus, Check, X } from 'lucide-react';
+import { Plus, Check, X, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import {
   COMMITMENT_STATUS_LABELS,
   type LpsWeeklyCommitment,
@@ -15,10 +15,12 @@ import {
 } from '@/types/lean-constraints';
 import { getWeekRange } from '@/engine/lean-constraints';
 
+type CommitmentPayload = Omit<LpsWeeklyCommitment, 'id' | 'created_at' | 'updated_at' | 'service_fronts' | 'lps_constraints'>;
+
 interface WeeklyCommitmentPanelProps {
   commitments: LpsWeeklyCommitment[];
-  onCreateCommitment: (data: Record<string, unknown>) => void;
-  onUpdateCommitment: (data: { id: string } & Record<string, unknown>) => void;
+  onCreateCommitment: (data: CommitmentPayload) => void;
+  onUpdateCommitment: (data: Partial<LpsWeeklyCommitment> & { id: string }) => void;
   projectId: string;
   userId: string;
 }
@@ -37,20 +39,33 @@ export function WeeklyCommitmentPanel({
   const [descricao, setDescricao] = useState('');
   const [qtdPlanejada, setQtdPlanejada] = useState('');
   const [unidade, setUnidade] = useState('');
+  const [weekOffset, setWeekOffset] = useState(0);
 
-  const currentWeek = getWeekRange(new Date());
+  const getOffsetDate = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + weekOffset * 7);
+    return d;
+  };
+
+  const currentWeek = getWeekRange(getOffsetDate());
+  const isCurrentWeek = weekOffset === 0;
 
   const handleCreate = () => {
     if (!descricao.trim()) return;
     onCreateCommitment({
       created_by_user_id: userId,
       project_id: projectId,
+      service_front_id: null,
+      service_id: null,
       semana_inicio: currentWeek.start,
       semana_fim: currentWeek.end,
       descricao_tarefa: descricao.trim(),
       quantidade_planejada: qtdPlanejada ? parseFloat(qtdPlanejada) : null,
+      quantidade_executada: null,
       unidade: unidade || null,
       status: 'planejado',
+      motivo_nao_cumprimento: null,
+      constraint_id: null,
     });
     setDescricao('');
     setQtdPlanejada('');
@@ -66,15 +81,39 @@ export function WeeklyCommitmentPanel({
     c => c.semana_inicio === currentWeek.start
   );
 
+  const formatDateBR = (dateStr: string) => {
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+  };
+
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-lg">
-          Compromissos Semanais ({currentWeek.start} a {currentWeek.end})
-        </CardTitle>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
-          <Plus className="h-4 w-4 mr-1" /> Novo
-        </Button>
+      <CardHeader className="flex flex-row items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <CalendarDays className="h-5 w-5 text-indigo-600" />
+            Compromissos Semanais
+          </CardTitle>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setWeekOffset(w => w - 1)}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm font-medium min-w-[180px] text-center">
+            {formatDateBR(currentWeek.start)} a {formatDateBR(currentWeek.end)}
+          </span>
+          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setWeekOffset(w => w + 1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          {!isCurrentWeek && (
+            <Button variant="ghost" size="sm" className="text-xs" onClick={() => setWeekOffset(0)}>
+              Hoje
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setShowForm(!showForm)}>
+            <Plus className="h-4 w-4 mr-1" /> Novo
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {showForm && (
@@ -108,9 +147,13 @@ export function WeeklyCommitmentPanel({
         )}
 
         {weekCommitments.length === 0 ? (
-          <p className="text-muted-foreground text-center py-6">
-            Nenhum compromisso para esta semana.
-          </p>
+          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-2">
+            <CalendarDays className="h-8 w-8 text-muted-foreground/50" />
+            <p className="text-sm">Nenhum compromisso para esta semana.</p>
+            <Button variant="ghost" size="sm" onClick={() => setShowForm(true)}>
+              <Plus className="h-4 w-4 mr-1" /> Adicionar compromisso
+            </Button>
+          </div>
         ) : (
           <Table>
             <TableHeader>
@@ -125,8 +168,8 @@ export function WeeklyCommitmentPanel({
             <TableBody>
               {weekCommitments.map((c) => (
                 <TableRow key={c.id}>
-                  <TableCell>{c.descricao_tarefa}</TableCell>
-                  <TableCell>
+                  <TableCell className="text-sm">{c.descricao_tarefa}</TableCell>
+                  <TableCell className="text-sm">
                     {c.quantidade_planejada != null ? `${c.quantidade_planejada} ${c.unidade || ''}` : '—'}
                   </TableCell>
                   <TableCell>
