@@ -15,6 +15,9 @@ import { ResolutionTimeChart } from '@/components/lean-constraints/ResolutionTim
 import { WeeklyEvolutionChart } from '@/components/lean-constraints/WeeklyEvolutionChart';
 import { CriticalAreasRanking } from '@/components/lean-constraints/CriticalAreasRanking';
 import { PPCCalculator } from '@/components/lean-constraints/PPCCalculator';
+import { DeadlineNotifications } from '@/components/lean-constraints/DeadlineNotifications';
+import { ExportLeanData } from '@/components/lean-constraints/ExportLeanData';
+import { generateWeeklyReport } from '@/engine/lean-constraints';
 
 const LeanDashboard = () => {
   const navigate = useNavigate();
@@ -23,7 +26,7 @@ const LeanDashboard = () => {
   const [filters, setFilters] = useState<ConstraintFilters>({ status: 'todas', tipo: 'todos', impacto: 'todos' });
 
   const {
-    constraints, loading, currentPPC, ppcData,
+    constraints, commitments, loading, currentPPC, ppcData,
     constraintsByArea, constraintsByType, resolutionTrend, weeklyEvolution,
   } = useLeanConstraints(filters);
 
@@ -60,6 +63,9 @@ const LeanDashboard = () => {
     loadFronts();
   }, [filters.projectId]);
 
+  const currentProjectName = projects.find(p => p.id === filters.projectId)?.name || 'Projeto';
+  const weeklyReport = generateWeeklyReport(constraints, commitments);
+
   if (loading && !filters.projectId) {
     return (
       <SidebarProvider>
@@ -89,20 +95,30 @@ const LeanDashboard = () => {
                   Visão analítica das restrições por área, tipo e evolução temporal
                 </p>
               </div>
-              <Select
-                value={filters.projectId || ''}
-                onValueChange={(v) => setFilters(prev => ({ ...prev, projectId: v }))}
-              >
-                <SelectTrigger className="w-[250px]">
-                  <SelectValue placeholder="Selecione o projeto" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-3 items-center">
+                <Select
+                  value={filters.projectId || ''}
+                  onValueChange={(v) => setFilters(prev => ({ ...prev, projectId: v }))}
+                >
+                  <SelectTrigger className="w-[250px]">
+                    <SelectValue placeholder="Selecione o projeto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <ExportLeanData
+                  constraints={constraints}
+                  weeklyReport={weeklyReport}
+                  projectName={currentProjectName}
+                />
+              </div>
             </div>
+
+            {/* Deadline Notifications */}
+            <DeadlineNotifications constraints={constraints} />
 
             {/* KPI Cards */}
             <LeanKPICards constraints={constraints} currentPPC={currentPPC} />

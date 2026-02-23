@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Shield, Plus, Loader2 } from 'lucide-react';
+import { Shield, Plus, Loader2, FileBarChart } from 'lucide-react';
 import { useLeanConstraints } from '@/hooks/useLeanConstraints';
 import type { ConstraintFilters, LpsConstraint } from '@/types/lean-constraints';
 import { LeanKPICards } from '@/components/lean-constraints/LeanKPICards';
@@ -18,10 +18,16 @@ import { FiveWhysDialog } from '@/components/lean-constraints/FiveWhysDialog';
 import { WeeklyCommitmentPanel } from '@/components/lean-constraints/WeeklyCommitmentPanel';
 import { PPCCalculator } from '@/components/lean-constraints/PPCCalculator';
 import { ConstraintMapLayer } from '@/components/lean-constraints/ConstraintMapLayer';
+import { DeadlineNotifications } from '@/components/lean-constraints/DeadlineNotifications';
+import { ExportLeanData } from '@/components/lean-constraints/ExportLeanData';
+import { ConstraintHistory, addHistoryEntry } from '@/components/lean-constraints/ConstraintHistory';
+import { WeeklyReportDialog } from '@/components/lean-constraints/WeeklyReportDialog';
+import { generateWeeklyReport } from '@/engine/lean-constraints';
 
 const LeanConstraints = () => {
   const navigate = useNavigate();
   const [userId, setUserId] = useState('');
+  const [userName, setUserName] = useState('Usuário');
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [serviceFronts, setServiceFronts] = useState<{ id: string; name: string }[]>([]);
   const [employees, setEmployees] = useState<{ id: string; name: string }[]>([]);
@@ -29,6 +35,8 @@ const LeanConstraints = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [editingConstraint, setEditingConstraint] = useState<LpsConstraint | null>(null);
   const [fiveWhysConstraint, setFiveWhysConstraint] = useState<LpsConstraint | null>(null);
+  const [historyConstraint, setHistoryConstraint] = useState<LpsConstraint | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const {
     constraints, commitments, loading, currentPPC, ppcData,
@@ -41,6 +49,7 @@ const LeanConstraints = () => {
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session) { navigate('/auth'); return; }
       setUserId(session.session.user.id);
+      setUserName(session.session.user.email?.split('@')[0] || 'Usuário');
 
       const { data: projs } = await supabase
         .from('projects')
@@ -70,9 +79,18 @@ const LeanConstraints = () => {
     loadRelated();
   }, [filters.projectId]);
 
+  const currentProjectName = projects.find(p => p.id === filters.projectId)?.name || 'Projeto';
+
   const handleCreate = (data: Record<string, unknown>) => {
     createConstraint.mutate(data as any, {
-      onSuccess: () => toast.success('Restrição criada com sucesso'),
+      onSuccess: (result: any) => {
+        toast.success('Restrição criada com sucesso');
+        addHistoryEntry({
+          constraintId: result?.id || '',
+          action: 'created',
+          userName,
+        });
+      },
       onError: (e: Error) => toast.error(`Erro: ${e.message}`),
     });
   };
@@ -80,14 +98,29 @@ const LeanConstraints = () => {
   const handleUpdate = (data: Record<string, unknown>) => {
     if (!editingConstraint) return;
     updateConstraint.mutate({ id: editingConstraint.id, ...data } as any, {
-      onSuccess: () => { toast.success('Restrição atualizada'); setEditingConstraint(null); },
+      onSuccess: () => {
+        toast.success('Restrição atualizada');
+        addHistoryEntry({
+          constraintId: editingConstraint.id,
+          action: 'updated',
+          userName,
+        });
+        setEditingConstraint(null);
+      },
       onError: (e: Error) => toast.error(`Erro: ${e.message}`),
     });
   };
 
   const handleResolve = (id: string) => {
     resolveConstraint.mutate(id, {
-      onSuccess: () => toast.success('Restrição resolvida'),
+      onSuccess: () => {
+        toast.success('Restrição resolvida');
+        addHistoryEntry({
+          constraintId: id,
+          action: 'resolved',
+          userName,
+        });
+      },
       onError: (e: Error) => toast.error(`Erro: ${e.message}`),
     });
   };
@@ -95,10 +128,19 @@ const LeanConstraints = () => {
   const handleDelete = (id: string) => {
     if (!confirm('Tem certeza que deseja excluir esta restrição?')) return;
     deleteConstraint.mutate(id, {
-      onSuccess: () => toast.success('Restrição excluída'),
+      onSuccess: () => {
+        toast.success('Restrição excluída');
+        addHistoryEntry({
+          constraintId: id,
+          action: 'deleted',
+          userName,
+        });
+      },
       onError: (e: Error) => toast.error(`Erro: ${e.message}`),
     });
   };
+
+  const weeklyReport = generateWeeklyReport(constraints, commitments);
 
   if (loading && !filters.projectId) {
     return (
@@ -143,11 +185,28 @@ const LeanConstraints = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                <ExportLeanData
+                  constraints={constraints}
+                  weeklyReport={weeklyReport}
+                  projectName={currentProjectName}
+                />
+                <Button variant="outline" size="sm" onClick={() => setReportOpen(true)}>
+                  <FileBarChart className="h-4 w-4 mr-1" /> Relatório Semanal
+                </Button>
                 <Button onClick={() => { setEditingConstraint(null); setCreateOpen(true); }}>
                   <Plus className="h-4 w-4 mr-1" /> Nova Restrição
                 </Button>
               </div>
             </div>
+
+            {/* Deadline Notifications */}
+            <DeadlineNotifications
+              constraints={constraints}
+              onGoToConstraint={(c) => {
+                setEditingConstraint(c);
+                setCreateOpen(true);
+              }}
+            />
 
             {/* KPI Cards */}
             <LeanKPICards constraints={constraints} currentPPC={currentPPC} />
@@ -174,6 +233,12 @@ const LeanConstraints = () => {
                   onResolve={handleResolve}
                   onDelete={handleDelete}
                   onFiveWhys={(c) => setFiveWhysConstraint(c)}
+                  onHistory={(c) => setHistoryConstraint(c)}
+                  onReorder={(ids) => {
+                    // Store priority order locally
+                    localStorage.setItem(`lean-priority-${filters.projectId}`, JSON.stringify(ids));
+                    toast.success('Ordem de prioridade atualizada');
+                  }}
                 />
               </TabsContent>
 
@@ -226,6 +291,24 @@ const LeanConstraints = () => {
               userId={userId}
             />
           )}
+
+          {/* History Dialog */}
+          {historyConstraint && (
+            <ConstraintHistory
+              open={!!historyConstraint}
+              onOpenChange={(o) => { if (!o) setHistoryConstraint(null); }}
+              constraintId={historyConstraint.id}
+              constraintDescription={historyConstraint.descricao}
+            />
+          )}
+
+          {/* Weekly Report Dialog */}
+          <WeeklyReportDialog
+            open={reportOpen}
+            onOpenChange={setReportOpen}
+            report={weeklyReport}
+            projectName={currentProjectName}
+          />
         </main>
       </div>
     </SidebarProvider>

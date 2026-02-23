@@ -131,3 +131,38 @@ export const COMMITMENT_STATUS_LABELS: Record<CommitmentStatus, string> = {
   nao_cumprido: 'Não Cumprido',
   parcial: 'Parcial',
 };
+
+export type DeadlineStatus = 'overdue' | 'critical' | 'warning' | 'ok' | 'no_deadline' | 'resolved';
+
+export interface ConstraintAuditEntry {
+  id: string;
+  constraintId: string;
+  action: 'created' | 'updated' | 'resolved' | 'deleted' | 'status_changed';
+  field?: string;
+  oldValue?: string;
+  newValue?: string;
+  userName: string;
+  timestamp: string;
+}
+
+export interface WeeklyReport {
+  weekStart: string;
+  weekEnd: string;
+  totalAtivas: number;
+  totalCriticas: number;
+  novasSemana: number;
+  resolvidasSemana: number;
+  vencidas: number;
+  ppc: number;
+  ppcAdjusted: number;
+  topConstraintTypes: { tipo: ConstraintType; count: number }[];
+  topAreas: { areaName: string; total: number }[];
+}
+
+export const PERIOD_PRESETS = [
+  { label: 'Últimos 7 dias', days: 7 },
+  { label: 'Últimos 15 dias', days: 15 },
+  { label: 'Últimos 30 dias', days: 30 },
+  { label: 'Últimos 90 dias', days: 90 },
+  { label: 'Tudo', days: 0 },
+] as const;

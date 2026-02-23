@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertTriangle, CheckCircle, Shield, TrendingUp, Clock } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Shield, TrendingUp, Clock, AlertCircle } from 'lucide-react';
 import type { LpsConstraint, PPCResult } from '@/types/lean-constraints';
+import { getOverdueConstraints } from '@/engine/lean-constraints';
 
 interface LeanKPICardsProps {
   constraints: LpsConstraint[];
@@ -12,6 +13,7 @@ export function LeanKPICards({ constraints, currentPPC }: LeanKPICardsProps) {
   const ativas = constraints.filter(c => c.status === 'ativa').length;
   const criticas = constraints.filter(c => c.status === 'critica').length;
   const resolvidas = constraints.filter(c => c.status === 'resolvida').length;
+  const vencidas = getOverdueConstraints(constraints).length;
 
   const avgResolutionDays = (() => {
     const resolved = constraints.filter(c => c.status === 'resolvida' && c.data_resolvida);
@@ -29,13 +31,14 @@ export function LeanKPICards({ constraints, currentPPC }: LeanKPICardsProps) {
     { title: 'Total Restrições', value: total, icon: Shield, color: 'text-blue-600' },
     { title: 'Ativas', value: ativas, icon: AlertTriangle, color: 'text-yellow-600' },
     { title: 'Críticas', value: criticas, icon: AlertTriangle, color: 'text-red-600' },
+    { title: 'Vencidas', value: vencidas, icon: AlertCircle, color: vencidas > 0 ? 'text-red-600 animate-pulse' : 'text-gray-400' },
     { title: 'Resolvidas', value: resolvidas, icon: CheckCircle, color: 'text-green-600' },
     { title: 'PPC (%)', value: currentPPC ? `${currentPPC.ppc}%` : '—', icon: TrendingUp, color: 'text-purple-600' },
     { title: 'Tempo Médio (dias)', value: avgResolutionDays || '—', icon: Clock, color: 'text-orange-600' },
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
       {cards.map((card) => (
         <Card key={card.title}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">

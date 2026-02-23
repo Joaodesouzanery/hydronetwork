@@ -4,6 +4,8 @@ import type {
   PPCResult,
   ConstraintsByArea,
   ConstraintType,
+  DeadlineStatus,
+  WeeklyReport,
 } from '@/types/lean-constraints';
 
 export function calculatePPC(commitments: LpsWeeklyCommitment[]): PPCResult | null {
@@ -192,4 +194,127 @@ function formatWeekLabel(date: Date): string {
 
 export function getDefaultConstraintType(justificationType?: ConstraintType): ConstraintType {
   return justificationType || 'restricao_externa';
+}
+
+export function getDeadlineStatus(constraint: LpsConstraint): DeadlineStatus {
+  if (constraint.status === 'resolvida') return 'resolved';
+  if (!constraint.data_prevista_resolucao) return 'no_deadline';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const deadline = new Date(constraint.data_prevista_resolucao);
+  deadline.setHours(0, 0, 0, 0);
+
+  const diffDays = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return 'overdue';
+  if (diffDays <= 2) return 'critical';
+  if (diffDays <= 7) return 'warning';
+  return 'ok';
+}
+
+export function getOverdueConstraints(constraints: LpsConstraint[]): LpsConstraint[] {
+  return constraints.filter(c => getDeadlineStatus(c) === 'overdue');
+}
+
+export function getNearDeadlineConstraints(constraints: LpsConstraint[]): LpsConstraint[] {
+  return constraints.filter(c => {
+    const status = getDeadlineStatus(c);
+    return status === 'critical' || status === 'warning';
+  });
+}
+
+export function getDaysUntilDeadline(constraint: LpsConstraint): number | null {
+  if (!constraint.data_prevista_resolucao) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const deadline = new Date(constraint.data_prevista_resolucao);
+  deadline.setHours(0, 0, 0, 0);
+  return Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+export function generateWeeklyReport(
+  constraints: LpsConstraint[],
+  commitments: LpsWeeklyCommitment[]
+): WeeklyReport {
+  const { start, end } = getWeekRange(new Date());
+  const weekStartDate = new Date(start);
+  const weekEndDate = new Date(end);
+
+  const novasSemana = constraints.filter(c => {
+    const d = new Date(c.data_identificacao);
+    return d >= weekStartDate && d <= weekEndDate;
+  }).length;
+
+  const resolvidasSemana = constraints.filter(c => {
+    if (!c.data_resolvida) return false;
+    const d = new Date(c.data_resolvida);
+    return d >= weekStartDate && d <= weekEndDate;
+  }).length;
+
+  const ativas = constraints.filter(c => c.status === 'ativa');
+  const criticas = constraints.filter(c => c.status === 'critica');
+  const vencidas = getOverdueConstraints(constraints);
+
+  const ppcResult = calculatePPCAdjusted(commitments, constraints);
+
+  const typeMap = new Map<ConstraintType, number>();
+  for (const c of constraints.filter(c => c.status !== 'resolvida')) {
+    typeMap.set(c.tipo_restricao, (typeMap.get(c.tipo_restricao) || 0) + 1);
+  }
+  const topTypes = Array.from(typeMap.entries())
+    .map(([tipo, count]) => ({ tipo, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+
+  const areas = aggregateConstraintsByArea(constraints.filter(c => c.status !== 'resolvida'));
+
+  return {
+    weekStart: start,
+    weekEnd: end,
+    totalAtivas: ativas.length,
+    totalCriticas: criticas.length,
+    novasSemana,
+    resolvidasSemana,
+    vencidas: vencidas.length,
+    ppc: ppcResult?.ppc ?? 0,
+    ppcAdjusted: ppcResult?.ppcAdjusted ?? 0,
+    topConstraintTypes: topTypes,
+    topAreas: areas.slice(0, 5).map(a => ({ areaName: a.areaName, total: a.total })),
+  };
+}
+
+export function exportConstraintsToCSV(constraints: LpsConstraint[]): string {
+  const headers = [
+    'Data Identificação', 'Tipo', 'Descrição', 'Frente de Serviço',
+    'Responsável', 'Status', 'Impacto', 'Previsão Resolução',
+    'Data Resolvida', 'Notas',
+  ];
+
+  const TYPES: Record<string, string> = {
+    projeto_nao_liberado: 'Projeto Não Liberado',
+    material_nao_entregue: 'Material Não Entregue',
+    equipe_indisponivel: 'Equipe Indisponível',
+    interferencia_tecnica: 'Interferência Técnica',
+    falta_equipamento: 'Falta de Equipamento',
+    condicao_climatica: 'Condição Climática',
+    aprovacao_pendente: 'Aprovação Pendente',
+    restricao_contratual: 'Restrição Contratual',
+    restricao_externa: 'Restrição Externa',
+  };
+
+  const rows = constraints.map(c => [
+    c.data_identificacao,
+    TYPES[c.tipo_restricao] || c.tipo_restricao,
+    `"${(c.descricao || '').replace(/"/g, '""')}"`,
+    c.service_fronts?.name || '',
+    c.employees?.name || c.responsavel_nome || '',
+    c.status,
+    c.impacto,
+    c.data_prevista_resolucao || '',
+    c.data_resolvida || '',
+    `"${(c.notas || '').replace(/"/g, '""')}"`,
+  ]);
+
+  return [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
 }
