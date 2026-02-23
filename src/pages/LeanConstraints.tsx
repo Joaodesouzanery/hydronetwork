@@ -253,7 +253,7 @@ const LeanConstraints = () => {
                     </Link>
                   </Button>
                   <Button onClick={() => { setEditingConstraint(null); setMapCoordinates(null); setCreateOpen(true); }}>
-                    <Plus className="h-4 w-4 mr-1" /> Nova Restrição
+                    <Plus className="h-4 w-4 mr-1" /> Adicionar Restrição
                   </Button>
                 </div>
               </div>
