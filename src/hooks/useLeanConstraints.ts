@@ -61,6 +61,25 @@ async function withSchemaRetry<T>(
 export function useLeanConstraints(filters: ConstraintFilters) {
   const queryClient = useQueryClient();
 
+  // Lightweight check to see if the LPS tables exist
+  const tableCheckQuery = useQuery({
+    queryKey: ['lps-table-check'],
+    queryFn: async () => {
+      const { error } = await supabase
+        .from('lps_constraints')
+        .select('id')
+        .limit(0);
+      if (error && isSchemaError(error)) {
+        return { exists: false };
+      }
+      return { exists: true };
+    },
+    staleTime: 60_000, // cache for 1 minute
+    retry: false,
+  });
+
+  const tablesExist = tableCheckQuery.data?.exists ?? true; // assume true until proven otherwise
+
   const constraintsQuery = useQuery({
     queryKey: ['lps-constraints', filters],
     queryFn: async () => {
@@ -102,15 +121,14 @@ export function useLeanConstraints(filters: ConstraintFilters) {
 
       if (error) {
         if (isSchemaError(error)) {
-          const err = new Error('TABELA_NAO_CONFIGURADA');
-          (err as any).isSetupError = true;
-          throw err;
+          // Tables don't exist yet — return empty array, flag handled via needsSetup
+          return [] as LpsConstraint[];
         }
         throw error;
       }
       return (data ?? []) as LpsConstraint[];
     },
-    enabled: !!filters.projectId,
+    enabled: !!filters.projectId && tablesExist,
     retry: (failureCount, error) => {
       if (isSchemaError(error)) return false;
       return failureCount < 2;
@@ -137,7 +155,7 @@ export function useLeanConstraints(filters: ConstraintFilters) {
       }
       return (data ?? []) as LpsWeeklyCommitment[];
     },
-    enabled: !!filters.projectId,
+    enabled: !!filters.projectId && tablesExist,
     retry: (failureCount, error) => {
       if (isSchemaError(error)) return false;
       return failureCount < 2;
@@ -155,6 +173,7 @@ export function useLeanConstraints(filters: ConstraintFilters) {
   const weeklyEvolution = calculateWeeklyEvolution(constraints);
 
   const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['lps-table-check'] });
     queryClient.invalidateQueries({ queryKey: ['lps-constraints'] });
     queryClient.invalidateQueries({ queryKey: ['lps-commitments'] });
   };
@@ -267,7 +286,7 @@ export function useLeanConstraints(filters: ConstraintFilters) {
     onSuccess: invalidateAll,
   });
 
-  const needsSetup = !!(constraintsQuery.error && (constraintsQuery.error as any).isSetupError);
+  const needsSetup = !tablesExist;
 
   return {
     constraints,

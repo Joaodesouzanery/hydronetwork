@@ -449,21 +449,25 @@ const RDONew = () => {
 
           if (justError) throw justError;
 
-          // Auto-create lean constraint from RDO justification
-          const constraintType = (service.justification_type || 'restricao_externa') as ConstraintType;
-          await supabase.from('lps_constraints').insert([{
-            created_by_user_id: user.id,
-            project_id: selectedProject,
-            service_front_id: selectedServiceFronts[0] || null,
-            tipo_restricao: constraintType,
-            descricao: `RDO ${reportDate}: ${service.justification}`,
-            status: 'ativa',
-            impacto: 'medio',
-            origem: 'rdo_justificativa',
-            justification_id: justData?.id || null,
-            daily_report_id: dailyReport.id,
-            data_identificacao: reportDate,
-          }]);
+          // Auto-create lean constraint from RDO justification (silently skip if LPS tables don't exist)
+          try {
+            const constraintType = (service.justification_type || 'restricao_externa') as ConstraintType;
+            await supabase.from('lps_constraints').insert([{
+              created_by_user_id: user.id,
+              project_id: selectedProject,
+              service_front_id: selectedServiceFronts[0] || null,
+              tipo_restricao: constraintType,
+              descricao: `RDO ${reportDate}: ${service.justification}`,
+              status: 'ativa',
+              impacto: 'medio',
+              origem: 'rdo_justificativa',
+              justification_id: justData?.id || null,
+              daily_report_id: dailyReport.id,
+              data_identificacao: reportDate,
+            }]);
+          } catch {
+            // LPS tables may not exist yet — don't block RDO creation
+          }
         }
       }
 

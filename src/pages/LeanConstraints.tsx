@@ -263,11 +263,16 @@ const LeanConstraints = () => {
                 </div>
               </div>
 
-              {/* Setup Banner */}
+              {/* Setup Banner - when tables don't exist */}
               {needsSetup && (
-                <LpsSetupBanner onRetry={refreshData} />
+                <>
+                  <LpsSetupBanner onRetry={refreshData} />
+                </>
               )}
 
+              {/* Content only shown when tables exist */}
+              {!needsSetup && (
+              <>
               {/* Deadline Notifications */}
               <DeadlineNotifications
                 constraints={constraints}
@@ -350,6 +355,8 @@ const LeanConstraints = () => {
                   />
                 </TabsContent>
               </Tabs>
+              </>
+              )}
             </div>
 
             {/* Create/Edit Dialog */}

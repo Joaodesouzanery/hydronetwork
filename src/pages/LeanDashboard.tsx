@@ -23,6 +23,7 @@ import { CriticalAreasRanking } from '@/components/lean-constraints/CriticalArea
 import { PPCCalculator } from '@/components/lean-constraints/PPCCalculator';
 import { DeadlineNotifications } from '@/components/lean-constraints/DeadlineNotifications';
 import { ExportLeanData } from '@/components/lean-constraints/ExportLeanData';
+import { LpsSetupBanner } from '@/components/lean-constraints/LpsSetupBanner';
 import { generateWeeklyReport } from '@/engine/lean-constraints';
 
 const LeanDashboard = () => {
@@ -32,8 +33,9 @@ const LeanDashboard = () => {
   const [filters, setFilters] = useState<ConstraintFilters>({ status: 'todas', tipo: 'todos', impacto: 'todos' });
 
   const {
-    constraints, commitments, loading, currentPPC, ppcData,
+    constraints, commitments, loading, needsSetup, currentPPC, ppcData,
     constraintsByArea, constraintsByType, resolutionTrend, weeklyEvolution,
+    refreshData,
   } = useLeanConstraints(filters);
 
   useEffect(() => {
@@ -149,6 +151,10 @@ const LeanDashboard = () => {
                 </div>
               </div>
 
+              {needsSetup ? (
+                <LpsSetupBanner onRetry={refreshData} />
+              ) : (
+              <>
               {/* Deadline Notifications */}
               <DeadlineNotifications constraints={constraints} />
 
@@ -171,6 +177,8 @@ const LeanDashboard = () => {
                 <CriticalAreasRanking data={constraintsByArea} />
                 <PPCCalculator ppcData={ppcData} currentPPC={currentPPC} />
               </div>
+              </>
+              )}
             </div>
           </main>
         </div>
