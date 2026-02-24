@@ -1,10 +1,12 @@
 /**
  * Saved Planning engine - allows saving, loading, and editing planning configurations.
  * Plans include team config, productivity, holidays, schedule results, and trecho metadata.
+ * Uses Supabase for persistent storage with localStorage fallback.
  */
 
-import { TeamConfig, ScheduleResult, DEFAULT_TEAM_CONFIG } from "./planning";
+import { TeamConfig, DEFAULT_TEAM_CONFIG } from "./planning";
 import { TipoRedeManual } from "./domain";
+import { supabase } from "@/lib/supabase";
 
 export interface TrechoMetadata {
   trechoKey: string; // idInicio-idFim
@@ -60,8 +62,111 @@ export interface SavedPlan {
 const STORAGE_KEY = "hydronetwork_saved_plans";
 
 export function generatePlanId(): string {
-  return "plan_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 8);
+  return crypto.randomUUID();
 }
+
+// ── Supabase helpers ──
+
+function planToRow(plan: SavedPlan) {
+  return {
+    id: plan.id,
+    nome: plan.name,
+    descricao: plan.description || "",
+    num_equipes: plan.numEquipes,
+    team_config: plan.teamConfig,
+    metros_dia: plan.metrosDia,
+    horas_trabalho: plan.horasTrabalho,
+    work_days: plan.workDays,
+    data_inicio: plan.dataInicio || null,
+    data_termino: plan.dataTermino || null,
+    productivity: plan.productivity,
+    holidays: plan.holidays,
+    trecho_metadata: plan.trechoMetadata,
+    grouping_mode: plan.groupingMode,
+    schedule_snapshot: plan.scheduleSnapshot || null,
+    total_metros: plan.scheduleSnapshot?.totalMetros,
+    total_dias: plan.scheduleSnapshot?.totalDays,
+    custo_total: plan.scheduleSnapshot?.totalCost,
+  };
+}
+
+function rowToPlan(r: any): SavedPlan {
+  return {
+    id: r.id,
+    name: r.nome,
+    description: r.descricao || "",
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    numEquipes: r.num_equipes,
+    teamConfig: r.team_config,
+    metrosDia: Number(r.metros_dia),
+    horasTrabalho: Number(r.horas_trabalho),
+    workDays: r.work_days as 5 | 6 | 7,
+    dataInicio: r.data_inicio || "",
+    dataTermino: r.data_termino || "",
+    productivity: r.productivity || [],
+    holidays: r.holidays || [],
+    trechoMetadata: r.trecho_metadata || [],
+    groupingMode: r.grouping_mode || "trecho",
+    scheduleSnapshot: r.schedule_snapshot || undefined,
+  };
+}
+
+// ── Main API (Supabase-first with localStorage fallback) ──
+
+export async function getSavedPlansAsync(): Promise<SavedPlan[]> {
+  try {
+    const { data, error } = await supabase
+      .from("hydro_saved_plans")
+      .select("*")
+      .order("updated_at", { ascending: false });
+    if (error) throw error;
+    if (data && data.length > 0) return data.map(rowToPlan);
+  } catch {
+    // fallback
+  }
+  return getSavedPlans();
+}
+
+export async function savePlanAsync(plan: SavedPlan): Promise<void> {
+  plan.updatedAt = new Date().toISOString();
+  if (!plan.createdAt) plan.createdAt = plan.updatedAt;
+  try {
+    const { error } = await supabase
+      .from("hydro_saved_plans")
+      .upsert(planToRow(plan), { onConflict: "id" });
+    if (error) throw error;
+  } catch {
+    // fallback to localStorage
+  }
+  savePlan(plan);
+}
+
+export async function deleteSavedPlanAsync(id: string): Promise<void> {
+  try {
+    await supabase.from("hydro_saved_plans").delete().eq("id", id);
+  } catch {
+    // silent
+  }
+  deleteSavedPlan(id);
+}
+
+export async function duplicatePlanAsync(id: string): Promise<SavedPlan | null> {
+  const plans = await getSavedPlansAsync();
+  const original = plans.find(p => p.id === id);
+  if (!original) return null;
+  const copy: SavedPlan = {
+    ...JSON.parse(JSON.stringify(original)),
+    id: generatePlanId(),
+    name: `${original.name} (Cópia)`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  await savePlanAsync(copy);
+  return copy;
+}
+
+// ── Sync localStorage functions (backward compat) ──
 
 export function getSavedPlans(): SavedPlan[] {
   try {

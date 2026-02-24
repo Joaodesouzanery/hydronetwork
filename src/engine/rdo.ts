@@ -42,17 +42,82 @@ export interface RDO {
   updatedAt: string;
 }
 
+import { supabase } from "@/lib/supabase";
+
 const STORAGE_KEY = "rdoData";
 
 export function generateId(): string {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
-  });
+  return crypto.randomUUID();
 }
+
+// ── Supabase-first with localStorage fallback ──
+
+export async function saveRDOsToSupabase(rdos: RDO[]): Promise<void> {
+  try {
+    for (const rdo of rdos) {
+      const { error } = await supabase.from("hydro_rdos").upsert({
+        id: rdo.id,
+        project_id: rdo.projectId || "default",
+        date: rdo.date,
+        project_name: rdo.projectName,
+        obra_name: rdo.obraName,
+        status: rdo.status,
+        services: rdo.services,
+        segments: rdo.segments,
+        notes: rdo.notes,
+        occurrences: rdo.occurrences,
+      }, { onConflict: "id" });
+      if (error) throw error;
+    }
+  } catch {
+    // Fallback: save to localStorage
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(rdos));
+  }
+}
+
+export async function loadRDOsFromSupabase(): Promise<RDO[]> {
+  try {
+    const { data, error } = await supabase
+      .from("hydro_rdos")
+      .select("*")
+      .order("date", { ascending: false });
+    if (error) throw error;
+    if (data && data.length > 0) {
+      return data.map((r: any) => ({
+        id: r.id,
+        projectId: r.project_id,
+        date: r.date,
+        projectName: r.project_name,
+        obraName: r.obra_name,
+        status: r.status as RDOStatus,
+        services: r.services || [],
+        segments: r.segments || [],
+        notes: r.notes,
+        occurrences: r.occurrences,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      }));
+    }
+  } catch {
+    // Fallback to localStorage
+  }
+  const local = localStorage.getItem(STORAGE_KEY);
+  return local ? JSON.parse(local) : [];
+}
+
+export async function deleteRDOFromSupabase(id: string): Promise<void> {
+  try {
+    await supabase.from("hydro_rdos").delete().eq("id", id);
+  } catch {
+    // silent
+  }
+}
+
+// ── Sync functions (keep localStorage working for backward compat) ──
 
 export function saveRDOs(rdos: RDO[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(rdos));
+  saveRDOsToSupabase(rdos).catch(() => {});
 }
 
 export function loadRDOs(): RDO[] {
@@ -63,6 +128,7 @@ export function loadRDOs(): RDO[] {
 export function deleteRDO(rdos: RDO[], id: string): RDO[] {
   const updated = rdos.filter((r) => r.id !== id);
   saveRDOs(updated);
+  deleteRDOFromSupabase(id).catch(() => {});
   return updated;
 }
 

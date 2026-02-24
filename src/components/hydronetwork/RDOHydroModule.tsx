@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +81,8 @@ interface Equipment {
   status: "disponivel" | "em_uso" | "manutencao" | "indisponivel";
 }
 
+import { supabase } from "@/lib/supabase";
+
 const EQUIPMENT_STORAGE_KEY = "hydronetwork_rdo_equipments";
 
 function loadEquipments(): Equipment[] {
@@ -92,6 +94,37 @@ function loadEquipments(): Equipment[] {
 
 function saveEquipments(equips: Equipment[]) {
   localStorage.setItem(EQUIPMENT_STORAGE_KEY, JSON.stringify(equips));
+  // Sync to Supabase
+  syncEquipmentsToSupabase(equips).catch(() => {});
+}
+
+async function syncEquipmentsToSupabase(equips: Equipment[]) {
+  for (const e of equips) {
+    await supabase.from("hydro_equipments").upsert({
+      id: e.id,
+      nome: e.nome,
+      tipo: e.tipo,
+      placa: e.placa,
+      proprietario: e.proprietario,
+      custo_hora: e.custoHora,
+      status: e.status,
+    }, { onConflict: "id" });
+  }
+}
+
+async function loadEquipmentsFromSupabase(): Promise<Equipment[]> {
+  try {
+    const { data, error } = await supabase.from("hydro_equipments").select("*").order("created_at");
+    if (error) throw error;
+    if (data && data.length > 0) {
+      return data.map((e: any) => ({
+        id: e.id, nome: e.nome, tipo: e.tipo, placa: e.placa || "",
+        proprietario: e.proprietario || "", custoHora: Number(e.custo_hora),
+        status: e.status as Equipment["status"],
+      }));
+    }
+  } catch { /* fallback */ }
+  return loadEquipments();
 }
 
 export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange, onTrechosChange }: RDOHydroModuleProps) => {
@@ -99,6 +132,13 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
   const [financials, setFinancials] = useState<FinancialEntry[]>(MOCK_FINANCIALS);
   const [equipments, setEquipments] = useState<Equipment[]>(loadEquipments());
   const [showAddEquipment, setShowAddEquipment] = useState(false);
+
+  // Load equipment from Supabase on mount
+  useEffect(() => {
+    loadEquipmentsFromSupabase().then(eqs => {
+      if (eqs.length > 0) setEquipments(eqs);
+    });
+  }, []);
   const [newEquip, setNewEquip] = useState<Partial<Equipment>>({ tipo: "Retroescavadeira", status: "disponivel", custoHora: 0 });
   const [curvaSView, setCurvaSView] = useState<"financeiro" | "fisico" | "ambos">("ambos");
   const [segFilterRede, setSegFilterRede] = useState<string>("all");
