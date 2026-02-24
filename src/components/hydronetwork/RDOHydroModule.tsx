@@ -103,6 +103,8 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
   const [curvaSView, setCurvaSView] = useState<"financeiro" | "fisico" | "ambos">("ambos");
   const [segFilterRede, setSegFilterRede] = useState<string>("all");
   const [segFilterStatus, setSegFilterStatus] = useState<string>("all");
+  const [segFilterFrente, setSegFilterFrente] = useState<string>("all");
+  const [segFilterLote, setSegFilterLote] = useState<string>("all");
   const [segSearch, setSegSearch] = useState("");
   const topoInputRef = useRef<HTMLInputElement>(null);
 
@@ -396,6 +398,32 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                       <SelectItem value="concluido">Concluido</SelectItem>
                     </SelectContent>
                   </Select>
+                  {(() => {
+                    const frentes = [...new Set(activeSegments.map(s => s.frente).filter(Boolean))];
+                    if (frentes.length === 0) return null;
+                    return (
+                      <Select value={segFilterFrente} onValueChange={setSegFilterFrente}>
+                        <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="Frente" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todas Frentes</SelectItem>
+                          {frentes.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    );
+                  })()}
+                  {(() => {
+                    const lotes = [...new Set(activeSegments.map(s => s.lote).filter(Boolean))];
+                    if (lotes.length === 0) return null;
+                    return (
+                      <Select value={segFilterLote} onValueChange={setSegFilterLote}>
+                        <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="Lote" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos Lotes</SelectItem>
+                          {lotes.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    );
+                  })()}
                 </div>
               </div>
             </CardHeader>
@@ -406,6 +434,8 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                   <TableRow>
                     <TableHead>Trecho</TableHead>
                     <TableHead>Sistema</TableHead>
+                    <TableHead>Frente</TableHead>
+                    <TableHead>Lote</TableHead>
                     <TableHead>Planejado (m)</TableHead>
                     <TableHead>Executado (m)</TableHead>
                     <TableHead>Progresso</TableHead>
@@ -416,11 +446,13 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                   {activeSegments
                     .filter(seg => {
                       if (segFilterRede !== "all" && seg.system !== segFilterRede) return false;
+                      if (segFilterFrente !== "all" && seg.frente !== segFilterFrente) return false;
+                      if (segFilterLote !== "all" && seg.lote !== segFilterLote) return false;
                       const pct = seg.planned > 0 ? (seg.executed / seg.planned) * 100 : 0;
                       if (segFilterStatus === "nao_iniciado" && pct > 0) return false;
                       if (segFilterStatus === "em_execucao" && (pct <= 0 || pct >= 100)) return false;
                       if (segFilterStatus === "concluido" && pct < 100) return false;
-                      if (segSearch && !seg.id.toLowerCase().includes(segSearch.toLowerCase())) return false;
+                      if (segSearch && !seg.id.toLowerCase().includes(segSearch.toLowerCase()) && !(seg.frente || "").toLowerCase().includes(segSearch.toLowerCase())) return false;
                       return true;
                     })
                     .map(seg => {
@@ -432,6 +464,8 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                       <TableRow key={seg.id}>
                         <TableCell className="font-medium">{seg.id}</TableCell>
                         <TableCell>{sysIcon} {seg.system}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{seg.frente || "-"}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{seg.lote || "-"}</TableCell>
                         <TableCell>{seg.planned.toFixed(2)}</TableCell>
                         <TableCell>{seg.executed.toFixed(2)}</TableCell>
                         <TableCell>

@@ -427,7 +427,10 @@ const HydroNetwork = () => {
                       <TableHead className="min-w-[40px]">#</TableHead>
                       <TableHead className="min-w-[120px]">Nome</TableHead>
                       <TableHead>Inicio</TableHead><TableHead>Fim</TableHead><TableHead>Comp.</TableHead>
-                      <TableHead>Decliv.</TableHead><TableHead>Desnivel</TableHead><TableHead>Material</TableHead>
+                      <TableHead className="min-w-[100px]">Tipo Rede</TableHead>
+                      <TableHead className="min-w-[100px]">Frente</TableHead>
+                      <TableHead className="min-w-[80px]">Lote</TableHead>
+                      <TableHead>Decliv.</TableHead><TableHead>Material</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>{trechos.map((t, i) => (
@@ -437,10 +440,10 @@ const HydroNetwork = () => {
                         <input
                           className="bg-transparent border-b border-dashed border-muted-foreground/30 hover:border-primary focus:border-primary outline-none text-sm w-full px-0 py-0.5"
                           placeholder={`Trecho ${i + 1}`}
-                          value={t.nome || ""}
+                          value={t.nomeTrecho || t.nome || ""}
                           onChange={e => {
                             const updated = [...trechos];
-                            updated[i] = { ...updated[i], nome: e.target.value };
+                            updated[i] = { ...updated[i], nomeTrecho: e.target.value, nome: e.target.value };
                             setTrechos(updated);
                           }}
                         />
@@ -448,10 +451,47 @@ const HydroNetwork = () => {
                       <TableCell className="font-medium">{t.idInicio}</TableCell>
                       <TableCell className="font-medium">{t.idFim}</TableCell>
                       <TableCell>{fmt(t.comprimento, 2)}m</TableCell>
-                      <TableCell className={t.declividade < 0 ? "text-destructive font-medium" : ""}>{(t.declividade * 100).toFixed(2)}%</TableCell>
-                      <TableCell className={t.cotaInicio - t.cotaFim < 0 ? "text-destructive" : "text-green-600"}>
-                        {(t.cotaInicio - t.cotaFim).toFixed(3)}m
+                      <TableCell>
+                        <Select value={t.tipoRedeManual || "esgoto"} onValueChange={v => {
+                          const updated = [...trechos];
+                          updated[i] = { ...updated[i], tipoRedeManual: v as any };
+                          setTrechos(updated);
+                        }}>
+                          <SelectTrigger className="h-7 text-xs w-full"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="agua">Agua</SelectItem>
+                            <SelectItem value="esgoto">Esgoto</SelectItem>
+                            <SelectItem value="drenagem">Drenagem</SelectItem>
+                            <SelectItem value="recalque">Recalque</SelectItem>
+                            <SelectItem value="outro">Outro</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </TableCell>
+                      <TableCell>
+                        <input
+                          className="bg-transparent border-b border-dashed border-muted-foreground/30 hover:border-primary focus:border-primary outline-none text-xs w-full px-0 py-0.5"
+                          placeholder="Frente"
+                          value={t.frenteServico || ""}
+                          onChange={e => {
+                            const updated = [...trechos];
+                            updated[i] = { ...updated[i], frenteServico: e.target.value };
+                            setTrechos(updated);
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <input
+                          className="bg-transparent border-b border-dashed border-muted-foreground/30 hover:border-primary focus:border-primary outline-none text-xs w-full px-0 py-0.5"
+                          placeholder="Lote"
+                          value={t.lote || ""}
+                          onChange={e => {
+                            const updated = [...trechos];
+                            updated[i] = { ...updated[i], lote: e.target.value };
+                            setTrechos(updated);
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell className={t.declividade < 0 ? "text-destructive font-medium" : ""}>{(t.declividade * 100).toFixed(2)}%</TableCell>
                       <TableCell><Badge variant="outline">{t.material}</Badge></TableCell>
                     </TableRow>
                   ))}</TableBody>

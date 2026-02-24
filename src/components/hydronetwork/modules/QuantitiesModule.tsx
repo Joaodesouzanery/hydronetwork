@@ -163,7 +163,7 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
 
       return {
         id: `T${String(idx + 1).padStart(2, "0")}`,
-        trecho: `${t.idInicio}→${t.idFim}`,
+        trecho: t.nomeTrecho || `${t.idInicio}→${t.idFim}`,
         comp: t.comprimento, dn: t.diametroMm,
         prof, larguraVala: lv,
         escavacao, reaterro, botafora, pavimento: areaPav,

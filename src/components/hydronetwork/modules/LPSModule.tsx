@@ -348,7 +348,7 @@ function LookaheadTab({ data, trechos, onSave }: { data: LPSData; trechos: Trech
                     <SelectItem value="geral">Geral</SelectItem>
                     {trechos.slice(0, 50).map((t, i) => (
                       <SelectItem key={i} value={`${t.idInicio}-${t.idFim}`} className="text-xs">
-                        {t.idInicio} → {t.idFim} ({t.comprimento.toFixed(1)}m)
+                        {t.nomeTrecho || `${t.idInicio} - ${t.idFim}`} ({t.comprimento.toFixed(1)}m){t.frenteServico ? ` [${t.frenteServico}]` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>

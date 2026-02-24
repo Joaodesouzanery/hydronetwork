@@ -176,7 +176,7 @@ export const BudgetCostModule = ({ trechos, pontos }: BudgetCostModuleProps) => 
 
       return {
         id: `T-${String(idx + 1).padStart(2, "0")}`,
-        inicio: t.idInicio, fim: t.idFim, comp: t.comprimento, dn: t.diametroMm, prof,
+        nome: t.nomeTrecho || "", inicio: t.idInicio, fim: t.idFim, comp: t.comprimento, dn: t.diametroMm, prof,
         escavacao: custoEsc, escoramento: custoEscor, tubo: custoTubo,
         berco: custoBerco, envoltoria: custoEnv, reaterro: custoReat,
         botafora: custoBota, subbase: custoSubbase, base: custoBase,
@@ -410,7 +410,7 @@ export const BudgetCostModule = ({ trechos, pontos }: BudgetCostModuleProps) => 
                         {rows.map(r => (
                           <TableRow key={r.id}>
                             <TableCell className="font-medium">{r.id}</TableCell>
-                            <TableCell className="text-xs">{r.inicio}→{r.fim}</TableCell>
+                            <TableCell className="text-xs">{r.nome || `${r.inicio}→${r.fim}`}</TableCell>
                             <TableCell>{fmt(r.comp)}</TableCell>
                             <TableCell>{fmtC(r.escavacao)}</TableCell>
                             <TableCell>{fmtC(r.escoramento)}</TableCell>
