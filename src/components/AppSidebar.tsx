@@ -25,6 +25,7 @@ const dashboardItems = [
 const monitoringItems = [
   { title: "Alertas", url: "/alerts", icon: Bell },
   { title: "Atrasos de Projeto", url: "/project-delays", icon: Clock },
+  { title: "LPS", url: "/hydronetwork/lps", icon: ClipboardCheck },
 ];
 
 const hydroModules = [

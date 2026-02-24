@@ -43,6 +43,7 @@ import { PeerReviewModule } from "@/components/hydronetwork/modules/PeerReviewMo
 import { BudgetCostModule } from "@/components/hydronetwork/modules/BudgetCostModule";
 import { BdiModule } from "@/components/hydronetwork/modules/BdiModule";
 import { RDOPlanningModule } from "@/components/hydronetwork/modules/RDOPlanningModule";
+import { LPSModule } from "@/components/hydronetwork/modules/LPSModule";
 import { saveHydroProject, loadHydroProject } from "@/engine/sharedPlanningStore";
 import {
   getSpatialProject, validateProject, ValidationIssue,
@@ -204,6 +205,8 @@ const HydroNetwork = () => {
         return <RDOHydroModule pontos={pontos} trechos={trechos} rdos={rdos} setRdos={setRdos} onPontosChange={setPontos} onTrechosChange={setTrechos} />;
       case "rdo-planejamento":
         return <RDOPlanningModule pontos={pontos} trechos={trechos} rdos={rdos} scheduleResult={scheduleResult} />;
+      case "lps":
+        return <LPSModule pontos={pontos} trechos={trechos} />;
       case "perfil":
         return <PerfilLongitudinal pontos={pontos} trechos={trechos} />;
       case "mapa":
@@ -551,6 +554,7 @@ const HydroNetwork = () => {
     swmm: "SWMM", openproject: "OpenProject", projectlibre: "ProjectLibre", qgis: "QGIS",
     revisao: "Revisao por Pares", rdo: "RDO", "rdo-planejamento": "RDO Ã-- Planejamento",
     perfil: "Perfil Longitudinal", mapa: "Mapa Interativo", exportacao: "Exportacao GIS",
+    lps: "LPS — Last Planner System",
   };
 
   return (
