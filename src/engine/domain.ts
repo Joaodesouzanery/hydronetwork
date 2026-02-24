@@ -21,6 +21,7 @@ export type TipoRedeManual = "agua" | "esgoto" | "drenagem" | "recalque" | "outr
 export interface Trecho {
   idInicio: string;
   idFim: string;
+  nome?: string;
   comprimento: number;
   declividade: number;
   tipoRede: TipoRede;

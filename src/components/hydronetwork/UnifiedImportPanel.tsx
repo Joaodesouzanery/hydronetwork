@@ -14,7 +14,9 @@ import { Button } from '@/components/ui/button';
 import { PontoTopografico, parseTopographyCSV } from '@/engine/reader';
 import { Trecho, createTrechoFromPoints, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from '@/engine/domain';
 import { parseINPToInternal, parseSWMMToInternal } from '@/engine/importEngine';
-import { Upload, Trash2, Check, X, FileText, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Upload, Trash2, Check, X, FileText, Loader2, ChevronDown, ChevronRight, Globe, AlertTriangle, History, Save, FolderOpen, Undo2 } from 'lucide-react';
+import { CRSSelector } from '@/components/hydronetwork/CRSSelector';
+import { ImportCRSConfig, validateUTMRange } from '@/engine/coordinateTransform';
 
 // ── Types ──
 
@@ -66,10 +68,30 @@ interface ImportHistoryEntry {
   timestamp: string;
 }
 
+interface ValidationIssueItem {
+  type: 'warning' | 'error' | 'info';
+  category: string;
+  message: string;
+  count: number;
+  details?: string[];
+}
+
+interface ImportTemplate {
+  id: string;
+  name: string;
+  selectedLayers: string[];
+  crsConfig: ImportCRSConfig | null;
+  filterLayer: string;
+  filterType: string;
+  createdAt: string;
+}
+
 interface UnifiedImportPanelProps {
   onImport: (pontos: PontoTopografico[], trechos: Trecho[]) => void;
   diametroMm?: number;
   material?: string;
+  onBeforeImport?: () => { pontos: PontoTopografico[]; trechos: Trecho[] } | null;
+  onUndo?: (snapshot: { pontos: PontoTopografico[]; trechos: Trecho[] }) => void;
 }
 
 // ── Helpers ──
@@ -980,6 +1002,96 @@ function parseSHPContent(buffer: ArrayBuffer, fileName: string): ParseResult {
   return { points, edges, layers: points.length > 0 || edges.length > 0 ? ['SHP'] : [], fields: Array.from(fieldsSet) };
 }
 
+// ── Validation ──
+
+function runPostParseValidation(points: ParsedPoint[], edges: ParsedEdge[]): ValidationIssueItem[] {
+  const issues: ValidationIssueItem[] = [];
+
+  // 1. Duplicate points (same x,y within 0.001 tolerance)
+  const coordMap = new Map<string, string[]>();
+  for (const p of points) {
+    const key = `${p.x.toFixed(3)}_${p.y.toFixed(3)}`;
+    if (!coordMap.has(key)) coordMap.set(key, []);
+    coordMap.get(key)!.push(p.id);
+  }
+  const duplicates = Array.from(coordMap.entries()).filter(([, ids]) => ids.length > 1);
+  if (duplicates.length > 0) {
+    issues.push({
+      type: 'warning', category: 'Pontos Duplicados',
+      message: `${duplicates.length} posicao(oes) com pontos sobrepostos`,
+      count: duplicates.length,
+      details: duplicates.slice(0, 5).map(([coord, ids]) => `Posicao ${coord.replace('_', ', ')}: ${ids.join(', ')}`),
+    });
+  }
+
+  // 2. Zero-length edges
+  const zeroEdges = edges.filter(e => {
+    const len = calculateEdgeLength(e.coordinates);
+    return len < 0.001;
+  });
+  if (zeroEdges.length > 0) {
+    issues.push({
+      type: 'warning', category: 'Trechos Comprimento Zero',
+      message: `${zeroEdges.length} trecho(s) com comprimento zero ou quase zero`,
+      count: zeroEdges.length,
+      details: zeroEdges.slice(0, 5).map(e => `${e.id} (${e.layer})`),
+    });
+  }
+
+  // 3. Out-of-range coordinates
+  const outOfRange = points.filter(p => {
+    const absX = Math.abs(p.x);
+    const absY = Math.abs(p.y);
+    // Check if likely UTM but with invalid ranges
+    if (absX > 100000 && absX < 1000000) {
+      // Likely UTM X - check Y range
+      return absY < 100000 || absY > 10000100;
+    }
+    // Check if coordinates are negative (could be an issue for UTM)
+    if (p.x < 0 && absX > 1000) return true;
+    return false;
+  });
+  if (outOfRange.length > 0) {
+    issues.push({
+      type: 'warning', category: 'Coordenadas Fora da Faixa',
+      message: `${outOfRange.length} ponto(s) com coordenadas possivelmente invalidas`,
+      count: outOfRange.length,
+      details: outOfRange.slice(0, 5).map(p => `${p.id}: X=${p.x.toFixed(2)}, Y=${p.y.toFixed(2)}`),
+    });
+  }
+
+  // 4. Network gaps - isolated points not connected to any edge
+  if (edges.length > 0 && points.length > 0) {
+    const edgePointKeys = new Set<string>();
+    for (const e of edges) {
+      for (const c of e.coordinates) {
+        edgePointKeys.add(`${c[0].toFixed(3)}_${c[1].toFixed(3)}`);
+      }
+    }
+    const isolatedPoints = points.filter(p => !edgePointKeys.has(`${p.x.toFixed(3)}_${p.y.toFixed(3)}`));
+    if (isolatedPoints.length > 0) {
+      issues.push({
+        type: 'info', category: 'Pontos Isolados (Gaps)',
+        message: `${isolatedPoints.length} ponto(s) nao conectados a nenhum trecho`,
+        count: isolatedPoints.length,
+        details: isolatedPoints.slice(0, 5).map(p => `${p.id} (${p.layer})`),
+      });
+    }
+  }
+
+  // 5. Points with Z=0 (potential missing elevation)
+  const zeroZ = points.filter(p => p.z === 0);
+  if (zeroZ.length > 0 && zeroZ.length < points.length) {
+    issues.push({
+      type: 'info', category: 'Elevacao Zero',
+      message: `${zeroZ.length} de ${points.length} pontos com elevacao Z=0`,
+      count: zeroZ.length,
+    });
+  }
+
+  return issues;
+}
+
 // ── Persistence ──
 
 function saveImportHistory(entries: ImportHistoryEntry[]) {
@@ -990,9 +1102,49 @@ function saveImportHistory(entries: ImportHistoryEntry[]) {
   } catch { /* ignore */ }
 }
 
+function loadImportHistory(): ImportHistoryEntry[] {
+  try {
+    return JSON.parse(localStorage.getItem('hydroImportHistory') || '[]');
+  } catch { return []; }
+}
+
+function saveImportTemplate(template: ImportTemplate) {
+  try {
+    const existing: ImportTemplate[] = JSON.parse(localStorage.getItem('hydroImportTemplates') || '[]');
+    const updated = [template, ...existing.filter(t => t.id !== template.id)].slice(0, 10);
+    localStorage.setItem('hydroImportTemplates', JSON.stringify(updated));
+  } catch { /* ignore */ }
+}
+
+function loadImportTemplates(): ImportTemplate[] {
+  try {
+    return JSON.parse(localStorage.getItem('hydroImportTemplates') || '[]');
+  } catch { return []; }
+}
+
+function deleteImportTemplate(id: string) {
+  try {
+    const existing: ImportTemplate[] = JSON.parse(localStorage.getItem('hydroImportTemplates') || '[]');
+    localStorage.setItem('hydroImportTemplates', JSON.stringify(existing.filter(t => t.id !== id)));
+  } catch { /* ignore */ }
+}
+
+function saveImportSnapshot(pontos: PontoTopografico[], trechos: Trecho[]) {
+  try {
+    localStorage.setItem('hydroImportSnapshot', JSON.stringify({ pontos, trechos, timestamp: new Date().toISOString() }));
+  } catch { /* ignore */ }
+}
+
+function loadImportSnapshot(): { pontos: PontoTopografico[]; trechos: Trecho[]; timestamp: string } | null {
+  try {
+    const raw = localStorage.getItem('hydroImportSnapshot');
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
 // ── Component ──
 
-export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport, diametroMm = DEFAULT_DIAMETRO_MM, material = DEFAULT_MATERIAL }) => {
+export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport, diametroMm = DEFAULT_DIAMETRO_MM, material = DEFAULT_MATERIAL, onBeforeImport, onUndo }) => {
   const [fileQueue, setFileQueue] = useState<FileQueueItem[]>([]);
   const [selectedEntities, setSelectedEntities] = useState<Set<string>>(new Set());
   const [filterLayer, setFilterLayer] = useState('all');
@@ -1000,6 +1152,15 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
   const [isDragging, setIsDragging] = useState(false);
   const [expandedEntities, setExpandedEntities] = useState<Set<string>>(new Set());
   const [showFields, setShowFields] = useState(false);
+  const [importCRS, setImportCRS] = useState<ImportCRSConfig | null>(null);
+  const [validationIssues, setValidationIssues] = useState<ValidationIssueItem[]>([]);
+  const [showValidation, setShowValidation] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [importHistory] = useState<ImportHistoryEntry[]>(() => loadImportHistory());
+  const [templates, setTemplates] = useState<ImportTemplate[]>(() => loadImportTemplates());
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [hasSnapshot, setHasSnapshot] = useState(() => !!loadImportSnapshot());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const processingRef = useRef(false);
 
@@ -1122,6 +1283,16 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
     });
   }, [fileQueue, processFile]);
 
+  // Auto-run validation when data changes
+  useEffect(() => {
+    if (allPoints.length > 0 || allEdges.length > 0) {
+      const issues = runPostParseValidation(allPoints, allEdges);
+      setValidationIssues(issues);
+    } else {
+      setValidationIssues([]);
+    }
+  }, [allPoints.length, allEdges.length]);
+
   // Handle file selection
   const handleFiles = useCallback((files: FileList | File[]) => {
     const arr = Array.from(files);
@@ -1154,7 +1325,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
     setFileQueue(prev => prev.filter(f => f.id !== id));
   };
 
-  const clearQueue = () => { setFileQueue([]); setSelectedEntities(new Set()); setExpandedEntities(new Set()); };
+  const clearQueue = () => { setFileQueue([]); setSelectedEntities(new Set()); setExpandedEntities(new Set()); setImportCRS(null); };
 
   const selectAll = () => {
     const ids = [...filteredPoints.map(p => p.id), ...filteredEdges.map(e => e.id)];
@@ -1253,6 +1424,15 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
 
     if (pontosTopo.length < 2 && trechosResult.length === 0) return;
 
+    // Save snapshot for undo (before applying new import)
+    if (onBeforeImport) {
+      const currentData = onBeforeImport();
+      if (currentData && (currentData.pontos.length > 0 || currentData.trechos.length > 0)) {
+        saveImportSnapshot(currentData.pontos, currentData.trechos);
+        setHasSnapshot(true);
+      }
+    }
+
     // Save history
     const historyEntries: ImportHistoryEntry[] = fileQueue.filter(f => f.status === 'ok').map(f => ({
       fileName: f.file.name, format: f.format,
@@ -1270,19 +1450,32 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
 
   return (
     <div className="space-y-3">
-      {/* Drop Zone */}
+      {/* Enhanced Drop Zone */}
       <div
-        className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer ${isDragging ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : 'border-border hover:border-primary/50'}`}
+        className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-300 cursor-pointer relative overflow-hidden
+          ${isDragging
+            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30 scale-[1.02] shadow-lg shadow-blue-500/20'
+            : 'border-border hover:border-primary/50 hover:bg-muted/30'
+          }`}
         onDrop={e => { e.preventDefault(); setIsDragging(false); handleFiles(e.dataTransfer.files); }}
         onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onClick={() => fileInputRef.current?.click()}
       >
-        <Upload className="h-8 w-8 mx-auto mb-1 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">Arraste ou clique para selecionar arquivos</p>
-        <p className="text-xs text-muted-foreground mt-1">
-          <strong>DXF</strong>, <strong>SHP</strong>, <strong>INP</strong>, CSV, TXT, <strong>XLSX</strong>, GeoJSON, <strong>IFC</strong> — selecao multipla
+        {isDragging && (
+          <div className="absolute inset-0 bg-blue-500/5 animate-pulse pointer-events-none" />
+        )}
+        <div className={`transition-transform duration-200 ${isDragging ? 'scale-110' : ''}`}>
+          <Upload className={`h-10 w-10 mx-auto mb-2 transition-colors duration-200 ${isDragging ? 'text-blue-500' : 'text-muted-foreground'}`} />
+        </div>
+        <p className={`text-sm font-medium transition-colors duration-200 ${isDragging ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`}>
+          {isDragging ? 'Solte os arquivos aqui!' : 'Arraste ou clique para selecionar arquivos'}
         </p>
+        <div className="flex flex-wrap justify-center gap-1.5 mt-2">
+          {['DXF', 'SHP', 'INP', 'CSV', 'XLSX', 'GeoJSON', 'IFC'].map(fmt => (
+            <span key={fmt} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">{fmt}</span>
+          ))}
+        </div>
         <input
           ref={fileInputRef}
           type="file"
@@ -1292,6 +1485,41 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
           onChange={e => { if (e.target.files) handleFiles(e.target.files); e.target.value = ''; }}
         />
       </div>
+
+      {/* Undo Last Import + History */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {hasSnapshot && onUndo && (
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => {
+            const snapshot = loadImportSnapshot();
+            if (snapshot) { onUndo({ pontos: snapshot.pontos, trechos: snapshot.trechos }); setHasSnapshot(false); localStorage.removeItem('hydroImportSnapshot'); }
+          }}>
+            <Undo2 className="h-3 w-3 mr-1" />Desfazer Ultima Importacao
+          </Button>
+        )}
+        {importHistory.length > 0 && (
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowHistory(!showHistory)}>
+            <History className="h-3 w-3 mr-1" />Historico ({importHistory.length})
+          </Button>
+        )}
+      </div>
+
+      {/* Import History */}
+      {showHistory && importHistory.length > 0 && (
+        <div className="border border-border rounded-lg overflow-hidden">
+          <div className="px-3 py-2 bg-muted/50 text-xs font-medium">Historico de Importacoes</div>
+          <div className="max-h-[120px] overflow-auto divide-y divide-border">
+            {importHistory.slice(0, 10).map((h, i) => (
+              <div key={i} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+                <FileText className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                <span className="truncate flex-1">{h.fileName}</span>
+                <Badge variant="outline" className="text-[10px]">{h.format}</Badge>
+                <span className="text-muted-foreground">{h.pointCount}pts {h.edgeCount}tr</span>
+                <span className="text-muted-foreground text-[10px]">{new Date(h.timestamp).toLocaleDateString('pt-BR')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* File Queue */}
       {fileQueue.length > 0 && (
@@ -1537,14 +1765,150 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
             </div>
           )}
 
+          {/* CRS Selection — MANDATORY before import */}
+          <CRSSelector
+            onCRSSelected={setImportCRS}
+            sampleCoordinates={allPoints.slice(0, 20).map(p => ({ x: p.x, y: p.y }))}
+            initialConfig={importCRS || undefined}
+          />
+
+          {/* Import Templates */}
+          <div className="border border-border rounded-lg overflow-hidden">
+            <button
+              className="flex items-center justify-between w-full px-3 py-2 bg-muted/50 text-xs font-medium hover:bg-muted/70 transition-colors"
+              onClick={() => setShowTemplates(!showTemplates)}
+            >
+              <span className="flex items-center gap-1"><FolderOpen className="h-3.5 w-3.5" /> Templates de Importacao ({templates.length})</span>
+              {showTemplates ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </button>
+            {showTemplates && (
+              <div className="p-3 space-y-2">
+                {templates.length > 0 && (
+                  <div className="space-y-1">
+                    {templates.map(t => (
+                      <div key={t.id} className="flex items-center gap-2 text-xs">
+                        <Button variant="outline" size="sm" className="h-6 text-xs flex-1 justify-start" onClick={() => {
+                          if (t.crsConfig) setImportCRS(t.crsConfig);
+                          setFilterLayer(t.filterLayer);
+                          setFilterType(t.filterType);
+                          // Reselect entities based on saved layers
+                          if (t.selectedLayers.length > 0) {
+                            const idsToSelect = [
+                              ...allPoints.filter(p => t.selectedLayers.includes(p.layer)).map(p => p.id),
+                              ...allEdges.filter(e => t.selectedLayers.includes(e.layer)).map(e => e.id),
+                            ];
+                            setSelectedEntities(new Set(idsToSelect));
+                          }
+                        }}>
+                          <FolderOpen className="h-3 w-3 mr-1" />{t.name}
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => {
+                          deleteImportTemplate(t.id);
+                          setTemplates(loadImportTemplates());
+                        }}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text" placeholder="Nome do template..."
+                    value={templateName} onChange={e => setTemplateName(e.target.value)}
+                    className="flex-1 text-xs border border-border rounded px-2 py-1 bg-background"
+                  />
+                  <Button variant="outline" size="sm" className="h-7 text-xs" disabled={!templateName.trim()}
+                    onClick={() => {
+                      const selectedLayerNames = [...new Set([
+                        ...allPoints.filter(p => selectedEntities.has(p.id)).map(p => p.layer),
+                        ...allEdges.filter(e => selectedEntities.has(e.id)).map(e => e.layer),
+                      ])];
+                      const template: ImportTemplate = {
+                        id: Date.now().toString(),
+                        name: templateName.trim(),
+                        selectedLayers: selectedLayerNames,
+                        crsConfig: importCRS,
+                        filterLayer, filterType,
+                        createdAt: new Date().toISOString(),
+                      };
+                      saveImportTemplate(template);
+                      setTemplates(loadImportTemplates());
+                      setTemplateName('');
+                    }}>
+                    <Save className="h-3 w-3 mr-1" />Salvar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Validation Report */}
+          {validationIssues.length > 0 && (
+            <div className="border border-border rounded-lg overflow-hidden">
+              <button
+                className="flex items-center justify-between w-full px-3 py-2 bg-muted/50 text-xs font-medium hover:bg-muted/70 transition-colors"
+                onClick={() => setShowValidation(!showValidation)}
+              >
+                <span className="flex items-center gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                  Validacao ({validationIssues.filter(i => i.type === 'warning').length} avisos, {validationIssues.filter(i => i.type === 'error').length} erros, {validationIssues.filter(i => i.type === 'info').length} info)
+                </span>
+                {showValidation ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+              </button>
+              {showValidation && (
+                <div className="divide-y divide-border">
+                  {validationIssues.map((issue, idx) => (
+                    <div key={idx} className={`px-3 py-2 text-xs ${
+                      issue.type === 'error' ? 'bg-red-50 dark:bg-red-950/20' :
+                      issue.type === 'warning' ? 'bg-amber-50 dark:bg-amber-950/20' :
+                      'bg-blue-50 dark:bg-blue-950/20'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={issue.type === 'error' ? 'destructive' : issue.type === 'warning' ? 'secondary' : 'outline'} className="text-[10px]">
+                          {issue.type === 'error' ? 'ERRO' : issue.type === 'warning' ? 'AVISO' : 'INFO'}
+                        </Badge>
+                        <span className="font-medium">{issue.category}</span>
+                        <span className="text-muted-foreground">— {issue.message}</span>
+                      </div>
+                      {issue.details && issue.details.length > 0 && (
+                        <div className="mt-1 ml-6 text-[10px] text-muted-foreground space-y-0.5">
+                          {issue.details.map((d, di) => <div key={di}>• {d}</div>)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* UTM Validation Warning */}
+          {importCRS?.type === 'utm' && allPoints.length > 0 && (() => {
+            const invalidPts = allPoints.slice(0, 50).filter(p => !validateUTMRange(p.x, p.y).valid);
+            if (invalidPts.length === 0) return null;
+            return (
+              <div className="flex items-start gap-2 border border-amber-500 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-2 text-xs text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                <span>
+                  {invalidPts.length} ponto(s) fora da faixa UTM esperada (X: 100.000-900.000, Y: 1.000.000-10.000.000).
+                  Verifique se o CRS está correto ou use "Transformar Coordenadas" após importar.
+                </span>
+              </div>
+            );
+          })()}
+
           {/* Confirm */}
           <Button
             className="w-full"
-            disabled={selectedEntities.size === 0}
+            disabled={selectedEntities.size === 0 || !importCRS}
             onClick={handleConfirm}
           >
             <Check className="h-4 w-4 mr-2" />
-            Confirmar Importacao ({selectedEntities.size} entidades selecionadas)
+            {!importCRS
+              ? 'Defina o CRS antes de importar'
+              : `Confirmar Importacao (${selectedEntities.size} entidades selecionadas)`
+            }
           </Button>
         </>
       )}

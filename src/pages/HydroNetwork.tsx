@@ -10,9 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   Download, MapPin, Droplets,
-  AlertTriangle, Settings2, X
+  AlertTriangle, Settings2, X, Map
 } from "lucide-react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { parseTopographyCSV, validateTopographySequence, PontoTopografico } from "@/engine/reader";
 import { UnifiedImportPanel } from "@/components/hydronetwork/UnifiedImportPanel";
 import { ValidationReport } from "@/components/hydronetwork/ValidationReport";
@@ -73,6 +73,7 @@ const useHydroState = () => {
 
 const HydroNetwork = () => {
   const { module } = useParams<{ module?: string }>();
+  const navigate = useNavigate();
   const activeModule = module || "topografia";
 
   const state = useHydroState();
@@ -259,6 +260,9 @@ const HydroNetwork = () => {
                     {networkSummary && <Badge variant="outline">{fmt(networkSummary.comprimentoTotal, 1)}m total</Badge>}
                   </div>
                   <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/hydronetwork/mapa')}>
+                      <Map className="h-4 w-4 mr-1" /> Ver no Mapa
+                    </Button>
                     <Button variant="ghost" size="sm" onClick={() => {
                       const issues = validateProject();
                       setValidationIssues(issues);
@@ -291,7 +295,18 @@ const HydroNetwork = () => {
               </div>
             )}
 
-            <UnifiedImportPanel onImport={handleImportData} diametroMm={diametroMm} material={material} />
+            <UnifiedImportPanel
+              onImport={handleImportData}
+              diametroMm={diametroMm}
+              material={material}
+              onBeforeImport={() => ({ pontos, trechos })}
+              onUndo={(snapshot) => {
+                setPontos(snapshot.pontos);
+                setTrechos(snapshot.trechos);
+                setNetworkSummary(snapshot.trechos.length > 0 ? summarizeNetwork(snapshot.trechos) : null);
+                toast.success("Importacao desfeita! Dados restaurados.");
+              }}
+            />
 
             <details className="group">
               <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground">
@@ -409,12 +424,27 @@ const HydroNetwork = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="min-w-[40px]">#</TableHead>
+                      <TableHead className="min-w-[120px]">Nome</TableHead>
                       <TableHead>Inicio</TableHead><TableHead>Fim</TableHead><TableHead>Comp.</TableHead>
                       <TableHead>Decliv.</TableHead><TableHead>Desnivel</TableHead><TableHead>Material</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>{trechos.map((t, i) => (
                     <TableRow key={i}>
+                      <TableCell className="text-muted-foreground text-xs">T{String(i + 1).padStart(2, "0")}</TableCell>
+                      <TableCell>
+                        <input
+                          className="bg-transparent border-b border-dashed border-muted-foreground/30 hover:border-primary focus:border-primary outline-none text-sm w-full px-0 py-0.5"
+                          placeholder={`Trecho ${i + 1}`}
+                          value={t.nome || ""}
+                          onChange={e => {
+                            const updated = [...trechos];
+                            updated[i] = { ...updated[i], nome: e.target.value };
+                            setTrechos(updated);
+                          }}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">{t.idInicio}</TableCell>
                       <TableCell className="font-medium">{t.idFim}</TableCell>
                       <TableCell>{fmt(t.comprimento, 2)}m</TableCell>

@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useAlertNotifications } from "@/hooks/useAlertNotifications";
 import { useProductionUpdates } from "@/hooks/useProductionUpdates";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import MaintenanceOverlay from "@/components/MaintenanceOverlay";
 import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import Index from "./pages/Index";
@@ -34,43 +36,52 @@ import ModulesCatalog from "./pages/ModulesCatalog";
 import Projects from "./pages/Projects";
 import ProjectHistory from "./pages/ProjectHistory";
 import ProjectDelays from "./pages/ProjectDelays";
+import InteractiveMap from "./pages/InteractiveMap";
+import LeanConstraints from "./pages/LeanConstraints";
+import LeanDashboard from "./pages/LeanDashboard";
 
 const queryClient = new QueryClient();
 
 const AppContent = () => {
   useAlertNotifications();
   useProductionUpdates();
-  
+
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public routes */}
         <Route path="/" element={<Index />} />
-        <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/auth" element={<Auth />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/custom-dashboard" element={<CustomDashboard />} />
-        <Route path="/production-control" element={<ProductionControl />} />
-        <Route path="/rdo" element={<RDO />} />
-        <Route path="/rdo-new" element={<RDONew />} />
-        <Route path="/rdo-history" element={<RDOHistory />} />
-        <Route path="/rdo-photos" element={<RDOPhotos />} />
-        <Route path="/alerts" element={<Alerts />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/connection-reports" element={<ConnectionReports />} />
-        <Route path="/occurrences" element={<Occurrences />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/admin/metrics" element={<UserMetrics />} />
-        <Route path="/backup" element={<Backup />} />
-        <Route path="/support" element={<Support />} />
-        <Route path="/help-center" element={<HelpCenter />} />
-        <Route path="/sentiment-dashboard" element={<SentimentDashboard />} />
-        <Route path="/projects" element={<Projects />} />
-        <Route path="/projects/:id/history" element={<ProjectHistory />} />
-        <Route path="/project-delays" element={<ProjectDelays />} />
-        <Route path="/hydronetwork" element={<HydroNetwork />} />
-        <Route path="/hydronetwork/:module" element={<HydroNetwork />} />
         <Route path="/hydronetwork-landing" element={<HydroNetworkLanding />} />
-        <Route path="/modules" element={<ModulesCatalog />} />
+
+        {/* Protected routes - require authentication */}
+        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/custom-dashboard" element={<ProtectedRoute><CustomDashboard /></ProtectedRoute>} />
+        <Route path="/production-control" element={<ProtectedRoute><ProductionControl /></ProtectedRoute>} />
+        <Route path="/rdo" element={<ProtectedRoute><RDO /></ProtectedRoute>} />
+        <Route path="/rdo-new" element={<ProtectedRoute><RDONew /></ProtectedRoute>} />
+        <Route path="/rdo-history" element={<ProtectedRoute><RDOHistory /></ProtectedRoute>} />
+        <Route path="/rdo-photos" element={<ProtectedRoute><RDOPhotos /></ProtectedRoute>} />
+        <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        <Route path="/connection-reports" element={<ProtectedRoute><ConnectionReports /></ProtectedRoute>} />
+        <Route path="/occurrences" element={<ProtectedRoute><Occurrences /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+        <Route path="/admin/metrics" element={<ProtectedRoute><UserMetrics /></ProtectedRoute>} />
+        <Route path="/backup" element={<ProtectedRoute><Backup /></ProtectedRoute>} />
+        <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+        <Route path="/help-center" element={<ProtectedRoute><HelpCenter /></ProtectedRoute>} />
+        <Route path="/sentiment-dashboard" element={<ProtectedRoute><SentimentDashboard /></ProtectedRoute>} />
+        <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+        <Route path="/projects/:id/history" element={<ProtectedRoute><ProjectHistory /></ProtectedRoute>} />
+        <Route path="/project-delays" element={<ProtectedRoute><ProjectDelays /></ProtectedRoute>} />
+        <Route path="/projects/:projectId/map" element={<ProtectedRoute><InteractiveMap /></ProtectedRoute>} />
+        <Route path="/lean-constraints" element={<ProtectedRoute><LeanConstraints /></ProtectedRoute>} />
+        <Route path="/lean-dashboard" element={<ProtectedRoute><LeanDashboard /></ProtectedRoute>} />
+        <Route path="/hydronetwork" element={<ProtectedRoute><HydroNetwork /></ProtectedRoute>} />
+        <Route path="/hydronetwork/:module" element={<ProtectedRoute><HydroNetwork /></ProtectedRoute>} />
+        <Route path="/modules" element={<ProtectedRoute><ModulesCatalog /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       <FeedbackWidget />
@@ -81,10 +92,12 @@ const AppContent = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <MaintenanceOverlay />
-      <Toaster />
-      <Sonner />
-      <AppContent />
+      <AuthProvider>
+        <MaintenanceOverlay />
+        <Toaster />
+        <Sonner />
+        <AppContent />
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

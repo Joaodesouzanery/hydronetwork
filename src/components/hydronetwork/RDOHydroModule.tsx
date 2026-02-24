@@ -70,9 +70,36 @@ const MOCK_SEGMENTS = [
   { id: "TRD-001", system: "drenagem" as const, planned: 250, executed: 100 },
 ];
 
+// ── Equipment types ──
+interface Equipment {
+  id: string;
+  nome: string;
+  tipo: string;
+  placa: string;
+  proprietario: string;
+  custoHora: number;
+  status: "disponivel" | "em_uso" | "manutencao" | "indisponivel";
+}
+
+const EQUIPMENT_STORAGE_KEY = "hydronetwork_rdo_equipments";
+
+function loadEquipments(): Equipment[] {
+  try {
+    const raw = localStorage.getItem(EQUIPMENT_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveEquipments(equips: Equipment[]) {
+  localStorage.setItem(EQUIPMENT_STORAGE_KEY, JSON.stringify(equips));
+}
+
 export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange, onTrechosChange }: RDOHydroModuleProps) => {
-  const [view, setView] = useState<"dashboard" | "list" | "new" | "map" | "financial">("dashboard");
+  const [view, setView] = useState<"dashboard" | "list" | "new" | "map" | "financial" | "equipamentos">("dashboard");
   const [financials, setFinancials] = useState<FinancialEntry[]>(MOCK_FINANCIALS);
+  const [equipments, setEquipments] = useState<Equipment[]>(loadEquipments());
+  const [showAddEquipment, setShowAddEquipment] = useState(false);
+  const [newEquip, setNewEquip] = useState<Partial<Equipment>>({ tipo: "Retroescavadeira", status: "disponivel", custoHora: 0 });
   const [curvaSView, setCurvaSView] = useState<"financeiro" | "fisico" | "ambos">("ambos");
   const [segFilterRede, setSegFilterRede] = useState<string>("all");
   const [segFilterStatus, setSegFilterStatus] = useState<string>("all");
@@ -223,6 +250,7 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
           { key: "list", label: "📃 Lista de RDOs" },
           { key: "map", label: "🗺️ Mapa de Avanço" },
           { key: "financial", label: "💰 Financeiro" },
+          { key: "equipamentos", label: "🚜 Equipamentos" },
         ].map(({ key, label }) => (
           <Button key={key} variant={view === key ? "default" : "outline"} size="sm" onClick={() => setView(key as any)}>{label}</Button>
         ))}
@@ -648,6 +676,161 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
 
       {/* NEW RDO FORM */}
       {view === "new" && <RDOFormComplete rdos={rdos} setRdos={setRdos} trechos={trechos} onComplete={() => setView("list")} />}
+
+      {/* EQUIPAMENTOS VIEW */}
+      {view === "equipamentos" && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <span>🚜</span> Equipamentos ({equipments.length})
+                </CardTitle>
+                <Button size="sm" onClick={() => setShowAddEquipment(!showAddEquipment)}>
+                  <Plus className="h-4 w-4 mr-1" /> Adicionar Equipamento
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {showAddEquipment && (
+                <Card className="border-primary/30 bg-primary/5">
+                  <CardContent className="pt-4 space-y-3">
+                    <p className="font-semibold text-sm">Novo Equipamento</p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <div>
+                        <Label className="text-xs">Nome/Identificação *</Label>
+                        <Input placeholder="Ex: Retro CAT 320" value={newEquip.nome || ""} onChange={e => setNewEquip({ ...newEquip, nome: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Tipo</Label>
+                        <Select value={newEquip.tipo || "Retroescavadeira"} onValueChange={v => setNewEquip({ ...newEquip, tipo: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {["Retroescavadeira", "Escavadeira Hidráulica", "Compactador", "Caminhão Basculante", "Caminhão Pipa", "Bomba Submersa", "Bomba de Esgotamento", "Rolo Compactador", "Placa Vibratória", "Serra Circular", "Betoneira", "Gerador", "Guindaste", "Motosserra", "Outro"].map(t => (
+                              <SelectItem key={t} value={t}>{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Placa/Patrimônio</Label>
+                        <Input placeholder="Ex: ABC-1234" value={newEquip.placa || ""} onChange={e => setNewEquip({ ...newEquip, placa: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Proprietário</Label>
+                        <Input placeholder="Próprio / Locadora XYZ" value={newEquip.proprietario || ""} onChange={e => setNewEquip({ ...newEquip, proprietario: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Custo/Hora (R$)</Label>
+                        <Input type="number" step={0.01} value={newEquip.custoHora || 0} onChange={e => setNewEquip({ ...newEquip, custoHora: Number(e.target.value) })} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Status</Label>
+                        <Select value={newEquip.status || "disponivel"} onValueChange={v => setNewEquip({ ...newEquip, status: v as Equipment["status"] })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="disponivel">Disponível</SelectItem>
+                            <SelectItem value="em_uso">Em Uso</SelectItem>
+                            <SelectItem value="manutencao">Manutenção</SelectItem>
+                            <SelectItem value="indisponivel">Indisponível</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => {
+                        if (!newEquip.nome?.trim()) { toast.error("Informe o nome do equipamento."); return; }
+                        const equip: Equipment = {
+                          id: crypto.randomUUID(),
+                          nome: newEquip.nome!,
+                          tipo: newEquip.tipo || "Outro",
+                          placa: newEquip.placa || "",
+                          proprietario: newEquip.proprietario || "",
+                          custoHora: newEquip.custoHora || 0,
+                          status: newEquip.status as Equipment["status"] || "disponivel",
+                        };
+                        const updated = [...equipments, equip];
+                        setEquipments(updated);
+                        saveEquipments(updated);
+                        setNewEquip({ tipo: "Retroescavadeira", status: "disponivel", custoHora: 0 });
+                        setShowAddEquipment(false);
+                        toast.success(`Equipamento "${equip.nome}" adicionado!`);
+                      }}>
+                        <Plus className="h-4 w-4 mr-1" /> Adicionar
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setShowAddEquipment(false)}>Cancelar</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {equipments.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">Nenhum equipamento cadastrado. Clique em "Adicionar Equipamento" para começar.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <Card><CardContent className="pt-4 text-center"><div className="text-2xl font-bold text-blue-600">{equipments.length}</div><div className="text-xs text-muted-foreground">Total</div></CardContent></Card>
+                    <Card><CardContent className="pt-4 text-center"><div className="text-2xl font-bold text-green-600">{equipments.filter(e => e.status === "disponivel").length}</div><div className="text-xs text-muted-foreground">Disponíveis</div></CardContent></Card>
+                    <Card><CardContent className="pt-4 text-center"><div className="text-2xl font-bold text-yellow-600">{equipments.filter(e => e.status === "em_uso").length}</div><div className="text-xs text-muted-foreground">Em Uso</div></CardContent></Card>
+                    <Card><CardContent className="pt-4 text-center"><div className="text-2xl font-bold text-red-600">{equipments.filter(e => e.status === "manutencao" || e.status === "indisponivel").length}</div><div className="text-xs text-muted-foreground">Manutenção/Indisp.</div></CardContent></Card>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Placa</TableHead>
+                        <TableHead>Proprietário</TableHead>
+                        <TableHead>Custo/Hora</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {equipments.map(equip => (
+                        <TableRow key={equip.id}>
+                          <TableCell className="font-medium">{equip.nome}</TableCell>
+                          <TableCell className="text-sm">{equip.tipo}</TableCell>
+                          <TableCell className="text-sm">{equip.placa || "-"}</TableCell>
+                          <TableCell className="text-sm">{equip.proprietario || "-"}</TableCell>
+                          <TableCell className="text-sm">{equip.custoHora > 0 ? fmtCurrency(equip.custoHora) : "-"}</TableCell>
+                          <TableCell>
+                            <Select value={equip.status} onValueChange={v => {
+                              const updated = equipments.map(e => e.id === equip.id ? { ...e, status: v as Equipment["status"] } : e);
+                              setEquipments(updated);
+                              saveEquipments(updated);
+                            }}>
+                              <SelectTrigger className="h-7 w-28">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="disponivel">Disponível</SelectItem>
+                                <SelectItem value="em_uso">Em Uso</SelectItem>
+                                <SelectItem value="manutencao">Manutenção</SelectItem>
+                                <SelectItem value="indisponivel">Indisponível</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
+                              const updated = equipments.filter(e => e.id !== equip.id);
+                              setEquipments(updated);
+                              saveEquipments(updated);
+                              toast.success("Equipamento removido.");
+                            }}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

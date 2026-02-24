@@ -8,11 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   MapPin, Plus, Minus, Trash2, Undo2, Save,
-  FolderOpen, Maximize, Link2, Layers, X, Crosshair, MousePointerClick, Move
+  FolderOpen, Maximize, Link2, Layers, X, Crosshair, MousePointerClick, Move, RefreshCw
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho, createTrechoFromPoints } from "@/engine/domain";
 import { detectBatchCRS, getMapCoordinatesWithCRS, setGlobalUtmZone, getGlobalUtmZone, DetectedCRS } from "@/engine/hydraulics";
+import { CoordinateTransformDialog } from "@/components/hydronetwork/CoordinateTransformDialog";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -55,14 +56,15 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   const [deleteMode, setDeleteMode] = useState<"nodes" | "trechos" | false>(false);
   const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
   const [selectedTrechosForDelete, setSelectedTrechosForDelete] = useState<Set<number>>(new Set());
+  const [bulkMoveMode, setBulkMoveMode] = useState(false);
+  const [bulkMoveStart, setBulkMoveStart] = useState<L.LatLng | null>(null);
+  const [showTransformDialog, setShowTransformDialog] = useState(false);
   const markersRef = useRef<L.CircleMarker[]>([]);
   const polylinesRef = useRef<L.Polyline[]>([]);
   const [tileKey, setTileKey] = useState("osm");
   const [utmZone, setUtmZone] = useState<string>(String(getGlobalUtmZone() || "auto"));
   const [utmZoneVersion, setUtmZoneVersion] = useState(0);
 
-  // Bulk move mode state
-  const [bulkMoveMode, setBulkMoveMode] = useState(false);
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
 
   // Structure mode state
@@ -128,7 +130,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         if (drawMode) { setDrawMode(false); setDrawOrigin(null); toast.info("Modo ligação desativado"); }
         if (addNodeMode) { setAddNodeMode(false); toast.info("Modo adicionar ponto desativado"); }
         if (deleteMode) { setDeleteMode(false); setSelectedForDelete(new Set()); setSelectedTrechosForDelete(new Set()); toast.info("Modo exclusão desativado"); }
-        if (bulkMoveMode) { setBulkMoveMode(false); setDraggedNodeId(null); toast.info("Modo mover em massa desativado"); }
+        if (bulkMoveMode) { setBulkMoveMode(false); setBulkMoveStart(null); toast.info("Modo mover em massa desativado"); }
         if (structureMode) { setStructureMode(false); setSelectedTrechoIdx(null); toast.info("Modo Estrutura desativado"); }
       }
     };
@@ -154,7 +156,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    
+
     const handleMapClick = (e: L.LeafletMouseEvent) => {
       if (!addNodeMode || !onPontosChange) return;
       const { lat, lng } = e.latlng;
@@ -168,37 +170,52 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
     return () => { map.off("click", handleMapClick); };
   }, [addNodeMode, pontos, onPontosChange]);
 
-  // Handle bulk move dragging
+  // Handle bulk move mode - click to set origin, then click to set destination
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !bulkMoveMode || !draggedNodeId || !onPontosChange) return;
+    if (!map || !bulkMoveMode || !onPontosChange) return;
 
-    const handleMouseMove = (e: L.LeafletMouseEvent) => {
-      const { lat, lng } = e.latlng;
-      const updatedPontos = pontos.map(p =>
-        p.id === draggedNodeId ? { ...p, x: lng, y: lat } : p
-      );
-      onPontosChange(updatedPontos);
+    const handleBulkMoveClick = (e: L.LeafletMouseEvent) => {
+      if (!bulkMoveMode) return;
+
+      if (!bulkMoveStart) {
+        setBulkMoveStart(e.latlng);
+        toast.info("Ponto de origem marcado. Agora clique onde os pontos devem estar.");
+      } else {
+        const startLatLng = bulkMoveStart;
+        const endLatLng = e.latlng;
+        const deltaLat = endLatLng.lat - startLatLng.lat;
+        const deltaLng = endLatLng.lng - startLatLng.lng;
+        const isUTMData = pontos.length > 0 && (Math.abs(pontos[0].x) > 1000 || Math.abs(pontos[0].y) > 1000);
+
+        if (isUTMData) {
+          const cosLat = Math.cos(startLatLng.lat * Math.PI / 180);
+          const deltaXMeters = deltaLng * 111320 * cosLat;
+          const deltaYMeters = deltaLat * 111320;
+          const newPontos = pontos.map(p => ({ ...p, x: p.x + deltaXMeters, y: p.y + deltaYMeters }));
+          onPontosChange(newPontos);
+          toast.success(`${pontos.length} pontos movidos: dX=${deltaXMeters.toFixed(1)}m, dY=${deltaYMeters.toFixed(1)}m`);
+        } else {
+          const newPontos = pontos.map(p => ({ ...p, x: p.x + deltaLng, y: p.y + deltaLat }));
+          onPontosChange(newPontos);
+          toast.success(`${pontos.length} pontos movidos: dLat=${deltaLat.toFixed(6)}, dLng=${deltaLng.toFixed(6)}`);
+        }
+
+        setBulkMoveMode(false);
+        setBulkMoveStart(null);
+      }
     };
 
-    const handleMapClick = (e: L.LeafletMouseEvent) => {
-      // Drop the node at the clicked position
-      const { lat, lng } = e.latlng;
-      const updatedPontos = pontos.map(p =>
-        p.id === draggedNodeId ? { ...p, x: lng, y: lat } : p
-      );
-      onPontosChange(updatedPontos);
-      setDraggedNodeId(null);
-      toast.success(`Ponto ${draggedNodeId} reposicionado.`);
-    };
+    map.on("click", handleBulkMoveClick);
+    return () => { map.off("click", handleBulkMoveClick); };
+  }, [bulkMoveMode, bulkMoveStart, pontos, onPontosChange]);
 
-    map.on("mousemove", handleMouseMove);
-    map.on("click", handleMapClick);
-    return () => {
-      map.off("mousemove", handleMouseMove);
-      map.off("click", handleMapClick);
-    };
-  }, [bulkMoveMode, draggedNodeId, pontos, onPontosChange]);
+  // Handle transform dialog result
+  const handleTransformResult = useCallback((newPontos: PontoTopografico[], newTrechos: Trecho[]) => {
+    onPontosChange?.(newPontos);
+    onTrechosChange?.(newTrechos);
+    toast.success(`Coordenadas transformadas: ${newPontos.length} pontos e ${newTrechos.length} trechos atualizados.`);
+  }, [onPontosChange, onTrechosChange]);
 
   // Handle marker click - draw mode or select mode
   const handleTrechoClick = useCallback((idx: number, event?: any) => {
@@ -574,33 +591,26 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
             className={deleteMode === "trechos" ? "bg-red-600 hover:bg-red-700 text-white" : ""}>
             <Trash2 className="h-3 w-3 mr-1" /> {deleteMode === "trechos" ? "Selecionando Trechos..." : "Excluir Trechos"}
           </Button>
-          {/* Bulk Move Mode Button */}
-          <Button
-            size="sm"
-            variant={bulkMoveMode ? "default" : "outline"}
-            onClick={() => {
+          {/* Bulk move button */}
+          {onPontosChange && (
+            <Button size="sm" variant={bulkMoveMode ? "default" : "outline"} onClick={() => {
               const newMode = !bulkMoveMode;
               setBulkMoveMode(newMode);
+              setBulkMoveStart(null);
               if (newMode) {
                 setDrawMode(false); setDrawOrigin(null); setAddNodeMode(false); setDeleteMode(false); setStructureMode(false); setSelectedTrechoIdx(null);
-                toast.info("Modo mover em massa: arraste os pontos no mapa. ESC para sair.");
-              } else {
-                setDraggedNodeId(null);
-                toast.info("Modo mover em massa desativado.");
-              }
-            }}
-            className={bulkMoveMode ? "bg-cyan-600 hover:bg-cyan-700 text-white" : ""}
-            title="Mover trechos em massa"
-            disabled={!onPontosChange}
-          >
-            <Move className="h-3 w-3 mr-1" /> {bulkMoveMode ? "Movendo..." : "Mover em Massa"}
-          </Button>
+                toast.info("Mover em Massa: clique no ponto de referência, depois clique onde deveria estar. ESC para cancelar.");
+              } else { toast.info("Modo mover em massa desativado."); }
+            }} className={bulkMoveMode ? "bg-purple-600 hover:bg-purple-700 text-white" : ""}>
+              <Move className="h-3 w-3 mr-1" /> {bulkMoveMode ? "Movendo..." : "Mover em Massa"}
+            </Button>
+          )}
           {/* Structure mode */}
           <Button size="sm" variant={structureMode ? "default" : "outline"} onClick={() => {
             const newMode = !structureMode;
             setStructureMode(newMode);
             if (newMode) {
-              setDrawMode(false); setDrawOrigin(null); setDeleteMode(false); setAddNodeMode(false); setBulkMoveMode(false); setDraggedNodeId(null);
+              setDrawMode(false); setDrawOrigin(null); setDeleteMode(false); setAddNodeMode(false); setBulkMoveMode(false); setBulkMoveStart(null);
               toast.info("Modo Estrutura: clique em um trecho para editar nome, rede e frente.");
             } else {
               setSelectedTrechoIdx(null);
@@ -608,6 +618,10 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
             }
           }} className={structureMode ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""}>
             <Layers className="h-3 w-3 mr-1" /> {structureMode ? "Estrutura..." : "Modo Estrutura"}
+          </Button>
+          {/* Transform Coordinates dialog trigger */}
+          <Button size="sm" variant="outline" onClick={() => setShowTransformDialog(true)}>
+            <RefreshCw className="h-3 w-3 mr-1" /> Transformar CRS
           </Button>
           {/* UTM Zone selector */}
           <div className="flex items-center gap-1 ml-2">
@@ -693,16 +707,23 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           </div>
         )}
 
-        {/* Bulk move mode status bar */}
+        {/* Bulk move status bar */}
         {bulkMoveMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-cyan-50 dark:bg-cyan-950/20 border border-cyan-200">
-            <Move className="h-4 w-4 text-cyan-600" />
-            <span className="text-sm font-medium text-cyan-700 dark:text-cyan-400">
-              Modo Mover em Massa: arraste os pontos para reposicioná-los no mapa
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200">
+            <Move className="h-4 w-4 text-purple-600" />
+            <span className="text-sm font-medium text-purple-700 dark:text-purple-400">
+              {bulkMoveStart
+                ? "Agora clique onde os pontos devem estar (posição correta)"
+                : "Clique no mapa na posição de referência (posição errada)"}
             </span>
-            <Button size="sm" variant="ghost" className="h-6 text-xs ml-auto" onClick={() => { setBulkMoveMode(false); setDraggedNodeId(null); }}>
-              <X className="h-3 w-3 mr-1" /> Sair (ESC)
-            </Button>
+            <div className="ml-auto flex gap-1">
+              {bulkMoveStart && (
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setBulkMoveStart(null)}>Resetar</Button>
+              )}
+              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setBulkMoveMode(false); setBulkMoveStart(null); }}>
+                <X className="h-3 w-3 mr-1" /> Sair (ESC)
+              </Button>
+            </div>
           </div>
         )}
 
@@ -727,7 +748,6 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
                   </Button>
                 )}
                 <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => {
-                  // Select all trechos
                   const all = new Set<number>();
                   trechos.forEach((_, i) => all.add(i));
                   setBatchSelectedTrechos(all);
@@ -757,11 +777,11 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
                     <Select value={batchRede} onValueChange={v => setBatchRede(v as TipoRedeManualMap)}>
                       <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="agua">💧 Agua</SelectItem>
-                        <SelectItem value="esgoto">🚰 Esgoto</SelectItem>
-                        <SelectItem value="drenagem">🌧️ Drenagem</SelectItem>
-                        <SelectItem value="recalque">⬆️ Recalque</SelectItem>
-                        <SelectItem value="outro">📌 Outro</SelectItem>
+                        <SelectItem value="agua">Agua</SelectItem>
+                        <SelectItem value="esgoto">Esgoto</SelectItem>
+                        <SelectItem value="drenagem">Drenagem</SelectItem>
+                        <SelectItem value="recalque">Recalque</SelectItem>
+                        <SelectItem value="outro">Outro</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -806,48 +826,33 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
                 <div className="grid grid-cols-6 gap-2 p-2 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/10 border border-indigo-100">
                   <div>
                     <Label className="text-xs">Trecho</Label>
-                    <p className="text-sm font-mono font-semibold">{t.idInicio} → {t.idFim}</p>
+                    <p className="text-sm font-mono font-semibold">{t.idInicio} &rarr; {t.idFim}</p>
                     <p className="text-xs text-muted-foreground">{t.comprimento.toFixed(1)}m</p>
                   </div>
                   <div>
                     <Label className="text-xs">Nome</Label>
-                    <Input
-                      value={editingTrechoName}
-                      onChange={e => setEditingTrechoName(e.target.value)}
-                      placeholder="Nome do trecho"
-                      className="h-7 text-xs"
-                    />
+                    <Input value={editingTrechoName} onChange={e => setEditingTrechoName(e.target.value)} placeholder="Nome do trecho" className="h-7 text-xs" />
                   </div>
                   <div>
                     <Label className="text-xs">Tipo de Rede</Label>
                     <Select value={editingTrechoRede} onValueChange={v => setEditingTrechoRede(v as TipoRedeManualMap)}>
                       <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="agua">💧 Agua</SelectItem>
-                        <SelectItem value="esgoto">🚰 Esgoto</SelectItem>
-                        <SelectItem value="drenagem">🌧️ Drenagem</SelectItem>
-                        <SelectItem value="recalque">⬆️ Recalque</SelectItem>
-                        <SelectItem value="outro">📌 Outro</SelectItem>
+                        <SelectItem value="agua">Agua</SelectItem>
+                        <SelectItem value="esgoto">Esgoto</SelectItem>
+                        <SelectItem value="drenagem">Drenagem</SelectItem>
+                        <SelectItem value="recalque">Recalque</SelectItem>
+                        <SelectItem value="outro">Outro</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
                     <Label className="text-xs">Frente de Servico</Label>
-                    <Input
-                      value={editingTrechoFrente}
-                      onChange={e => setEditingTrechoFrente(e.target.value)}
-                      placeholder="Frente"
-                      className="h-7 text-xs"
-                    />
+                    <Input value={editingTrechoFrente} onChange={e => setEditingTrechoFrente(e.target.value)} placeholder="Frente" className="h-7 text-xs" />
                   </div>
                   <div>
                     <Label className="text-xs">Lote/Area</Label>
-                    <Input
-                      value={editingTrechoLote}
-                      onChange={e => setEditingTrechoLote(e.target.value)}
-                      placeholder="Lote"
-                      className="h-7 text-xs"
-                    />
+                    <Input value={editingTrechoLote} onChange={e => setEditingTrechoLote(e.target.value)} placeholder="Lote" className="h-7 text-xs" />
                   </div>
                   <div className="flex items-end">
                     <Button size="sm" className="h-7 text-xs" onClick={() => {
@@ -861,7 +866,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
                         lote: editingTrechoLote,
                       };
                       onTrechosChange(updated);
-                      toast.success(`Trecho ${t.idInicio} → ${t.idFim} atualizado!`);
+                      toast.success(`Trecho ${t.idInicio} -> ${t.idFim} atualizado!`);
                     }}>
                       <Save className="h-3 w-3 mr-1" /> Salvar
                     </Button>
@@ -876,7 +881,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         <div
           ref={mapContainerRef}
           className="w-full rounded-lg border border-border overflow-hidden"
-          style={{ height: 450 }}
+          style={{ height: 450, position: "relative", zIndex: 0 }}
         />
 
         {/* Selected point info (outside draw mode) */}
@@ -931,6 +936,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500" /> Selecionado</div>
           {drawMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-orange-500" /> Origem (ligação)</div>}
           {deleteMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-600" /> Selecionado p/ exclusão</div>}
+          {bulkMoveMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-purple-600" /> Mover em massa</div>}
           {structureMode ? (
             <>
               <div className="flex items-center gap-1"><div className="w-4 h-1 bg-blue-400 rounded" /> Agua</div>
@@ -946,6 +952,15 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
             </>
           )}
         </div>
+
+        {/* Coordinate Transform Dialog */}
+        <CoordinateTransformDialog
+          open={showTransformDialog}
+          onOpenChange={setShowTransformDialog}
+          pontos={pontos}
+          trechos={trechos}
+          onTransform={handleTransformResult}
+        />
       </CardContent>
     </Card>
   );
