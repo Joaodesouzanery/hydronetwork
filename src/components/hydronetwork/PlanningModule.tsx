@@ -257,30 +257,73 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
   const totalCost = useMemo(() => scheduleResult?.allSegments.reduce((s, seg) => s + seg.custoTotal, 0) || 0, [scheduleResult]);
   const workersPerTeam = teamConfig.encarregado + teamConfig.oficiais + teamConfig.ajudantes + teamConfig.operador;
 
-  // ── Gantt data ──
+  // ── Gantt data with grouping support ──
   const ganttData = useMemo(() => {
     if (!scheduleResult) return [];
     const { allSegments, totalDays } = scheduleResult;
-    
-    // Group by trecho
+
+    // First group by trecho
     const trechoMap = new Map<string, DailySegment[]>();
     allSegments.forEach(seg => {
       if (!trechoMap.has(seg.trechoId)) trechoMap.set(seg.trechoId, []);
       trechoMap.get(seg.trechoId)!.push(seg);
     });
 
-    return Array.from(trechoMap.entries()).map(([trechoId, segs], idx) => {
+    // If grouping mode is "trecho" (detailed), show per trecho
+    if (groupingMode === "trecho") {
+      return Array.from(trechoMap.entries()).map(([trechoId, segs], idx) => {
+        const totalMeters = segs.reduce((s, seg) => s + seg.meters, 0);
+        const days: Record<number, { meters: number; isTest: boolean }> = {};
+        segs.forEach(seg => { days[seg.day] = { meters: seg.meters, isTest: false }; });
+        const lastDay = Math.max(...segs.map(s => s.day));
+        if (lastDay + 1 <= totalDays) days[lastDay + 1] = { meters: 0, isTest: true };
+        const displayName = getTrechoDisplayName(trechoId, idx);
+        return { id: displayName, trechoId, meters: Math.round(totalMeters), days, totalDays };
+      });
+    }
+
+    // For grouped modes, aggregate trechos by the grouping key
+    const getGroupKey = (trechoId: string, idx: number): string => {
+      const trecho = trechos[idx];
+      const meta = trechoMetadata.find(m => m.trechoKey === trechoId);
+      if (groupingMode === "frente") {
+        return meta?.frenteServico || trecho?.frenteServico || "Sem Frente";
+      }
+      if (groupingMode === "lote") {
+        return meta?.lote || trecho?.lote || "Sem Lote";
+      }
+      if (groupingMode === "rede") {
+        return meta?.tipoRedeManual || trecho?.tipoRedeManual || "esgoto";
+      }
+      return `T${String(idx + 1).padStart(2, "0")}`;
+    };
+
+    // Build group map
+    const groupMap = new Map<string, { segs: DailySegment[]; trechoCount: number }>();
+    let idx = 0;
+    for (const [trechoId, segs] of trechoMap.entries()) {
+      const key = getGroupKey(trechoId, idx);
+      if (!groupMap.has(key)) groupMap.set(key, { segs: [], trechoCount: 0 });
+      const group = groupMap.get(key)!;
+      group.segs.push(...segs);
+      group.trechoCount++;
+      idx++;
+    }
+
+    return Array.from(groupMap.entries()).map(([groupName, { segs, trechoCount }]) => {
       const totalMeters = segs.reduce((s, seg) => s + seg.meters, 0);
       const days: Record<number, { meters: number; isTest: boolean }> = {};
-      segs.forEach(seg => { days[seg.day] = { meters: seg.meters, isTest: false }; });
-      // Add test day after last execution day
-      const lastDay = Math.max(...segs.map(s => s.day));
-      if (lastDay + 1 <= totalDays) days[lastDay + 1] = { meters: 0, isTest: true };
-
-      const displayName = getTrechoDisplayName(trechoId, idx);
-      return { id: displayName, trechoId, meters: Math.round(totalMeters), days, totalDays };
+      segs.forEach(seg => {
+        if (!days[seg.day]) days[seg.day] = { meters: 0, isTest: false };
+        days[seg.day].meters += seg.meters;
+      });
+      const redeIcons: Record<string, string> = { agua: "💧", esgoto: "🚰", drenagem: "🌧️", recalque: "⬆️" };
+      const displayName = groupingMode === "rede"
+        ? `${redeIcons[groupName] || ""} ${groupName} (${trechoCount} tr.)`
+        : `${groupName} (${trechoCount} tr.)`;
+      return { id: displayName, trechoId: groupName, meters: Math.round(totalMeters), days, totalDays };
     });
-  }, [scheduleResult, getTrechoDisplayName]);
+  }, [scheduleResult, getTrechoDisplayName, groupingMode, trechos, trechoMetadata]);
 
   // ── Histogram stats ──
   const histStats = useMemo(() => {

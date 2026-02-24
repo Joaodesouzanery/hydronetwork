@@ -74,6 +74,9 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
   const [view, setView] = useState<"dashboard" | "list" | "new" | "map" | "financial">("dashboard");
   const [financials, setFinancials] = useState<FinancialEntry[]>(MOCK_FINANCIALS);
   const [curvaSView, setCurvaSView] = useState<"financeiro" | "fisico" | "ambos">("ambos");
+  const [segFilterRede, setSegFilterRede] = useState<string>("all");
+  const [segFilterStatus, setSegFilterStatus] = useState<string>("all");
+  const [segSearch, setSegSearch] = useState("");
   const topoInputRef = useRef<HTMLInputElement>(null);
 
   const handleTopoImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,12 +106,17 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
   const activeSegments = trechos.length > 0
     ? trechos.map((t, i) => {
         const allSegs = rdos.flatMap(r => r.segments);
+        const trechoName = t.nomeTrecho || `${t.idInicio}-${t.idFim}`;
         const matching = allSegs.filter(s =>
-          s.segmentName === `${t.idInicio}-${t.idFim}` || s.segmentName === t.idInicio
+          s.segmentName === trechoName || s.segmentName === `${t.idInicio}-${t.idFim}` || s.segmentName === t.idInicio
         );
         const executed = matching.reduce((sum, s) => sum + s.executedBefore + s.executedToday, 0);
-        const system = (i % 3 === 0 ? "agua" : i % 3 === 1 ? "esgoto" : "drenagem") as "agua" | "esgoto" | "drenagem";
-        return { id: `${t.idInicio}-${t.idFim}`, system, planned: t.comprimento, executed };
+        // Use manual network type from trecho if available, otherwise infer from tipoRede
+        const system: "agua" | "esgoto" | "drenagem" = t.tipoRedeManual === "agua" ? "agua"
+          : t.tipoRedeManual === "drenagem" ? "drenagem"
+          : t.tipoRedeManual === "recalque" ? "agua"
+          : "esgoto";
+        return { id: trechoName, system, planned: t.comprimento, executed, frente: t.frenteServico || "", lote: t.lote || "", rede: t.tipoRedeManual || "" };
       })
     : MOCK_SEGMENTS;
 
@@ -332,8 +340,39 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
 
           {/* Segment detail table */}
           <Card>
-            <CardHeader><CardTitle>📏 Detalhamento por Trecho</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <CardTitle>📏 Detalhamento por Trecho</CardTitle>
+                <div className="flex gap-2 flex-wrap items-center">
+                  <Input
+                    placeholder="Buscar trecho..."
+                    value={segSearch}
+                    onChange={e => setSegSearch(e.target.value)}
+                    className="h-8 w-40 text-xs"
+                  />
+                  <Select value={segFilterRede} onValueChange={setSegFilterRede}>
+                    <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="Rede" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Redes</SelectItem>
+                      <SelectItem value="agua">💧 Agua</SelectItem>
+                      <SelectItem value="esgoto">🚰 Esgoto</SelectItem>
+                      <SelectItem value="drenagem">🌧️ Drenagem</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={segFilterStatus} onValueChange={setSegFilterStatus}>
+                    <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos Status</SelectItem>
+                      <SelectItem value="nao_iniciado">Nao Iniciado</SelectItem>
+                      <SelectItem value="em_execucao">Em Execucao</SelectItem>
+                      <SelectItem value="concluido">Concluido</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardHeader>
             <CardContent>
+              <div className="max-h-[500px] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -346,9 +385,19 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {activeSegments.map(seg => {
+                  {activeSegments
+                    .filter(seg => {
+                      if (segFilterRede !== "all" && seg.system !== segFilterRede) return false;
+                      const pct = seg.planned > 0 ? (seg.executed / seg.planned) * 100 : 0;
+                      if (segFilterStatus === "nao_iniciado" && pct > 0) return false;
+                      if (segFilterStatus === "em_execucao" && (pct <= 0 || pct >= 100)) return false;
+                      if (segFilterStatus === "concluido" && pct < 100) return false;
+                      if (segSearch && !seg.id.toLowerCase().includes(segSearch.toLowerCase())) return false;
+                      return true;
+                    })
+                    .map(seg => {
                     const pct = seg.planned > 0 ? (seg.executed / seg.planned) * 100 : 0;
-                    const status = pct >= 100 ? "Concluído" : pct > 0 ? "Em Execução" : "Não Iniciado";
+                    const status = pct >= 100 ? "Concluido" : pct > 0 ? "Em Execucao" : "Nao Iniciado";
                     const statusColor = pct >= 100 ? "bg-green-500" : pct > 0 ? "bg-orange-500" : "bg-red-500";
                     const sysIcon = seg.system === "agua" ? "💧" : seg.system === "esgoto" ? "🚰" : "🌧️";
                     return (
@@ -371,6 +420,7 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                   })}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </div>
