@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  Calendar, Users, Zap, ClipboardList, AlertTriangle, Download,
+  Calendar, Users, Zap, ClipboardList, AlertTriangle, Download, Upload,
   BarChart3, TrendingUp, Plus, Trash2, FileText, Save, FolderOpen,
   Copy, Edit, ChevronDown, ChevronUp, Pencil, Layers
 } from "lucide-react";
@@ -107,6 +107,99 @@ function loadSavedPlans(): SavedPlanning[] {
 
 function savePlansToStorage(plans: SavedPlanning[]) {
   localStorage.setItem(SAVED_PLANS_KEY, JSON.stringify(plans));
+  // Sync each plan to Supabase
+  syncPlansToSupabase(plans).catch(() => {});
+}
+
+async function syncPlansToSupabase(plans: SavedPlanning[]) {
+  for (const p of plans) {
+    await supabase.from("hydro_saved_plans").upsert({
+      id: p.id,
+      nome: p.nome,
+      descricao: "",
+      num_equipes: p.numEquipes,
+      team_config: p.teamConfig,
+      metros_dia: p.metrosDia,
+      horas_trabalho: p.horasTrabalho,
+      work_days: p.workDays,
+      data_inicio: p.dataInicio || null,
+      data_termino: p.dataTermino || null,
+      productivity: p.productivity,
+      holidays: p.holidays,
+      trecho_overrides: p.trechoOverrides,
+      service_notes: p.serviceNotes,
+      trecho_metadata: [],
+      grouping_mode: "trecho",
+      total_metros: p.totalMetros,
+      total_dias: p.totalDias,
+      custo_total: p.custoTotal,
+    }, { onConflict: "id" });
+  }
+}
+
+async function loadPlansFromSupabase(): Promise<SavedPlanning[] | null> {
+  try {
+    const { data, error } = await supabase
+      .from("hydro_saved_plans")
+      .select("*")
+      .order("updated_at", { ascending: false });
+    if (error) throw error;
+    if (data && data.length > 0) {
+      return data.map((r: any) => ({
+        id: r.id,
+        nome: r.nome,
+        criadoEm: r.created_at,
+        atualizadoEm: r.updated_at,
+        numEquipes: r.num_equipes,
+        teamConfig: r.team_config,
+        metrosDia: Number(r.metros_dia),
+        dataInicio: r.data_inicio || "",
+        dataTermino: r.data_termino || "",
+        horasTrabalho: Number(r.horas_trabalho),
+        workDays: r.work_days as WorkDays,
+        holidays: r.holidays || [],
+        productivity: r.productivity || [],
+        trechoOverrides: r.trecho_overrides || {},
+        serviceNotes: r.service_notes || [],
+        totalMetros: r.total_metros ? Number(r.total_metros) : undefined,
+        totalDias: r.total_dias ? Number(r.total_dias) : undefined,
+        custoTotal: r.custo_total ? Number(r.custo_total) : undefined,
+      }));
+    }
+  } catch {
+    // fallback
+  }
+  return null;
+}
+
+function exportPlanAsJSON(plan: SavedPlanning) {
+  const blob = new Blob([JSON.stringify(plan, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `planejamento_${plan.nome.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importPlanFromJSON(file: File): Promise<SavedPlanning> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const plan = JSON.parse(reader.result as string);
+        if (!plan.nome || !plan.numEquipes) throw new Error("Arquivo inválido");
+        plan.id = crypto.randomUUID();
+        plan.criadoEm = new Date().toISOString();
+        plan.atualizadoEm = new Date().toISOString();
+        resolve(plan);
+      } catch (e) {
+        reject(e);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
 }
 
 interface PlanningModuleProps {
@@ -187,6 +280,16 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
   // ── Saved Plans ──
   const [savedPlans, setSavedPlans] = useState<SavedPlanning[]>(loadSavedPlans());
   const [showSavedPlans, setShowSavedPlans] = useState(false);
+
+  // Load from Supabase on mount (merge with localStorage)
+  useEffect(() => {
+    loadPlansFromSupabase().then(plans => {
+      if (plans && plans.length > 0) {
+        setSavedPlans(plans);
+        localStorage.setItem(SAVED_PLANS_KEY, JSON.stringify(plans));
+      }
+    });
+  }, []);
   const [savePlanName, setSavePlanName] = useState("");
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
@@ -332,6 +435,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
     const updated = savedPlans.filter(p => p.id !== planId);
     setSavedPlans(updated);
     savePlansToStorage(updated);
+    supabase.from("hydro_saved_plans").delete().eq("id", planId).then(() => {});
     if (editingPlanId === planId) setEditingPlanId(null);
     toast.success("Planejamento excluído!");
   }, [savedPlans, editingPlanId]);
@@ -1444,6 +1548,30 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
             <DialogTitle>Planejamentos Salvos</DialogTitle>
             <DialogDescription>Carregue, edite, duplique ou exclua planejamentos salvos.</DialogDescription>
           </DialogHeader>
+          {/* Import JSON button */}
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" size="sm" onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = ".json";
+              input.onchange = async (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if (!file) return;
+                try {
+                  const plan = await importPlanFromJSON(file);
+                  const updated = [...savedPlans, plan];
+                  setSavedPlans(updated);
+                  savePlansToStorage(updated);
+                  toast.success(`Planejamento "${plan.nome}" importado!`);
+                } catch {
+                  toast.error("Arquivo JSON inválido.");
+                }
+              };
+              input.click();
+            }}>
+              <Upload className="h-3 w-3 mr-1" /> Importar JSON
+            </Button>
+          </div>
           {savedPlans.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">Nenhum planejamento salvo ainda.</p>
           ) : (
@@ -1468,6 +1596,12 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
                       <div className="flex gap-1">
                         <Button size="sm" onClick={() => handleLoadPlan(plan)}>
                           <FolderOpen className="h-3 w-3 mr-1" /> Carregar
+                        </Button>
+                        <Button size="sm" variant="outline" title="Exportar JSON" onClick={() => {
+                          exportPlanAsJSON(plan);
+                          toast.success(`"${plan.nome}" exportado como JSON!`);
+                        }}>
+                          <Download className="h-3 w-3" />
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => handleDuplicatePlan(plan)}>
                           <Copy className="h-3 w-3" />
