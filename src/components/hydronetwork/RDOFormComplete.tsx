@@ -437,7 +437,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
 
       {/* 8. Observações */}
       <Card>
-        <CardHeader><CardTitle>📝 8. Observações e Ocorrências</CardTitle></CardHeader>
+        <CardHeader><CardTitle><FileText className="h-4 w-4 inline-block mr-1" /> 8. Observações e Ocorrências</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div>
             <Label>Observações Gerais</Label>

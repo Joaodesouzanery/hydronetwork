@@ -121,9 +121,9 @@ export function ProductionTableWidget({
   const getCompletionColor = (actual: number, planned: number) => {
     if (planned === 0) return '';
     const rate = (actual / planned) * 100;
-    if (rate >= 100) return 'bg-green-500/10 text-green-600';
-    if (rate >= 80) return 'bg-yellow-500/10 text-yellow-600';
-    return 'bg-red-500/10 text-red-600';
+    if (rate >= 100) return 'bg-success/10 text-success';
+    if (rate >= 80) return 'bg-warning/10 text-warning';
+    return 'bg-destructive/10 text-destructive';
   };
 
   return (

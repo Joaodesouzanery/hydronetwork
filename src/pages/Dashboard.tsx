@@ -337,16 +337,16 @@ const Dashboard = () => {
                 </Card>
                 <Card className="border-accent/30 p-3 sm:p-4">
                   <p className="text-xs sm:text-sm text-muted-foreground mb-1">Status</p>
-                  <div className="text-2xl sm:text-3xl font-bold text-green-600">
+                  <div className="text-2xl sm:text-3xl font-bold text-success">
                     Ótimo
                   </div>
                   <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
                     Operacional
                   </p>
                 </Card>
-                <Card className="border-amber-500/30 p-3 sm:p-4">
+                <Card className="border-warning/30 p-3 sm:p-4">
                   <p className="text-xs sm:text-sm text-muted-foreground mb-1">Alertas</p>
-                  <div className="text-2xl sm:text-3xl font-bold text-amber-600">
+                  <div className="text-2xl sm:text-3xl font-bold text-warning">
                     0
                   </div>
                   <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
@@ -471,8 +471,8 @@ const Dashboard = () => {
                     </CardHeader>
                     <CardContent>
                       <div className={`text-2xl font-bold flex items-center gap-2 ${
-                        productionStats.completionRate >= 100 ? 'text-green-600' : 
-                        productionStats.completionRate >= 80 ? 'text-yellow-600' : 'text-red-600'
+                        productionStats.completionRate >= 100 ? 'text-success' :
+                        productionStats.completionRate >= 80 ? 'text-warning' : 'text-destructive'
                       }`}>
                         {productionStats.completionRate}%
                         <TrendingUp className="w-5 h-5" />
@@ -491,25 +491,25 @@ const Dashboard = () => {
                       <div className="flex items-center gap-2">
                         {productionStats.completionRate >= 90 ? (
                           <>
-                            <Target className="w-8 h-8 text-green-600" />
+                            <Target className="w-8 h-8 text-success" />
                             <div>
-                              <p className="font-semibold text-green-600">Excelente</p>
+                              <p className="font-semibold text-success">Excelente</p>
                               <p className="text-xs text-muted-foreground">Acima da meta</p>
                             </div>
                           </>
                         ) : productionStats.completionRate >= 70 ? (
                           <>
-                            <AlertCircle className="w-8 h-8 text-yellow-600" />
+                            <AlertCircle className="w-8 h-8 text-warning" />
                             <div>
-                              <p className="font-semibold text-yellow-600">Atenção</p>
+                              <p className="font-semibold text-warning">Atenção</p>
                               <p className="text-xs text-muted-foreground">Próximo da meta</p>
                             </div>
                           </>
                         ) : (
                           <>
-                            <AlertCircle className="w-8 h-8 text-red-600" />
+                            <AlertCircle className="w-8 h-8 text-destructive" />
                             <div>
-                              <p className="font-semibold text-red-600">Crítico</p>
+                              <p className="font-semibold text-destructive">Crítico</p>
                               <p className="text-xs text-muted-foreground">Abaixo da meta</p>
                             </div>
                           </>

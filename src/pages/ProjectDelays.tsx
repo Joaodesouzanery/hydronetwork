@@ -108,9 +108,9 @@ const ProjectDelays = () => {
 
   const getStatusBadge = (status: ProjectDelay["status"]) => {
     switch (status) {
-      case "on_track": return <Badge className="bg-green-600 text-white"><CheckCircle className="h-3 w-3 mr-1" />No prazo</Badge>;
-      case "warning": return <Badge className="bg-yellow-500 text-white"><AlertTriangle className="h-3 w-3 mr-1" />Atenção</Badge>;
-      case "critical": return <Badge className="bg-red-600 text-white"><XCircle className="h-3 w-3 mr-1" />Crítico</Badge>;
+      case "on_track": return <Badge className="bg-success text-success-foreground"><CheckCircle className="h-3 w-3 mr-1" />No prazo</Badge>;
+      case "warning": return <Badge className="bg-warning text-warning-foreground"><AlertTriangle className="h-3 w-3 mr-1" />Atenção</Badge>;
+      case "critical": return <Badge className="bg-destructive text-destructive-foreground"><XCircle className="h-3 w-3 mr-1" />Crítico</Badge>;
       case "overdue": return <Badge className="bg-red-900 text-white"><Clock className="h-3 w-3 mr-1" />Vencido</Badge>;
     }
   };
@@ -172,10 +172,10 @@ const ProjectDelays = () => {
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {[
-                { label: "Total", value: summary.total, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/30" },
-                { label: "No Prazo", value: summary.onTrack, color: "text-green-600", bg: "bg-green-50 dark:bg-green-950/30" },
-                { label: "Atenção", value: summary.warning, color: "text-yellow-600", bg: "bg-yellow-50 dark:bg-yellow-950/30" },
-                { label: "Crítico", value: summary.critical, color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/30" },
+                { label: "Total", value: summary.total, color: "text-info", bg: "bg-info/10" },
+                { label: "No Prazo", value: summary.onTrack, color: "text-success", bg: "bg-success/10" },
+                { label: "Atenção", value: summary.warning, color: "text-warning", bg: "bg-warning/10" },
+                { label: "Crítico", value: summary.critical, color: "text-destructive", bg: "bg-destructive/10" },
                 { label: "Vencido", value: summary.overdue, color: "text-red-900", bg: "bg-red-100 dark:bg-red-950/50" },
               ].map(s => (
                 <Card key={s.label} className={s.bg}>
@@ -261,8 +261,8 @@ const ProjectDelays = () => {
                               <span className="text-xs">{Math.round(d.actualProgress)}%</span>
                             </div>
                           </TableCell>
-                          <TableCell className={d.delayPercent > 10 ? "text-red-600 font-bold" : ""}>{Math.round(d.delayPercent)}%</TableCell>
-                          <TableCell className={d.delayDays > 30 ? "text-red-600 font-bold" : ""}>{d.delayDays}d</TableCell>
+                          <TableCell className={d.delayPercent > 10 ? "text-destructive font-bold" : ""}>{Math.round(d.delayPercent)}%</TableCell>
+                          <TableCell className={d.delayDays > 30 ? "text-destructive font-bold" : ""}>{d.delayDays}d</TableCell>
                           <TableCell>{getStatusBadge(d.status)}</TableCell>
                         </TableRow>
                       ))}
@@ -280,9 +280,9 @@ const ProjectDelays = () => {
             </Card>
 
             {/* Alert Config */}
-            <Card className="border-l-4 border-l-yellow-500">
+            <Card className="border-l-4 border-l-warning">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5 text-yellow-600" /> Configurar Alertas de Atraso</CardTitle>
+                <CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5 text-warning" /> Configurar Alertas de Atraso</CardTitle>
                 <CardDescription>Receba notificações quando um projeto ultrapassar o limite de atraso</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">

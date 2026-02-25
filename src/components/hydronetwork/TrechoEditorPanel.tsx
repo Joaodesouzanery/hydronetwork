@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Edit, Save, Tag, Filter, Wand2 } from "lucide-react";
+import { Edit, Save, Tag, Filter, Wand2, Droplets, CloudRain, ArrowUp, MapPin } from "lucide-react";
 import { Trecho, TipoRedeManual } from "@/engine/domain";
 import { TrechoMetadata, applyNamingPattern } from "@/engine/savedPlanning";
 
@@ -19,12 +19,12 @@ interface TrechoEditorPanelProps {
   onTrechosChange?: (trechos: Trecho[]) => void;
 }
 
-const REDE_OPTIONS: { value: TipoRedeManual; label: string; icon: string }[] = [
-  { value: "agua", label: "Agua", icon: "💧" },
+const REDE_OPTIONS: { value: TipoRedeManual; label: string; icon: React.ReactNode }[] = [
+  { value: "agua", label: "Agua", icon: <Droplets className="h-4 w-4 inline-block" /> },
   { value: "esgoto", label: "Esgoto", icon: "🚰" },
-  { value: "drenagem", label: "Drenagem", icon: "🌧️" },
-  { value: "recalque", label: "Recalque", icon: "⬆️" },
-  { value: "outro", label: "Outro", icon: "📌" },
+  { value: "drenagem", label: "Drenagem", icon: <CloudRain className="h-4 w-4 inline-block" /> },
+  { value: "recalque", label: "Recalque", icon: <ArrowUp className="h-4 w-4 inline-block" /> },
+  { value: "outro", label: "Outro", icon: <MapPin className="h-4 w-4 inline-block" /> },
 ];
 
 const fmt = (n: number, d = 2) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
