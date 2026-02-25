@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import {
@@ -10,12 +10,133 @@ import {
   Workflow, Gauge, Ruler, Upload, Settings2, GitBranch, CloudRain,
   Beaker, Waves, FileSpreadsheet, Activity, Eye, Calculator, Calendar,
   Lock, Smartphone, Monitor, Server, ExternalLink, AlertTriangle, Lightbulb,
-  Linkedin, MessageSquare, Send
+  Linkedin, MessageSquare, Send, ChevronLeft
 } from "lucide-react";
+import useEmblaCarousel from "embla-carousel-react";
+import Autoplay from "embla-carousel-autoplay";
 import { ContactDialog } from "@/components/ContactDialog";
 import { FAQ } from "@/components/FAQ";
 import { Logo } from "@/components/shared/Logo";
 import heroSaneamento from "@/assets/landing/hero-saneamento.jpg";
+
+// Landing showcase images
+import imgAlmoxarifado from "@/assets/landing/almoxarifado.png";
+import imgGestaoPredial from "@/assets/landing/gestao-predial.png";
+import imgManutencao from "@/assets/landing/manutencao.png";
+import imgObraOrganizada from "@/assets/landing/obra-organizada.png";
+import imgProgressoDados from "@/assets/landing/progresso-dados.png";
+import imgProjetosMapa from "@/assets/landing/projetos-mapa.png";
+import imgRastreieMaterial from "@/assets/landing/rastreie-material.png";
+import imgSistemaUnico from "@/assets/landing/sistema-unico.png";
+
+const showcaseSlides = [
+  { src: imgSistemaUnico, alt: "Sistema unificado de gestão", label: "Sistema Unificado" },
+  { src: imgProjetosMapa, alt: "Projetos no mapa interativo", label: "Projetos no Mapa" },
+  { src: imgProgressoDados, alt: "Progresso baseado em dados", label: "Dados em Tempo Real" },
+  { src: imgObraOrganizada, alt: "Obra organizada digitalmente", label: "Obra Organizada" },
+  { src: imgAlmoxarifado, alt: "Controle de almoxarifado", label: "Almoxarifado Digital" },
+  { src: imgGestaoPredial, alt: "Gestão predial completa", label: "Gestão Predial" },
+  { src: imgManutencao, alt: "Manutenção inteligente", label: "Manutenção" },
+  { src: imgRastreieMaterial, alt: "Rastreamento de materiais", label: "Rastreamento" },
+];
+
+const ShowcaseCarousel = () => {
+  const [emblaRef, emblaApi] = useEmblaCarousel(
+    { loop: true, align: "start", slidesToScroll: 1 },
+    [Autoplay({ delay: 3500, stopOnInteraction: false, stopOnMouseEnter: true })]
+  );
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    setSelectedIndex(emblaApi.selectedScrollSnap());
+  }, [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    onSelect();
+    emblaApi.on("select", onSelect);
+    return () => { emblaApi.off("select", onSelect); };
+  }, [emblaApi, onSelect]);
+
+  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
+  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
+  const scrollTo = useCallback((i: number) => emblaApi?.scrollTo(i), [emblaApi]);
+
+  return (
+    <section className="py-16 bg-muted/30 border-b border-border overflow-hidden">
+      <div className="container mx-auto px-4">
+        <div className="text-center mb-10">
+          <h2 className="text-2xl md:text-4xl font-black mb-3">
+            Veja a Plataforma em <span className="text-primary">Ação</span>
+          </h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto">
+            Screenshots reais dos módulos em funcionamento. Arraste para o lado ou deixe rolar automaticamente.
+          </p>
+        </div>
+
+        <div className="relative max-w-6xl mx-auto">
+          {/* Carousel */}
+          <div ref={emblaRef} className="overflow-hidden rounded-xl">
+            <div className="flex">
+              {showcaseSlides.map((slide, i) => (
+                <div
+                  key={i}
+                  className="flex-[0_0_100%] min-w-0 sm:flex-[0_0_50%] lg:flex-[0_0_33.333%] px-2"
+                >
+                  <div className="relative group rounded-xl overflow-hidden border border-border bg-card shadow-sm hover:shadow-xl transition-all duration-300">
+                    <img
+                      src={slide.src}
+                      alt={slide.alt}
+                      className="w-full h-48 sm:h-56 lg:h-64 object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+                      <span className="text-white text-sm font-bold">{slide.label}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Navigation arrows */}
+          <button
+            onClick={scrollPrev}
+            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 sm:-translate-x-4 z-10 w-10 h-10 rounded-full bg-card/90 backdrop-blur border border-border shadow-lg flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors"
+            aria-label="Anterior"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <button
+            onClick={scrollNext}
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 sm:translate-x-4 z-10 w-10 h-10 rounded-full bg-card/90 backdrop-blur border border-border shadow-lg flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors"
+            aria-label="Próximo"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Dots */}
+        <div className="flex justify-center gap-2 mt-6">
+          {showcaseSlides.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => scrollTo(i)}
+              className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                selectedIndex === i
+                  ? "bg-primary w-8"
+                  : "bg-muted-foreground/30 hover:bg-muted-foreground/50"
+              }`}
+              aria-label={`Slide ${i + 1}`}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
 
 const Hero = () => {
   const navigate = useNavigate();
@@ -292,6 +413,9 @@ const Hero = () => {
           <ChevronDown className="w-6 h-6 text-white/40" />
         </div>
       </section>
+
+      {/* ═══════════════ SHOWCASE CAROUSEL ═══════════════ */}
+      <ShowcaseCarousel />
 
       {/* ═══════════════ STATS BAR ═══════════════ */}
       <section className="py-16 border-y border-border bg-card">
