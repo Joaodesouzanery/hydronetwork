@@ -63,7 +63,7 @@ export function WeeklyReportDialog({ open, onOpenChange, report, projectName = '
           <div className="grid grid-cols-2 gap-3">
             <Card>
               <CardContent className="p-3 flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                <AlertTriangle className="h-5 w-5 text-warning" />
                 <div>
                   <p className="text-xs text-muted-foreground">Ativas</p>
                   <p className="text-xl font-bold">{report.totalAtivas}</p>
@@ -72,28 +72,28 @@ export function WeeklyReportDialog({ open, onOpenChange, report, projectName = '
             </Card>
             <Card>
               <CardContent className="p-3 flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-red-600" />
+                <AlertCircle className="h-5 w-5 text-destructive" />
                 <div>
                   <p className="text-xs text-muted-foreground">Críticas</p>
-                  <p className="text-xl font-bold text-red-600">{report.totalCriticas}</p>
+                  <p className="text-xl font-bold text-destructive">{report.totalCriticas}</p>
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-3 flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
+                <CheckCircle className="h-5 w-5 text-success" />
                 <div>
                   <p className="text-xs text-muted-foreground">Resolvidas (semana)</p>
-                  <p className="text-xl font-bold text-green-600">{report.resolvidasSemana}</p>
+                  <p className="text-xl font-bold text-success">{report.resolvidasSemana}</p>
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-3 flex items-center gap-2">
-                <Clock className="h-5 w-5 text-red-500" />
+                <Clock className="h-5 w-5 text-destructive" />
                 <div>
                   <p className="text-xs text-muted-foreground">Vencidas</p>
-                  <p className="text-xl font-bold text-red-500">{report.vencidas}</p>
+                  <p className="text-xl font-bold text-destructive">{report.vencidas}</p>
                 </div>
               </CardContent>
             </Card>
@@ -105,17 +105,17 @@ export function WeeklyReportDialog({ open, onOpenChange, report, projectName = '
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">PPC</span>
                 <div className="flex gap-4">
-                  <Badge variant="outline" className={report.ppc >= 75 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}>
+                  <Badge variant="outline" className={report.ppc >= 75 ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}>
                     PPC: {report.ppc}%
                   </Badge>
-                  <Badge variant="outline" className={report.ppcAdjusted >= 75 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}>
+                  <Badge variant="outline" className={report.ppcAdjusted >= 75 ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}>
                     Ajustado: {report.ppcAdjusted}%
                   </Badge>
                 </div>
               </div>
               <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full ${report.ppc >= 75 ? 'bg-green-500' : report.ppc >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  className={`h-full rounded-full ${report.ppc >= 75 ? 'bg-success' : report.ppc >= 50 ? 'bg-warning' : 'bg-destructive'}`}
                   style={{ width: `${report.ppc}%` }}
                 />
               </div>
@@ -125,12 +125,12 @@ export function WeeklyReportDialog({ open, onOpenChange, report, projectName = '
           {/* Fluxo da semana */}
           <div className="flex items-center justify-center gap-6 p-3 bg-muted rounded-lg">
             <div className="text-center">
-              <p className="text-2xl font-bold text-blue-600">+{report.novasSemana}</p>
+              <p className="text-2xl font-bold text-info">+{report.novasSemana}</p>
               <p className="text-xs text-muted-foreground">Novas</p>
             </div>
             <div className="text-3xl text-muted-foreground">→</div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-green-600">-{report.resolvidasSemana}</p>
+              <p className="text-2xl font-bold text-success">-{report.resolvidasSemana}</p>
               <p className="text-xs text-muted-foreground">Resolvidas</p>
             </div>
             <div className="text-3xl text-muted-foreground">=</div>

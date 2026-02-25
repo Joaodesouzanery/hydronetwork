@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Calculator, FileSpreadsheet, Download } from "lucide-react";
+import { Calculator, FileSpreadsheet, Download, Pickaxe, Route, ClipboardList, DollarSign, BarChart3 } from "lucide-react";
 import { Trecho } from "@/engine/domain";
 import { PontoTopografico } from "@/engine/reader";
 import * as XLSX from "xlsx";
@@ -270,9 +270,9 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
                 {[
                   { icon: "🔗", label: "Trechos", value: rows.length },
                   { icon: "📏", label: "Extensão Total", value: `${fmt(totals.totalComp, 1)} m` },
-                  { icon: "⛏️", label: "Escavação", value: `${fmt(totals.totalEscav, 1)} m³` },
+                  { icon: <Pickaxe className="h-6 w-6 inline-block" />, label: "Escavação", value: `${fmt(totals.totalEscav, 1)} m³` },
                   { icon: "🚛", label: "Bota-fora", value: `${fmt(totals.totalBotafora, 1)} m³` },
-                  { icon: "🛣️", label: "Recomposição Pav.", value: `${fmt(totals.totalPav, 1)} m²` },
+                  { icon: <Route className="h-6 w-6 inline-block" />, label: "Recomposição Pav.", value: `${fmt(totals.totalPav, 1)} m²` },
                 ].map((item, i) => (
                   <Card key={i}>
                     <CardContent className="pt-4 text-center">
@@ -285,7 +285,7 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
               </div>
 
               <Card>
-                <CardHeader><CardTitle>📋 Resultados Detalhados</CardTitle></CardHeader>
+                <CardHeader><CardTitle><ClipboardList className="h-4 w-4 inline-block mr-1" /> Resultados Detalhados</CardTitle></CardHeader>
                 <CardContent>
                   <div className="overflow-auto max-h-[500px]">
                     <Table>
@@ -326,7 +326,7 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
 
               {/* Cost Summary */}
               <Card>
-                <CardHeader><CardTitle>💰 Resumo de Custos (SINAPI)</CardTitle></CardHeader>
+                <CardHeader><CardTitle><DollarSign className="h-4 w-4 inline-block mr-1" /> Resumo de Custos (SINAPI)</CardTitle></CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                     {[
@@ -350,7 +350,7 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
 
               {/* Curva ABC */}
               <Card>
-                <CardHeader><CardTitle>📊 Curva ABC (Pareto)</CardTitle></CardHeader>
+                <CardHeader><CardTitle><BarChart3 className="h-4 w-4 inline-block mr-1" /> Curva ABC (Pareto)</CardTitle></CardHeader>
                 <CardContent>
                   {(() => {
                     const categories = [
@@ -414,7 +414,7 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
         <TabsContent value="sinapi">
           <Card>
             <CardHeader>
-              <CardTitle>📋 Composições SINAPI Utilizadas</CardTitle>
+              <CardTitle><ClipboardList className="h-4 w-4 inline-block mr-1" /> Composições SINAPI Utilizadas</CardTitle>
               <CardDescription>Custos unitários de referência (SINAPI 12/2024 - Desonerado - SP)</CardDescription>
             </CardHeader>
             <CardContent>

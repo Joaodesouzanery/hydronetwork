@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Plus, Trash2, Calculator, CloudRain, Upload, AlertTriangle, CheckCircle } from "lucide-react";
+import { Plus, Trash2, Calculator, CloudRain, Upload, AlertTriangle, CheckCircle, ClipboardList } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { NodeMapWidget, ConnectionData } from "@/components/hydronetwork/NodeMapWidget";
 
@@ -373,7 +373,7 @@ export const DrainageModule = ({ pontos }: DrainageModuleProps) => {
                 {[
                   { icon: "🔗", label: "Galerias", value: results.length },
                   { icon: "📏", label: "Extensão Total", value: `${fmt(totalComp, 1)} m` },
-                  { icon: "🌧️", label: "Área Total", value: `${fmt(totalArea, 2)} ha` },
+                  { icon: <CloudRain className="h-6 w-6 inline-block" />, label: "Área Total", value: `${fmt(totalArea, 2)} ha` },
                   { icon: "💨", label: "Vazão Máxima", value: `${fmt(maxQ * 1000, 1)} L/s` },
                 ].map((item, i) => (
                   <Card key={i}>
@@ -402,7 +402,7 @@ export const DrainageModule = ({ pontos }: DrainageModuleProps) => {
               )}
 
               <Card>
-                <CardHeader><CardTitle>📋 Resultados Detalhados</CardTitle></CardHeader>
+                <CardHeader><CardTitle><ClipboardList className="h-4 w-4 inline-block mr-1" /> Resultados Detalhados</CardTitle></CardHeader>
                 <CardContent>
                   <div className="max-h-[400px] overflow-auto">
                     <Table>

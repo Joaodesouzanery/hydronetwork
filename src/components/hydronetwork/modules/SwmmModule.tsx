@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Play, Download, Upload, Trash2, Plus, CloudRain, X } from "lucide-react";
+import { Play, Download, Upload, Trash2, Plus, CloudRain, X, Mountain, Globe, BarChart3, ClipboardList, TrendingUp } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
 import { getMapCoordinates } from "@/engine/hydraulics"; // kept for potential future use
@@ -190,7 +190,7 @@ export const SwmmModule = ({ pontos, trechos }: SwmmModuleProps) => {
 
       {/* Bacias */}
       <Card>
-        <CardHeader><CardTitle>🏔️ Bacias e Armazenamento</CardTitle></CardHeader>
+        <CardHeader><CardTitle><Mountain className="h-4 w-4 inline-block mr-1" /> Bacias e Armazenamento</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div>
             <h4 className="font-semibold text-sm text-blue-600 mb-2">Sub-bacias de Contribuição</h4>
@@ -244,7 +244,7 @@ export const SwmmModule = ({ pontos, trechos }: SwmmModuleProps) => {
 
       {/* Actions */}
       <div className="flex gap-2 flex-wrap">
-        <Button variant="outline" onClick={loadPlatformData}>🌐 Usar Dados da Plataforma</Button>
+        <Button variant="outline" onClick={loadPlatformData}><Globe className="h-4 w-4 inline-block mr-1" /> Usar Dados da Plataforma</Button>
         <Button variant="outline" onClick={() => { setSimulated(false); setMapConnections([]); toast.info("Dados limpos"); }}><Trash2 className="h-4 w-4 mr-1" /> Limpar</Button>
         <Button onClick={simulate}><Play className="h-4 w-4 mr-1" /> Simular</Button>
       </div>
@@ -275,9 +275,9 @@ export const SwmmModule = ({ pontos, trechos }: SwmmModuleProps) => {
         <CardContent>
           <Tabs value={resultTab} onValueChange={setResultTab}>
             <TabsList>
-              <TabsTrigger value="summary">📊 Resumo</TabsTrigger>
-              <TabsTrigger value="detailed">📋 Detalhado</TabsTrigger>
-              <TabsTrigger value="hydrograph">📈 Hidrograma</TabsTrigger>
+              <TabsTrigger value="summary"><><BarChart3 className="h-4 w-4 inline-block mr-1" /> Resumo</></TabsTrigger>
+              <TabsTrigger value="detailed"><><ClipboardList className="h-4 w-4 inline-block mr-1" /> Detalhado</></TabsTrigger>
+              <TabsTrigger value="hydrograph"><><TrendingUp className="h-4 w-4 inline-block mr-1" /> Hidrograma</></TabsTrigger>
             </TabsList>
 
             <TabsContent value="summary" className="py-4">

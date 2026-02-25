@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, ArrowRight, Check, X, Star } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, X, Star, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TOTAL_SECTIONS = 11;
@@ -299,7 +299,7 @@ const SatisfactionSurvey = () => {
               <Check className="h-8 w-8 text-green-600" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-foreground mb-2">Obrigado! ✅</h2>
+              <h2 className="text-2xl font-bold text-foreground mb-2">Obrigado! <CheckCircle2 className="h-6 w-6 inline-block ml-1 text-green-600" /></h2>
               <p className="text-muted-foreground">
                 Sua resposta melhora o ConstruData.
               </p>

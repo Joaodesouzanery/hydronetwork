@@ -6,7 +6,8 @@ import { useNavigate } from "react-router-dom";
 import {
   Droplets, MapPin, BarChart3, Calendar, ClipboardList, FileSpreadsheet,
   Upload, Settings2, Users, Zap, ArrowRight, ChevronDown,
-  Globe, Calculator, Layers, GitBranch, Shield, Eye, Map, DollarSign
+  Globe, Calculator, Layers, GitBranch, Shield, Eye, Map, DollarSign,
+  Palette, AlertTriangle, Building2, Ruler
 } from "lucide-react";
 
 const CostMapSVG = () => (
@@ -218,14 +219,14 @@ const HydroNetworkLanding = () => {
           <CostMapSVG />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { icon: "📍", title: "Custo por Trecho", desc: "Cada segmento mostra seu custo individual baseado em extensão, diâmetro, profundidade e tipo de solo." },
-              { icon: "🎨", title: "Cores por Faixa de Custo", desc: "Identifique visualmente trechos caros (vermelho), médios (amarelo) e econômicos (verde)." },
-              { icon: "⚠️", title: "Alertas de Custo Alto", desc: "Trechos com escavação profunda (>3m) ou interferências são destacados automaticamente." },
-              { icon: "📊", title: "Análise de Cenários", desc: "Simule alterações de traçado e veja instantaneamente como o custo total muda." },
+              { icon: MapPin, title: "Custo por Trecho", desc: "Cada segmento mostra seu custo individual baseado em extensão, diâmetro, profundidade e tipo de solo." },
+              { icon: Palette, title: "Cores por Faixa de Custo", desc: "Identifique visualmente trechos caros (vermelho), médios (amarelo) e econômicos (verde)." },
+              { icon: AlertTriangle, title: "Alertas de Custo Alto", desc: "Trechos com escavação profunda (>3m) ou interferências são destacados automaticamente." },
+              { icon: BarChart3, title: "Análise de Cenários", desc: "Simule alterações de traçado e veja instantaneamente como o custo total muda." },
             ].map((f, i) => (
               <Card key={i} className="border-0 hover:scale-105 transition-transform" style={{ background: "#0f172a", border: "1px solid #334155" }}>
                 <CardContent className="pt-6 space-y-3">
-                  <span className="text-3xl">{f.icon}</span>
+                  <f.icon className="h-8 w-8" style={{ color: "#c9a227" }} />
                   <h3 className="text-lg font-bold text-white">{f.title}</h3>
                   <p className="text-sm" style={{ color: "#94a3b8" }}>{f.desc}</p>
                 </CardContent>
@@ -306,13 +307,13 @@ const HydroNetworkLanding = () => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
-              { emoji: "🏗️", title: "Projeto Exemplo", desc: "Rede coletora de 3,2 km com 45 trechos — dimensionamento, orçamento e cronograma gerados automaticamente" },
-              { emoji: "📐", title: "Validação Normativa", desc: "Verificação automática de velocidade, declividade, profundidade e pressão conforme ABNT" },
-              { emoji: "⚡", title: "Workflow Integrado", desc: "Dados fluem da topografia ao RDO sem redigitação — importe uma vez, use em todos os módulos" },
+              { icon: Building2, title: "Projeto Exemplo", desc: "Rede coletora de 3,2 km com 45 trechos — dimensionamento, orçamento e cronograma gerados automaticamente" },
+              { icon: Ruler, title: "Validação Normativa", desc: "Verificação automática de velocidade, declividade, profundidade e pressão conforme ABNT" },
+              { icon: Zap, title: "Workflow Integrado", desc: "Dados fluem da topografia ao RDO sem redigitação — importe uma vez, use em todos os módulos" },
             ].map((card, i) => (
               <Card key={i} className="border-0 hover:scale-105 transition-transform" style={{ background: "#0f172a", border: "1px solid #334155" }}>
                 <CardContent className="pt-6 space-y-3 text-center">
-                  <span className="text-4xl">{card.emoji}</span>
+                  <card.icon className="h-10 w-10 mx-auto" style={{ color: "#c9a227" }} />
                   <h3 className="text-lg font-bold text-white">{card.title}</h3>
                   <p className="text-sm" style={{ color: "#94a3b8" }}>{card.desc}</p>
                 </CardContent>

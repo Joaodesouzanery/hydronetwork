@@ -5,17 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Building2, Package, FileText, HardHat, Wrench, DollarSign, BarChart3, RefreshCw } from "lucide-react";
 
 const functionalities = [
-  { id: "rdo", label: "🏗 Gestão de Obras / Diário de Obra (RDO)" },
-  { id: "materials", label: "📦 Controle de Materiais & Almoxarifado" },
-  { id: "checklists", label: "📝 Checklists & Qualidade" },
-  { id: "teams", label: "👷 Equipes e Folha de Campo" },
-  { id: "maintenance", label: "🛠 Manutenção Predial / Ativos" },
-  { id: "budget", label: "💰 Orçamento & Custos" },
-  { id: "dashboard", label: "📊 Dashboard e Indicadores" },
-  { id: "automation", label: "🔄 Automação de Fluxos (Workflows)" },
+  { id: "rdo", icon: Building2, label: "Gestão de Obras / Diário de Obra (RDO)" },
+  { id: "materials", icon: Package, label: "Controle de Materiais & Almoxarifado" },
+  { id: "checklists", icon: FileText, label: "Checklists & Qualidade" },
+  { id: "teams", icon: HardHat, label: "Equipes e Folha de Campo" },
+  { id: "maintenance", icon: Wrench, label: "Manutenção Predial / Ativos" },
+  { id: "budget", icon: DollarSign, label: "Orçamento & Custos" },
+  { id: "dashboard", icon: BarChart3, label: "Dashboard e Indicadores" },
+  { id: "automation", icon: RefreshCw, label: "Automação de Fluxos (Workflows)" },
 ];
 
 const employeeSizes = [
@@ -110,7 +110,8 @@ export default function SystemTest() {
                         checked={formData.functionalities.includes(func.id)}
                         onCheckedChange={() => handleFunctionalityToggle(func.id)}
                       />
-                      <Label htmlFor={func.id} className="cursor-pointer flex-1 text-base">
+                      <Label htmlFor={func.id} className="cursor-pointer flex-1 text-base flex items-center">
+                        <func.icon className="h-4 w-4 inline-block mr-1" />
                         {func.label}
                       </Label>
                     </div>

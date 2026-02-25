@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import {
   Calendar, Users, Zap, ClipboardList, AlertTriangle, Download, Upload,
   BarChart3, TrendingUp, Plus, Trash2, FileText, Save, FolderOpen,
-  Copy, Edit, ChevronDown, ChevronUp, Pencil, Layers
+  Copy, Edit, ChevronDown, ChevronUp, Pencil, Layers, Droplets, CloudRain, ArrowUp, Lightbulb
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
@@ -556,11 +556,19 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
         if (!days[seg.day]) days[seg.day] = { meters: 0, isTest: false };
         days[seg.day].meters += seg.meters;
       });
-      const redeIcons: Record<string, string> = { agua: "💧", esgoto: "🚰", drenagem: "🌧️", recalque: "⬆️" };
+      const redeIconComponents: Record<string, React.ReactNode> = {
+        agua: <Droplets className="h-4 w-4 inline-block mr-1" />,
+        esgoto: null,
+        drenagem: <CloudRain className="h-4 w-4 inline-block mr-1" />,
+        recalque: <ArrowUp className="h-4 w-4 inline-block mr-1" />,
+      };
       const displayName = groupingMode === "rede"
-        ? `${redeIcons[groupName] || ""} ${groupName} (${trechoCount} tr.)`
+        ? `${groupName} (${trechoCount} tr.)`
         : `${groupName} (${trechoCount} tr.)`;
-      return { id: displayName, trechoId: groupName, meters: Math.round(totalMeters), days, totalDays };
+      const displayLabel = groupingMode === "rede"
+        ? <>{redeIconComponents[groupName]}{groupName} ({trechoCount} tr.)</>
+        : <>{groupName} ({trechoCount} tr.)</>;
+      return { id: displayName, label: displayLabel, trechoId: groupName, meters: Math.round(totalMeters), days, totalDays };
     });
   }, [scheduleResult, getTrechoDisplayName, groupingMode, trechos, trechoMetadata]);
 
@@ -829,7 +837,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
             </div>
             <Card className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300">
               <CardContent className="pt-3 pb-3">
-                <p className="font-semibold text-sm text-yellow-700 dark:text-yellow-400">💡 Dica: Dias Mais Corridos</p>
+                <p className="font-semibold text-sm text-yellow-700 dark:text-yellow-400"><Lightbulb className="h-4 w-4 inline-block mr-1" />Dica: Dias Mais Corridos</p>
                 <ul className="text-xs text-muted-foreground mt-1 space-y-1 list-disc pl-4">
                   <li>Aumente os "Metros por Dia" (ex: 15-20 m/dia)</li>
                   <li>Selecione "Por Trecho Completo" no modo de agrupamento</li>
@@ -1149,7 +1157,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                📅 Cronograma de Execução
+                <Calendar className="h-4 w-4 inline-block mr-1" /> Cronograma de Execução
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1190,7 +1198,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
                   <tbody>
                     {ganttData.map((row) => (
                       <tr key={row.id}>
-                        <td className="border px-2 py-1 font-semibold bg-muted/50 sticky left-0 z-10">{row.id}</td>
+                        <td className="border px-2 py-1 font-semibold bg-muted/50 sticky left-0 z-10">{row.label || row.id}</td>
                         <td className="border px-2 py-1 text-right bg-muted/50 sticky left-[60px] z-10">{row.meters}m</td>
                         {Array.from({ length: scheduleResult.totalDays }, (_, d) => {
                           const dayNum = d + 1;
@@ -1223,7 +1231,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
 
           {/* Curva ABC */}
           <Card>
-            <CardHeader><CardTitle className="text-base">📊 Curva ABC (Pareto)</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base"><BarChart3 className="h-4 w-4 inline-block mr-1" /> Curva ABC (Pareto)</CardTitle></CardHeader>
             <CardContent>
               {(() => {
                 // Build ABC data from gantt trechos sorted by cost descending
@@ -1299,7 +1307,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
           {/* Curva S + Histogram */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>
-              <CardHeader><CardTitle className="text-base">📈 Curva S</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base"><TrendingUp className="h-4 w-4 inline-block mr-1" /> Curva S</CardTitle></CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <AreaChart data={scheduleResult.curveS}>
@@ -1317,7 +1325,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">📊 Histograma de Recursos</CardTitle>
+                <CardTitle className="text-base"><BarChart3 className="h-4 w-4 inline-block mr-1" /> Histograma de Recursos</CardTitle>
                 <div className="flex gap-2 mt-2">
                   <Select value={histView} onValueChange={v => setHistView(v as HistogramView)}>
                     <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
@@ -1377,7 +1385,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
 
           {/* Detailed Daily Plan */}
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2 text-base">📋 Plano Diário Detalhado</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2 text-base"><ClipboardList className="h-4 w-4 inline-block mr-1" /> Plano Diário Detalhado</CardTitle></CardHeader>
             <CardContent>
               <div className="max-h-[500px] overflow-auto">
                 <Table>

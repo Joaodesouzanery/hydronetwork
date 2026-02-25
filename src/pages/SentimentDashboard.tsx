@@ -4,7 +4,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Smile, Frown, Meh, TrendingUp, MessageSquare, Star, Users } from "lucide-react";
+import { Smile, Frown, Meh, TrendingUp, MessageSquare, Star, Users, FileText } from "lucide-react";
 import { format, subDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -188,7 +188,7 @@ const SentimentDashboard = () => {
                       {feedback.slice(0, 50).map((f) => (
                         <div key={f.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
                           <span className="text-xl">
-                            {f.emoji_rating ? emojiMap[f.emoji_rating]?.emoji || "📝" : "📝"}
+                            {f.emoji_rating ? emojiMap[f.emoji_rating]?.emoji || <FileText className="h-5 w-5 inline-block" /> : <FileText className="h-5 w-5 inline-block" />}
                           </span>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">

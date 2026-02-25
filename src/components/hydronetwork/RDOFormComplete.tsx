@@ -6,12 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, MapPin, Filter } from "lucide-react";
+import { Plus, Trash2, MapPin, Filter, Sun, Cloud, CloudRain, CloudLightning, CloudSun, ClipboardList, Users, Truck, Wrench, Ruler, Droplets, FileText } from "lucide-react";
 import {
   RDO, ExecutedService, SegmentProgress, ServiceUnit, RDOStatus, SystemType,
   generateId, saveRDOs, validateRDO,
 } from "@/engine/rdo";
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 
 type ClimaCond = "bom" | "nublado" | "chuva" | "impraticavel";
 
@@ -55,11 +55,11 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
     occurrences: "",
   });
 
-  const climaOptions: { value: ClimaCond; label: string }[] = [
-    { value: "bom", label: "☀️ Bom" },
-    { value: "nublado", label: "☁️ Nublado" },
-    { value: "chuva", label: "🌧️ Chuva" },
-    { value: "impraticavel", label: "⛈️ Impraticável" },
+  const climaOptions: { value: ClimaCond; label: ReactNode }[] = [
+    { value: "bom", label: <><Sun className="h-3 w-3 inline-block mr-1" /> Bom</> },
+    { value: "nublado", label: <><Cloud className="h-3 w-3 inline-block mr-1" /> Nublado</> },
+    { value: "chuva", label: <><CloudRain className="h-3 w-3 inline-block mr-1" /> Chuva</> },
+    { value: "impraticavel", label: <><CloudLightning className="h-3 w-3 inline-block mr-1" /> Impraticável</> },
   ];
 
   const addService = () => {
@@ -125,7 +125,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
     <div className="space-y-4">
       {/* 1. Informações Gerais */}
       <Card>
-        <CardHeader><CardTitle>📋 1. Informações Gerais</CardTitle></CardHeader>
+        <CardHeader><CardTitle><ClipboardList className="h-4 w-4 inline-block mr-1" /> 1. Informações Gerais</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <Label>Data do Relatório</Label>
@@ -144,7 +144,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
 
       {/* 2. Condições Climáticas */}
       <Card>
-        <CardHeader><CardTitle>🌤️ 2. Condições Climáticas</CardTitle></CardHeader>
+        <CardHeader><CardTitle><CloudSun className="h-4 w-4 inline-block mr-1" /> 2. Condições Climáticas</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[
             { label: "Manhã", key: "climaManha" as const },
@@ -172,7 +172,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
 
       {/* 3. Efetivo */}
       <Card>
-        <CardHeader><CardTitle>👷 3. Mão de Obra</CardTitle></CardHeader>
+        <CardHeader><CardTitle><Users className="h-4 w-4 inline-block mr-1" /> 3. Mão de Obra</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
@@ -197,7 +197,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
       {/* 4. Equipamentos */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>🚜 4. Equipamentos</CardTitle>
+          <CardTitle><Truck className="h-4 w-4 inline-block mr-1" /> 4. Equipamentos</CardTitle>
           <Button size="sm" variant="outline" onClick={() => {
             setForm(p => ({
               ...p,
@@ -266,7 +266,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
       {/* 5. Serviços Executados */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>🔧 5. Serviços Executados</CardTitle>
+          <CardTitle><Wrench className="h-4 w-4 inline-block mr-1" /> 5. Serviços Executados</CardTitle>
           <Button size="sm" variant="outline" onClick={addService}><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -312,7 +312,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
       {/* 6. Avanço por Trecho */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>📏 6. Avanço por Trecho</CardTitle>
+          <CardTitle><Ruler className="h-4 w-4 inline-block mr-1" /> 6. Avanço por Trecho</CardTitle>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={addSegment}><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
             {trechos.length > 0 && form.segments.length === 0 && (
@@ -349,7 +349,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
                 if (count === 0) return null;
                 return (
                   <Badge key={sys} variant="outline" className="text-xs cursor-default">
-                    {sys === "agua" ? "💧" : sys === "esgoto" ? "🚰" : "🌧️"} {sys}: {count}
+                    {sys === "agua" ? <Droplets className="h-3 w-3 inline-block mr-0.5 text-blue-400" /> : sys === "esgoto" ? <Droplets className="h-3 w-3 inline-block mr-0.5 text-green-500" /> : <CloudRain className="h-3 w-3 inline-block mr-0.5 text-amber-500" />} {sys}: {count}
                   </Badge>
                 );
               })}
@@ -381,9 +381,9 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
               }}>
                 <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="agua">💧 Agua</SelectItem>
-                  <SelectItem value="esgoto">🚰 Esgoto</SelectItem>
-                  <SelectItem value="drenagem">🌧️ Drenagem</SelectItem>
+                  <SelectItem value="agua"><Droplets className="h-3 w-3 inline-block mr-1 text-blue-400" /> Agua</SelectItem>
+                  <SelectItem value="esgoto"><Droplets className="h-3 w-3 inline-block mr-1 text-green-500" /> Esgoto</SelectItem>
+                  <SelectItem value="drenagem"><CloudRain className="h-3 w-3 inline-block mr-1 text-amber-500" /> Drenagem</SelectItem>
                 </SelectContent>
               </Select>
               <Input type="number" placeholder="Planej." value={seg.plannedTotal || ""}
@@ -417,7 +417,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
 
       {/* 7. Geolocalização */}
       <Card>
-        <CardHeader><CardTitle>📍 7. Georreferenciamento</CardTitle></CardHeader>
+        <CardHeader><CardTitle><MapPin className="h-4 w-4 inline-block mr-1" /> 7. Georreferenciamento</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-4">
             <div>

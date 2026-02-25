@@ -7,8 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { Building2, User, Bell, Lock, LogOut } from "lucide-react";
+import { Building2, User, Bell, Lock, LogOut, Download, Upload, Package, FileArchive, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { exportProjectAsZip, importProjectFromZip, previewZipContents, type ProjectManifest } from "@/engine/projectExport";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 
@@ -19,6 +22,9 @@ const Settings = () => {
   const [displayName, setDisplayName] = useState("");
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [pushNotifications, setPushNotifications] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<ProjectManifest | null>(null);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -54,6 +60,42 @@ const Settings = () => {
       navigate('/');
     } catch (error) {
       toast.error("Erro ao fazer logout");
+    }
+  };
+
+  const handleExportProject = async () => {
+    setIsExporting(true);
+    try {
+      await exportProjectAsZip();
+      toast.success("Projeto exportado com sucesso!");
+    } catch (error) {
+      toast.error("Erro ao exportar projeto");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportProject = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const result = await importProjectFromZip(file);
+      if (result.success) {
+        const parts: string[] = [];
+        if (result.counts.plans) parts.push(`${result.counts.plans} planos`);
+        if (result.counts.rdos) parts.push(`${result.counts.rdos} RDOs`);
+        if (result.counts.pontos) parts.push(`${result.counts.pontos} pontos`);
+        if (result.counts.trechos) parts.push(`${result.counts.trechos} trechos`);
+        if (result.counts.bdiContracts) parts.push(`${result.counts.bdiContracts} contratos BDI`);
+        if (result.counts.equipment) parts.push(`${result.counts.equipment} equipamentos`);
+        toast.success(`Importado: ${parts.join(", ")}`);
+        setImportPreview(result.manifest);
+      } else {
+        toast.error(result.errors.join(". "));
+      }
+    } catch (error) {
+      toast.error("Erro ao importar projeto");
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -196,6 +238,125 @@ const Settings = () => {
                       checked={pushNotifications}
                       onCheckedChange={setPushNotifications}
                     />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Backup & Export */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Package className="w-5 h-5" />
+                    <CardTitle>Backup do Projeto</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Exporte todos os dados como um pacote ZIP ou importe de um backup anterior
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Export */}
+                  <div className="flex items-start gap-4 p-4 rounded-lg border bg-muted/30">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <Download className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <div>
+                        <h4 className="font-medium">Exportar Projeto</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Baixa um arquivo .zip com todos os dados: planejamentos, RDOs, topografia, BDI, equipamentos e configurações.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Badge variant="secondary">Planejamentos</Badge>
+                        <Badge variant="secondary">RDOs</Badge>
+                        <Badge variant="secondary">Topografia</Badge>
+                        <Badge variant="secondary">BDI</Badge>
+                        <Badge variant="secondary">Equipamentos</Badge>
+                        <Badge variant="secondary">Templates</Badge>
+                      </div>
+                      <Button onClick={handleExportProject} disabled={isExporting}>
+                        {isExporting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Exportando...
+                          </>
+                        ) : (
+                          <>
+                            <FileArchive className="w-4 h-4 mr-2" />
+                            Exportar como ZIP
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Import */}
+                  <div className="flex items-start gap-4 p-4 rounded-lg border bg-muted/30">
+                    <div className="p-2 rounded-lg bg-secondary/10">
+                      <Upload className="w-5 h-5 text-secondary" />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <div>
+                        <h4 className="font-medium">Importar Projeto</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Carregue um arquivo .zip exportado anteriormente. Dados existentes com mesmo ID serão mantidos.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          disabled={isImporting}
+                          onClick={() => {
+                            const input = document.createElement("input");
+                            input.type = "file";
+                            input.accept = ".zip";
+                            input.onchange = (e) => {
+                              const file = (e.target as HTMLInputElement).files?.[0];
+                              if (file) handleImportProject(file);
+                            };
+                            input.click();
+                          }}
+                        >
+                          {isImporting ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Importando...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-4 h-4 mr-2" />
+                              Selecionar arquivo .zip
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      {importPreview && (
+                        <div className="mt-2 p-3 rounded-md border bg-card text-sm space-y-1">
+                          <div className="flex items-center gap-2 text-success">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span className="font-medium">Importado com sucesso</span>
+                          </div>
+                          <p className="text-muted-foreground">
+                            Exportado em: {new Date(importPreview.exportedAt).toLocaleString("pt-BR")}
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {importPreview.modules.map((m) => (
+                              <Badge key={m} variant="outline">{m}</Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Warning */}
+                  <div className="flex items-start gap-2 p-3 rounded-md bg-warning/10 border border-warning/20">
+                    <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+                    <p className="text-sm text-muted-foreground">
+                      Recomendamos exportar regularmente como backup. Os dados ficam salvos no navegador (localStorage) e no Supabase, mas um backup em arquivo garante que nada se perca.
+                    </p>
                   </div>
                 </CardContent>
               </Card>

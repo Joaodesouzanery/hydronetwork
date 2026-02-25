@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Calculator, Upload, Droplets, AlertTriangle, Link, Ruler } from "lucide-react";
+import { Plus, Trash2, Calculator, Upload, Droplets, AlertTriangle, Link, Ruler, ClipboardList } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { hazenWilliamsHeadloss, hazenWilliamsVelocity } from "@/engine/hydraulics";
 import { NodeMapWidget, ConnectionData } from "@/components/hydronetwork/NodeMapWidget";
@@ -225,7 +225,7 @@ export const WaterModule = ({ pontos }: WaterModuleProps) => {
             </div>
             {warnings.length > 0 && (
               <Card className="mb-4 border-yellow-400/30 bg-yellow-500/5">
-                <CardHeader className="pb-2"><CardTitle className="text-sm">📋 Validação Normativa</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm"><ClipboardList className="h-4 w-4 inline-block mr-1" /> Validação Normativa</CardTitle></CardHeader>
                 <CardContent>
                   <div className="max-h-[200px] overflow-auto space-y-1">
                     {warnings.map((w, i) => <p key={i} className="text-sm text-yellow-700 dark:text-yellow-400">{w.trecho}: {w.msg}</p>)}
@@ -234,7 +234,7 @@ export const WaterModule = ({ pontos }: WaterModuleProps) => {
               </Card>
             )}
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">📋 Resultados Detalhados</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm"><ClipboardList className="h-4 w-4 inline-block mr-1" /> Resultados Detalhados</CardTitle></CardHeader>
               <CardContent>
                 <div className="max-h-[400px] overflow-auto">
                   <Table>

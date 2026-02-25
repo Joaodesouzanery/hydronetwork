@@ -426,7 +426,7 @@ const Inventory = () => {
                 <Building2 className="w-6 h-6 mr-2" />
                 <span className="font-bold">ConstruData</span>
               </Button>
-              <h1 className="text-xl font-semibold">Almoxarifado</h1>
+              <h1 className="text-3xl font-bold">Almoxarifado</h1>
             </div>
             <div className="flex gap-2">
               <PageTutorialButton pageKey="inventory" />

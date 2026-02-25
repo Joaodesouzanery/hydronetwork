@@ -15,7 +15,9 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
   Play, Upload, Download, Trash2, Droplets, AlertTriangle, Pause,
-  FileText, BarChart3, MapPin, Plus, X, Settings2, Zap
+  FileText, BarChart3, MapPin, Plus, X, Settings2, Zap, Mountain,
+  Square, Minus, Wrench, Ruler, Triangle, TrendingUp, FolderOpen,
+  Map, Settings, TrendingDown, ClipboardList
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -648,13 +650,13 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
         <CardContent>
           <div className="grid grid-cols-3 md:grid-cols-7 gap-2 mb-4">
             {[
-              { icon: "📍", value: junctions.length, label: "Junções", color: "text-blue-600" },
-              { icon: "🏔️", value: reservoirs.length, label: "Reservatórios", color: "text-amber-600" },
-              { icon: "🟦", value: tanks.length, label: "Tanques", color: "text-cyan-600" },
-              { icon: "➖", value: pipes.length, label: "Tubos", color: "text-green-600" },
-              { icon: "⚡", value: pumps.length, label: "Bombas", color: "text-purple-600" },
-              { icon: "🔧", value: valves.length, label: "Válvulas", color: "text-orange-600" },
-              { icon: "📏", value: `${totalExtension.toFixed(0)}m`, label: "Extensão", color: "text-indigo-600" },
+              { icon: <MapPin className="h-5 w-5 inline-block text-blue-600" />, value: junctions.length, label: "Junções", color: "text-blue-600" },
+              { icon: <Mountain className="h-5 w-5 inline-block text-amber-600" />, value: reservoirs.length, label: "Reservatórios", color: "text-amber-600" },
+              { icon: <Square className="h-5 w-5 inline-block text-cyan-600" />, value: tanks.length, label: "Tanques", color: "text-cyan-600" },
+              { icon: <Minus className="h-5 w-5 inline-block text-green-600" />, value: pipes.length, label: "Tubos", color: "text-green-600" },
+              { icon: <Zap className="h-5 w-5 inline-block text-purple-600" />, value: pumps.length, label: "Bombas", color: "text-purple-600" },
+              { icon: <Wrench className="h-5 w-5 inline-block text-orange-600" />, value: valves.length, label: "Válvulas", color: "text-orange-600" },
+              { icon: <Ruler className="h-5 w-5 inline-block text-indigo-600" />, value: `${totalExtension.toFixed(0)}m`, label: "Extensão", color: "text-indigo-600" },
             ].map((s, i) => (
               <div key={i} className="bg-white dark:bg-card border rounded-xl p-2 text-center">
                 <div className="text-lg">{s.icon}</div>
@@ -665,15 +667,15 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
           </div>
           {(pipeVertices.length > 0 || importedPatterns.length > 0 || importedCurves.length > 0) && (
             <div className="flex gap-2 flex-wrap mb-3">
-              {pipeVertices.length > 0 && <Badge variant="secondary" className="text-[10px]">📐 {pipeVertices.length} vértices</Badge>}
-              {importedPatterns.length > 0 && <Badge variant="secondary" className="text-[10px]">📊 {importedPatterns.length} padrões</Badge>}
-              {importedCurves.length > 0 && <Badge variant="secondary" className="text-[10px]">📈 {importedCurves.length} curvas</Badge>}
+              {pipeVertices.length > 0 && <Badge variant="secondary" className="text-[10px]"><Triangle className="h-3 w-3 inline-block mr-1" />{pipeVertices.length} vértices</Badge>}
+              {importedPatterns.length > 0 && <Badge variant="secondary" className="text-[10px]"><BarChart3 className="h-3 w-3 inline-block mr-1" />{importedPatterns.length} padrões</Badge>}
+              {importedCurves.length > 0 && <Badge variant="secondary" className="text-[10px]"><TrendingUp className="h-3 w-3 inline-block mr-1" />{importedCurves.length} curvas</Badge>}
             </div>
           )}
           <div className="flex gap-2 flex-wrap">
             <input ref={fileInputRef} type="file" accept=".inp,.INP" className="hidden" onChange={handleFileUpload} key={fileInputKey} />
             <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => fileInputRef.current?.click()}><Upload className="h-4 w-4 mr-1" /> Importar .INP</Button>
-            <Button variant="outline" onClick={loadExample}>📂 Carregar Exemplo</Button>
+            <Button variant="outline" onClick={loadExample}><FolderOpen className="h-4 w-4 inline-block mr-1" /> Carregar Exemplo</Button>
             <Button variant="outline" onClick={() => {
               if (topoPontos.length === 0 || topoTrechos.length === 0) { toast.error("Carregue dados na Topografia primeiro"); return; }
               const newJunctions: Junction[] = topoPontos.map(p => ({ id: p.id, elevation: p.cota, demand: 1.0, pattern: "Residencial" }));
@@ -699,14 +701,14 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="flex flex-wrap h-auto gap-1">
-          <TabsTrigger value="network">🗺️ Rede</TabsTrigger>
-          <TabsTrigger value="junctions">📍 Junções</TabsTrigger>
-          <TabsTrigger value="pipes">➖ Tubos</TabsTrigger>
-          <TabsTrigger value="elements">🔧 Elementos</TabsTrigger>
-          <TabsTrigger value="config">⚙️ Configuração</TabsTrigger>
-          <TabsTrigger value="patterns">📊 Padrões</TabsTrigger>
-          <TabsTrigger value="results">📈 Resultados</TabsTrigger>
-          <TabsTrigger value="charts">📉 Gráficos</TabsTrigger>
+          <TabsTrigger value="network"><><Map className="h-4 w-4 inline-block mr-1" /> Rede</></TabsTrigger>
+          <TabsTrigger value="junctions"><><MapPin className="h-4 w-4 inline-block mr-1" /> Junções</></TabsTrigger>
+          <TabsTrigger value="pipes"><><Minus className="h-4 w-4 inline-block mr-1" /> Tubos</></TabsTrigger>
+          <TabsTrigger value="elements"><><Wrench className="h-4 w-4 inline-block mr-1" /> Elementos</></TabsTrigger>
+          <TabsTrigger value="config"><><Settings className="h-4 w-4 inline-block mr-1" /> Configuração</></TabsTrigger>
+          <TabsTrigger value="patterns"><><BarChart3 className="h-4 w-4 inline-block mr-1" /> Padrões</></TabsTrigger>
+          <TabsTrigger value="results"><><TrendingUp className="h-4 w-4 inline-block mr-1" /> Resultados</></TabsTrigger>
+          <TabsTrigger value="charts"><><TrendingDown className="h-4 w-4 inline-block mr-1" /> Gráficos</></TabsTrigger>
         </TabsList>
 
         {/* Network Map */}

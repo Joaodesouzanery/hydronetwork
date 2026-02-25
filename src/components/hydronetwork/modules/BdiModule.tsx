@@ -17,7 +17,8 @@ import { toast } from "sonner";
 import {
   Calculator, DollarSign, Plus, Trash2, Download, Upload,
   FileText, BarChart3, Users, Wrench, TrendingUp, CheckCircle,
-  AlertTriangle, XCircle, Copy, Printer, Info
+  AlertTriangle, XCircle, Copy, Printer, Info, Target, ClipboardList,
+  Tag, CheckCircle2
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -278,7 +279,7 @@ export const BdiModule = () => {
         </CardHeader>
         <CardContent>
           <div className="flex gap-2 flex-wrap">
-            <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={loadDemo}>🎯 Carregar Demo</Button>
+            <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={loadDemo}><Target className="h-4 w-4 inline-block mr-1" /> Carregar Demo</Button>
             <Button variant="outline" onClick={saveContrato}><FileText className="h-4 w-4 mr-1" /> Salvar Contrato</Button>
             <Button variant="outline" onClick={exportExcel} className="text-green-700"><Download className="h-4 w-4 mr-1" /> Excel</Button>
             <Button variant="outline" onClick={exportCSV} className="text-orange-700"><Download className="h-4 w-4 mr-1" /> CSV</Button>
@@ -290,14 +291,14 @@ export const BdiModule = () => {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="flex flex-wrap h-auto gap-1">
-          <TabsTrigger value="contrato">📋 Contrato</TabsTrigger>
-          <TabsTrigger value="equipes">👷 Equipes</TabsTrigger>
-          <TabsTrigger value="orcamento">💰 Orçamento</TabsTrigger>
-          <TabsTrigger value="bdi">📊 BDI</TabsTrigger>
-          <TabsTrigger value="venda">🏷️ Preço de Venda</TabsTrigger>
-          <TabsTrigger value="viabilidade">✅ Viabilidade</TabsTrigger>
-          <TabsTrigger value="cenarios">🔮 Cenários</TabsTrigger>
-          <TabsTrigger value="historico">📁 Histórico</TabsTrigger>
+          <TabsTrigger value="contrato"><ClipboardList className="h-4 w-4 inline-block mr-1" /> Contrato</TabsTrigger>
+          <TabsTrigger value="equipes"><Users className="h-4 w-4 inline-block mr-1" /> Equipes</TabsTrigger>
+          <TabsTrigger value="orcamento"><DollarSign className="h-4 w-4 inline-block mr-1" /> Orçamento</TabsTrigger>
+          <TabsTrigger value="bdi"><BarChart3 className="h-4 w-4 inline-block mr-1" /> BDI</TabsTrigger>
+          <TabsTrigger value="venda"><Tag className="h-4 w-4 inline-block mr-1" /> Preço de Venda</TabsTrigger>
+          <TabsTrigger value="viabilidade"><CheckCircle2 className="h-4 w-4 inline-block mr-1" /> Viabilidade</TabsTrigger>
+          <TabsTrigger value="cenarios"><TrendingUp className="h-4 w-4 inline-block mr-1" /> Cenários</TabsTrigger>
+          <TabsTrigger value="historico"><FileText className="h-4 w-4 inline-block mr-1" /> Histórico</TabsTrigger>
         </TabsList>
 
         {/* TAB 1: Contract Data */}
