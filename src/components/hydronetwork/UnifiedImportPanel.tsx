@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { PontoTopografico, parseTopographyCSV } from '@/engine/reader';
 import { Trecho, createTrechoFromPoints, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from '@/engine/domain';
 import { parseINPToInternal, parseSWMMToInternal } from '@/engine/importEngine';
-import { Upload, Trash2, Check, X, FileText, Loader2, ChevronDown, ChevronRight, Globe, AlertTriangle, History, Save, FolderOpen, Undo2 } from 'lucide-react';
+import { Upload, Trash2, Check, X, FileText, Loader2, ChevronDown, ChevronRight, ChevronLeft, Globe, AlertTriangle, History, Save, FolderOpen, Undo2 } from 'lucide-react';
 import { CRSSelector } from '@/components/hydronetwork/CRSSelector';
 import { ImportCRSConfig, validateUTMRange } from '@/engine/coordinateTransform';
 
@@ -1163,6 +1163,8 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
   const [filterType, setFilterType] = useState('all');
   const [isDragging, setIsDragging] = useState(false);
   const [expandedEntities, setExpandedEntities] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(0);
+  const PAGE_SIZE = 50;
   const [showFields, setShowFields] = useState(false);
   const [importCRS, setImportCRS] = useState<ImportCRSConfig | null>(null);
   const [validationIssues, setValidationIssues] = useState<ValidationIssueItem[]>([]);
@@ -1217,6 +1219,16 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
   // Filtered
   const filteredPoints = allPoints.filter(p => (filterLayer === 'all' || p.layer === filterLayer));
   const filteredEdges = allEdges.filter(e => (filterLayer === 'all' || e.layer === filterLayer) && (filterType === 'all' || e.type === filterType));
+
+  // Pagination
+  const allFilteredEntities = [
+    ...filteredPoints.map(p => ({ type: 'point' as const, data: p })),
+    ...filteredEdges.map(e => ({ type: 'edge' as const, data: e })),
+  ];
+  const filteredTotal = allFilteredEntities.length;
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages - 1);
+  const paginatedEntities = allFilteredEntities.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   // File detection
   const detectFormat = (name: string): string => {
@@ -1637,13 +1649,13 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
 
           {/* Filters */}
           <div className="flex items-center gap-2 flex-wrap">
-            <select value={filterLayer} onChange={e => setFilterLayer(e.target.value)}
+            <select value={filterLayer} onChange={e => { setFilterLayer(e.target.value); setCurrentPage(0); }}
               className="text-xs border border-border rounded px-2 py-1 bg-background">
               <option value="all">Todos Layers ({allLayers.length})</option>
               {allLayers.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
             {allTypes.length > 0 && (
-              <select value={filterType} onChange={e => setFilterType(e.target.value)}
+              <select value={filterType} onChange={e => { setFilterType(e.target.value); setCurrentPage(0); }}
                 className="text-xs border border-border rounded px-2 py-1 bg-background">
                 <option value="all">Todos Tipos</option>
                 {allTypes.map(t => <option key={t} value={t}>{t}</option>)}
@@ -1674,91 +1686,124 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {filteredPoints.slice(0, 100).map(p => {
-                    const rowKey = `p_${p.id}_${p.sourceFile}`;
-                    const isExpanded = expandedEntities.has(rowKey);
-                    return (
-                      <React.Fragment key={rowKey}>
-                        <tr className="hover:bg-muted/30 cursor-pointer" onClick={() => toggleEntity(p.id)}>
-                          <td className="px-2 py-1 text-center"><input type="checkbox" checked={selectedEntities.has(p.id)} readOnly /></td>
-                          <td className="px-2 py-1 font-mono">{p.id}</td>
-                          <td className="px-2 py-1">
-                            {p.properties.color !== undefined && <span className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ backgroundColor: getDxfColor(p.properties.color) }} />}
-                            <Badge variant="outline" className="text-[10px]">{p.properties.entityType || 'POINT'}</Badge>
-                          </td>
-                          <td className="px-2 py-1 text-center font-mono">{p.x.toFixed(1)}, {p.y.toFixed(1)}</td>
-                          <td className="px-2 py-1 text-center text-muted-foreground">—</td>
-                          <td className="px-2 py-1">{p.layer}</td>
-                          <td className="px-2 py-1 text-muted-foreground truncate max-w-[80px]">{p.sourceFile}</td>
-                          <td className="px-2 py-1 text-center">
-                            {Object.keys(p.properties).length > 0 && (
-                              <button onClick={ev => { ev.stopPropagation(); toggleExpand(rowKey); }} className="text-muted-foreground hover:text-foreground">
-                                {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                        {isExpanded && (
-                          <tr>
-                            <td colSpan={8} className="px-4 py-2 bg-muted/20">
-                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
-                                {Object.entries(p.properties).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => (
-                                  <span key={k}><span className="font-medium text-muted-foreground">{k}:</span> <span className="font-mono">{String(v)}</span></span>
-                                ))}
-                              </div>
+                  {paginatedEntities.map(entity => {
+                    if (entity.type === 'point') {
+                      const p = entity.data as ParsedPoint;
+                      const rowKey = `p_${p.id}_${p.sourceFile}`;
+                      const isExpanded = expandedEntities.has(rowKey);
+                      return (
+                        <React.Fragment key={rowKey}>
+                          <tr className="hover:bg-muted/30 cursor-pointer" onClick={() => toggleEntity(p.id)}>
+                            <td className="px-2 py-1 text-center"><input type="checkbox" checked={selectedEntities.has(p.id)} readOnly /></td>
+                            <td className="px-2 py-1 font-mono">{p.id}</td>
+                            <td className="px-2 py-1">
+                              {p.properties.color !== undefined && <span className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ backgroundColor: getDxfColor(p.properties.color) }} />}
+                              <Badge variant="outline" className="text-[10px]">{p.properties.entityType || 'POINT'}</Badge>
+                            </td>
+                            <td className="px-2 py-1 text-center font-mono">{p.x.toFixed(1)}, {p.y.toFixed(1)}</td>
+                            <td className="px-2 py-1 text-center text-muted-foreground">—</td>
+                            <td className="px-2 py-1">{p.layer}</td>
+                            <td className="px-2 py-1 text-muted-foreground truncate max-w-[80px]">{p.sourceFile}</td>
+                            <td className="px-2 py-1 text-center">
+                              {Object.keys(p.properties).length > 0 && (
+                                <button onClick={ev => { ev.stopPropagation(); toggleExpand(rowKey); }} className="text-muted-foreground hover:text-foreground">
+                                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                </button>
+                              )}
                             </td>
                           </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                  {filteredEdges.slice(0, 100).map(e => {
-                    const rowKey = `e_${e.id}_${e.sourceFile}`;
-                    const isExpanded = expandedEntities.has(rowKey);
-                    const edgeLen = e.properties.length ?? calculateEdgeLength(e.coordinates);
-                    return (
-                      <React.Fragment key={rowKey}>
-                        <tr className="hover:bg-muted/30 cursor-pointer" onClick={() => toggleEntity(e.id)}>
-                          <td className="px-2 py-1 text-center"><input type="checkbox" checked={selectedEntities.has(e.id)} readOnly /></td>
-                          <td className="px-2 py-1 font-mono">{e.id}</td>
-                          <td className="px-2 py-1">
-                            {e.properties.color !== undefined && <span className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ backgroundColor: getDxfColor(e.properties.color) }} />}
-                            <Badge variant="outline" className="text-[10px]">{e.type}</Badge>
-                          </td>
-                          <td className="px-2 py-1 text-center">{e.coordinates.length} vertices</td>
-                          <td className="px-2 py-1 text-center font-mono">{edgeLen > 0 ? edgeLen.toFixed(1) : '—'}</td>
-                          <td className="px-2 py-1">{e.layer}</td>
-                          <td className="px-2 py-1 text-muted-foreground truncate max-w-[80px]">{e.sourceFile}</td>
-                          <td className="px-2 py-1 text-center">
-                            {Object.keys(e.properties).length > 0 && (
-                              <button onClick={ev => { ev.stopPropagation(); toggleExpand(rowKey); }} className="text-muted-foreground hover:text-foreground">
-                                {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                        {isExpanded && (
-                          <tr>
-                            <td colSpan={8} className="px-4 py-2 bg-muted/20">
-                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
-                                {Object.entries(e.properties).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => (
-                                  <span key={k}><span className="font-medium text-muted-foreground">{k}:</span> <span className="font-mono">{String(v)}</span></span>
-                                ))}
-                              </div>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={8} className="px-4 py-2 bg-muted/20">
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
+                                  {Object.entries(p.properties).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => (
+                                    <span key={k}><span className="font-medium text-muted-foreground">{k}:</span> <span className="font-mono">{String(v)}</span></span>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    } else {
+                      const e = entity.data as ParsedEdge;
+                      const rowKey = `e_${e.id}_${e.sourceFile}`;
+                      const isExpanded = expandedEntities.has(rowKey);
+                      const edgeLen = e.properties.length ?? calculateEdgeLength(e.coordinates);
+                      return (
+                        <React.Fragment key={rowKey}>
+                          <tr className="hover:bg-muted/30 cursor-pointer" onClick={() => toggleEntity(e.id)}>
+                            <td className="px-2 py-1 text-center"><input type="checkbox" checked={selectedEntities.has(e.id)} readOnly /></td>
+                            <td className="px-2 py-1 font-mono">{e.id}</td>
+                            <td className="px-2 py-1">
+                              {e.properties.color !== undefined && <span className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ backgroundColor: getDxfColor(e.properties.color) }} />}
+                              <Badge variant="outline" className="text-[10px]">{e.type}</Badge>
+                            </td>
+                            <td className="px-2 py-1 text-center">{e.coordinates.length} vertices</td>
+                            <td className="px-2 py-1 text-center font-mono">{edgeLen > 0 ? edgeLen.toFixed(1) : '—'}</td>
+                            <td className="px-2 py-1">{e.layer}</td>
+                            <td className="px-2 py-1 text-muted-foreground truncate max-w-[80px]">{e.sourceFile}</td>
+                            <td className="px-2 py-1 text-center">
+                              {Object.keys(e.properties).length > 0 && (
+                                <button onClick={ev => { ev.stopPropagation(); toggleExpand(rowKey); }} className="text-muted-foreground hover:text-foreground">
+                                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                </button>
+                              )}
                             </td>
                           </tr>
-                        )}
-                      </React.Fragment>
-                    );
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={8} className="px-4 py-2 bg-muted/20">
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
+                                  {Object.entries(e.properties).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => (
+                                    <span key={k}><span className="font-medium text-muted-foreground">{k}:</span> <span className="font-mono">{String(v)}</span></span>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    }
                   })}
-                  {(filteredPoints.length > 100 || filteredEdges.length > 100) && (
-                    <tr><td colSpan={8} className="px-2 py-1.5 text-center text-muted-foreground">
-                      ... e mais {Math.max(0, filteredPoints.length - 100) + Math.max(0, filteredEdges.length - 100)} entidades
+                  {filteredTotal === 0 && (
+                    <tr><td colSpan={8} className="px-2 py-4 text-center text-muted-foreground">
+                      Nenhuma entidade encontrada
                     </td></tr>
                   )}
                 </tbody>
               </table>
             </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-t border-border text-xs">
+                <span className="text-muted-foreground">
+                  {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filteredTotal)} de {filteredTotal}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs"
+                    disabled={safePage === 0}
+                    onClick={() => setCurrentPage(0)}>
+                    Inicio
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs"
+                    disabled={safePage === 0}
+                    onClick={() => setCurrentPage(p => p - 1)}>
+                    <ChevronLeft className="h-3 w-3" />
+                  </Button>
+                  <span className="px-2 font-medium">{safePage + 1} / {totalPages}</span>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs"
+                    disabled={safePage >= totalPages - 1}
+                    onClick={() => setCurrentPage(p => p + 1)}>
+                    <ChevronRight className="h-3 w-3" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs"
+                    disabled={safePage >= totalPages - 1}
+                    onClick={() => setCurrentPage(totalPages - 1)}>
+                    Fim
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Trecho preview count */}
