@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Upload, Download, Trash2, Calendar, ZoomIn, ZoomOut, Maximize, Package, Save, FolderOpen, RefreshCw } from "lucide-react";
+import { Plus, Upload, Download, Trash2, Calendar, ZoomIn, ZoomOut, Maximize, Package, Save, FolderOpen, RefreshCw, BarChart3, Users } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
 import { loadSharedPlanning, saveSharedPlanning, SharedPlanningData, SharedTask, SharedResource } from "@/engine/sharedPlanningStore";
@@ -146,7 +146,7 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
         <CardContent className="pt-3 pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="text-sm">
-              <span className="font-medium">🔄 Dados compartilhados</span>
+              <span className="font-medium"><RefreshCw className="h-4 w-4 inline-block mr-1" /> Dados compartilhados</span>
               {lastSyncSource && <span className="text-muted-foreground ml-2">(última edição: {lastSyncSource})</span>}
             </div>
             <div className="flex gap-2">
@@ -226,7 +226,7 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle>📅 Gráfico de Gantt</CardTitle>
+            <CardTitle><Calendar className="h-4 w-4 inline-block mr-1" /> Gráfico de Gantt</CardTitle>
             <div className="flex gap-2 items-center">
               <Select value={ganttView} onValueChange={setGanttView}>
                 <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
@@ -301,9 +301,9 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
                 </div>
               </div>
               <div className="flex gap-4 text-sm text-muted-foreground">
-                <span>📊 {tasks.length} tarefas</span>
-                <span>📅 {totalDuration} dias totais</span>
-                <span>👷 {resources.length} recursos</span>
+                <span><BarChart3 className="h-4 w-4 inline-block mr-1" />{tasks.length} tarefas</span>
+                <span><Calendar className="h-4 w-4 inline-block mr-1" />{totalDuration} dias totais</span>
+                <span><Users className="h-4 w-4 inline-block mr-1" />{resources.length} recursos</span>
               </div>
             </div>
           )}
