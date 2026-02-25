@@ -196,26 +196,41 @@ export function utmToLatLng(
 /**
  * Auto-detect UTM zone by testing each Brazil zone (18-25).
  * Returns the zone whose central meridian best matches the converted longitude.
+ * Uses progressive tolerance and closest-match fallback to avoid defaulting to zone 23.
  */
 export function detectUTMZone(easting: number, northing: number, overrideZone?: number): { zone: number; hemisphere: "N" | "S" } {
   const hemisphere: "N" | "S" = northing < 10000000 ? "S" : "N";
   if (overrideZone) return { zone: overrideZone, hemisphere };
 
-  // Try each Brazil UTM zone and find the one where the result falls within zone bounds
-  for (const zone of [18, 19, 20, 21, 22, 23, 24, 25]) {
-    const result = utmToLatLng(easting, northing, zone, hemisphere);
-    if (!isFinite(result.lat) || !isFinite(result.lng)) continue;
-    // Check if result is within Brazil's bounding box (with margin)
-    if (result.lat < -35 || result.lat > 7) continue;
-    if (result.lng < -75 || result.lng > -33) continue;
-    // Check if longitude falls within this zone's range (6° wide)
-    const centralMeridian = (zone - 1) * 6 - 180 + 3;
-    if (Math.abs(result.lng - centralMeridian) <= 3.5) {
-      return { zone, hemisphere };
+  // Try with standard tolerance first (±3.5°), then wider (±6°)
+  for (const tolerance of [3.5, 6]) {
+    for (const zone of [18, 19, 20, 21, 22, 23, 24, 25]) {
+      const result = utmToLatLng(easting, northing, zone, hemisphere);
+      if (!isFinite(result.lat) || !isFinite(result.lng)) continue;
+      if (result.lat < -35 || result.lat > 7) continue;
+      if (result.lng < -75 || result.lng > -33) continue;
+      const centralMeridian = (zone - 1) * 6 - 180 + 3;
+      if (Math.abs(result.lng - centralMeridian) <= tolerance) {
+        return { zone, hemisphere };
+      }
     }
   }
 
-  return { zone: 23, hemisphere };
+  // Fallback: find closest zone by meridian proximity
+  let bestZone = 23;
+  let bestDistance = Infinity;
+  for (const zone of [18, 19, 20, 21, 22, 23, 24, 25]) {
+    const result = utmToLatLng(easting, northing, zone, hemisphere);
+    if (!isFinite(result.lat) || !isFinite(result.lng)) continue;
+    const centralMeridian = (zone - 1) * 6 - 180 + 3;
+    const dist = Math.abs(result.lng - centralMeridian);
+    if (dist < bestDistance) {
+      bestDistance = dist;
+      bestZone = zone;
+    }
+  }
+
+  return { zone: bestZone, hemisphere };
 }
 
 // ════════════════════════════════════════

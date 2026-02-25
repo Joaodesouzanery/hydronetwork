@@ -1,15 +1,16 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Trash2, Edit, FileText, MapPin, BarChart3, List, Map as MapIcon, Download, Upload } from "lucide-react";
+import { Plus, Trash2, Edit, FileText, MapPin, BarChart3, List, Map as MapIcon, Download, Upload, ArrowUpDown } from "lucide-react";
 import {
   RDO, ExecutedService, SegmentProgress, ServiceUnit, RDOStatus, SystemType,
   generateId, saveRDOs, loadRDOs, deleteRDO, validateRDO, calculateDashboardMetrics, getStatusColor, exportRDOsToCSV
@@ -146,6 +147,11 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
   const [segFilterFrente, setSegFilterFrente] = useState<string>("all");
   const [segFilterLote, setSegFilterLote] = useState<string>("all");
   const [segSearch, setSegSearch] = useState("");
+  // Manual completion overrides: trechoId → boolean (concluido)
+  const [manualCompletion, setManualCompletion] = useState<Record<string, boolean>>({});
+  // Financial sorting
+  const [financialSortField, setFinancialSortField] = useState<"date" | "category" | "value">("date");
+  const [financialSortDir, setFinancialSortDir] = useState<"asc" | "desc">("desc");
   const topoInputRef = useRef<HTMLInputElement>(null);
 
   const handleTopoImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -215,13 +221,51 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
     { name: "Não Iniciado", value: naoIniciados, color: "#ef4444" },
   ];
 
-  // Top services
-  const topServices = [
-    { name: "Escavação mecanizada", qty: 1250, unit: "m³" },
-    { name: "Assentamento DN200", qty: 405, unit: "m" },
-    { name: "Reaterro compactado", qty: 980, unit: "m³" },
-    { name: "Escoramento", qty: 650, unit: "m²" },
-  ];
+  // Top services: aggregate from real RDOs, fallback to mock if no RDOs
+  const topServices = useMemo(() => {
+    if (rdos.length === 0) {
+      return [
+        { name: "Escavação mecanizada", qty: 1250, unit: "m³", planned: 0 },
+        { name: "Assentamento DN200", qty: 405, unit: "m", planned: 0 },
+        { name: "Reaterro compactado", qty: 980, unit: "m³", planned: 0 },
+        { name: "Escoramento", qty: 650, unit: "m²", planned: 0 },
+      ];
+    }
+    // Aggregate services from all RDOs
+    const serviceMap = new Map<string, { qty: number; unit: string }>();
+    for (const rdo of rdos) {
+      for (const svc of rdo.services) {
+        const key = svc.serviceName;
+        const existing = serviceMap.get(key);
+        if (existing) {
+          existing.qty += svc.quantity;
+        } else {
+          serviceMap.set(key, { qty: svc.quantity, unit: svc.unit });
+        }
+      }
+    }
+    // Try to load planning productivity for planned quantities
+    let planningServices: Record<string, number> = {};
+    try {
+      const raw = localStorage.getItem("hydronetwork_saved_plans");
+      if (raw) {
+        const plans = JSON.parse(raw);
+        if (plans.length > 0) {
+          const latest = plans[plans.length - 1];
+          if (latest.productivity) {
+            for (const p of latest.productivity) {
+              planningServices[p.servico] = p.produtividade;
+            }
+          }
+        }
+      }
+    } catch { /* ignore */ }
+
+    return Array.from(serviceMap.entries())
+      .map(([name, { qty, unit }]) => ({ name, qty, unit, planned: planningServices[name] || 0 }))
+      .sort((a, b) => b.qty - a.qty)
+      .slice(0, 10);
+  }, [rdos]);
 
   // EVM
   const BAC = 850000;
@@ -395,15 +439,36 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
 
           {/* Top services */}
           <Card>
-            <CardHeader><CardTitle>🏆 Serviços Mais Executados</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>🏆 Serviços Mais Executados</CardTitle>
+              <CardDescription className="text-xs">
+                {rdos.length > 0
+                  ? `Dados agregados de ${rdos.length} RDOs registrados`
+                  : "Dados de exemplo (registre RDOs para dados reais)"}
+              </CardDescription>
+            </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {topServices.map((s, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <span className="text-sm">{s.name}</span>
-                    <Badge variant="outline">{s.qty.toLocaleString("pt-BR")} {s.unit}</Badge>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                {topServices.map((s, i) => {
+                  const maxQty = topServices[0]?.qty || 1;
+                  const barWidth = Math.max(5, (s.qty / maxQty) * 100);
+                  return (
+                    <div key={i} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{s.name}</span>
+                        <Badge variant="outline">{s.qty.toLocaleString("pt-BR")} {s.unit}</Badge>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${barWidth}%` }} />
+                      </div>
+                      {s.planned > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          Planejado: {s.planned.toLocaleString("pt-BR")} {s.unit} ({((s.qty / s.planned) * 100).toFixed(0)}%)
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
@@ -472,6 +537,7 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[60px]">Concluído</TableHead>
                     <TableHead>Trecho</TableHead>
                     <TableHead>Sistema</TableHead>
                     <TableHead>Frente</TableHead>
@@ -489,19 +555,30 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                       if (segFilterFrente !== "all" && seg.frente !== segFilterFrente) return false;
                       if (segFilterLote !== "all" && seg.lote !== segFilterLote) return false;
                       const pct = seg.planned > 0 ? (seg.executed / seg.planned) * 100 : 0;
-                      if (segFilterStatus === "nao_iniciado" && pct > 0) return false;
-                      if (segFilterStatus === "em_execucao" && (pct <= 0 || pct >= 100)) return false;
-                      if (segFilterStatus === "concluido" && pct < 100) return false;
+                      const isManualDone = manualCompletion[seg.id] === true;
+                      const effectivePct = isManualDone ? 100 : pct;
+                      if (segFilterStatus === "nao_iniciado" && effectivePct > 0) return false;
+                      if (segFilterStatus === "em_execucao" && (effectivePct <= 0 || effectivePct >= 100)) return false;
+                      if (segFilterStatus === "concluido" && effectivePct < 100) return false;
                       if (segSearch && !seg.id.toLowerCase().includes(segSearch.toLowerCase()) && !(seg.frente || "").toLowerCase().includes(segSearch.toLowerCase())) return false;
                       return true;
                     })
                     .map(seg => {
                     const pct = seg.planned > 0 ? (seg.executed / seg.planned) * 100 : 0;
-                    const status = pct >= 100 ? "Concluido" : pct > 0 ? "Em Execucao" : "Nao Iniciado";
-                    const statusColor = pct >= 100 ? "bg-green-500" : pct > 0 ? "bg-orange-500" : "bg-red-500";
+                    const isManualDone = manualCompletion[seg.id] === true;
+                    const effectiveStatus = isManualDone ? "Concluido" : pct >= 100 ? "Concluido" : pct > 0 ? "Em Execucao" : "Nao Iniciado";
+                    const statusColor = effectiveStatus === "Concluido" ? "bg-green-500" : pct > 0 ? "bg-orange-500" : "bg-red-500";
                     const sysIcon = seg.system === "agua" ? "💧" : seg.system === "esgoto" ? "🚰" : "🌧️";
                     return (
-                      <TableRow key={seg.id}>
+                      <TableRow key={seg.id} className={isManualDone && pct < 100 ? "bg-green-500/5" : ""}>
+                        <TableCell>
+                          <Checkbox
+                            checked={isManualDone || pct >= 100}
+                            onCheckedChange={(checked) => {
+                              setManualCompletion(prev => ({ ...prev, [seg.id]: checked === true }));
+                            }}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">{seg.id}</TableCell>
                         <TableCell>{sysIcon} {seg.system}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{seg.frente || "-"}</TableCell>
@@ -511,12 +588,12 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: pct >= 100 ? "#22c55e" : pct > 0 ? "#f59e0b" : "#ef4444" }} />
+                              <div className="h-full rounded-full" style={{ width: `${Math.min(isManualDone ? 100 : pct, 100)}%`, backgroundColor: effectiveStatus === "Concluido" ? "#22c55e" : pct > 0 ? "#f59e0b" : "#ef4444" }} />
                             </div>
-                            <span className="text-xs">{fmt(pct)}%</span>
+                            <span className="text-xs">{isManualDone ? "100,0" : fmt(pct)}%</span>
                           </div>
                         </TableCell>
-                        <TableCell><Badge className={`${statusColor} text-white`}>{status}</Badge></TableCell>
+                        <TableCell><Badge className={`${statusColor} text-white`}>{effectiveStatus}</Badge></TableCell>
                       </TableRow>
                     );
                   })}
@@ -643,16 +720,28 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Data</TableHead>
-                          <TableHead>Categoria</TableHead>
+                          <TableHead className="cursor-pointer select-none" onClick={() => { setFinancialSortField("date"); setFinancialSortDir(financialSortField === "date" && financialSortDir === "asc" ? "desc" : "asc"); }}>
+                            <div className="flex items-center gap-1">Data <ArrowUpDown className="h-3 w-3" /></div>
+                          </TableHead>
+                          <TableHead className="cursor-pointer select-none" onClick={() => { setFinancialSortField("category"); setFinancialSortDir(financialSortField === "category" && financialSortDir === "asc" ? "desc" : "asc"); }}>
+                            <div className="flex items-center gap-1">Categoria <ArrowUpDown className="h-3 w-3" /></div>
+                          </TableHead>
                           <TableHead>Descrição</TableHead>
-                          <TableHead className="text-right">Valor</TableHead>
+                          <TableHead className="text-right cursor-pointer select-none" onClick={() => { setFinancialSortField("value"); setFinancialSortDir(financialSortField === "value" && financialSortDir === "asc" ? "desc" : "asc"); }}>
+                            <div className="flex items-center gap-1 justify-end">Valor <ArrowUpDown className="h-3 w-3" /></div>
+                          </TableHead>
                           <TableHead>Tipo</TableHead>
                           <TableHead>Ações</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {financials.map(f => (
+                        {[...financials].sort((a, b) => {
+                          const dir = financialSortDir === "asc" ? 1 : -1;
+                          if (financialSortField === "date") return dir * a.date.localeCompare(b.date);
+                          if (financialSortField === "category") return dir * a.category.localeCompare(b.category);
+                          if (financialSortField === "value") return dir * (a.value - b.value);
+                          return 0;
+                        }).map(f => (
                           <TableRow key={f.id}>
                             <TableCell className="text-sm">{new Date(f.date).toLocaleDateString("pt-BR")}</TableCell>
                             <TableCell><span className="mr-1">{f.categoryIcon}</span>{f.category}</TableCell>

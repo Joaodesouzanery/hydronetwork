@@ -575,6 +575,45 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
     return { peakLabor, avgDaily: parseFloat(avgDaily.toFixed(1)), totalHH, equipDays };
   }, [scheduleResult, horasTrabalho]);
 
+  // ── Inverse Calculator ──
+  const [inverseMode, setInverseMode] = useState(false);
+  const [inverseFixedField, setInverseFixedField] = useState<"equipes" | "metros">("equipes");
+  const [inverseDataTermino, setInverseDataTermino] = useState("");
+
+  const inverseResult = useMemo(() => {
+    if (!inverseMode || !dataInicio || !inverseDataTermino) return null;
+    const start = new Date(dataInicio);
+    const end = new Date(inverseDataTermino);
+    if (end <= start) return null;
+
+    // Calculate business days
+    let businessDays = 0;
+    const current = new Date(start);
+    const holidayDates = new Set(holidays.map(h => h.date));
+    while (current <= end) {
+      const dayOfWeek = current.getDay();
+      const dateStr = current.toISOString().split("T")[0];
+      const isWorkDay = workDays === 7 || (workDays === 6 ? dayOfWeek !== 0 : (dayOfWeek !== 0 && dayOfWeek !== 6));
+      if (isWorkDay && !holidayDates.has(dateStr)) businessDays++;
+      current.setDate(current.getDate() + 1);
+    }
+
+    if (businessDays <= 0) return null;
+
+    const total = totalMetros || trechos.reduce((s, t) => s + t.comprimento, 0);
+    if (total <= 0) return null;
+
+    if (inverseFixedField === "equipes") {
+      // Fixed: numEquipes → calculate metrosDia needed
+      const neededMetrosDia = total / (businessDays * numEquipes);
+      return { businessDays, totalMetros: total, metrosDia: neededMetrosDia, equipes: numEquipes };
+    } else {
+      // Fixed: metrosDia → calculate equipes needed
+      const neededEquipes = Math.ceil(total / (businessDays * metrosDia));
+      return { businessDays, totalMetros: total, metrosDia, equipes: neededEquipes };
+    }
+  }, [inverseMode, dataInicio, inverseDataTermino, holidays, workDays, totalMetros, trechos, numEquipes, metrosDia, inverseFixedField]);
+
   // ── Technical Rules ──
   const technicalRules = [
     "Método de escavação vs profundidade",
@@ -888,6 +927,86 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
           </CardContent>
         </Card>
       </div>
+
+      {/* Inverse Calculator */}
+      <Card className={inverseMode ? "border-blue-500/30 bg-blue-500/5" : ""}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <TrendingUp className="h-5 w-5" /> Calculadora Inversa
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Checkbox checked={inverseMode} onCheckedChange={v => setInverseMode(!!v)} />
+              <Label className="text-sm cursor-pointer" onClick={() => setInverseMode(!inverseMode)}>Ativar</Label>
+            </div>
+          </div>
+        </CardHeader>
+        {inverseMode && (
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Defina a data de término desejada e descubra quantas equipes ou metros/dia são necessários para cumprir o prazo.
+              Este cálculo é apenas informativo e não altera o planejamento atual.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
+                <Label className="text-xs">Data de Início</Label>
+                <Input type="date" value={dataInicio} disabled className="h-8 text-sm bg-muted" />
+              </div>
+              <div>
+                <Label className="text-xs">Data de Término Desejada</Label>
+                <Input type="date" value={inverseDataTermino} onChange={e => setInverseDataTermino(e.target.value)} className="h-8 text-sm" />
+              </div>
+              <div>
+                <Label className="text-xs">Fixar campo</Label>
+                <Select value={inverseFixedField} onValueChange={v => setInverseFixedField(v as "equipes" | "metros")}>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="equipes">Fixar Equipes ({numEquipes}) → Calcular m/dia</SelectItem>
+                    <SelectItem value="metros">Fixar m/dia ({metrosDia}) → Calcular equipes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Total de Metros</Label>
+                <Input type="text" value={`${Math.round(totalMetros || trechos.reduce((s, t) => s + t.comprimento, 0))} m`} disabled className="h-8 text-sm bg-muted" />
+              </div>
+            </div>
+
+            {inverseResult && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Card className="border-blue-500/30">
+                  <CardContent className="pt-3 pb-3 text-center">
+                    <div className="text-xl font-bold text-blue-600">{inverseResult.businessDays}</div>
+                    <div className="text-xs text-muted-foreground">Dias Úteis</div>
+                  </CardContent>
+                </Card>
+                <Card className="border-green-500/30">
+                  <CardContent className="pt-3 pb-3 text-center">
+                    <div className="text-xl font-bold text-green-600">{Math.round(inverseResult.totalMetros)} m</div>
+                    <div className="text-xs text-muted-foreground">Total de Metros</div>
+                  </CardContent>
+                </Card>
+                <Card className={inverseFixedField === "metros" ? "border-orange-500/50 bg-orange-500/10" : "border-border"}>
+                  <CardContent className="pt-3 pb-3 text-center">
+                    <div className="text-xl font-bold text-orange-600">{inverseResult.equipes}</div>
+                    <div className="text-xs text-muted-foreground">{inverseFixedField === "metros" ? "Equipes Necessárias" : "Equipes (fixo)"}</div>
+                  </CardContent>
+                </Card>
+                <Card className={inverseFixedField === "equipes" ? "border-purple-500/50 bg-purple-500/10" : "border-border"}>
+                  <CardContent className="pt-3 pb-3 text-center">
+                    <div className="text-xl font-bold text-purple-600">{fmt(inverseResult.metrosDia)}</div>
+                    <div className="text-xs text-muted-foreground">{inverseFixedField === "equipes" ? "m/dia Necessários" : "m/dia (fixo)"}</div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {!inverseDataTermino && (
+              <p className="text-xs text-muted-foreground">Selecione a data de término desejada para ver o cálculo.</p>
+            )}
+          </CardContent>
+        )}
+      </Card>
 
       {/* Row 3: Productivity Table + Technical Rules */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

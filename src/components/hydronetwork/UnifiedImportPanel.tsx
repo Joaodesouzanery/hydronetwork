@@ -691,25 +691,69 @@ function parseIFCContent(content: string, fileName: string): ParseResult {
   const layersSet = new Set<string>();
   const ifcLines = content.split(/\r?\n/);
 
-  // First pass: collect IFCCARTESIANPOINT coordinates by #ID
+  // ═══ SINGLE-PASS parsing: collect all entity types in one loop ═══
   const cartesianPoints = new Map<string, [number, number, number]>();
-  for (const line of ifcLines) {
-    const m = line.match(/^(#\d+)\s*=\s*IFCCARTESIANPOINT\s*\(\s*\(\s*([-\d.eE+]+)\s*,\s*([-\d.eE+]+)\s*(?:,\s*([-\d.eE+]+))?\s*\)/i);
-    if (m) {
-      cartesianPoints.set(m[1], [parseFloat(m[2]), parseFloat(m[3]), parseFloat(m[4] || '0')]);
-    }
-  }
+  const placementToPoint = new Map<string, string>();
+  const localPlacementMap = new Map<string, string>();
+  const entityCounts = new Map<string, number>();
+  const mepEntities: { id: string; type: string; name: string; placement: string }[] = [];
+  const polylines: { id: string; refs: string[] }[] = [];
+  const mepTypes = new Set(['IFCPIPESEGMENT', 'IFCPIPEFITTING', 'IFCDUCTSEGMENT', 'IFCDUCTFITTING',
+    'IFCFLOWTERMINAL', 'IFCFLOWSEGMENT', 'IFCFLOWFITTING', 'IFCFLOWCONTROLLER',
+    'IFCPUMP', 'IFCVALVE', 'IFCFIRESUPPRESSIONTERMINAL', 'IFCSANITARYTERMINAL']);
 
-  // Collect IFCLOCALPLACEMENT → IFCAXIS2PLACEMENT3D → location point
-  const placementToPoint = new Map<string, string>(); // placementId → cartesianPointRef
-  const localPlacementMap = new Map<string, string>(); // localPlacementId → axis2placement ref
   for (const line of ifcLines) {
-    // IFCAXIS2PLACEMENT3D(#point, ...)
-    const axis = line.match(/^(#\d+)\s*=\s*IFCAXIS2PLACEMENT3D\s*\(\s*(#\d+)/i);
-    if (axis) placementToPoint.set(axis[1], axis[2]);
-    // IFCLOCALPLACEMENT(relativeTo, #axis2placement)
-    const lp = line.match(/^(#\d+)\s*=\s*IFCLOCALPLACEMENT\s*\([^,]*,\s*(#\d+)/i);
-    if (lp) localPlacementMap.set(lp[1], lp[2]);
+    // Match entity definition lines: #ID = IFCTYPE(...)
+    const entityMatch = line.match(/^(#\d+)\s*=\s*(IFC\w+)\s*\(/i);
+    if (!entityMatch) continue;
+    const entId = entityMatch[1];
+    const type = entityMatch[2].toUpperCase();
+
+    // IFCCARTESIANPOINT
+    if (type === 'IFCCARTESIANPOINT') {
+      const m = line.match(/\(\s*\(\s*([-\d.eE+]+)\s*,\s*([-\d.eE+]+)\s*(?:,\s*([-\d.eE+]+))?\s*\)/);
+      if (m) cartesianPoints.set(entId, [parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3] || '0')]);
+      continue;
+    }
+
+    // IFCAXIS2PLACEMENT3D
+    if (type === 'IFCAXIS2PLACEMENT3D') {
+      const m = line.match(/\(\s*(#\d+)/);
+      if (m) placementToPoint.set(entId, m[1]);
+      continue;
+    }
+
+    // IFCLOCALPLACEMENT
+    if (type === 'IFCLOCALPLACEMENT') {
+      const m = line.match(/\([^,]*,\s*(#\d+)/);
+      if (m) localPlacementMap.set(entId, m[1]);
+      continue;
+    }
+
+    // IFCPOLYLINE
+    if (type === 'IFCPOLYLINE') {
+      const m = line.match(/\(\s*\(([^)]+)\)/);
+      if (m) {
+        polylines.push({ id: entId, refs: m[1].split(',').map(r => r.trim()) });
+      }
+      continue;
+    }
+
+    // MEP-related entities: count and extract
+    if (type.includes('PIPE') || type.includes('FLOW') || type.includes('DUCT') ||
+      type.includes('FITTING') || type.includes('SEGMENT') || type.includes('TERMINAL') ||
+      type.includes('VALVE') || type.includes('PUMP')) {
+      entityCounts.set(type, (entityCounts.get(type) || 0) + 1);
+    }
+    if (mepTypes.has(type)) {
+      const nameMatch = line.match(/'([^']+)'/);
+      const placementMatch = line.match(/,\s*(#\d+)\s*,/);
+      mepEntities.push({
+        id: entId, type,
+        name: nameMatch ? nameMatch[1] : type,
+        placement: placementMatch ? placementMatch[1] : '',
+      });
+    }
   }
 
   // Resolve placement → coordinates
@@ -721,35 +765,6 @@ function parseIFCContent(content: string, fileName: string): ParseResult {
     return cartesianPoints.get(ptRef) || null;
   };
 
-  // Extract IFC entity types for info
-  const entityTypeRegex = /^(#\d+)\s*=\s*(IFC\w+)\s*\(/gm;
-  const entityCounts = new Map<string, number>();
-  const mepEntities: { id: string; type: string; name: string; placement: string }[] = [];
-  const mepTypes = new Set(['IFCPIPESEGMENT', 'IFCPIPEFITTING', 'IFCDUCTSEGMENT', 'IFCDUCTFITTING',
-    'IFCFLOWTERMINAL', 'IFCFLOWSEGMENT', 'IFCFLOWFITTING', 'IFCFLOWCONTROLLER',
-    'IFCPUMP', 'IFCVALVE', 'IFCFIRESUPPRESSIONTERMINAL', 'IFCSANITARYTERMINAL']);
-
-  let eMatch;
-  while ((eMatch = entityTypeRegex.exec(content)) !== null) {
-    const entId = eMatch[1];
-    const type = eMatch[2].toUpperCase();
-    if (type.includes('PIPE') || type.includes('FLOW') || type.includes('DUCT') ||
-      type.includes('FITTING') || type.includes('SEGMENT') || type.includes('TERMINAL') ||
-      type.includes('VALVE') || type.includes('PUMP')) {
-      entityCounts.set(type, (entityCounts.get(type) || 0) + 1);
-    }
-    if (mepTypes.has(type)) {
-      // Try to extract name and placement from the line
-      const fullLine = content.substring(eMatch.index, content.indexOf('\n', eMatch.index));
-      const nameMatch = fullLine.match(/'([^']+)'/);
-      const placementMatch = fullLine.match(/,\s*(#\d+)\s*,/);
-      mepEntities.push({
-        id: entId, type,
-        name: nameMatch ? nameMatch[1] : type,
-        placement: placementMatch ? placementMatch[1] : '',
-      });
-    }
-  }
   const ifcEntitySummary = Object.fromEntries(entityCounts);
   if (entityCounts.size > 0) fieldsSet.add('ifcEntityTypes');
 
@@ -773,11 +788,11 @@ function parseIFCContent(content: string, fileName: string): ParseResult {
     }
   }
 
-  // Fallback: if no MEP entities found with placement, extract cartesian points
+  // Fallback: if no MEP entities found with placement, extract cartesian points (up to 50k)
   if (points.length === 0) {
     layersSet.add('IFC');
     for (const [ifcId, coords] of cartesianPoints) {
-      if (autoId > 5000) break;
+      if (autoId > 50000) break;
       points.push({
         id: `IFC_${autoId++}`, x: coords[0], y: coords[1], z: coords[2],
         layer: 'IFC', sourceFile: fileName,
@@ -786,14 +801,11 @@ function parseIFCContent(content: string, fileName: string): ParseResult {
     }
   }
 
-  // Extract IFCPOLYLINE as edges
-  const polylineRegex = /^(#\d+)\s*=\s*IFCPOLYLINE\s*\(\s*\(([^)]+)\)/gm;
-  let plMatch;
+  // Extract IFCPOLYLINE as edges (already collected in single pass)
   let edgeId = 1;
-  while ((plMatch = polylineRegex.exec(content)) !== null) {
-    const refs = plMatch[2].split(',').map(r => r.trim());
+  for (const pl of polylines) {
     const coords: number[][] = [];
-    for (const ref of refs) {
+    for (const ref of pl.refs) {
       const pt = cartesianPoints.get(ref);
       if (pt) coords.push([...pt]);
     }
@@ -803,7 +815,7 @@ function parseIFCContent(content: string, fileName: string): ParseResult {
       edges.push({
         id: `IFC_E${edgeId++}`, type: 'POLYLINE', coordinates: coords, isClosed: false,
         layer: 'IFC Polylines', sourceFile: fileName,
-        properties: { entityClass: 'IFCPOLYLINE', ifcId: plMatch[1], vertexCount: coords.length, length: calculateEdgeLength(coords) },
+        properties: { entityClass: 'IFCPOLYLINE', ifcId: pl.id, vertexCount: coords.length, length: calculateEdgeLength(coords) },
       });
     }
   }

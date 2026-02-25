@@ -73,6 +73,7 @@ export interface ImportCRSConfig {
   utmZone?: number;
   hemisphere?: "N" | "S";
   epsgCode?: string;
+  convention?: "xy" | "yx"; // xy = x is longitude, y is latitude (standard); yx = x is latitude, y is longitude
 }
 
 /**
@@ -93,6 +94,7 @@ export function validateUTMRange(x: number, y: number): { valid: boolean; warnin
 
 /**
  * Auto-detect coordinate system from a sample of points.
+ * Uses multiple sample points and progressive tolerance for zone detection.
  */
 export function autoDetectCRS(points: { x: number; y: number }[]): ImportCRSConfig | null {
   if (points.length === 0) return null;
@@ -111,20 +113,59 @@ export function autoDetectCRS(points: { x: number; y: number }[]): ImportCRSConf
 
   // Check if UTM
   if (minX >= 100000 && maxX <= 900000 && minY >= 1000000 && maxY <= 10000000) {
-    // Try to detect zone
-    const sampleX = xs[0];
-    const sampleY = ys[0];
+    // Use multiple sample points for more robust detection
+    const sampleIndices = [0, Math.floor(points.length / 2), points.length - 1]
+      .filter((v, i, a) => a.indexOf(v) === i); // unique
+    const samples = sampleIndices.map(i => ({ x: xs[i], y: ys[i] }));
+
+    // Try with standard tolerance first (±3.5°), then progressively wider (±6°, ±10°)
+    for (const tolerance of [3.5, 6, 10]) {
+      const zoneCounts: Record<number, number> = {};
+      for (const z of BRAZIL_UTM_ZONES) {
+        let matchCount = 0;
+        for (const sample of samples) {
+          const result = utmToLatLng(sample.x, sample.y, z.zone, z.hemisphere);
+          if (isFinite(result.lat) && isFinite(result.lng) &&
+              result.lat >= -35 && result.lat <= 7 &&
+              result.lng >= -75 && result.lng <= -33) {
+            const centralMeridian = (z.zone - 1) * 6 - 180 + 3;
+            if (Math.abs(result.lng - centralMeridian) <= tolerance) {
+              matchCount++;
+            }
+          }
+        }
+        if (matchCount > 0) zoneCounts[z.zone] = matchCount;
+      }
+
+      // Find zone with most matches
+      const bestZone = Object.entries(zoneCounts)
+        .sort(([, a], [, b]) => b - a)[0];
+      if (bestZone) {
+        const zone = parseInt(bestZone[0]);
+        const zoneInfo = BRAZIL_UTM_ZONES.find(z => z.zone === zone)!;
+        return { type: "utm", datum: "SIRGAS2000", utmZone: zone, hemisphere: zoneInfo.hemisphere };
+      }
+    }
+
+    // Last resort: find closest zone by converting first point and checking closest central meridian
+    const sample = samples[0];
+    let bestZoneByProximity: UTMZoneInfo | null = null;
+    let bestDistance = Infinity;
     for (const z of BRAZIL_UTM_ZONES) {
-      const result = utmToLatLng(sampleX, sampleY, z.zone, z.hemisphere);
-      if (isFinite(result.lat) && isFinite(result.lng) &&
-          result.lat >= -35 && result.lat <= 7 &&
-          result.lng >= -75 && result.lng <= -33) {
+      const result = utmToLatLng(sample.x, sample.y, z.zone, z.hemisphere);
+      if (isFinite(result.lat) && isFinite(result.lng)) {
         const centralMeridian = (z.zone - 1) * 6 - 180 + 3;
-        if (Math.abs(result.lng - centralMeridian) <= 3.5) {
-          return { type: "utm", datum: "SIRGAS2000", utmZone: z.zone, hemisphere: z.hemisphere };
+        const dist = Math.abs(result.lng - centralMeridian);
+        if (dist < bestDistance) {
+          bestDistance = dist;
+          bestZoneByProximity = z;
         }
       }
     }
+    if (bestZoneByProximity) {
+      return { type: "utm", datum: "SIRGAS2000", utmZone: bestZoneByProximity.zone, hemisphere: bestZoneByProximity.hemisphere };
+    }
+
     return { type: "utm", datum: "SIRGAS2000", utmZone: 23, hemisphere: "S" };
   }
 
@@ -206,8 +247,15 @@ export function transformCoordinate(
   let lat: number, lng: number;
 
   if (source.type === "geographic") {
-    lat = y;
-    lng = x;
+    if (source.convention === "yx") {
+      // x=latitude, y=longitude (swapped)
+      lat = x;
+      lng = y;
+    } else {
+      // Default: x=longitude, y=latitude (standard)
+      lat = y;
+      lng = x;
+    }
   } else if (source.type === "utm") {
     const result = utmToLatLng(x, y, source.utmZone || 23, source.hemisphere || "S");
     lat = result.lat;
