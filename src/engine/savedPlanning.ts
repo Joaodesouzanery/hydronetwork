@@ -67,9 +67,19 @@ export function generatePlanId(): string {
 
 // ── Supabase helpers ──
 
-function planToRow(plan: SavedPlan) {
+async function getUserId(): Promise<string | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+function planToRow(plan: SavedPlan, userId?: string | null) {
   return {
     id: plan.id,
+    user_id: userId || undefined,
     nome: plan.name,
     descricao: plan.description || "",
     num_equipes: plan.numEquipes,
@@ -116,12 +126,20 @@ function rowToPlan(r: any): SavedPlan {
 
 export async function getSavedPlansAsync(): Promise<SavedPlan[]> {
   try {
-    const { data, error } = await supabase
+    const userId = await getUserId();
+    let query = supabase
       .from("hydro_saved_plans")
       .select("*")
       .order("updated_at", { ascending: false });
+    if (userId) query = query.eq("user_id", userId);
+    const { data, error } = await query;
     if (error) throw error;
-    if (data && data.length > 0) return data.map(rowToPlan);
+    if (data && data.length > 0) {
+      // Sync cloud data to localStorage
+      const plans = data.map(rowToPlan);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(plans.slice(0, 50)));
+      return plans;
+    }
   } catch {
     // fallback
   }
@@ -131,24 +149,29 @@ export async function getSavedPlansAsync(): Promise<SavedPlan[]> {
 export async function savePlanAsync(plan: SavedPlan): Promise<void> {
   plan.updatedAt = new Date().toISOString();
   if (!plan.createdAt) plan.createdAt = plan.updatedAt;
+  // Always save to localStorage first (immediate)
+  savePlan(plan);
   try {
+    const userId = await getUserId();
     const { error } = await supabase
       .from("hydro_saved_plans")
-      .upsert(planToRow(plan), { onConflict: "id" });
+      .upsert(planToRow(plan, userId), { onConflict: "id" });
     if (error) throw error;
-  } catch {
-    // fallback to localStorage
+  } catch (err) {
+    console.error("[SavedPlans] Falha ao salvar no Supabase:", err);
   }
-  savePlan(plan);
 }
 
 export async function deleteSavedPlanAsync(id: string): Promise<void> {
-  try {
-    await supabase.from("hydro_saved_plans").delete().eq("id", id);
-  } catch {
-    // silent
-  }
   deleteSavedPlan(id);
+  try {
+    const userId = await getUserId();
+    let query = supabase.from("hydro_saved_plans").delete().eq("id", id);
+    if (userId) query = query.eq("user_id", userId);
+    await query;
+  } catch (err) {
+    console.error("[SavedPlans] Falha ao deletar no Supabase:", err);
+  }
 }
 
 export async function duplicatePlanAsync(id: string): Promise<SavedPlan | null> {
@@ -162,7 +185,7 @@ export async function duplicatePlanAsync(id: string): Promise<SavedPlan | null> 
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
-  await savePlanAsync(copy);
+  await savePlanAsync(copy); // savePlanAsync already handles user_id
   return copy;
 }
 

@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Save, FolderOpen, Trash2, Copy, Edit, X, Plus, ArrowLeft } from "lucide-react";
+import { Save, FolderOpen, Trash2, Copy, Edit, X, Plus, Loader2 } from "lucide-react";
 import {
-  SavedPlan, getSavedPlans, deleteSavedPlan, duplicatePlan, savePlan, createDefaultPlan,
+  SavedPlan, getSavedPlans, getSavedPlansAsync, deleteSavedPlanAsync,
+  duplicatePlanAsync, savePlanAsync, createDefaultPlan,
 } from "@/engine/savedPlanning";
 
 interface SavedPlansDialogProps {
@@ -16,41 +17,59 @@ interface SavedPlansDialogProps {
 }
 
 export function SavedPlansDialog({ onLoadPlan, onClose, currentPlanId }: SavedPlansDialogProps) {
-  const [plans, setPlans] = useState(getSavedPlans());
+  const [plans, setPlans] = useState<SavedPlan[]>(getSavedPlans());
+  const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [newPlanName, setNewPlanName] = useState("");
 
-  const handleDelete = (id: string) => {
-    deleteSavedPlan(id);
-    setPlans(getSavedPlans());
+  // Load plans from Supabase on mount
+  useEffect(() => {
+    getSavedPlansAsync()
+      .then(setPlans)
+      .catch(() => setPlans(getSavedPlans()))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const refreshPlans = async () => {
+    try {
+      const updated = await getSavedPlansAsync();
+      setPlans(updated);
+    } catch {
+      setPlans(getSavedPlans());
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteSavedPlanAsync(id);
+    await refreshPlans();
     toast.success("Planejamento excluído.");
   };
 
-  const handleDuplicate = (id: string) => {
-    const copy = duplicatePlan(id);
+  const handleDuplicate = async (id: string) => {
+    const copy = await duplicatePlanAsync(id);
     if (copy) {
-      setPlans(getSavedPlans());
+      await refreshPlans();
       toast.success("Planejamento duplicado.");
     }
   };
 
-  const handleEditSave = (plan: SavedPlan) => {
-    savePlan({ ...plan, name: editName, description: editDesc });
-    setPlans(getSavedPlans());
+  const handleEditSave = async (plan: SavedPlan) => {
+    await savePlanAsync({ ...plan, name: editName, description: editDesc });
+    await refreshPlans();
     setEditingId(null);
     toast.success("Planejamento atualizado.");
   };
 
-  const handleCreateNew = () => {
+  const handleCreateNew = async () => {
     if (!newPlanName.trim()) {
       toast.error("Digite um nome para o planejamento.");
       return;
     }
     const plan = createDefaultPlan(newPlanName.trim());
-    savePlan(plan);
-    setPlans(getSavedPlans());
+    await savePlanAsync(plan);
+    await refreshPlans();
     setNewPlanName("");
     toast.success("Novo planejamento criado.");
     onLoadPlan(plan);
@@ -84,7 +103,12 @@ export function SavedPlansDialog({ onLoadPlan, onClose, currentPlanId }: SavedPl
         </div>
 
         {/* Plans list */}
-        {plans.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Carregando planejamentos...</span>
+          </div>
+        ) : plans.length === 0 ? (
           <p className="text-center text-muted-foreground text-sm py-4">
             Nenhum planejamento salvo. Crie um novo acima.
           </p>

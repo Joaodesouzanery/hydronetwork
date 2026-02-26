@@ -39,6 +39,7 @@ import ProjectDelays from "./pages/ProjectDelays";
 import InteractiveMap from "./pages/InteractiveMap";
 import LeanConstraints from "./pages/LeanConstraints";
 import LeanDashboard from "./pages/LeanDashboard";
+import QADiagnostics from "./pages/QADiagnostics";
 
 const queryClient = new QueryClient();
 
@@ -82,6 +83,7 @@ const AppContent = () => {
         <Route path="/hydronetwork" element={<ProtectedRoute><HydroNetwork /></ProtectedRoute>} />
         <Route path="/hydronetwork/:module" element={<ProtectedRoute><HydroNetwork /></ProtectedRoute>} />
         <Route path="/modules" element={<ProtectedRoute><ModulesCatalog /></ProtectedRoute>} />
+        <Route path="/qa" element={<ProtectedRoute><QADiagnostics /></ProtectedRoute>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       <FeedbackWidget />

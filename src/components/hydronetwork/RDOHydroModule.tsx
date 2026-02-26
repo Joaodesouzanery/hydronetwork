@@ -103,10 +103,21 @@ function saveEquipments(equips: Equipment[]) {
   syncEquipmentsToSupabase(equips).catch(() => {});
 }
 
+async function getEquipUserId(): Promise<string | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id || null;
+  } catch {
+    return null;
+  }
+}
+
 async function syncEquipmentsToSupabase(equips: Equipment[]) {
+  const userId = await getEquipUserId();
   for (const e of equips) {
     await supabase.from("hydro_equipments").upsert({
       id: e.id,
+      user_id: userId || undefined,
       nome: e.nome,
       tipo: e.tipo,
       placa: e.placa,
@@ -119,7 +130,10 @@ async function syncEquipmentsToSupabase(equips: Equipment[]) {
 
 async function loadEquipmentsFromSupabase(): Promise<Equipment[]> {
   try {
-    const { data, error } = await supabase.from("hydro_equipments").select("*").order("created_at");
+    const userId = await getEquipUserId();
+    let query = supabase.from("hydro_equipments").select("*").order("created_at");
+    if (userId) query = query.eq("user_id", userId);
+    const { data, error } = await query;
     if (error) throw error;
     if (data && data.length > 0) {
       return data.map((e: any) => ({

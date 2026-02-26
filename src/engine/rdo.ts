@@ -50,13 +50,26 @@ export function generateId(): string {
   return crypto.randomUUID();
 }
 
+// ── Supabase helpers ──
+
+async function getUserId(): Promise<string | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id || null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Supabase-first with localStorage fallback ──
 
 export async function saveRDOsToSupabase(rdos: RDO[]): Promise<void> {
   try {
+    const userId = await getUserId();
     for (const rdo of rdos) {
       const { error } = await supabase.from("hydro_rdos").upsert({
         id: rdo.id,
+        user_id: userId || undefined,
         project_id: rdo.projectId || "default",
         date: rdo.date,
         project_name: rdo.projectName,
@@ -77,10 +90,13 @@ export async function saveRDOsToSupabase(rdos: RDO[]): Promise<void> {
 
 export async function loadRDOsFromSupabase(): Promise<RDO[]> {
   try {
-    const { data, error } = await supabase
+    const userId = await getUserId();
+    let query = supabase
       .from("hydro_rdos")
       .select("*")
       .order("date", { ascending: false });
+    if (userId) query = query.eq("user_id", userId);
+    const { data, error } = await query;
     if (error) throw error;
     if (data && data.length > 0) {
       return data.map((r: any) => ({
@@ -107,7 +123,10 @@ export async function loadRDOsFromSupabase(): Promise<RDO[]> {
 
 export async function deleteRDOFromSupabase(id: string): Promise<void> {
   try {
-    await supabase.from("hydro_rdos").delete().eq("id", id);
+    const userId = await getUserId();
+    let query = supabase.from("hydro_rdos").delete().eq("id", id);
+    if (userId) query = query.eq("user_id", userId);
+    await query;
   } catch {
     // silent
   }
