@@ -78,6 +78,10 @@ export interface LPSConstraint {
   status: ConstraintStatus;
   resolvedAt?: string;
   notes?: string;
+  tema?: string;
+  impacto?: string;
+  acoes?: string[];
+  tags?: string[];
 }
 
 export interface LookaheadTask {
@@ -250,6 +254,10 @@ export function createConstraint(partial: Partial<LPSConstraint> & { taskId: str
     prazoRemocao: partial.prazoRemocao || new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
     status: partial.status || "identificada",
     notes: partial.notes,
+    tema: partial.tema || "",
+    impacto: partial.impacto || "",
+    acoes: partial.acoes || [],
+    tags: partial.tags || [],
   };
 }
 
@@ -318,6 +326,14 @@ export function calculatePPC(commitment: WeeklyCommitment): PPCRecord {
 
 // ─── Analytics ───
 
+export interface TagMetric {
+  tag: string;
+  total: number;
+  identificada: number;
+  em_resolucao: number;
+  resolvida: number;
+}
+
 export interface LPSMetrics {
   avgPPC: number;
   currentPPC: number;
@@ -328,6 +344,8 @@ export interface LPSMetrics {
   topCauses: { cause: NonCompletionCause; label: string; count: number; percent: number }[];
   constraintsByCategory: { category: ConstraintCategory; label: string; count: number }[];
   weeklyPPCData: { weekId: string; ppc: number; target: number }[];
+  constraintsByTag: TagMetric[];
+  allTags: string[];
 }
 
 export function calculateLPSMetrics(data: LPSData): LPSMetrics {
@@ -374,10 +392,29 @@ export function calculateLPSMetrics(data: LPSData): LPSMetrics {
     target: data.config.targetPPC,
   }));
 
+  // Constraints by tag
+  const tagMap = new Map<string, { total: number; identificada: number; em_resolucao: number; resolvida: number }>();
+  const allTagsSet = new Set<string>();
+  data.constraints.forEach(c => {
+    const tags = c.tags || [];
+    tags.forEach(tag => {
+      allTagsSet.add(tag);
+      const entry = tagMap.get(tag) || { total: 0, identificada: 0, em_resolucao: 0, resolvida: 0 };
+      entry.total++;
+      entry[c.status]++;
+      tagMap.set(tag, entry);
+    });
+  });
+  const constraintsByTag: TagMetric[] = Array.from(tagMap.entries())
+    .map(([tag, counts]) => ({ tag, ...counts }))
+    .sort((a, b) => b.total - a.total);
+  const allTags = Array.from(allTagsSet).sort();
+
   return {
     avgPPC, currentPPC, ppcTrend,
     totalConstraints, openConstraints, resolvedConstraints,
     topCauses, constraintsByCategory, weeklyPPCData,
+    constraintsByTag, allTags,
   };
 }
 

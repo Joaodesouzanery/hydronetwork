@@ -17,7 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
   BarChart3, Target, Calendar, ShieldAlert, TrendingUp, TrendingDown, Minus,
-  Plus, Trash2, Check, X, AlertTriangle, Save, Eye, ChevronRight, Info
+  Plus, Trash2, Check, X, AlertTriangle, Save, Eye, ChevronRight, ChevronDown, Info, Circle, Tag
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend,
@@ -25,7 +25,7 @@ import {
 } from "recharts";
 import {
   LPSData, LPSConstraint, LookaheadTask, WeeklyCommitment, WeeklyTask, PPCRecord,
-  ConstraintCategory, ConstraintStatus, NonCompletionCause, TaskStatus,
+  ConstraintCategory, ConstraintStatus, NonCompletionCause, TaskStatus, TagMetric,
   CONSTRAINT_LABELS, CAUSE_LABELS,
   createLPSData, createLookaheadTask, createConstraint, createWeeklyCommitment, createWeeklyTask,
   calculatePPC, calculateLPSMetrics, LPSMetrics,
@@ -77,7 +77,7 @@ export function LPSModule({ pontos, trechos }: LPSModuleProps) {
           <PPCTab data={data} onSave={save} />
         </TabsContent>
         <TabsContent value="restricoes">
-          <ConstraintsTab data={data} onSave={save} />
+          <ConstraintsTab data={data} onSave={save} metrics={metrics} />
         </TabsContent>
       </Tabs>
     </div>
@@ -767,15 +767,33 @@ function PPCTab({ data, onSave }: { data: LPSData; onSave: (d: LPSData) => void 
 
 /* ═══════════════════════ CONSTRAINTS TAB ═══════════════════════ */
 
-function ConstraintsTab({ data, onSave }: { data: LPSData; onSave: (d: LPSData) => void }) {
+const TAG_COLORS = ["#6366f1", "#ec4899", "#14b8a6", "#f97316", "#8b5cf6", "#06b6d4", "#84cc16", "#e11d48", "#0ea5e9", "#a855f7"];
+function getTagColor(tag: string, allTags: string[]): string {
+  const idx = allTags.indexOf(tag);
+  return TAG_COLORS[idx >= 0 ? idx % TAG_COLORS.length : 0];
+}
+
+function ConstraintsTab({ data, onSave, metrics }: { data: LPSData; onSave: (d: LPSData) => void; metrics: LPSMetrics }) {
   const [showAdd, setShowAdd] = useState(false);
   const [filter, setFilter] = useState<"all" | ConstraintStatus>("all");
-  const [newConstraint, setNewConstraint] = useState({
-    taskId: "", category: "material" as ConstraintCategory,
-    description: "", responsavel: "", prazo: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0], notes: "",
-  });
+  const [tagFilter, setTagFilter] = useState<string>("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const filtered = filter === "all" ? data.constraints : data.constraints.filter(c => c.status === filter);
+  const defaultForm = {
+    taskId: "", category: "projeto" as ConstraintCategory,
+    description: "", responsavel: "", prazo: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0],
+    notes: "", tema: "", impacto: "", acoes: [] as string[], tags: [] as string[],
+  };
+  const [newConstraint, setNewConstraint] = useState(defaultForm);
+  const [newAcao, setNewAcao] = useState("");
+  const [newTag, setNewTag] = useState("");
+
+  // Filter constraints by status and tag
+  const filtered = data.constraints.filter(c => {
+    if (filter !== "all" && c.status !== filter) return false;
+    if (tagFilter !== "all" && !(c.tags || []).includes(tagFilter)) return false;
+    return true;
+  });
 
   const addConstraint = () => {
     if (!newConstraint.description.trim()) { toast.error("Descrição obrigatória"); return; }
@@ -786,12 +804,39 @@ function ConstraintsTab({ data, onSave }: { data: LPSData; onSave: (d: LPSData) 
       responsavel: newConstraint.responsavel,
       prazoRemocao: newConstraint.prazo,
       notes: newConstraint.notes || undefined,
+      tema: newConstraint.tema,
+      impacto: newConstraint.impacto,
+      acoes: newConstraint.acoes,
+      tags: newConstraint.tags,
     });
     const updated = { ...data, constraints: [...data.constraints, constraint] };
     onSave(updated);
     setShowAdd(false);
-    setNewConstraint({ taskId: "", category: "material", description: "", responsavel: "", prazo: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0], notes: "" });
+    setNewConstraint(defaultForm);
+    setNewAcao("");
+    setNewTag("");
     toast.success("Restrição registrada");
+  };
+
+  const addAcao = () => {
+    if (!newAcao.trim()) return;
+    setNewConstraint({ ...newConstraint, acoes: [...newConstraint.acoes, newAcao.trim()] });
+    setNewAcao("");
+  };
+
+  const removeAcao = (idx: number) => {
+    setNewConstraint({ ...newConstraint, acoes: newConstraint.acoes.filter((_, i) => i !== idx) });
+  };
+
+  const addTag = () => {
+    const tag = newTag.trim();
+    if (!tag || newConstraint.tags.includes(tag)) return;
+    setNewConstraint({ ...newConstraint, tags: [...newConstraint.tags, tag] });
+    setNewTag("");
+  };
+
+  const removeTag = (tag: string) => {
+    setNewConstraint({ ...newConstraint, tags: newConstraint.tags.filter(t => t !== tag) });
   };
 
   const updateConstraintStatus = (id: string, status: ConstraintStatus) => {
@@ -807,6 +852,7 @@ function ConstraintsTab({ data, onSave }: { data: LPSData; onSave: (d: LPSData) 
   const deleteConstraint = (id: string) => {
     const updated = { ...data, constraints: data.constraints.filter(c => c.id !== id) };
     onSave(updated);
+    if (expandedId === id) setExpandedId(null);
   };
 
   const statusColors: Record<ConstraintStatus, string> = {
@@ -819,8 +865,40 @@ function ConstraintsTab({ data, onSave }: { data: LPSData; onSave: (d: LPSData) 
     identificada: "Identificada", em_resolucao: "Em Resolução", resolvida: "Resolvida",
   };
 
+  const statusIndicator: Record<ConstraintStatus, { color: string; label: string }> = {
+    identificada: { color: "text-red-500", label: "Não removida" },
+    em_resolucao: { color: "text-yellow-500", label: "Em resolução" },
+    resolvida: { color: "text-green-500", label: "Removida" },
+  };
+
+  // Suggested tags from existing constraints
+  const suggestedTags = metrics.allTags.filter(t => !newConstraint.tags.includes(t));
+
   return (
     <div className="space-y-4">
+      {/* Stacked BarChart by Tags */}
+      {metrics.constraintsByTag.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2"><Tag className="h-4 w-4" /> Restrições por Tag</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={metrics.constraintsByTag} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" tick={{ fontSize: 10 }} />
+                <YAxis dataKey="tag" type="category" tick={{ fontSize: 10 }} width={120} />
+                <RechartsTooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="identificada" stackId="a" name="Identificada" fill="#ef4444" />
+                <Bar dataKey="em_resolucao" stackId="a" name="Em Resolução" fill="#f59e0b" />
+                <Bar dataKey="resolvida" stackId="a" name="Resolvida" fill="#10b981" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -838,13 +916,24 @@ function ConstraintsTab({ data, onSave }: { data: LPSData; onSave: (d: LPSData) 
                   <SelectItem value="resolvida" className="text-xs">Resolvidas</SelectItem>
                 </SelectContent>
               </Select>
+              {metrics.allTags.length > 0 && (
+                <Select value={tagFilter} onValueChange={setTagFilter}>
+                  <SelectTrigger className="h-8 w-32 text-xs"><SelectValue placeholder="Tag" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-xs">Todas as tags</SelectItem>
+                    {metrics.allTags.map(t => (
+                      <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <Button size="sm" onClick={() => setShowAdd(true)}><Plus className="h-3 w-3 mr-1" /> Nova Restrição</Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           {/* Summary badges */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex flex-wrap gap-2 mb-4">
             <Badge variant="outline">{data.constraints.length} total</Badge>
             <Badge className="bg-red-100 text-red-700">{data.constraints.filter(c => c.status === "identificada").length} identificadas</Badge>
             <Badge className="bg-yellow-100 text-yellow-700">{data.constraints.filter(c => c.status === "em_resolucao").length} em resolução</Badge>
@@ -852,14 +941,16 @@ function ConstraintsTab({ data, onSave }: { data: LPSData; onSave: (d: LPSData) 
           </div>
 
           {filtered.length > 0 ? (
-            <div className="max-h-[400px] overflow-auto">
+            <div className="max-h-[500px] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-6"></TableHead>
                     <TableHead>Categoria</TableHead>
                     <TableHead>Descrição</TableHead>
                     <TableHead>Responsável</TableHead>
                     <TableHead>Prazo</TableHead>
+                    <TableHead>Tags</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-8"></TableHead>
                   </TableRow>
@@ -867,37 +958,106 @@ function ConstraintsTab({ data, onSave }: { data: LPSData; onSave: (d: LPSData) 
                 <TableBody>
                   {filtered.map(constraint => {
                     const overdue = constraint.status !== "resolvida" && new Date(constraint.prazoRemocao) < new Date();
+                    const isExpanded = expandedId === constraint.id;
+                    const si = statusIndicator[constraint.status];
                     return (
-                      <TableRow key={constraint.id} className={overdue ? "bg-red-50/50" : ""}>
-                        <TableCell>
-                          <Badge variant="outline" className="text-[10px]">{CONSTRAINT_LABELS[constraint.category]}</Badge>
-                        </TableCell>
-                        <TableCell className="text-xs font-medium max-w-[200px] truncate">{constraint.description}</TableCell>
-                        <TableCell className="text-xs">{constraint.responsavel || "—"}</TableCell>
-                        <TableCell className="text-xs">
-                          <span className={overdue ? "text-red-600 font-medium" : ""}>
-                            {new Date(constraint.prazoRemocao).toLocaleDateString("pt-BR")}
-                            {overdue && <AlertTriangle className="h-3 w-3 inline ml-1 text-red-500" />}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Select value={constraint.status} onValueChange={v => updateConstraintStatus(constraint.id, v as ConstraintStatus)}>
-                            <SelectTrigger className={`h-6 text-[10px] w-28 ${statusColors[constraint.status]}`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(Object.keys(statusLabels) as ConstraintStatus[]).map(s => (
-                                <SelectItem key={s} value={s} className="text-xs">{statusLabels[s]}</SelectItem>
+                      <>
+                        <TableRow key={constraint.id} className={`cursor-pointer ${overdue ? "bg-red-50/50" : ""} ${isExpanded ? "border-b-0" : ""}`} onClick={() => setExpandedId(isExpanded ? null : constraint.id)}>
+                          <TableCell className="px-1">
+                            {isExpanded ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-[10px]">{CONSTRAINT_LABELS[constraint.category]}</Badge>
+                          </TableCell>
+                          <TableCell className="text-xs font-medium max-w-[180px] truncate">{constraint.description}</TableCell>
+                          <TableCell className="text-xs">{constraint.responsavel || "—"}</TableCell>
+                          <TableCell className="text-xs">
+                            <span className={overdue ? "text-red-600 font-medium" : ""}>
+                              {new Date(constraint.prazoRemocao).toLocaleDateString("pt-BR")}
+                              {overdue && <AlertTriangle className="h-3 w-3 inline ml-1 text-red-500" />}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1 flex-wrap">
+                              {(constraint.tags || []).map(tag => (
+                                <span key={tag} className="inline-block px-1.5 py-0.5 rounded text-[9px] font-medium text-white" style={{ backgroundColor: getTagColor(tag, metrics.allTags) }}>
+                                  {tag}
+                                </span>
                               ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => deleteConstraint(constraint.id)}>
-                            <Trash2 className="h-3 w-3 text-red-500" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                              <Circle className={`h-2.5 w-2.5 fill-current ${si.color}`} />
+                              <Select value={constraint.status} onValueChange={v => updateConstraintStatus(constraint.id, v as ConstraintStatus)}>
+                                <SelectTrigger className={`h-6 text-[10px] w-28 ${statusColors[constraint.status]}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {(Object.keys(statusLabels) as ConstraintStatus[]).map(s => (
+                                    <SelectItem key={s} value={s} className="text-xs">{statusLabels[s]}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={e => { e.stopPropagation(); deleteConstraint(constraint.id); }}>
+                              <Trash2 className="h-3 w-3 text-red-500" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                        {/* Expanded detail panel */}
+                        {isExpanded && (
+                          <TableRow key={`${constraint.id}-detail`} className="bg-muted/30 hover:bg-muted/30">
+                            <TableCell colSpan={8} className="p-4">
+                              <div className="space-y-3">
+                                {constraint.tema && (
+                                  <div>
+                                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Tema</span>
+                                    <p className="text-sm font-medium mt-0.5">{constraint.tema}</p>
+                                  </div>
+                                )}
+                                {constraint.impacto && (
+                                  <div>
+                                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Impacto</span>
+                                    <p className="text-xs mt-0.5 text-muted-foreground">{constraint.impacto}</p>
+                                  </div>
+                                )}
+                                {(constraint.acoes || []).length > 0 && (
+                                  <div>
+                                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Ações Necessárias</span>
+                                    <ul className="mt-1 space-y-1">
+                                      {constraint.acoes!.map((acao, i) => (
+                                        <li key={i} className="flex items-center gap-2 text-xs">
+                                          {constraint.status === "resolvida"
+                                            ? <Check className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                            : <Circle className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                          }
+                                          {acao}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                                {constraint.notes && (
+                                  <div>
+                                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Observações</span>
+                                    <p className="text-xs mt-0.5 text-muted-foreground">{constraint.notes}</p>
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2 pt-1">
+                                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Status LPS:</span>
+                                  <span className={`text-xs font-semibold flex items-center gap-1 ${si.color}`}>
+                                    <Circle className="h-2.5 w-2.5 fill-current" />
+                                    {si.label}
+                                  </span>
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
                     );
                   })}
                 </TableBody>
@@ -907,7 +1067,7 @@ function ConstraintsTab({ data, onSave }: { data: LPSData; onSave: (d: LPSData) 
             <div className="text-center py-8">
               <ShieldAlert className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">
-                {filter === "all" ? "Nenhuma restrição registrada." : `Nenhuma restrição com status "${statusLabels[filter as ConstraintStatus]}".`}
+                {filter === "all" && tagFilter === "all" ? "Nenhuma restrição registrada." : "Nenhuma restrição encontrada com os filtros selecionados."}
               </p>
             </div>
           )}
@@ -916,9 +1076,13 @@ function ConstraintsTab({ data, onSave }: { data: LPSData; onSave: (d: LPSData) 
 
       {/* Add constraint dialog */}
       <Dialog open={showAdd} onOpenChange={setShowAdd}>
-        <DialogContent>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Nova Restrição</DialogTitle></DialogHeader>
           <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Tema</Label>
+              <Input className="h-8 text-xs" value={newConstraint.tema} onChange={e => setNewConstraint({ ...newConstraint, tema: e.target.value })} placeholder="Ex: Definição Técnica da Remoção – EEE Criadores" />
+            </div>
             <div>
               <Label className="text-xs">Categoria</Label>
               <Select value={newConstraint.category} onValueChange={v => setNewConstraint({ ...newConstraint, category: v as ConstraintCategory })}>
@@ -931,26 +1095,82 @@ function ConstraintsTab({ data, onSave }: { data: LPSData; onSave: (d: LPSData) 
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Descrição *</Label>
+              <Label className="text-xs">Descrição / Restrição *</Label>
               <Textarea value={newConstraint.description} onChange={e => setNewConstraint({ ...newConstraint, description: e.target.value })} placeholder="Descreva a restrição" rows={2} />
+            </div>
+            <div>
+              <Label className="text-xs">Impacto</Label>
+              <Textarea value={newConstraint.impacto} onChange={e => setNewConstraint({ ...newConstraint, impacto: e.target.value })} placeholder="Ex: Bloqueia avanço de projeto executivo, orçamento e liberação de frente" rows={2} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Responsável</Label>
-                <Input className="h-8 text-xs" value={newConstraint.responsavel} onChange={e => setNewConstraint({ ...newConstraint, responsavel: e.target.value })} placeholder="Nome do responsável" />
+                <Input className="h-8 text-xs" value={newConstraint.responsavel} onChange={e => setNewConstraint({ ...newConstraint, responsavel: e.target.value })} placeholder="Ex: Sala Técnica / Engenharia" />
               </div>
               <div>
                 <Label className="text-xs">Prazo de Remoção</Label>
                 <Input type="date" className="h-8 text-xs" value={newConstraint.prazo} onChange={e => setNewConstraint({ ...newConstraint, prazo: e.target.value })} />
               </div>
             </div>
+
+            {/* Ações Necessárias */}
+            <div>
+              <Label className="text-xs">Ações Necessárias</Label>
+              <div className="flex gap-1 mt-1">
+                <Input className="h-7 text-xs flex-1" value={newAcao} onChange={e => setNewAcao(e.target.value)} placeholder="Ex: Revisar traçado em servidão"
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addAcao(); } }} />
+                <Button type="button" variant="outline" size="sm" className="h-7 px-2" onClick={addAcao}><Plus className="h-3 w-3" /></Button>
+              </div>
+              {newConstraint.acoes.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {newConstraint.acoes.map((acao, i) => (
+                    <li key={i} className="flex items-center gap-2 text-xs bg-muted/40 rounded px-2 py-1">
+                      <Circle className="h-2.5 w-2.5 text-muted-foreground flex-shrink-0" />
+                      <span className="flex-1">{acao}</span>
+                      <Button type="button" variant="ghost" size="icon" className="h-5 w-5" onClick={() => removeAcao(i)}>
+                        <X className="h-2.5 w-2.5" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* Tags */}
+            <div>
+              <Label className="text-xs">Tags</Label>
+              <div className="flex gap-1 mt-1">
+                <div className="relative flex-1">
+                  <Input className="h-7 text-xs" value={newTag} onChange={e => setNewTag(e.target.value)} placeholder="Adicionar tag..."
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+                    list="tag-suggestions" />
+                  {suggestedTags.length > 0 && (
+                    <datalist id="tag-suggestions">
+                      {suggestedTags.map(t => <option key={t} value={t} />)}
+                    </datalist>
+                  )}
+                </div>
+                <Button type="button" variant="outline" size="sm" className="h-7 px-2" onClick={addTag}><Tag className="h-3 w-3" /></Button>
+              </div>
+              {newConstraint.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {newConstraint.tags.map(tag => (
+                    <Badge key={tag} className="text-[10px] gap-1 cursor-pointer" style={{ backgroundColor: getTagColor(tag, [...metrics.allTags, ...newConstraint.tags]) }}
+                      onClick={() => removeTag(tag)}>
+                      {tag} <X className="h-2 w-2" />
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div>
               <Label className="text-xs">Observações</Label>
               <Input className="h-8 text-xs" value={newConstraint.notes} onChange={e => setNewConstraint({ ...newConstraint, notes: e.target.value })} placeholder="Notas adicionais (opcional)" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setShowAdd(false)}>Cancelar</Button>
+            <Button variant="outline" size="sm" onClick={() => { setShowAdd(false); setNewConstraint(defaultForm); }}>Cancelar</Button>
             <Button size="sm" onClick={addConstraint}>Registrar</Button>
           </DialogFooter>
         </DialogContent>

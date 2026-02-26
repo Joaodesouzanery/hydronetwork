@@ -28,6 +28,11 @@ CREATE TABLE IF NOT EXISTS public.hydro_rdos (
 );
 
 ALTER TABLE public.hydro_rdos ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "hydro_rdos_all" ON public.hydro_rdos;
+DROP POLICY IF EXISTS "hydro_rdos_select" ON public.hydro_rdos;
+DROP POLICY IF EXISTS "hydro_rdos_insert" ON public.hydro_rdos;
+DROP POLICY IF EXISTS "hydro_rdos_update" ON public.hydro_rdos;
+DROP POLICY IF EXISTS "hydro_rdos_delete" ON public.hydro_rdos;
 CREATE POLICY "hydro_rdos_select" ON public.hydro_rdos FOR SELECT USING (true);
 CREATE POLICY "hydro_rdos_insert" ON public.hydro_rdos FOR INSERT WITH CHECK (true);
 CREATE POLICY "hydro_rdos_update" ON public.hydro_rdos FOR UPDATE USING (true);
@@ -70,6 +75,10 @@ CREATE TABLE IF NOT EXISTS public.hydro_saved_plans (
 );
 
 ALTER TABLE public.hydro_saved_plans ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "hydro_plans_select" ON public.hydro_saved_plans;
+DROP POLICY IF EXISTS "hydro_plans_insert" ON public.hydro_saved_plans;
+DROP POLICY IF EXISTS "hydro_plans_update" ON public.hydro_saved_plans;
+DROP POLICY IF EXISTS "hydro_plans_delete" ON public.hydro_saved_plans;
 CREATE POLICY "hydro_plans_select" ON public.hydro_saved_plans FOR SELECT USING (true);
 CREATE POLICY "hydro_plans_insert" ON public.hydro_saved_plans FOR INSERT WITH CHECK (true);
 CREATE POLICY "hydro_plans_update" ON public.hydro_saved_plans FOR UPDATE USING (true);
@@ -98,6 +107,10 @@ CREATE TABLE IF NOT EXISTS public.hydro_equipments (
 );
 
 ALTER TABLE public.hydro_equipments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "hydro_equip_select" ON public.hydro_equipments;
+DROP POLICY IF EXISTS "hydro_equip_insert" ON public.hydro_equipments;
+DROP POLICY IF EXISTS "hydro_equip_update" ON public.hydro_equipments;
+DROP POLICY IF EXISTS "hydro_equip_delete" ON public.hydro_equipments;
 CREATE POLICY "hydro_equip_select" ON public.hydro_equipments FOR SELECT USING (true);
 CREATE POLICY "hydro_equip_insert" ON public.hydro_equipments FOR INSERT WITH CHECK (true);
 CREATE POLICY "hydro_equip_update" ON public.hydro_equipments FOR UPDATE USING (true);
