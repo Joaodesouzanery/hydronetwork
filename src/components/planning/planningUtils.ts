@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { supabase } from '@/lib/supabase';
 
 // ===== CONSTANTS =====
 export const DECLIVIDADE_MINIMA = 0.005;
@@ -301,27 +302,120 @@ export function generateAlerts(trechos: Trecho[]): PlanningAlert[] {
   return alerts;
 }
 
-// ===== LOCAL STORAGE =====
+// ===== PERSISTENCE (Supabase + localStorage fallback) =====
 const STORAGE_KEY = 'planning_projects';
 
+function getProjectsFromStorage(): ProjectData[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  } catch { return []; }
+}
+
+function saveToStorage(projects: ProjectData[]): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects.slice(0, 20)));
+}
+
 export function saveProject(project: ProjectData): void {
-  const projects = getProjects();
+  // Sync save to localStorage (immediate)
+  const projects = getProjectsFromStorage();
   const existing = projects.findIndex(p => p.config.nome === project.config.nome && p.createdAt === project.createdAt);
   if (existing >= 0) {
     projects[existing] = project;
   } else {
     projects.unshift(project);
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects.slice(0, 20)));
+  saveToStorage(projects);
+
+  // Async save to Supabase (background)
+  saveProjectToCloud(project).catch(err =>
+    console.error('[Planning] Falha ao salvar no Supabase:', err)
+  );
+}
+
+async function saveProjectToCloud(project: ProjectData): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+
+  const { error } = await supabase
+    .from('hydro_dimensioning_projects')
+    .upsert({
+      user_id: session.user.id,
+      nome: project.config.nome,
+      project_data: project,
+      created_at: project.createdAt,
+    }, {
+      onConflict: 'id',
+    });
+
+  if (error) {
+    console.error('[Planning] Supabase save error:', error);
+  }
 }
 
 export function getProjects(): ProjectData[] {
+  return getProjectsFromStorage();
+}
+
+export async function loadProjectsFromCloud(): Promise<ProjectData[]> {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  } catch { return []; }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return [];
+
+    const { data, error } = await supabase
+      .from('hydro_dimensioning_projects')
+      .select('project_data, created_at')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error('[Planning] Supabase load error:', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) return [];
+
+    const cloudProjects: ProjectData[] = data.map((row: any) => row.project_data as ProjectData);
+
+    // Merge cloud projects with localStorage (cloud wins on conflicts)
+    const localProjects = getProjectsFromStorage();
+    const merged = [...cloudProjects];
+    for (const local of localProjects) {
+      const exists = merged.some(
+        p => p.config.nome === local.config.nome && p.createdAt === local.createdAt
+      );
+      if (!exists) {
+        merged.push(local);
+        // Also sync local-only projects up to cloud
+        saveProjectToCloud(local).catch(() => {});
+      }
+    }
+
+    // Update localStorage with merged data
+    saveToStorage(merged);
+    return merged;
+  } catch {
+    return getProjectsFromStorage();
+  }
 }
 
 export function deleteProject(createdAt: string): void {
-  const projects = getProjects().filter(p => p.createdAt !== createdAt);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  const projects = getProjectsFromStorage().filter(p => p.createdAt !== createdAt);
+  saveToStorage(projects);
+
+  // Async delete from Supabase
+  (async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      await supabase
+        .from('hydro_dimensioning_projects')
+        .delete()
+        .eq('user_id', session.user.id)
+        .eq('created_at', createdAt);
+    } catch (err) {
+      console.error('[Planning] Falha ao deletar no Supabase:', err);
+    }
+  })();
 }
