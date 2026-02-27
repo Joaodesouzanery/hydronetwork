@@ -1,11 +1,14 @@
 /**
- * QEsg/QWater Module — Frontend for sewer and water network dimensioning
- * via FastAPI backend (Manning/Hazen-Williams/Colebrook-White algorithms).
+ * QEsg/QWater Module — 100% client-side sewer and water network dimensioning.
  *
- * Based on Sketua/QEsg and Sketua/QWater QGIS plugins.
+ * NO backend required. All calculations run in the browser using engines
+ * ported from jorgealmerio/QEsg and standard hydraulic formulas.
+ *
+ * QEsg (Esgoto): Manning / NBR 9649
+ * QWater (Água): Hazen-Williams + Colebrook-White / NBR 12218
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,11 +19,21 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
-  Calculator, Droplets, Waves, Settings, CheckCircle, XCircle,
-  RefreshCw, Download, AlertTriangle, Zap, Server
+  Calculator, Droplets, Waves, CheckCircle, XCircle,
+  Zap, Download, AlertTriangle, Info
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
+import {
+  dimensionSewerNetwork,
+  type SewerSegmentInput,
+  type SewerSegmentResult,
+} from "@/engine/qesgEngine";
+import {
+  dimensionWaterNetwork,
+  type WaterSegmentInput,
+  type WaterSegmentResult,
+} from "@/engine/qwaterEngine";
 
 interface QEsgWaterModuleProps {
   pontos: PontoTopografico[];
@@ -28,48 +41,22 @@ interface QEsgWaterModuleProps {
   onTrechosChange?: (t: Trecho[]) => void;
 }
 
-// Types matching backend schemas
-interface SewerResult {
-  id: string;
-  diametro_mm: number;
-  declividade_min: number;
-  velocidade_ms: number;
-  lamina_dagua: number;
-  tensao_trativa: number;
-  atende_norma: boolean;
-  observacoes: string[];
-}
-
-interface WaterResult {
-  id: string;
-  diametro_mm: number;
-  velocidade_ms: number;
-  perda_carga_m: number;
-  perda_carga_unitaria: number;
-  pressao_jusante: number | null;
-  atende_norma: boolean;
-  observacoes: string[];
-}
-
-const DEFAULT_API_URL = "http://localhost:8000";
-
 export const QEsgWaterModule = ({ pontos, trechos, onTrechosChange }: QEsgWaterModuleProps) => {
   const [activeTab, setActiveTab] = useState<"qesg" | "qwater">("qesg");
-  const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
-  const [loading, setLoading] = useState(false);
-  const [connected, setConnected] = useState<boolean | null>(null);
 
   // QEsg parameters
-  const [sewerResults, setSewerResults] = useState<SewerResult[]>([]);
+  const [sewerResults, setSewerResults] = useState<SewerSegmentResult[]>([]);
+  const [sewerResumo, setSewerResumo] = useState<{ total: number; atendem: number } | null>(null);
   const [manning, setManning] = useState(0.013);
   const [laminaMax, setLaminaMax] = useState(0.75);
   const [velMinEsg, setVelMinEsg] = useState(0.6);
   const [velMaxEsg, setVelMaxEsg] = useState(5.0);
   const [tensaoMin, setTensaoMin] = useState(1.0);
-  const [diamMinEsg, setDiamMinEsg] = useState(100);
+  const [diamMinEsg, setDiamMinEsg] = useState(150);
 
   // QWater parameters
-  const [waterResults, setWaterResults] = useState<WaterResult[]>([]);
+  const [waterResults, setWaterResults] = useState<WaterSegmentResult[]>([]);
+  const [waterResumo, setWaterResumo] = useState<{ total: number; atendem: number } | null>(null);
   const [formula, setFormula] = useState<"hazen-williams" | "colebrook">("hazen-williams");
   const [coefHW, setCoefHW] = useState(140);
   const [velMinAgua, setVelMinAgua] = useState(0.6);
@@ -88,128 +75,79 @@ export const QEsgWaterModule = ({ pontos, trechos, onTrechosChange }: QEsgWaterM
     [trechos]
   );
 
-  // Test connection
-  const testConnection = async () => {
-    try {
-      const res = await fetch(`${apiUrl}/health`);
-      if (res.ok) {
-        setConnected(true);
-        toast.success("Conectado ao backend HydroNetwork API");
-      } else {
-        setConnected(false);
-        toast.error("Backend respondeu com erro");
-      }
-    } catch {
-      setConnected(false);
-      toast.error("Não foi possível conectar ao backend. Verifique se o servidor está rodando.");
-    }
-  };
-
-  // Dimension sewer network
-  const dimensionSewer = async () => {
+  // Dimension sewer network (client-side)
+  const dimensionSewer = useCallback(() => {
     if (sewerTrechos.length === 0) {
       toast.error("Nenhum trecho de esgoto encontrado. Importe uma rede primeiro.");
       return;
     }
 
-    setLoading(true);
-    try {
-      const body = {
-        trechos: sewerTrechos.map(t => {
-          const ptInicio = pontos.find(p => p.id === t.idInicio);
-          const ptFim = pontos.find(p => p.id === t.idFim);
-          return {
-            id: `${t.idInicio}-${t.idFim}`,
-            comprimento: t.comprimento,
-            cota_montante: ptInicio?.cota ?? 0,
-            cota_jusante: ptFim?.cota ?? 0,
-            vazao_lps: 1.5, // Default per-capita flow
-            tipo_tubo: t.material || "PVC",
-          };
-        }),
-        coeficiente_manning: manning,
-        lamina_maxima: laminaMax,
-        velocidade_minima: velMinEsg,
-        velocidade_maxima: velMaxEsg,
-        tensao_trativa_minima: tensaoMin,
-        diametro_minimo_mm: diamMinEsg,
+    const inputs: SewerSegmentInput[] = sewerTrechos.map(t => {
+      const ptInicio = pontos.find(p => p.id === t.idInicio);
+      const ptFim = pontos.find(p => p.id === t.idFim);
+      return {
+        id: `${t.idInicio}-${t.idFim}`,
+        comprimento: t.comprimento,
+        cotaMontante: ptInicio?.cota ?? 0,
+        cotaJusante: ptFim?.cota ?? 0,
+        vazaoLps: 1.5,
+        tipoTubo: t.material || "PVC",
       };
+    });
 
-      const res = await fetch(`${apiUrl}/api/qesg/dimension`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+    const { resultados, resumo } = dimensionSewerNetwork(inputs, {
+      manning,
+      laminaMax,
+      velMin: velMinEsg,
+      velMax: velMaxEsg,
+      tensaoMin,
+      diamMinMm: diamMinEsg,
+    });
 
-      if (!res.ok) throw new Error(`Erro ${res.status}: ${await res.text()}`);
-      const data = await res.json();
-      setSewerResults(data.resultados);
+    setSewerResults(resultados);
+    setSewerResumo({ total: resumo.total, atendem: resumo.atendem });
+    toast.success(`Dimensionamento concluído: ${resumo.atendem}/${resumo.total} trechos atendem NBR 9649`);
+  }, [sewerTrechos, pontos, manning, laminaMax, velMinEsg, velMaxEsg, tensaoMin, diamMinEsg]);
 
-      const atende = data.resumo.atendem_norma;
-      const total = data.resumo.total_trechos;
-      toast.success(`Dimensionamento concluído: ${atende}/${total} trechos atendem NBR 9649`);
-    } catch (err: any) {
-      toast.error(`Erro no dimensionamento: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Dimension water network
-  const dimensionWater = async () => {
+  // Dimension water network (client-side)
+  const dimensionWater = useCallback(() => {
     if (waterTrechos.length === 0) {
       toast.error("Nenhum trecho de água encontrado. Importe uma rede primeiro.");
       return;
     }
 
-    setLoading(true);
-    try {
-      const body = {
-        trechos: waterTrechos.map(t => {
-          const ptInicio = pontos.find(p => p.id === t.idInicio);
-          const ptFim = pontos.find(p => p.id === t.idFim);
-          return {
-            id: `${t.idInicio}-${t.idFim}`,
-            comprimento: t.comprimento,
-            cota_montante: ptInicio?.cota ?? 0,
-            cota_jusante: ptFim?.cota ?? 0,
-            vazao_lps: 0.5, // Default
-            material: t.material || "PVC",
-          };
-        }),
-        formula,
-        coeficiente_hw: coefHW,
-        velocidade_minima: velMinAgua,
-        velocidade_maxima: velMaxAgua,
-        pressao_minima: pressaoMin,
-        pressao_maxima: pressaoMax,
-        diametro_minimo_mm: diamMinAgua,
+    const inputs: WaterSegmentInput[] = waterTrechos.map(t => {
+      const ptInicio = pontos.find(p => p.id === t.idInicio);
+      const ptFim = pontos.find(p => p.id === t.idFim);
+      return {
+        id: `${t.idInicio}-${t.idFim}`,
+        comprimento: t.comprimento,
+        cotaMontante: ptInicio?.cota ?? 0,
+        cotaJusante: ptFim?.cota ?? 0,
+        vazaoLps: 0.5,
+        material: t.material || "PVC",
       };
+    });
 
-      const res = await fetch(`${apiUrl}/api/qwater/dimension`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+    const { resultados, resumo } = dimensionWaterNetwork(inputs, {
+      formula,
+      coefHW,
+      velMin: velMinAgua,
+      velMax: velMaxAgua,
+      pressaoMin,
+      pressaoMax,
+      diamMinMm: diamMinAgua,
+    });
 
-      if (!res.ok) throw new Error(`Erro ${res.status}: ${await res.text()}`);
-      const data = await res.json();
-      setWaterResults(data.resultados);
-
-      const atende = data.resumo.atendem_norma;
-      const total = data.resumo.total_trechos;
-      toast.success(`Dimensionamento concluído: ${atende}/${total} trechos atendem NBR 12218`);
-    } catch (err: any) {
-      toast.error(`Erro no dimensionamento: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setWaterResults(resultados);
+    setWaterResumo({ total: resumo.total, atendem: resumo.atendem });
+    toast.success(`Dimensionamento concluído: ${resumo.atendem}/${resumo.total} trechos atendem NBR 12218`);
+  }, [waterTrechos, pontos, formula, coefHW, velMinAgua, velMaxAgua, pressaoMin, pressaoMax, diamMinAgua]);
 
   // Apply calculated diameters back to trechos
   const applySewerDiameters = () => {
     if (sewerResults.length === 0 || !onTrechosChange) return;
-    const resultMap = new Map(sewerResults.map(r => [r.id, r.diametro_mm]));
+    const resultMap = new Map(sewerResults.map(r => [r.id, r.diametroMm]));
     const updated = trechos.map(t => {
       const key = `${t.idInicio}-${t.idFim}`;
       const newDiam = resultMap.get(key);
@@ -221,7 +159,7 @@ export const QEsgWaterModule = ({ pontos, trechos, onTrechosChange }: QEsgWaterM
 
   const applyWaterDiameters = () => {
     if (waterResults.length === 0 || !onTrechosChange) return;
-    const resultMap = new Map(waterResults.map(r => [r.id, r.diametro_mm]));
+    const resultMap = new Map(waterResults.map(r => [r.id, r.diametroMm]));
     const updated = trechos.map(t => {
       const key = `${t.idInicio}-${t.idFim}`;
       const newDiam = resultMap.get(key);
@@ -231,38 +169,58 @@ export const QEsgWaterModule = ({ pontos, trechos, onTrechosChange }: QEsgWaterM
     toast.success("Diâmetros de água aplicados aos trechos");
   };
 
+  // Export results to CSV
+  const exportCSV = (type: "sewer" | "water") => {
+    const results = type === "sewer" ? sewerResults : waterResults;
+    if (results.length === 0) return;
+
+    let csv: string;
+    if (type === "sewer") {
+      csv = "Trecho;DN (mm);DN Calc (mm);V (m/s);V Crit (m/s);y/D;Tensão (Pa);Decliv Min;Decliv Usada;Status;Obs\n";
+      for (const r of sewerResults) {
+        csv += `${r.id};${r.diametroMm};${r.diametroCalculadoMm};${r.velocidadeMs};${r.velocidadeCriticaMs};${r.laminaDagua};${r.tensaoTrativa};${r.declividadeMin};${r.declividadeUsada};${r.atendeNorma ? "OK" : "NÃO"};${r.observacoes.join(" | ")}\n`;
+      }
+    } else {
+      csv = "Trecho;DN (mm);V (m/s);hf (m);J (m/m);P jus (mca);Status;Obs\n";
+      for (const r of waterResults) {
+        csv += `${r.id};${r.diametroMm};${r.velocidadeMs};${r.perdaCargaM};${r.perdaCargaUnitaria};${r.pressaoJusante ?? "—"};${r.atendeNorma ? "OK" : "NÃO"};${r.observacoes.join(" | ")}\n`;
+      }
+    }
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dimensionamento_${type === "sewer" ? "esgoto" : "agua"}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-4">
-      {/* Connection Card */}
+      {/* Header Card */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Server className="h-5 w-5" />
+            <Calculator className="h-5 w-5" />
             QEsg / QWater — Dimensionamento Hidráulico
           </CardTitle>
           <CardDescription>
-            Dimensionamento de redes de esgoto (Manning/NBR 9649) e água (Hazen-Williams/NBR 12218)
-            via backend FastAPI. Baseado nos plugins QEsg e QWater do QGIS.
+            Dimensionamento de redes de esgoto (Manning/NBR 9649) e água (Hazen-Williams/NBR 12218).
+            Baseado nos algoritmos do QEsg e QWater — cálculos 100% no navegador.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3">
-            <Label className="whitespace-nowrap">API URL:</Label>
-            <Input
-              value={apiUrl}
-              onChange={e => setApiUrl(e.target.value)}
-              placeholder="http://localhost:8000"
-              className="max-w-sm"
-            />
-            <Button onClick={testConnection} variant="outline" size="sm">
-              <RefreshCw className="h-4 w-4 mr-1" /> Testar
-            </Button>
-            {connected === true && <Badge className="bg-green-500">Conectado</Badge>}
-            {connected === false && <Badge variant="destructive">Desconectado</Badge>}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Info className="h-4 w-4" />
+            <span>
+              Fórmulas portadas de{" "}
+              <a href="https://github.com/jorgealmerio/QEsg" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">QEsg</a>
+              {" "}e{" "}
+              <a href="https://github.com/jorgealmerio/QWater" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">QWater</a>.
+              Sem necessidade de backend — tudo roda localmente.
+            </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Inicie o backend: <code>cd backend && pip install -r requirements.txt && uvicorn main:app --reload</code>
-          </p>
         </CardContent>
       </Card>
 
@@ -285,6 +243,9 @@ export const QEsgWaterModule = ({ pontos, trechos, onTrechosChange }: QEsgWaterM
                 <Waves className="h-5 w-5 text-amber-600" />
                 Dimensionamento de Rede de Esgoto (NBR 9649)
               </CardTitle>
+              <CardDescription className="text-xs">
+                τ = 10000·Rh·I | v_c = 6·√(g·Rh) | I_min = 0.0055·Q^(-0.47) | D = [n·Q/(√I·(A/D²)·(Rh/D)^(2/3))]^(3/8)
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Parameters */}
@@ -315,19 +276,35 @@ export const QEsgWaterModule = ({ pontos, trechos, onTrechosChange }: QEsgWaterM
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                <Button onClick={dimensionSewer} disabled={loading || sewerTrechos.length === 0}>
+              <div className="flex gap-2 flex-wrap">
+                <Button onClick={dimensionSewer} disabled={sewerTrechos.length === 0}>
                   <Calculator className="h-4 w-4 mr-1" />
-                  {loading ? "Calculando..." : `Dimensionar (${sewerTrechos.length} trechos)`}
+                  Dimensionar ({sewerTrechos.length} trechos)
                 </Button>
                 {sewerResults.length > 0 && (
-                  <Button variant="outline" onClick={applySewerDiameters}>
-                    <Zap className="h-4 w-4 mr-1" /> Aplicar Diâmetros
-                  </Button>
+                  <>
+                    <Button variant="outline" onClick={applySewerDiameters}>
+                      <Zap className="h-4 w-4 mr-1" /> Aplicar Diâmetros
+                    </Button>
+                    <Button variant="outline" onClick={() => exportCSV("sewer")}>
+                      <Download className="h-4 w-4 mr-1" /> Exportar CSV
+                    </Button>
+                  </>
                 )}
               </div>
 
-              {/* Results */}
+              {/* Summary */}
+              {sewerResumo && (
+                <div className="flex gap-3 text-sm">
+                  <Badge variant="outline">{sewerResumo.total} trechos</Badge>
+                  <Badge className="bg-green-500">{sewerResumo.atendem} atendem NBR 9649</Badge>
+                  {sewerResumo.total - sewerResumo.atendem > 0 && (
+                    <Badge variant="destructive">{sewerResumo.total - sewerResumo.atendem} não atendem</Badge>
+                  )}
+                </div>
+              )}
+
+              {/* Results Table */}
               {sewerResults.length > 0 && (
                 <div className="border rounded-lg overflow-auto max-h-96">
                   <Table>
@@ -335,24 +312,28 @@ export const QEsgWaterModule = ({ pontos, trechos, onTrechosChange }: QEsgWaterM
                       <TableRow>
                         <TableHead>Trecho</TableHead>
                         <TableHead>DN (mm)</TableHead>
+                        <TableHead>DN Calc</TableHead>
                         <TableHead>V (m/s)</TableHead>
+                        <TableHead>V crit</TableHead>
                         <TableHead>y/D</TableHead>
-                        <TableHead>Tensão (Pa)</TableHead>
-                        <TableHead>Decliv. (m/m)</TableHead>
+                        <TableHead>τ (Pa)</TableHead>
+                        <TableHead>I usada</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {sewerResults.map(r => (
-                        <TableRow key={r.id}>
+                        <TableRow key={r.id} className={!r.atendeNorma ? "bg-red-50 dark:bg-red-950/20" : ""}>
                           <TableCell className="font-mono text-xs">{r.id}</TableCell>
-                          <TableCell>{r.diametro_mm}</TableCell>
-                          <TableCell>{r.velocidade_ms.toFixed(2)}</TableCell>
-                          <TableCell>{r.lamina_dagua.toFixed(3)}</TableCell>
-                          <TableCell>{r.tensao_trativa.toFixed(2)}</TableCell>
-                          <TableCell>{r.declividade_min.toFixed(4)}</TableCell>
+                          <TableCell className="font-semibold">{r.diametroMm}</TableCell>
+                          <TableCell className="text-muted-foreground">{r.diametroCalculadoMm}</TableCell>
+                          <TableCell>{r.velocidadeMs.toFixed(2)}</TableCell>
+                          <TableCell className="text-muted-foreground">{r.velocidadeCriticaMs.toFixed(2)}</TableCell>
+                          <TableCell>{r.laminaDagua.toFixed(3)}</TableCell>
+                          <TableCell>{r.tensaoTrativa.toFixed(2)}</TableCell>
+                          <TableCell className="font-mono text-xs">{r.declividadeUsada.toFixed(4)}</TableCell>
                           <TableCell>
-                            {r.atende_norma ? (
+                            {r.atendeNorma ? (
                               <Badge className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" /> OK</Badge>
                             ) : (
                               <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" /> Não atende</Badge>
@@ -362,6 +343,13 @@ export const QEsgWaterModule = ({ pontos, trechos, onTrechosChange }: QEsgWaterM
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+
+              {sewerTrechos.length === 0 && (
+                <div className="flex items-center gap-2 p-4 bg-muted rounded-lg text-sm text-muted-foreground">
+                  <AlertTriangle className="h-4 w-4" />
+                  Nenhum trecho de esgoto. Importe uma rede na aba Topografia ou cadastre trechos no módulo Esgoto.
                 </div>
               )}
             </CardContent>
@@ -376,6 +364,9 @@ export const QEsgWaterModule = ({ pontos, trechos, onTrechosChange }: QEsgWaterM
                 <Droplets className="h-5 w-5 text-blue-600" />
                 Dimensionamento de Rede de Água (NBR 12218)
               </CardTitle>
+              <CardDescription className="text-xs">
+                Hazen-Williams: hf = 10.643·Q^1.85 / (C^1.85·D^4.87)·L | Colebrook: 1/√f = -2·log(ε/3.7D + 2.51/Re√f)
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Parameters */}
@@ -412,19 +403,35 @@ export const QEsgWaterModule = ({ pontos, trechos, onTrechosChange }: QEsgWaterM
                 </div>
               </div>
 
-              <div className="flex gap-2">
-                <Button onClick={dimensionWater} disabled={loading || waterTrechos.length === 0}>
+              <div className="flex gap-2 flex-wrap">
+                <Button onClick={dimensionWater} disabled={waterTrechos.length === 0}>
                   <Calculator className="h-4 w-4 mr-1" />
-                  {loading ? "Calculando..." : `Dimensionar (${waterTrechos.length} trechos)`}
+                  Dimensionar ({waterTrechos.length} trechos)
                 </Button>
                 {waterResults.length > 0 && (
-                  <Button variant="outline" onClick={applyWaterDiameters}>
-                    <Zap className="h-4 w-4 mr-1" /> Aplicar Diâmetros
-                  </Button>
+                  <>
+                    <Button variant="outline" onClick={applyWaterDiameters}>
+                      <Zap className="h-4 w-4 mr-1" /> Aplicar Diâmetros
+                    </Button>
+                    <Button variant="outline" onClick={() => exportCSV("water")}>
+                      <Download className="h-4 w-4 mr-1" /> Exportar CSV
+                    </Button>
+                  </>
                 )}
               </div>
 
-              {/* Results */}
+              {/* Summary */}
+              {waterResumo && (
+                <div className="flex gap-3 text-sm">
+                  <Badge variant="outline">{waterResumo.total} trechos</Badge>
+                  <Badge className="bg-green-500">{waterResumo.atendem} atendem NBR 12218</Badge>
+                  {waterResumo.total - waterResumo.atendem > 0 && (
+                    <Badge variant="destructive">{waterResumo.total - waterResumo.atendem} não atendem</Badge>
+                  )}
+                </div>
+              )}
+
+              {/* Results Table */}
               {waterResults.length > 0 && (
                 <div className="border rounded-lg overflow-auto max-h-96">
                   <Table>
@@ -441,15 +448,15 @@ export const QEsgWaterModule = ({ pontos, trechos, onTrechosChange }: QEsgWaterM
                     </TableHeader>
                     <TableBody>
                       {waterResults.map(r => (
-                        <TableRow key={r.id}>
+                        <TableRow key={r.id} className={!r.atendeNorma ? "bg-red-50 dark:bg-red-950/20" : ""}>
                           <TableCell className="font-mono text-xs">{r.id}</TableCell>
-                          <TableCell>{r.diametro_mm}</TableCell>
-                          <TableCell>{r.velocidade_ms.toFixed(2)}</TableCell>
-                          <TableCell>{r.perda_carga_m.toFixed(3)}</TableCell>
-                          <TableCell>{r.perda_carga_unitaria.toFixed(5)}</TableCell>
-                          <TableCell>{r.pressao_jusante?.toFixed(1) ?? "—"}</TableCell>
+                          <TableCell className="font-semibold">{r.diametroMm}</TableCell>
+                          <TableCell>{r.velocidadeMs.toFixed(2)}</TableCell>
+                          <TableCell>{r.perdaCargaM.toFixed(3)}</TableCell>
+                          <TableCell className="font-mono text-xs">{r.perdaCargaUnitaria.toFixed(5)}</TableCell>
+                          <TableCell>{r.pressaoJusante?.toFixed(1) ?? "—"}</TableCell>
                           <TableCell>
-                            {r.atende_norma ? (
+                            {r.atendeNorma ? (
                               <Badge className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" /> OK</Badge>
                             ) : (
                               <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" /> Não atende</Badge>
@@ -459,6 +466,13 @@ export const QEsgWaterModule = ({ pontos, trechos, onTrechosChange }: QEsgWaterM
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+
+              {waterTrechos.length === 0 && (
+                <div className="flex items-center gap-2 p-4 bg-muted rounded-lg text-sm text-muted-foreground">
+                  <AlertTriangle className="h-4 w-4" />
+                  Nenhum trecho de água. Importe uma rede na aba Topografia ou cadastre trechos no módulo Água.
                 </div>
               )}
             </CardContent>

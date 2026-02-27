@@ -1,0 +1,245 @@
+/**
+ * QEsg Engine — Client-side sewer network dimensioning.
+ *
+ * Faithful port of jorgealmerio/QEsg (QGIS plugin) core formulas.
+ * Based on Brazilian standards NBR 9649 and NBR 14486.
+ *
+ * Key formulas from QEsg_03Dimensionamento.py:
+ * - CalcDiametro: D = [n·Q / (√I·(A/D²)·(Rh/D)^(2/3))]^(3/8) × 1000
+ * - CalcTheta: binary search with M threshold 0.335282
+ * - Tensão trativa: τ = 10000·Rh·I (Pa)
+ * - Velocidade crítica: v_c = 6·√(g·Rh)
+ * - Declividade mínima: I_min = 0.0055·Q^(-0.47)
+ *
+ * References:
+ * - https://github.com/jorgealmerio/QEsg
+ * - NBR 9649: Projeto de redes coletoras de esgoto sanitário
+ * - Ariovaldo Nuvolari, "Esgoto sanitário"
+ */
+
+// Commercial pipe diameters: [diameter_mm, manning_n]
+const TUBOS_PVC: [number, number][] = [
+  [100, 0.013], [150, 0.013], [200, 0.013], [250, 0.013],
+  [300, 0.013], [350, 0.013], [400, 0.013], [450, 0.013],
+  [500, 0.013], [600, 0.013], [700, 0.013], [800, 0.013],
+  [900, 0.013], [1000, 0.013], [1200, 0.013], [1500, 0.013],
+];
+
+const TUBOS_CONCRETO: [number, number][] = [
+  [300, 0.015], [400, 0.015], [500, 0.015], [600, 0.015],
+  [700, 0.015], [800, 0.015], [900, 0.015], [1000, 0.015],
+  [1200, 0.015], [1500, 0.015], [2000, 0.015],
+];
+
+/** Central angle θ from y/D ratio: θ = 2·arccos(1 - 2·y/D) */
+function thetaFromYd(yd: number): number {
+  yd = Math.min(Math.max(yd, 0.001), 0.999);
+  return 2.0 * Math.acos(1.0 - 2.0 * yd);
+}
+
+/** y/D from central angle θ: y/D = 0.5·(1 - cos(θ/2)) */
+function ydFromTheta(theta: number): number {
+  return 0.5 * (1.0 - Math.cos(theta / 2.0));
+}
+
+/** Normalized area A/D² = (θ - sin θ) / 8 */
+function calcAreaNormalized(theta: number): number {
+  return (theta - Math.sin(theta)) / 8.0;
+}
+
+/** Normalized hydraulic radius Rh/D = (θ - sin θ) / (4θ) */
+function calcRhNormalized(theta: number): number {
+  if (theta <= 0) return 0;
+  return (theta - Math.sin(theta)) / (4.0 * theta);
+}
+
+/** Manning velocity: V = (1/n) · Rh^(2/3) · S^(1/2) */
+function manningVelocity(rh: number, slope: number, n: number): number {
+  if (slope <= 0 || rh <= 0) return 0;
+  return (1.0 / n) * Math.pow(rh, 2.0 / 3.0) * Math.pow(slope, 0.5);
+}
+
+/** Tractive stress: τ = 10000 · Rh · I (Pa) — QEsg formula */
+function calcTractiveStress(rh: number, slope: number): number {
+  return 10000.0 * rh * slope;
+}
+
+/** Critical velocity: v_c = 6·√(g·Rh) */
+function calcCriticalVelocity(rh: number): number {
+  if (rh <= 0) return 0;
+  return 6.0 * Math.sqrt(9.81 * rh);
+}
+
+/** Minimum slope: I_min = 0.0055·Q^(-0.47) */
+function calcMinSlope(vazaoLps: number): number {
+  if (vazaoLps <= 0) return 0.005;
+  return 0.0055 * Math.pow(vazaoLps, -0.47);
+}
+
+/** Analytical diameter: D = [n·Q/(√I·(A/D²)·(Rh/D)^(2/3))]^(3/8) × 1000 */
+function calcDiameterAnalytical(qLps: number, n: number, slope: number, yd: number): number {
+  if (slope <= 0 || qLps <= 0) return 0;
+  const qM3s = qLps / 1000.0;
+  const theta = thetaFromYd(yd);
+  const amD2 = calcAreaNormalized(theta);
+  const rhD = calcRhNormalized(theta);
+  if (amD2 <= 0 || rhD <= 0) return 0;
+  const diamM = Math.pow(n * qM3s / (Math.pow(slope, 0.5) * amD2 * Math.pow(rhD, 2.0 / 3.0)), 3.0 / 8.0);
+  return diamM * 1000.0;
+}
+
+/**
+ * Find θ (central angle) for given flow conditions.
+ * Binary search with M = n·Q/(√I·D^(8/3)), threshold 0.335282.
+ */
+function calcThetaForFlow(qLps: number, n: number, slope: number, diamMm: number): number {
+  if (slope <= 0 || diamMm <= 0) return 0;
+  const diamM = diamMm / 1000.0;
+  const qM3s = qLps / 1000.0;
+  const M = n * qM3s / (Math.pow(slope, 0.5) * Math.pow(diamM, 8.0 / 3.0));
+
+  if (M >= 0.335282) return 2.0 * Math.PI;
+
+  let thetaLow = 0.01;
+  let thetaHigh = 2.0 * Math.PI;
+  let theta = Math.PI;
+
+  for (let i = 0; i < 1000; i++) {
+    const amD2 = calcAreaNormalized(theta);
+    const rhD = calcRhNormalized(theta);
+    if (rhD <= 0) { thetaLow = theta; theta = (thetaLow + thetaHigh) / 2; continue; }
+    const mCalc = amD2 * Math.pow(rhD, 2.0 / 3.0);
+    if (Math.abs(mCalc - M) < 1e-10) break;
+    if (mCalc < M) thetaLow = theta; else thetaHigh = theta;
+    theta = (thetaLow + thetaHigh) / 2;
+  }
+  return theta;
+}
+
+function selectCommercialDiameter(diamCalcMm: number, diamMinMm: number, tubos: [number, number][]): [number, number] {
+  for (const [d, n] of tubos) {
+    if (d >= Math.max(diamCalcMm, diamMinMm)) return [d, n];
+  }
+  const last = tubos[tubos.length - 1];
+  return [last[0], last[1]];
+}
+
+// ══════════════════════════════════════
+// Public API
+// ══════════════════════════════════════
+
+export interface SewerSegmentInput {
+  id: string;
+  comprimento: number;
+  cotaMontante: number;
+  cotaJusante: number;
+  vazaoLps: number;
+  tipoTubo?: string;
+}
+
+export interface SewerSegmentResult {
+  id: string;
+  diametroMm: number;
+  diametroCalculadoMm: number;
+  declividadeMin: number;
+  declividadeUsada: number;
+  velocidadeMs: number;
+  velocidadeCriticaMs: number;
+  laminaDagua: number;
+  tensaoTrativa: number;
+  atendeNorma: boolean;
+  observacoes: string[];
+}
+
+export interface SewerParams {
+  manning: number;
+  laminaMax: number;
+  velMin: number;
+  velMax: number;
+  tensaoMin: number;
+  diamMinMm: number;
+}
+
+const DEFAULT_SEWER_PARAMS: SewerParams = {
+  manning: 0.013,
+  laminaMax: 0.75,
+  velMin: 0.6,
+  velMax: 5.0,
+  tensaoMin: 1.0,
+  diamMinMm: 150,
+};
+
+export function dimensionSewerSegment(
+  input: SewerSegmentInput,
+  params: Partial<SewerParams> = {}
+): SewerSegmentResult {
+  const p = { ...DEFAULT_SEWER_PARAMS, ...params };
+  const obs: string[] = [];
+
+  let slope = input.comprimento > 0
+    ? (input.cotaMontante - input.cotaJusante) / input.comprimento
+    : 0;
+
+  if (slope < 0) {
+    obs.push("Declividade negativa (contra-fluxo) - usando valor absoluto");
+    slope = Math.abs(slope);
+  }
+  if (slope === 0) {
+    obs.push("Declividade nula - usando declividade mínima");
+    slope = calcMinSlope(input.vazaoLps);
+  }
+
+  const iMin = calcMinSlope(input.vazaoLps);
+  const slopeUsed = Math.max(slope, iMin);
+  if (slope < iMin) {
+    obs.push(`Declividade (${slope.toFixed(6)}) abaixo da mínima (${iMin.toFixed(6)})`);
+  }
+
+  const tubos = (input.tipoTubo || "PVC").toUpperCase().includes("CONCRETO") ? TUBOS_CONCRETO : TUBOS_PVC;
+  const diamCalc = calcDiameterAnalytical(input.vazaoLps, p.manning, slopeUsed, p.laminaMax);
+  const [diamMm, nTubo] = selectCommercialDiameter(diamCalc, p.diamMinMm, tubos);
+  const diamM = diamMm / 1000.0;
+
+  const theta = calcThetaForFlow(input.vazaoLps, nTubo, slopeUsed, diamMm);
+  const yd = ydFromTheta(theta);
+  const amD2 = calcAreaNormalized(theta);
+  const rhD = calcRhNormalized(theta);
+  const area = amD2 * diamM * diamM;
+  const rh = rhD * diamM;
+  const vel = area > 0 ? (input.vazaoLps / 1000.0) / area : 0;
+  const tensao = calcTractiveStress(rh, slopeUsed);
+  const vCrit = calcCriticalVelocity(rh);
+
+  let atende = true;
+  if (yd > p.laminaMax) { atende = false; obs.push(`y/D (${yd.toFixed(3)}) excede máximo (${p.laminaMax})`); }
+  if (vel < p.velMin) { atende = false; obs.push(`Velocidade (${vel.toFixed(3)} m/s) abaixo do mínimo (${p.velMin} m/s)`); }
+  if (vel > p.velMax) { atende = false; obs.push(`Velocidade (${vel.toFixed(3)} m/s) acima do máximo (${p.velMax} m/s)`); }
+  if (tensao < p.tensaoMin) { atende = false; obs.push(`Tensão trativa (${tensao.toFixed(3)} Pa) abaixo do mínimo (${p.tensaoMin} Pa)`); }
+  if (vel > vCrit && yd > 0.5) { obs.push(`V > V_crítica (${vCrit.toFixed(2)} m/s) → y/D deveria ser ≤ 0.50`); }
+
+  return {
+    id: input.id,
+    diametroMm: diamMm,
+    diametroCalculadoMm: Math.round(diamCalc * 10) / 10,
+    declividadeMin: Math.round(iMin * 1e6) / 1e6,
+    declividadeUsada: Math.round(slopeUsed * 1e6) / 1e6,
+    velocidadeMs: Math.round(vel * 1000) / 1000,
+    velocidadeCriticaMs: Math.round(vCrit * 1000) / 1000,
+    laminaDagua: Math.round(yd * 10000) / 10000,
+    tensaoTrativa: Math.round(tensao * 1000) / 1000,
+    atendeNorma: atende,
+    observacoes: obs,
+  };
+}
+
+export function dimensionSewerNetwork(
+  trechos: SewerSegmentInput[],
+  params: Partial<SewerParams> = {}
+): { resultados: SewerSegmentResult[]; resumo: { total: number; atendem: number; naoAtendem: number } } {
+  const resultados = trechos.map(t => dimensionSewerSegment(t, params));
+  const atendem = resultados.filter(r => r.atendeNorma).length;
+  return {
+    resultados,
+    resumo: { total: resultados.length, atendem, naoAtendem: resultados.length - atendem },
+  };
+}
