@@ -59,9 +59,15 @@ export const QEsgWaterPanel = ({ pontos, trechos, onTrechosChange }: QEsgWaterPa
   const [diamMinAgua, setDiamMinAgua] = useState(50);
 
   const sewerTrechos = useMemo(() =>
-    trechos.filter(t => t.tipoRede === "esgoto" || t.tipoRede === "outro"), [trechos]);
+    trechos.filter(t => {
+      const tipo = t.tipoRedeManual || "esgoto";
+      return tipo === "esgoto" || tipo === "outro";
+    }), [trechos]);
   const waterTrechos = useMemo(() =>
-    trechos.filter(t => t.tipoRede === "agua" || t.tipoRede === "outro"), [trechos]);
+    trechos.filter(t => {
+      const tipo = t.tipoRedeManual || "esgoto";
+      return tipo === "agua" || tipo === "outro";
+    }), [trechos]);
 
   const dimensionSewer = useCallback(() => {
     if (sewerTrechos.length === 0) { toast.error("Nenhum trecho de esgoto encontrado."); return; }

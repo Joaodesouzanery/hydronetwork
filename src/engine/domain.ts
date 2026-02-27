@@ -100,6 +100,7 @@ export function createTrechoFromPoints(
     xFim: pontoFim.x,
     yFim: pontoFim.y,
     cotaFim: pontoFim.cota,
+    tipoRedeManual: "esgoto",
   };
 }
 
