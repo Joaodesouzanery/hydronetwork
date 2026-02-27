@@ -35,6 +35,7 @@ const leanItems = [
 
 const hydroModules = [
   { title: "Topografia", url: "/hydronetwork/topografia", icon: Upload },
+  { title: "QEsg / QWater", url: "/hydronetwork/qesg-qwater", icon: Waves },
   { title: "Esgoto", url: "/hydronetwork/esgoto", icon: Droplets },
   { title: "Água", url: "/hydronetwork/agua", icon: Droplets },
   { title: "Drenagem", url: "/hydronetwork/drenagem", icon: CloudRain },

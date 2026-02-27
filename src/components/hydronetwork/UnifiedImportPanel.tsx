@@ -902,116 +902,191 @@ function parseSWMMContent(content: string, fileName: string): ParseResult {
   return { points, edges, layers: Array.from(layersSet), fields: Array.from(fieldsSet) };
 }
 
-function parseSHPContent(buffer: ArrayBuffer, fileName: string): ParseResult {
+async function parseSHPContentAsync(buffer: ArrayBuffer, fileName: string): Promise<ParseResult> {
   const points: ParsedPoint[] = [];
   const edges: ParsedEdge[] = [];
-  const fieldsSet = new Set<string>(['shapeType']);
+  const fieldsSet = new Set<string>();
+  const layersSet = new Set<string>();
 
+  try {
+    // Use shpjs library for full SHP+DBF parsing (supports .shp and .zip)
+    const { parseSHPBuffer } = await import('@/engine/shpReader');
+    const shpResult = await parseSHPBuffer(buffer);
+
+    for (const feature of shpResult.features) {
+      if (!feature.geometry) continue;
+      const props = feature.properties || {};
+      Object.keys(props).forEach(k => fieldsSet.add(k));
+      const layer = props.layer || props.LAYER || 'SHP';
+      layersSet.add(layer);
+
+      switch (feature.geometry.type) {
+        case 'Point': {
+          const [x, y, z] = feature.geometry.coordinates;
+          points.push({
+            id: props.id || props.ID || `SHP_P${points.length}`,
+            x, y, z: z || props.cota || props.COTA || props.Z || props.ELEVACAO || 0,
+            layer, sourceFile: fileName,
+            properties: { ...props, geometryType: 'Point' },
+          });
+          break;
+        }
+        case 'MultiPoint': {
+          for (const coord of feature.geometry.coordinates) {
+            const [x, y, z] = coord;
+            points.push({
+              id: `SHP_P${points.length}`, x, y, z: z || 0,
+              layer, sourceFile: fileName,
+              properties: { ...props, geometryType: 'MultiPoint' },
+            });
+          }
+          break;
+        }
+        case 'LineString': {
+          const coords = feature.geometry.coordinates;
+          if (coords.length >= 2) {
+            edges.push({
+              id: props.id || `SHP_E${edges.length}`,
+              type: 'PolyLine', coordinates: coords.map((c: number[]) => [c[0], c[1], c[2] || 0]),
+              isClosed: false, layer, sourceFile: fileName,
+              properties: { ...props, geometryType: 'LineString', length: calculateEdgeLength(coords) },
+            });
+          }
+          break;
+        }
+        case 'MultiLineString': {
+          for (const line of feature.geometry.coordinates) {
+            if (line.length >= 2) {
+              edges.push({
+                id: `SHP_E${edges.length}`,
+                type: 'PolyLine', coordinates: line.map((c: number[]) => [c[0], c[1], c[2] || 0]),
+                isClosed: false, layer, sourceFile: fileName,
+                properties: { ...props, geometryType: 'MultiLineString', length: calculateEdgeLength(line) },
+              });
+            }
+          }
+          break;
+        }
+        case 'Polygon': {
+          if (feature.geometry.coordinates?.[0]?.length >= 2) {
+            const ring = feature.geometry.coordinates[0];
+            edges.push({
+              id: `SHP_E${edges.length}`,
+              type: 'Polygon', coordinates: ring.map((c: number[]) => [c[0], c[1], c[2] || 0]),
+              isClosed: true, layer, sourceFile: fileName,
+              properties: { ...props, geometryType: 'Polygon', length: calculateEdgeLength(ring) },
+            });
+          }
+          break;
+        }
+        case 'MultiPolygon': {
+          for (const poly of feature.geometry.coordinates) {
+            if (poly[0]?.length >= 2) {
+              edges.push({
+                id: `SHP_E${edges.length}`,
+                type: 'Polygon', coordinates: poly[0].map((c: number[]) => [c[0], c[1], c[2] || 0]),
+                isClosed: true, layer, sourceFile: fileName,
+                properties: { ...props, geometryType: 'MultiPolygon', length: calculateEdgeLength(poly[0]) },
+              });
+            }
+          }
+          break;
+        }
+      }
+    }
+  } catch (shpErr) {
+    // Fallback: try raw binary SHP parsing (without DBF attributes)
+    return parseSHPContentFallback(buffer, fileName);
+  }
+
+  return {
+    points, edges,
+    layers: Array.from(layersSet).length > 0 ? Array.from(layersSet) : ['SHP'],
+    fields: Array.from(fieldsSet),
+  };
+}
+
+// Fallback binary SHP parser (used when shpjs fails, e.g., raw .shp without .dbf)
+function parseSHPContentFallback(buffer: ArrayBuffer, fileName: string): ParseResult {
+  const points: ParsedPoint[] = [];
+  const edges: ParsedEdge[] = [];
   const view = new DataView(buffer);
-  // SHP file header: magic number 9994 at byte 0 (big-endian)
   const magic = view.getInt32(0, false);
   if (magic !== 9994) return { points, edges, layers: ['SHP'], fields: [] };
 
-  const shapeType = view.getInt32(32, true); // little-endian
-  let offset = 100; // records start after 100-byte header
-
+  let offset = 100;
   let recIdx = 0;
   while (offset + 12 < buffer.byteLength) {
     try {
-      const contentLength = view.getInt32(offset + 4, false) * 2; // big-endian, in 16-bit words
+      const contentLength = view.getInt32(offset + 4, false) * 2;
       const recStart = offset + 8;
       if (recStart + 4 > buffer.byteLength) break;
       const recShapeType = view.getInt32(recStart, true);
 
-      if (recShapeType === 0) {
-        // Null shape
-      } else if (recShapeType === 1 || recShapeType === 11 || recShapeType === 21) {
-        // Point / PointZ / PointM
+      if (recShapeType === 1 || recShapeType === 11 || recShapeType === 21) {
         const x = view.getFloat64(recStart + 4, true);
         const y = view.getFloat64(recStart + 12, true);
         const z = recShapeType === 11 && recStart + 28 <= buffer.byteLength ? view.getFloat64(recStart + 20, true) : 0;
-        points.push({
-          id: `SHP_P${recIdx}`, x, y, z,
-          layer: 'SHP', sourceFile: fileName,
-          properties: { shapeType: recShapeType === 1 ? 'Point' : recShapeType === 11 ? 'PointZ' : 'PointM' },
-        });
-      } else if (recShapeType === 3 || recShapeType === 13 || recShapeType === 23 ||
-                 recShapeType === 5 || recShapeType === 15 || recShapeType === 25) {
-        // PolyLine / PolyLineZ / PolyLineM / Polygon / PolygonZ / PolygonM
+        points.push({ id: `SHP_P${recIdx}`, x, y, z, layer: 'SHP', sourceFile: fileName, properties: {} });
+      } else if (recShapeType === 3 || recShapeType === 13 || recShapeType === 5 || recShapeType === 15) {
         const numParts = view.getInt32(recStart + 36, true);
         const numPoints = view.getInt32(recStart + 40, true);
-        const partsOffset = recStart + 44;
-        const pointsOffset = partsOffset + numParts * 4;
-
+        const partsOff = recStart + 44;
+        const ptsOff = partsOff + numParts * 4;
         const parts: number[] = [];
+        for (let p = 0; p < numParts; p++) parts.push(view.getInt32(partsOff + p * 4, true));
         for (let p = 0; p < numParts; p++) {
-          parts.push(view.getInt32(partsOffset + p * 4, true));
-        }
-
-        for (let p = 0; p < numParts; p++) {
-          const start = parts[p];
-          const end = p + 1 < numParts ? parts[p + 1] : numPoints;
+          const start = parts[p], end = p + 1 < numParts ? parts[p + 1] : numPoints;
           const coords: number[][] = [];
           for (let pt = start; pt < end; pt++) {
-            const ptOff = pointsOffset + pt * 16;
+            const ptOff = ptsOff + pt * 16;
             if (ptOff + 16 > buffer.byteLength) break;
-            const px = view.getFloat64(ptOff, true);
-            const py = view.getFloat64(ptOff + 8, true);
-            coords.push([px, py, 0]);
+            coords.push([view.getFloat64(ptOff, true), view.getFloat64(ptOff + 8, true), 0]);
           }
-          // Read Z values if available (PolyLineZ/PolygonZ)
-          if ((recShapeType === 13 || recShapeType === 15) && numPoints > 0) {
-            const zOffset = pointsOffset + numPoints * 16 + 16; // skip bbox min/max
-            for (let pt = start; pt < end; pt++) {
-              const zOff = zOffset + pt * 8;
-              if (zOff + 8 <= buffer.byteLength && coords[pt - start]) {
-                coords[pt - start][2] = view.getFloat64(zOff, true);
-              }
-            }
-          }
-          const isPolygon = recShapeType === 5 || recShapeType === 15 || recShapeType === 25;
           if (coords.length >= 2) {
             edges.push({
-              id: `SHP_E${recIdx}_${p}`,
-              type: isPolygon ? 'Polygon' : 'PolyLine',
-              coordinates: coords,
-              isClosed: isPolygon,
-              layer: 'SHP', sourceFile: fileName,
-              properties: {
-                shapeType: isPolygon ? 'Polygon' : 'PolyLine',
-                vertexCount: coords.length,
-                length: calculateEdgeLength(coords),
-              },
+              id: `SHP_E${recIdx}_${p}`, type: recShapeType >= 5 ? 'Polygon' : 'PolyLine',
+              coordinates: coords, isClosed: recShapeType >= 5, layer: 'SHP', sourceFile: fileName,
+              properties: { length: calculateEdgeLength(coords) },
             });
-            fieldsSet.add('vertexCount');
-            fieldsSet.add('length');
           }
         }
-      } else if (recShapeType === 8 || recShapeType === 18 || recShapeType === 28) {
-        // MultiPoint / MultiPointZ / MultiPointM
-        const numPoints = view.getInt32(recStart + 36, true);
-        const ptBase = recStart + 40;
-        for (let pt = 0; pt < numPoints; pt++) {
-          const ptOff = ptBase + pt * 16;
-          if (ptOff + 16 > buffer.byteLength) break;
-          const px = view.getFloat64(ptOff, true);
-          const py = view.getFloat64(ptOff + 8, true);
-          points.push({
-            id: `SHP_P${recIdx}_${pt}`, x: px, y: py, z: 0,
-            layer: 'SHP', sourceFile: fileName,
-            properties: { shapeType: 'MultiPoint' },
-          });
-        }
       }
-
       offset += 8 + contentLength;
       recIdx++;
-    } catch {
-      break;
+    } catch { break; }
+  }
+  return { points, edges, layers: ['SHP'], fields: [] };
+}
+
+// TIF/GeoTIFF parser for elevation raster data
+async function parseTIFContentAsync(buffer: ArrayBuffer, fileName: string): Promise<ParseResult> {
+  const points: ParsedPoint[] = [];
+  const edges: ParsedEdge[] = [];
+  const fieldsSet = new Set<string>(['cota', 'resolution']);
+
+  try {
+    const { parseGeoTIFF } = await import('@/engine/tifReader');
+    const tifResult = await parseGeoTIFF(buffer, 15000);
+
+    for (const pt of tifResult.points) {
+      points.push({
+        id: pt.id, x: pt.x, y: pt.y, z: pt.cota,
+        layer: 'GeoTIFF', sourceFile: fileName,
+        properties: { cota: pt.cota, _source: 'GeoTIFF' },
+      });
     }
+
+    if (tifResult.crs?.epsg) fieldsSet.add(`EPSG:${tifResult.crs.epsg}`);
+  } catch (err: any) {
+    throw new Error(`Erro ao ler GeoTIFF: ${err.message}`);
   }
 
-  return { points, edges, layers: points.length > 0 || edges.length > 0 ? ['SHP'] : [], fields: Array.from(fieldsSet) };
+  return {
+    points, edges,
+    layers: points.length > 0 ? ['GeoTIFF'] : [],
+    fields: Array.from(fieldsSet),
+  };
 }
 
 // ── Validation ──
@@ -1236,7 +1311,8 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
     const map: Record<string, string> = {
       dxf: 'DXF', csv: 'CSV', txt: 'TXT', xlsx: 'XLSX', xls: 'XLSX',
       geojson: 'GeoJSON', json: 'GeoJSON', ifc: 'IFC',
-      inp: 'INP', shp: 'SHP',
+      inp: 'INP', shp: 'SHP', tif: 'TIF', tiff: 'TIF',
+      zip: 'SHP', // ZIP files typically contain Shapefiles
     };
     return map[ext] || 'Desconhecido';
   };
@@ -1269,7 +1345,10 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
         result = isSWMM ? parseSWMMContent(text, item.file.name) : parseINPContent(text, item.file.name);
       } else if (format === 'SHP') {
         const buffer = await item.file.arrayBuffer();
-        result = parseSHPContent(buffer, item.file.name);
+        result = await parseSHPContentAsync(buffer, item.file.name);
+      } else if (format === 'TIF') {
+        const buffer = await item.file.arrayBuffer();
+        result = await parseTIFContentAsync(buffer, item.file.name);
       } else {
         return { ...item, status: 'erro', error: `Formato nao suportado: ${format}` };
       }
@@ -1504,7 +1583,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".dxf,.csv,.txt,.xlsx,.xls,.geojson,.json,.ifc,.inp,.shp"
+          accept=".dxf,.csv,.txt,.xlsx,.xls,.geojson,.json,.ifc,.inp,.shp,.tif,.tiff,.zip"
           className="hidden"
           onChange={e => { if (e.target.files) handleFiles(e.target.files); e.target.value = ''; }}
         />

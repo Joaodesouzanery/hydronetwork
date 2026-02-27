@@ -98,6 +98,15 @@ interface ServiceNote {
 
 const SAVED_PLANS_KEY = "hydronetwork_saved_plans";
 
+async function getPlanUserId(): Promise<string | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id || null;
+  } catch {
+    return null;
+  }
+}
+
 function loadSavedPlans(): SavedPlanning[] {
   try {
     const raw = localStorage.getItem(SAVED_PLANS_KEY);
@@ -112,9 +121,11 @@ function savePlansToStorage(plans: SavedPlanning[]) {
 }
 
 async function syncPlansToSupabase(plans: SavedPlanning[]) {
+  const userId = await getPlanUserId();
   for (const p of plans) {
     await supabase.from("hydro_saved_plans").upsert({
       id: p.id,
+      user_id: userId || undefined,
       nome: p.nome,
       descricao: "",
       num_equipes: p.numEquipes,
@@ -139,10 +150,13 @@ async function syncPlansToSupabase(plans: SavedPlanning[]) {
 
 async function loadPlansFromSupabase(): Promise<SavedPlanning[] | null> {
   try {
-    const { data, error } = await supabase
+    const userId = await getPlanUserId();
+    let query = supabase
       .from("hydro_saved_plans")
       .select("*")
       .order("updated_at", { ascending: false });
+    if (userId) query = query.eq("user_id", userId);
+    const { data, error } = await query;
     if (error) throw error;
     if (data && data.length > 0) {
       return data.map((r: any) => ({

@@ -214,6 +214,81 @@ export function extractDxfLayers(text: string): string[] {
   return Array.from(layers).sort();
 }
 
+// ═══ CIVIL 3D Layer Mapping ═══
+
+export interface Civil3DLayerMapping {
+  layerPattern: RegExp;
+  tipoRede: string;
+  description: string;
+}
+
+/**
+ * Standard CIVIL 3D layer naming conventions for Brazilian sanitation projects.
+ * Follows Autodesk National CAD Standards (NCS) and Brazilian adaptations.
+ */
+export const CIVIL3D_LAYER_MAPPINGS: Civil3DLayerMapping[] = [
+  // Water supply
+  { layerPattern: /^C-WATR|^AGUA|^REDE.?AGUA|^DIST.?AGUA|^ADUT/i, tipoRede: "agua", description: "Rede de Água" },
+  // Sewer
+  { layerPattern: /^C-SSWR|^ESGOTO|^REDE.?ESGOTO|^COLET|^ESG/i, tipoRede: "esgoto", description: "Rede de Esgoto" },
+  // Storm drainage
+  { layerPattern: /^C-STRM|^DRENAGEM|^REDE.?DREN|^GALERIA|^PLUV|^DREN/i, tipoRede: "drenagem", description: "Rede de Drenagem" },
+  // Recalque (pumping)
+  { layerPattern: /^RECALQUE|^ELEVATORIA|^RECALQ/i, tipoRede: "recalque", description: "Recalque" },
+  // Topography
+  { layerPattern: /^C-TOPO|^TOPOGRAFIA|^TERRENO|^CURVA|^PONTO.?COTA|^LEVANT/i, tipoRede: "topografia", description: "Topografia" },
+];
+
+/**
+ * Detect the tipoRede for a DXF layer name based on CIVIL 3D conventions.
+ * Returns null if no matching pattern is found.
+ */
+export function detectCivil3DLayerType(layerName: string): string | null {
+  for (const mapping of CIVIL3D_LAYER_MAPPINGS) {
+    if (mapping.layerPattern.test(layerName)) {
+      return mapping.tipoRede;
+    }
+  }
+  return null;
+}
+
+/**
+ * Analyze DXF entities and classify them by CIVIL 3D layer conventions.
+ * Returns a summary of detected network types and their entities.
+ */
+export function classifyCivil3DLayers(entities: DxfEntity[]): {
+  layerMapping: Record<string, string>;
+  summary: Array<{ layer: string; tipoRede: string; entityCount: number; types: string[] }>;
+} {
+  const layerEntities = new Map<string, { count: number; types: Set<string> }>();
+
+  for (const e of entities) {
+    const layer = e.layer || "0";
+    if (!layerEntities.has(layer)) {
+      layerEntities.set(layer, { count: 0, types: new Set() });
+    }
+    const le = layerEntities.get(layer)!;
+    le.count++;
+    le.types.add(e.type);
+  }
+
+  const layerMapping: Record<string, string> = {};
+  const summary: Array<{ layer: string; tipoRede: string; entityCount: number; types: string[] }> = [];
+
+  for (const [layer, info] of layerEntities) {
+    const tipoRede = detectCivil3DLayerType(layer) || "outro";
+    layerMapping[layer] = tipoRede;
+    summary.push({
+      layer,
+      tipoRede,
+      entityCount: info.count,
+      types: Array.from(info.types),
+    });
+  }
+
+  return { layerMapping, summary };
+}
+
 /**
  * Parse a DXF file into topographic points.
  */

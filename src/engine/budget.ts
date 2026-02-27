@@ -235,6 +235,125 @@ export function createBudgetSummary(budgetRows: BudgetRow[]): BudgetSummary {
   };
 }
 
+// ═══ AUTO-QUANTITATIVE GENERATION FROM NETWORK ═══
+
+export interface QuantitativeGroup {
+  tipoRede: string;
+  diametroMm: number;
+  material: string;
+  comprimentoTotal: number;
+  numTrechos: number;
+  trechoIds: string[];
+}
+
+export interface QuantitativeSummary {
+  groups: QuantitativeGroup[];
+  totalLength: number;
+  totalSegments: number;
+  byNetworkType: Record<string, { length: number; segments: number }>;
+  byDiameter: Record<number, { length: number; segments: number }>;
+  byMaterial: Record<string, { length: number; segments: number }>;
+}
+
+/**
+ * Generate quantitative summary from network trechos.
+ * Groups segments by tipoRede × diâmetro × material and computes totals.
+ */
+export function generateQuantitiesFromNetwork(trechos: Trecho[]): QuantitativeSummary {
+  const groupMap = new Map<string, QuantitativeGroup>();
+
+  for (const t of trechos) {
+    const key = `${t.tipoRede}|${t.diametroMm}|${t.material}`;
+    if (!groupMap.has(key)) {
+      groupMap.set(key, {
+        tipoRede: t.tipoRede,
+        diametroMm: t.diametroMm,
+        material: t.material,
+        comprimentoTotal: 0,
+        numTrechos: 0,
+        trechoIds: [],
+      });
+    }
+    const g = groupMap.get(key)!;
+    g.comprimentoTotal += t.comprimento;
+    g.numTrechos++;
+    g.trechoIds.push(`${t.idInicio}-${t.idFim}`);
+  }
+
+  const groups = Array.from(groupMap.values()).sort((a, b) =>
+    a.tipoRede.localeCompare(b.tipoRede) || a.diametroMm - b.diametroMm
+  );
+
+  const totalLength = groups.reduce((s, g) => s + g.comprimentoTotal, 0);
+  const totalSegments = groups.reduce((s, g) => s + g.numTrechos, 0);
+
+  const byNetworkType: Record<string, { length: number; segments: number }> = {};
+  const byDiameter: Record<number, { length: number; segments: number }> = {};
+  const byMaterial: Record<string, { length: number; segments: number }> = {};
+
+  for (const g of groups) {
+    // By network type
+    if (!byNetworkType[g.tipoRede]) byNetworkType[g.tipoRede] = { length: 0, segments: 0 };
+    byNetworkType[g.tipoRede].length += g.comprimentoTotal;
+    byNetworkType[g.tipoRede].segments += g.numTrechos;
+
+    // By diameter
+    if (!byDiameter[g.diametroMm]) byDiameter[g.diametroMm] = { length: 0, segments: 0 };
+    byDiameter[g.diametroMm].length += g.comprimentoTotal;
+    byDiameter[g.diametroMm].segments += g.numTrechos;
+
+    // By material
+    if (!byMaterial[g.material]) byMaterial[g.material] = { length: 0, segments: 0 };
+    byMaterial[g.material].length += g.comprimentoTotal;
+    byMaterial[g.material].segments += g.numTrechos;
+  }
+
+  return { groups, totalLength, totalSegments, byNetworkType, byDiameter, byMaterial };
+}
+
+/**
+ * Export quantitative summary to XLSX.
+ */
+export function exportQuantitativeExcel(
+  summary: QuantitativeSummary,
+  filename = "quantitativo_rede.xlsx"
+): void {
+  const wb = XLSX.utils.book_new();
+
+  // Detail sheet
+  const detailData = summary.groups.map(g => ({
+    "Tipo de Rede": g.tipoRede,
+    "Diâmetro (mm)": g.diametroMm,
+    "Material": g.material,
+    "Comprimento Total (m)": Math.round(g.comprimentoTotal * 100) / 100,
+    "Nº Trechos": g.numTrechos,
+  }));
+  const wsDetail = XLSX.utils.json_to_sheet(detailData);
+  XLSX.utils.book_append_sheet(wb, wsDetail, "Quantitativo");
+
+  // Summary by type
+  const typeData = Object.entries(summary.byNetworkType).map(([tipo, info]) => ({
+    "Tipo de Rede": tipo,
+    "Comprimento Total (m)": Math.round(info.length * 100) / 100,
+    "Nº Trechos": info.segments,
+  }));
+  const wsType = XLSX.utils.json_to_sheet(typeData);
+  XLSX.utils.book_append_sheet(wb, wsType, "Por Tipo de Rede");
+
+  // Summary by diameter
+  const diamData = Object.entries(summary.byDiameter)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([diam, info]) => ({
+      "Diâmetro (mm)": Number(diam),
+      "Comprimento Total (m)": Math.round(info.length * 100) / 100,
+      "Nº Trechos": info.segments,
+    }));
+  const wsDiam = XLSX.utils.json_to_sheet(diamData);
+  XLSX.utils.book_append_sheet(wb, wsDiam, "Por Diâmetro");
+
+  XLSX.writeFile(wb, filename);
+}
+
 /**
  * Export budget to XLSX download.
  */

@@ -1,138 +1,242 @@
-# Plano de Correções e Melhorias - HydroNetwork
+# Plano de Implementação - HydroNetwork Sprint Completo
 
 ## Visão Geral
-4 áreas de trabalho: Topografia (bugs de coordenadas), Performance de Importação (IFC/DXF), RDO Hydro (funcionalidades), Planejamento (calculadora inversa).
+6 frentes de trabalho simultâneas: Correção de Persistência, Parsers de Arquivo (SHP/IFC/TIF), Rede sobre Levantamento, Integração CIVIL 3D via DXF, Otimização de Orçamento/Quantitativo, e Módulo QEsg/QWater.
 
 ---
 
-## 1. Topografia - Bugs de Coordenadas
+## 1. Correção de Persistência (CRÍTICO)
 
-### 1.1 Fix: Default UTM zone 23 quando detecção falha
-**Arquivo:** `src/engine/coordinateTransform.ts` (linha ~128)
+### 1.1 Fix: user_id ausente em PlanningModule.tsx
+**Arquivo:** `src/components/hydronetwork/PlanningModule.tsx`
 
-**Problema:** Quando `autoDetectCRS()` não consegue detectar a zona UTM (nenhuma zona passa na validação de ±3.5° do meridiano central), a função retorna silenciosamente zone 23 como fallback. Isso causa interpretação errada de coordenadas que estão em outras zonas (18-22, 24-25).
+**Problema:** A função `syncPlansToSupabase()` (linhas 114-137) faz upsert na tabela `hydro_saved_plans` **SEM** incluir o campo `user_id`. Além disso, `loadPlansFromSupabase()` (linhas 140-173) carrega todos os planos **SEM** filtrar por `user_id`.
 
-**Correção:**
-- Em vez de defaultar para zona 23, tentar todas as zonas com tolerância progressiva (±3.5° → ±6° → ±10°)
-- Se nenhuma zona passar, retornar a zona cujo meridiano central está mais próximo da longitude convertida do ponto amostral
-- Adicionar log/warning quando usando detecção por proximidade em vez de match exato
-
-### 1.2 Fix: Swap de coordenadas geográficas não tratado
-**Arquivo:** `src/engine/coordinateTransform.ts` (linhas ~208-210)
-
-**Problema:** `transformCoordinate()` assume que coordenadas geográficas sempre vêm como x=longitude, y=latitude. Mas `detectBatchCRS()` em `hydraulics.ts` já detecta convention "xy" vs "yx". Essa informação não é usada na transformação.
+**Impacto:** Dados de planejamento não são isolados por usuário. Todos os usuários veem todos os planos. Dados podem ser sobrescritos entre usuários.
 
 **Correção:**
-- Adicionar campo opcional `convention?: "xy" | "yx"` ao tipo `ImportCRSConfig`
-- Em `transformCoordinate()`, quando source é geographic, verificar a convention antes de atribuir lat/lng
-- Se convention === "yx": lat=x, lng=y (invertido)
+1. Importar `getUserId` de `savedPlanning.ts` (que já usa corretamente)
+2. Em `syncPlansToSupabase()`: adicionar `user_id: await getUserId()` ao objeto de upsert
+3. Em `loadPlansFromSupabase()`: adicionar `.eq("user_id", userId)` ao query de select
+4. Seguir o padrão já correto de `savedPlanning.ts` e `rdo.ts`
 
-### 1.3 Melhoria: Detecção de CRS em batch para edge cases
-**Arquivo:** `src/engine/hydraulics.ts` (linhas ~239-321)
-
-**Problema:** `detectBatchCRS()` pode falhar para coordenadas em limites de zona ou com offsets locais, defaultando para resultados incorretos.
-
-**Correção:**
-- Adicionar scoring por zona: testar múltiplos pontos (não apenas 1) contra cada zona UTM
-- A zona com mais pontos validados vence
-- Melhorar detecção de coordenadas locais (IFC/DXF de CAD) vs UTM real
+**Nota:** `SavedPlansDialog.tsx`, `rdo.ts` e `RDOHydroModule.tsx` já estão corretos.
 
 ---
 
-## 2. Performance de Importação (IFC/DXF)
+## 2. Parsers de Arquivo para Topografia
 
-### 2.1 Otimizar parser IFC
-**Arquivo:** `src/components/hydronetwork/UnifiedImportPanel.tsx` (linhas ~687-812)
+### 2.1 Implementar Parser SHP (Shapefile)
+**Arquivos:** `src/engine/importEngine.ts`, novo: `src/engine/shpReader.ts`
 
-**Problema:** O parser IFC faz 3 passes com regex sobre o conteúdo completo do arquivo, tem limite hardcoded de 5000 pontos, e não usa Web Workers.
+**Situação atual:** `detectFileFormat()` detecta SHP e classifica como paradigma "gis", mas **não existe parser**. O import pipeline cai no erro "Formato não suportado: SHP".
 
-**Correções:**
-- **Single-pass parsing:** Refatorar para ler o arquivo linha por linha uma única vez, coletando cartesian points, placements e entidades MEP simultaneamente
-- **Remover/aumentar limite de 5000 pontos:** Tornar configurável (padrão 50000) ou remover completamente, usando paginação na UI
-- **Progress callback:** Adicionar callback de progresso para mostrar barra de loading durante importação
+**Implementação:**
+1. Instalar biblioteca `shpjs` (npm) - parser JavaScript puro para Shapefiles
+2. Criar `src/engine/shpReader.ts` com:
+   - `parseSHPToPoints(buffer: ArrayBuffer): PontoTopografico[]` - extrai pontos com coordenadas e elevação Z
+   - `parseSHPToInternal(buffer: ArrayBuffer): { nodes: InternalNode[], edges: InternalEdge[] }` - converte geometrias para modelo interno
+   - Suporte a Point, MultiPoint (→ nós), LineString, MultiLineString (→ arestas)
+   - Leitura de atributos do DBF embutido (diâmetro, material, id)
+3. Integrar no `importEngine.ts`:
+   - Adicionar case "SHP" em `analyzeFileRaw()` para estatísticas
+   - Adicionar case "SHP" em pipeline de importação para chamar `parseSHPToInternal()`
+4. Tratar CRS: se .prj disponível, detectar; senão, usar auto-detect por coordenadas
 
-### 2.2 Virtualização da tabela de pontos
-**Arquivo:** `src/components/hydronetwork/UnifiedImportPanel.tsx` ou componente de tabela relevante
+### 2.2 Melhorar Parser IFC (de regex para parser estruturado)
+**Arquivo:** `src/engine/importEngine.ts`
 
-**Problema:** A tabela renderiza até 100 rows sem paginação nem virtualização. Com arquivos grandes, a UI fica lenta.
+**Situação atual:** O parser IFC faz 3 passes com regex sobre texto bruto. Extrai apenas IFCCARTESIANPOINT como coordenadas. Não faz parsing real da estrutura IFC (hierarquia de objetos, relações, propriedades de tubos).
 
-**Correção:**
-- Usar `react-window` (ou virtualização manual com height fixo) para renderizar apenas as linhas visíveis
-- Adicionar paginação como fallback se react-window não estiver disponível no projeto
+**Implementação:**
+1. Instalar `web-ifc` (npm) - parser IFC compilado para WebAssembly, roda no browser
+2. Criar `src/engine/ifcReader.ts` com:
+   - `parseIFCToPoints(buffer: ArrayBuffer): PontoTopografico[]` - extrai pontos 3D de todas as entidades
+   - `parseIFCToInternal(buffer: ArrayBuffer): { nodes, edges }` - extrai pipes, fittings como rede
+   - Mapear IfcPipeSegment → edges, IfcPipeFitting/IfcJunction → nodes
+   - Extrair propriedades: diâmetro, material, comprimento das PropertySets
+3. Substituir regex em `analyzeFileRaw()` pela análise via web-ifc
+4. Remover limite de 5000 pontos (ou tornar configurável)
+5. Adicionar progress callback para UI
 
----
+### 2.3 Implementar Suporte a TIF/GeoTIFF
+**Arquivos:** `src/engine/importEngine.ts`, novo: `src/engine/tifReader.ts`
 
-## 3. RDO Hydro
+**Situação atual:** TIFF não é detectado nem suportado. O formato é raster (DEM/DTM), diferente dos vetoriais.
 
-### 3.1 "Avanço por Trecho" - Checkbox concluído/não concluído
-**Arquivo:** `src/components/hydronetwork/RDOHydroModule.tsx` (linhas ~411-527)
+**Implementação:**
+1. Instalar `geotiff` (npm) - parser GeoTIFF puro JavaScript
+2. Criar `src/engine/tifReader.ts` com:
+   - `parseGeoTIFFToPoints(buffer: ArrayBuffer, sampleStep?: number): PontoTopografico[]` - converte raster de elevação em grade de pontos
+   - Auto-detectar CRS dos tags GeoTIFF (EPSG code)
+   - Amostragem configurável (cada N pixels) para não gerar milhões de pontos
+   - Gerar grid de pontos com x, y (coordenadas geográficas/projetadas) e cota (valor do pixel)
+3. Adicionar "TIF"/"TIFF" em `detectFileFormat()` no importEngine
+4. Classificar paradigma como "raster" (novo tipo)
+5. Integrar no pipeline de importação
 
-**Problema:** Não há como marcar manualmente um trecho como concluído/não concluído. O status é calculado apenas pela porcentagem.
+### 2.4 Garantir DXF robusto
+**Arquivo:** `src/engine/dxfReader.ts`
 
-**Correção:**
-- Adicionar campo `manualStatus?: "concluido" | "nao_concluido"` ao tipo de segmento
-- Adicionar coluna de checkbox na tabela "Avanço por Trecho"
-- Quando checkbox marcado, overrida o status calculado automaticamente
-- Persistir estado no RDO ou no estado do projeto
-
-### 3.2 "Serviços Mais Executados" - Dados reais (RDO + Planejamento)
-**Arquivo:** `src/components/hydronetwork/RDOHydroModule.tsx` (linhas ~219-224, 397-409)
-
-**Problema:** Usa dados mock hardcoded em vez de dados reais dos RDOs e do Planejamento.
-
-**Correção:**
-- Agregar serviços de todos os RDOs (`rdos.flatMap(r => r.services)`) por tipo/nome
-- Somar quantidades executadas por serviço
-- Buscar serviços planejados da configuração de produtividade do Planning (se disponível)
-- Mostrar ranking: serviço, quantidade executada, quantidade planejada, % de conclusão
-- Ordenar por quantidade executada (descrescente)
-- Substituir os badges mock por gráfico de barras horizontais (planejado vs executado)
-
-### 3.3 "Serviços Executados" - Ordenação por cronograma
-**Arquivo:** `src/components/hydronetwork/RDOHydroModule.tsx` (linhas ~629-674)
-
-**Problema:** A tabela de serviços executados não tem ordenação por cronograma/data.
-
-**Correção:**
-- Adicionar sort por data (coluna "Data") como ordenação padrão
-- Adicionar opção de ordenar por categoria, valor, tipo
-- Implementar header clickável para toggle de ordenação (asc/desc)
-
----
-
-## 4. Planejamento - Calculadora Inversa
-
-### 4.1 Calculadora inversa: data final → equipes/metros por dia
-**Arquivo:** `src/components/hydronetwork/PlanningModule.tsx` (linhas ~243-476)
-
-**Problema:** Atualmente só existe cálculo direto: dados equipes + metros/dia + data início → data término. Não existe o inverso: dada uma data final desejada → calcular quantas equipes ou metros/dia são necessários.
-
-**Correção:**
-- Adicionar toggle "Modo de cálculo": "Direto" (atual) vs "Inverso"
-- No modo inverso:
-  - Inputs: data início, data término desejada, metros totais (do projeto)
-  - O usuário pode fixar equipes OU metros/dia, e o outro é calculado
-  - Fórmula: `diasUteis = businessDays(inicio, termino, holidays, workDays)`
-  - Se fixar equipes: `metrosDia = totalMetros / (diasUteis * numEquipes)`
-  - Se fixar metros/dia: `numEquipes = ceil(totalMetros / (diasUteis * metrosDia))`
-- Mostrar resultado em card destacado com os valores calculados
-- Manter mesma lógica de feriados e dias úteis do cálculo direto
+**Situação atual:** ✅ DXF já funciona bem. Revisão de qualidade:
+- Verificar parsing de 3DPOLYLINE com elevações variáveis
+- Garantir que LWPOLYLINE com elevação por vértice seja preservada
+- Testar com arquivos CIVIL 3D exportados como DXF
 
 ---
 
-## Ordem de Implementação Sugerida
+## 3. Rede Projetada no Levantamento / Malha
 
-1. **Topografia (1.1, 1.2, 1.3)** - Bugs críticos que afetam dados
-2. **RDO Hydro (3.1, 3.2, 3.3)** - Funcionalidades solicitadas
-3. **Planejamento (4.1)** - Nova funcionalidade
-4. **Performance (2.1, 2.2)** - Otimizações
+### 3.1 Snap de rede nos pontos topográficos
+**Arquivo:** `src/components/hydronetwork/TopographyMap.tsx`
+
+**Problema:** Quando o usuário importa pontos topográficos (levantamento) e depois cria trechos de rede, os nós da rede devem "grudar" nos pontos do levantamento para herdar suas cotas.
+
+**Implementação:**
+1. Ao criar um nó de rede (água/esgoto/drenagem), buscar o ponto topográfico mais próximo dentro de uma tolerância (ex: 1m)
+2. Se encontrado, copiar a cota do ponto topográfico para o nó da rede
+3. Adicionar indicador visual de que o nó está "snapado" ao levantamento
+4. Para trechos importados de DXF/IFC, auto-snap nas elevações do levantamento se disponível
+
+### 3.2 Interpolação de elevação na malha
+**Arquivo:** `src/engine/hydraulics.ts` ou novo `src/engine/terrainInterpolation.ts`
+
+**Implementação:**
+1. Criar triangulação Delaunay dos pontos topográficos (usar algoritmo simples ou biblioteca)
+2. Para qualquer ponto da rede, interpolar a cota do terreno a partir dos triângulos adjacentes
+3. Calcular automaticamente: profundidade de instalação = cota terreno - cota rede
+
+---
+
+## 4. Integração CIVIL 3D via DXF
+
+### 4.1 Importação de DXF do CIVIL 3D com redes
+**Arquivo:** `src/engine/dxfReader.ts` + `src/engine/importEngine.ts`
+
+**Situação:** CIVIL 3D exporta DXF com layers organizados (rede água, rede esgoto, topografia). O parser DXF já lê todas as entidades, mas não mapeia layers → tipos de rede automaticamente.
+
+**Implementação:**
+1. Adicionar detecção de layers típicos do CIVIL 3D:
+   - `C-WATR-*` → rede de água
+   - `C-SSWR-*` → rede de esgoto
+   - `C-STRM-*` → rede de drenagem
+   - `C-TOPO-*` → topografia
+2. Criar mapeamento automático: layer → tipoRede
+3. Extrair propriedades de blocos/atributos INSERT (diâmetro, material)
+4. Gerar quantitativo automaticamente a partir dos trechos importados:
+   - Comprimento por diâmetro × material
+   - Quantidade de conexões por tipo
+   - Volume de escavação estimado (se cota terreno disponível)
+
+---
+
+## 5. Otimização de Orçamento / Quantitativo
+
+### 5.1 Geração automática de quantitativo a partir da rede
+**Arquivo:** `src/engine/budget.ts`
+
+**Situação:** O módulo de orçamento já existe e funciona, mas precisa gerar quantitativo automaticamente dos trechos.
+
+**Implementação:**
+1. Criar função `generateQuantitiesFromNetwork(trechos: Trecho[], pontos: PontoTopografico[])`:
+   - Agrupar trechos por tipoRede × diâmetro × material
+   - Somar comprimentos por grupo
+   - Calcular volumes de escavação (largura × profundidade × comprimento)
+   - Listar conexões (tês, curvas, reduções) baseado na topologia
+2. Integrar com tabela de custos unitários existente
+3. Exportar memorial de cálculo (PDF/XLSX)
+
+---
+
+## 6. Módulo QEsg / QWater (Novo)
+
+### 6.1 Scaffold do Backend FastAPI
+**Novo diretório:** `backend/` na raiz do projeto
+
+**Implementação:**
+1. Criar estrutura FastAPI:
+   ```
+   backend/
+   ├── main.py              # FastAPI app + CORS
+   ├── requirements.txt     # Dependencies
+   ├── routers/
+   │   ├── qesg.py          # Endpoints de dimensionamento de esgoto
+   │   └── qwater.py        # Endpoints de dimensionamento de água
+   ├── engines/
+   │   ├── qesg_engine.py   # Algoritmos Manning, perdas de carga esgoto
+   │   └── qwater_engine.py # Algoritmos Hazen-Williams, Colebrook, pressão
+   └── models/
+       └── schemas.py       # Pydantic models (input/output)
+   ```
+
+2. Endpoints QEsg (baseado no repositório Sketua/QEsg):
+   - `POST /api/qesg/dimension` - Dimensionamento de rede coletora de esgoto
+     - Input: trechos com vazão, extensão, cota montante/jusante
+     - Algoritmo: Manning (n=0.013 PVC), velocidade mínima 0.6 m/s, y/D ≤ 0.75
+     - Output: diâmetro calculado, velocidade, lâmina d'água, tensão trativa
+   - `POST /api/qesg/verify` - Verificação de rede existente
+
+3. Endpoints QWater (baseado no repositório Sketua/QWater):
+   - `POST /api/qwater/dimension` - Dimensionamento de rede de distribuição
+     - Input: trechos com vazão, comprimento, cota, material
+     - Algoritmo: Hazen-Williams ou Colebrook-White
+     - Output: diâmetro, perda de carga, velocidade, pressão nos nós
+   - `POST /api/qwater/verify` - Verificação de pressões e velocidades
+
+### 6.2 Módulo Frontend QEsg/QWater
+**Novo arquivo:** `src/components/hydronetwork/modules/QEsgWaterModule.tsx`
+
+**Implementação:**
+1. Criar módulo com duas abas: "QEsg (Esgoto)" e "QWater (Água)"
+2. Cada aba terá:
+   - Conexão com backend FastAPI (URL configurável)
+   - Botão "Dimensionar rede" que envia trechos atuais do projeto
+   - Tabela de resultados com: trecho, diâmetro calculado, velocidade, perda de carga
+   - Indicadores visuais (verde/vermelho) para verificação de norma
+   - Botão "Aplicar diâmetros" que atualiza os trechos do projeto
+3. Registrar módulo no sistema de módulos em HydroNetwork.tsx
+4. Posicionar abaixo da Topografia na interface
+
+---
+
+## Dependências NPM a Instalar
+
+| Pacote | Versão | Uso |
+|--------|--------|-----|
+| `shpjs` | ^4.0 | Parser Shapefile (SHP+DBF+PRJ) |
+| `geotiff` | ^2.1 | Parser GeoTIFF para DEM/DTM |
+| `web-ifc` | ^0.0.57 | Parser IFC (WebAssembly) |
+
+**Nota:** `web-ifc` é ~5MB (WASM). Alternativa mais leve: melhorar o parser regex existente com single-pass + estrutura. Decisão: começar com parser regex melhorado, avaliar web-ifc se necessário.
+
+---
+
+## Ordem de Implementação
+
+1. **Persistência (1.1)** — Fix rápido, impacto imediato ✅
+2. **Parser SHP (2.1)** — Formato mais pedido
+3. **Parser IFC melhorado (2.2)** — Single-pass + extração de rede
+4. **Parser TIF/GeoTIFF (2.3)** — Suporte a DEM
+5. **DXF CIVIL 3D (4.1)** — Mapeamento de layers + quantitativo
+6. **Snap rede no levantamento (3.1)** — Integração topografia + rede
+7. **Quantitativo automático (5.1)** — Geração a partir dos trechos
+8. **Backend FastAPI QEsg/QWater (6.1)** — Scaffold + algoritmos
+9. **Módulo Frontend QEsg/QWater (6.2)** — Interface + integração
 
 ## Arquivos Afetados
 
 | Arquivo | Mudanças |
 |---------|----------|
-| `src/engine/coordinateTransform.ts` | Fix zone detection, fix coordinate swap |
-| `src/engine/hydraulics.ts` | Improve batch CRS detection |
-| `src/components/hydronetwork/RDOHydroModule.tsx` | Checkbox avanço, serviços reais, ordenação |
-| `src/components/hydronetwork/PlanningModule.tsx` | Calculadora inversa |
-| `src/components/hydronetwork/UnifiedImportPanel.tsx` | Otimizar IFC parser, virtualização |
+| `src/components/hydronetwork/PlanningModule.tsx` | Fix user_id em sync + load |
+| `src/engine/importEngine.ts` | Integrar SHP, IFC melhorado, TIF |
+| `src/engine/shpReader.ts` | **NOVO** — Parser Shapefile |
+| `src/engine/tifReader.ts` | **NOVO** — Parser GeoTIFF |
+| `src/engine/ifcReader.ts` | **NOVO** — Parser IFC melhorado |
+| `src/engine/dxfReader.ts` | Melhorias CIVIL 3D layers |
+| `src/engine/budget.ts` | Quantitativo automático |
+| `src/engine/terrainInterpolation.ts` | **NOVO** — Interpolação de elevação |
+| `src/components/hydronetwork/TopographyMap.tsx` | Snap de rede no levantamento |
+| `src/components/hydronetwork/modules/QEsgWaterModule.tsx` | **NOVO** — Módulo QEsg/QWater |
+| `src/pages/HydroNetwork.tsx` | Registrar módulo QEsg/QWater |
+| `backend/` | **NOVO** — FastAPI backend |
+| `package.json` | Novas dependências (shpjs, geotiff) |

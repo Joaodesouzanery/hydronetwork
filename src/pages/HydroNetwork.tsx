@@ -44,6 +44,7 @@ import { BudgetCostModule } from "@/components/hydronetwork/modules/BudgetCostMo
 import { BdiModule } from "@/components/hydronetwork/modules/BdiModule";
 import { RDOPlanningModule } from "@/components/hydronetwork/modules/RDOPlanningModule";
 import { LPSModule } from "@/components/hydronetwork/modules/LPSModule";
+import { QEsgWaterModule } from "@/components/hydronetwork/modules/QEsgWaterModule";
 import { saveHydroProject, loadHydroProject } from "@/engine/sharedPlanningStore";
 import {
   getSpatialProject, validateProject, ValidationIssue,
@@ -208,6 +209,8 @@ const HydroNetwork = () => {
         return <RDOPlanningModule pontos={pontos} trechos={trechos} rdos={rdos} scheduleResult={scheduleResult} />;
       case "lps":
         return <LPSModule pontos={pontos} trechos={trechos} />;
+      case "qesg-qwater":
+        return <QEsgWaterModule pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />;
       case "perfil":
         return <PerfilLongitudinal pontos={pontos} trechos={trechos} />;
       case "mapa":
@@ -625,6 +628,7 @@ const HydroNetwork = () => {
     revisao: "Revisao por Pares", rdo: "RDO", "rdo-planejamento": "RDO Ã-- Planejamento",
     perfil: "Perfil Longitudinal", mapa: "Mapa Interativo", exportacao: "Exportacao GIS",
     lps: "LPS — Last Planner System",
+    "qesg-qwater": "QEsg / QWater — Dimensionamento Hidráulico",
   };
 
   return (
