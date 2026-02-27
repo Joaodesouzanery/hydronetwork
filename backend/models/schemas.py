@@ -18,13 +18,16 @@ class SewerSegmentInput(BaseModel):
 
 
 class SewerSegmentResult(BaseModel):
-    """Dimensioning result for a single sewer segment."""
+    """Dimensioning result for a single sewer segment (QEsg methodology)."""
     id: str
-    diametro_mm: int = Field(..., description="Calculated diameter (mm)")
-    declividade_min: float = Field(..., description="Minimum slope (m/m)")
+    diametro_mm: int = Field(..., description="Commercial diameter (mm)")
+    diametro_calculado_mm: Optional[float] = Field(None, description="Analytical calculated diameter (mm)")
+    declividade_min: float = Field(..., description="Minimum slope I_min = 0.0055·Q^(-0.47) (m/m)")
+    declividade_usada: Optional[float] = Field(None, description="Slope actually used for calculations (m/m)")
     velocidade_ms: float = Field(..., description="Flow velocity (m/s)")
+    velocidade_critica_ms: Optional[float] = Field(None, description="Critical velocity v_c = 6·√(g·Rh) (m/s)")
     lamina_dagua: float = Field(..., description="Water depth y/D ratio")
-    tensao_trativa: float = Field(..., description="Tractive stress (Pa)")
+    tensao_trativa: float = Field(..., description="Tractive stress τ = 10000·Rh·I (Pa)")
     atende_norma: bool = Field(..., description="Meets NBR 9649 criteria")
     observacoes: List[str] = Field(default_factory=list)
 

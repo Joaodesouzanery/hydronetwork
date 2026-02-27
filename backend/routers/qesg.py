@@ -1,4 +1,12 @@
-"""QEsg API Router — Sewer network dimensioning endpoints."""
+"""QEsg API Router — Sewer network dimensioning endpoints.
+
+Faithful to jorgealmerio/QEsg methodology:
+- Analytical diameter: D = [n·Q / (√I·(A/D²)·(Rh/D)^(2/3))]^(3/8) × 1000
+- θ binary search with M threshold 0.335282
+- τ = 10000·Rh·I (Pa)
+- v_crit = 6·√(g·Rh)
+- I_min = 0.0055·Q^(-0.47)
+"""
 
 from fastapi import APIRouter
 from models.schemas import SewerDimensionRequest, SewerDimensionResponse, SewerSegmentResult
@@ -12,11 +20,13 @@ async def dimension_sewer(request: SewerDimensionRequest):
     """
     Dimensionar rede coletora de esgoto sanitário.
 
-    Aplica a fórmula de Manning com os critérios da NBR 9649:
-    - Lâmina d'água máxima (y/D)
-    - Velocidade mínima e máxima
-    - Tensão trativa mínima
-    - Diâmetro mínimo
+    Algoritmo portado do QEsg (jorgealmerio/QEsg) com fórmulas de Manning
+    e critérios da NBR 9649:
+    - Lâmina d'água máxima (y/D ≤ 0.75)
+    - Velocidade mínima (0.6 m/s) e máxima (5.0 m/s)
+    - Tensão trativa mínima (1.0 Pa)
+    - Velocidade crítica: se V > v_c, y/D deve ser ≤ 0.50
+    - Declividade mínima: I_min = 0.0055·Q^(-0.47)
     """
     trechos = [
         {
@@ -25,6 +35,7 @@ async def dimension_sewer(request: SewerDimensionRequest):
             "comprimento": t.comprimento,
             "cota_montante": t.cota_montante,
             "cota_jusante": t.cota_jusante,
+            "tipo_tubo": t.tipo_tubo,
         }
         for t in request.trechos
     ]
@@ -43,8 +54,11 @@ async def dimension_sewer(request: SewerDimensionRequest):
         SewerSegmentResult(
             id=r["id"],
             diametro_mm=r["diametro_mm"],
+            diametro_calculado_mm=r.get("diametro_calculado_mm"),
             declividade_min=r["declividade_min"],
+            declividade_usada=r.get("declividade_usada"),
             velocidade_ms=r["velocidade_ms"],
+            velocidade_critica_ms=r.get("velocidade_critica_ms"),
             lamina_dagua=r["lamina_dagua"],
             tensao_trativa=r["tensao_trativa"],
             atende_norma=r["atende_norma"],
@@ -59,6 +73,7 @@ async def dimension_sewer(request: SewerDimensionRequest):
         "atendem_norma": atende_count,
         "nao_atendem": len(resultados) - atende_count,
         "norma_referencia": "NBR 9649",
+        "formulas": "Manning (QEsg port)",
     }
 
     return SewerDimensionResponse(resultados=resultados, resumo=resumo)
@@ -68,6 +83,6 @@ async def dimension_sewer(request: SewerDimensionRequest):
 async def verify_sewer(request: SewerDimensionRequest):
     """
     Verificar rede de esgoto existente contra critérios normativos.
-    Mesmo endpoint que dimension, mas usado semanticamente para verificação.
+    Mesmo algoritmo que /dimension.
     """
     return await dimension_sewer(request)

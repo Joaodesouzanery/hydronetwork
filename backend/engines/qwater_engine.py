@@ -4,9 +4,19 @@ QWater Engine — Water distribution network dimensioning algorithms.
 Based on Brazilian standards NBR 12218.
 Implements Hazen-Williams and Colebrook-White equations.
 
+NOTE: The original QWater QGIS plugin (jorgealmerio/QWater) delegates
+ALL hydraulic calculations to EPANET via the embedded GHydraulics plugin.
+QWater itself only handles demand distribution (Q = pop × perCapita × k1 × k2 / 86400).
+
+This engine implements the underlying hydraulic formulas directly,
+giving standalone dimensioning without needing an EPANET runtime.
+For full network simulation (loops, branching), use the EPANET PRO module instead.
+
 References:
-- Sketua/QWater QGIS plugin
+- https://github.com/jorgealmerio/QWater
 - NBR 12218: Projeto de rede de distribuição de água
+- Hazen-Williams: hf = 10.643·Q^1.85 / (C^1.85·D^4.87) · L
+- Colebrook-White: 1/√f = -2·log10(ε/(3.7·D) + 2.51/(Re·√f))
 """
 
 import math
