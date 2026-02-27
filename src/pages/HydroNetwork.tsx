@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,7 @@ import { BdiModule } from "@/components/hydronetwork/modules/BdiModule";
 import { RDOPlanningModule } from "@/components/hydronetwork/modules/RDOPlanningModule";
 import { LPSModule } from "@/components/hydronetwork/modules/LPSModule";
 import { QEsgWaterModule } from "@/components/hydronetwork/modules/QEsgWaterModule";
-import { saveHydroProject, loadHydroProject } from "@/engine/sharedPlanningStore";
+import { saveHydroProject, loadHydroProject, loadHydroProjectAsync, saveHydroProjectAsync } from "@/engine/sharedPlanningStore";
 import {
   getSpatialProject, validateProject, ValidationIssue,
   getAllLayers, resetSpatialProject,
@@ -84,6 +84,59 @@ const HydroNetwork = () => {
     diametroMm, setDiametroMm, material, setMaterial, scheduleResult, setScheduleResult,
     rdos, setRdos,
   } = state;
+
+  // ══════════════════════════════════════════════
+  // AUTO-LOAD: restore saved project on page open
+  // ══════════════════════════════════════════════
+  const autoLoadDone = useRef(false);
+  useEffect(() => {
+    if (autoLoadDone.current) return;
+    autoLoadDone.current = true;
+    (async () => {
+      const saved = await loadHydroProjectAsync();
+      if (!saved) return;
+      if (saved.pontos?.length) setPontos(saved.pontos);
+      if (saved.trechos?.length) {
+        setTrechos(saved.trechos);
+        setNetworkSummary(summarizeNetwork(saved.trechos));
+      }
+      if (saved.rdos?.length) setRdos(saved.rdos);
+      if (saved.scheduleResult) setScheduleResult(saved.scheduleResult);
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ══════════════════════════════════════════════
+  // AUTO-SAVE: persist every change with 2s debounce
+  // ══════════════════════════════════════════════
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    // Skip initial render (avoid saving empty state)
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    // Only save if there's actual data
+    if (pontos.length === 0 && trechos.length === 0 && rdos.length === 0) return;
+    const timer = setTimeout(() => {
+      saveHydroProjectAsync({
+        pontos, trechos, rdos, planning: null, scheduleResult,
+        savedAt: new Date().toISOString(), projectName: "HydroNetwork",
+      });
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [pontos, trechos, rdos, scheduleResult]);
+
+  // ══════════════════════════════════════════════
+  // SAVE ON CLOSE: sync save when user closes tab
+  // ══════════════════════════════════════════════
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (pontos.length === 0 && trechos.length === 0) return;
+      saveHydroProject({
+        pontos, trechos, rdos, planning: null, scheduleResult,
+        savedAt: new Date().toISOString(), projectName: "HydroNetwork",
+      });
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [pontos, trechos, rdos, scheduleResult]);
 
   const [pasteData, setPasteData] = useState("");
   const [tipoSolo, setTipoSolo] = useState<TipoSolo>("normal");
