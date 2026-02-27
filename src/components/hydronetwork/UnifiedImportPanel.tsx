@@ -1067,7 +1067,16 @@ async function parseTIFContentAsync(buffer: ArrayBuffer, fileName: string): Prom
 
   try {
     const { parseGeoTIFF } = await import('@/engine/tifReader');
-    const tifResult = await parseGeoTIFF(buffer, 15000);
+    const { setRasterGrid } = await import('@/engine/rasterStore');
+    const tifResult = await parseGeoTIFF(buffer, 15000, -9999, true);
+
+    // Store raw grid for contour extraction
+    if (tifResult.grid) {
+      setRasterGrid(tifResult.grid, {
+        width: tifResult.width, height: tifResult.height,
+        noDataValue: tifResult.noDataValue,
+      });
+    }
 
     for (const pt of tifResult.points) {
       points.push({

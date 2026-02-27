@@ -11,6 +11,12 @@
 
 import { fromArrayBuffer, GeoTIFF } from "geotiff";
 
+export interface TifRasterGrid {
+  data: Float32Array | Float64Array | Int16Array | Uint16Array;
+  origin: [number, number];
+  pixelSize: [number, number];
+}
+
 export interface TifParseResult {
   points: Array<{ id: string; x: number; y: number; cota: number }>;
   bbox?: { minX: number; maxX: number; minY: number; maxY: number };
@@ -19,6 +25,7 @@ export interface TifParseResult {
   crs?: { epsg?: number; description?: string };
   noDataValue?: number;
   resolution?: { x: number; y: number };
+  grid?: TifRasterGrid;
 }
 
 /**
@@ -32,6 +39,7 @@ export async function parseGeoTIFF(
   buffer: ArrayBuffer,
   maxPoints: number = 10000,
   noDataThreshold: number = -9999,
+  includeGrid: boolean = false,
 ): Promise<TifParseResult> {
   const tiff: GeoTIFF = await fromArrayBuffer(buffer);
   const image = await tiff.getImage();
@@ -89,7 +97,7 @@ export async function parseGeoTIFF(
     }
   }
 
-  return {
+  const result: TifParseResult = {
     points,
     bbox: points.length > 0 ? { minX, maxX, minY, maxY } : undefined,
     width,
@@ -98,6 +106,16 @@ export async function parseGeoTIFF(
     noDataValue,
     resolution: { x: Math.abs(resolution[0]), y: Math.abs(resolution[1]) },
   };
+
+  if (includeGrid) {
+    result.grid = {
+      data: data as Float32Array | Float64Array,
+      origin: [origin[0], origin[1]],
+      pixelSize: [resolution[0], resolution[1]],
+    };
+  }
+
+  return result;
 }
 
 /**

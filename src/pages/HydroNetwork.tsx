@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
-  Download, MapPin, Droplets,
+  Download, MapPin, Droplets, Calculator,
   AlertTriangle, Settings2, X, Map
 } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -45,7 +45,11 @@ import { BdiModule } from "@/components/hydronetwork/modules/BdiModule";
 import { RDOPlanningModule } from "@/components/hydronetwork/modules/RDOPlanningModule";
 import { LPSModule } from "@/components/hydronetwork/modules/LPSModule";
 import { QEsgWaterModule } from "@/components/hydronetwork/modules/QEsgWaterModule";
-import { saveHydroProject, loadHydroProject, loadHydroProjectAsync, saveHydroProjectAsync } from "@/engine/sharedPlanningStore";
+import { QEsgWaterPanel } from "@/components/hydronetwork/panels/QEsgWaterPanel";
+import { getRasterGrid } from "@/engine/rasterStore";
+import { extractContours, type ContourExtractionResult } from "@/engine/contourExtractor";
+import { saveHydroProject, loadHydroProject, loadHydroProjectAsync, saveHydroProjectAsync, type HydroProjectSave } from "@/engine/sharedPlanningStore";
+import { ProjectSelector } from "@/components/hydronetwork/ProjectSelector";
 import {
   getSpatialProject, validateProject, ValidationIssue,
   getAllLayers, resetSpatialProject,
@@ -86,6 +90,33 @@ const HydroNetwork = () => {
   } = state;
 
   // ══════════════════════════════════════════════
+  // PROJECT VERSIONING: current project identity
+  // ══════════════════════════════════════════════
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [currentProjectName, setCurrentProjectName] = useState("HydroNetwork");
+
+  const getProjectData = useCallback((): HydroProjectSave => ({
+    pontos, trechos, rdos, planning: null, scheduleResult,
+    savedAt: new Date().toISOString(), projectName: currentProjectName,
+  }), [pontos, trechos, rdos, scheduleResult, currentProjectName]);
+
+  const handleLoadProject = useCallback((id: string, name: string, data: HydroProjectSave) => {
+    setCurrentProjectId(id);
+    setCurrentProjectName(name);
+    setPontos(data.pontos || []);
+    setTrechos(data.trechos || []);
+    if (data.trechos?.length) setNetworkSummary(summarizeNetwork(data.trechos));
+    else setNetworkSummary(null);
+    setRdos(data.rdos || []);
+    setScheduleResult(data.scheduleResult || null);
+  }, []);
+
+  const handleProjectChange = useCallback((id: string, name: string) => {
+    setCurrentProjectId(id);
+    setCurrentProjectName(name);
+  }, []);
+
+  // ══════════════════════════════════════════════
   // AUTO-LOAD: restore saved project on page open
   // ══════════════════════════════════════════════
   const autoLoadDone = useRef(false);
@@ -102,6 +133,7 @@ const HydroNetwork = () => {
       }
       if (saved.rdos?.length) setRdos(saved.rdos);
       if (saved.scheduleResult) setScheduleResult(saved.scheduleResult);
+      if (saved.projectName) setCurrentProjectName(saved.projectName);
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -117,11 +149,11 @@ const HydroNetwork = () => {
     const timer = setTimeout(() => {
       saveHydroProjectAsync({
         pontos, trechos, rdos, planning: null, scheduleResult,
-        savedAt: new Date().toISOString(), projectName: "HydroNetwork",
-      });
+        savedAt: new Date().toISOString(), projectName: currentProjectName,
+      }, currentProjectId || undefined);
     }, 2000);
     return () => clearTimeout(timer);
-  }, [pontos, trechos, rdos, scheduleResult]);
+  }, [pontos, trechos, rdos, scheduleResult, currentProjectId, currentProjectName]);
 
   // ══════════════════════════════════════════════
   // SAVE ON CLOSE: sync save when user closes tab
@@ -131,12 +163,12 @@ const HydroNetwork = () => {
       if (pontos.length === 0 && trechos.length === 0) return;
       saveHydroProject({
         pontos, trechos, rdos, planning: null, scheduleResult,
-        savedAt: new Date().toISOString(), projectName: "HydroNetwork",
+        savedAt: new Date().toISOString(), projectName: currentProjectName,
       });
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [pontos, trechos, rdos, scheduleResult]);
+  }, [pontos, trechos, rdos, scheduleResult, currentProjectName]);
 
   const [pasteData, setPasteData] = useState("");
   const [tipoSolo, setTipoSolo] = useState<TipoSolo>("normal");
@@ -279,6 +311,21 @@ const HydroNetwork = () => {
   function TopografiaModule() {
     const spatialProject = getSpatialProject();
     const layerCount = getAllLayers().length;
+    const [contourInterval, setContourInterval] = useState(5);
+    const [contourResult, setContourResult] = useState<ContourExtractionResult | null>(null);
+
+    const handleGenerateContours = () => {
+      const raster = getRasterGrid();
+      if (!raster) { toast.error("Importe um arquivo TIF/GeoTIFF primeiro."); return; }
+      const { grid, meta } = raster;
+      const result = extractContours(
+        grid.data, meta.width, meta.height,
+        grid.origin, grid.pixelSize,
+        contourInterval, meta.noDataValue,
+      );
+      setContourResult(result);
+      toast.success(`${result.contours.length} curvas de nível geradas (intervalo ${contourInterval}m)`);
+    };
 
     return (
       <div className="space-y-4">
@@ -457,7 +504,7 @@ const HydroNetwork = () => {
           </Card>
         )}
 
-        <TopographyMap pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} onClearAll={handleClearTopography} onPontosChange={setPontos} />
+        <TopographyMap pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} onClearAll={handleClearTopography} onPontosChange={setPontos} contourLines={contourResult?.contours} />
 
         {pontos.length > 0 && (
           <Card>
@@ -472,6 +519,73 @@ const HydroNetwork = () => {
             </CardContent>
           </Card>
         )}
+        {/* MDE / Curvas de Nível */}
+        {getRasterGrid() && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-green-600" /> Modelo Digital de Elevação (MDE)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Extraia curvas de nível do raster importado (TIF/GeoTIFF)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {contourResult && (
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="bg-muted/50 rounded p-2 text-center">
+                    <div className="text-sm font-bold">{contourResult.stats.min.toFixed(1)}m</div>
+                    <div className="text-[10px] text-muted-foreground">Mín</div>
+                  </div>
+                  <div className="bg-muted/50 rounded p-2 text-center">
+                    <div className="text-sm font-bold">{contourResult.stats.max.toFixed(1)}m</div>
+                    <div className="text-[10px] text-muted-foreground">Máx</div>
+                  </div>
+                  <div className="bg-muted/50 rounded p-2 text-center">
+                    <div className="text-sm font-bold">{contourResult.stats.mean.toFixed(1)}m</div>
+                    <div className="text-[10px] text-muted-foreground">Média</div>
+                  </div>
+                  <div className="bg-muted/50 rounded p-2 text-center">
+                    <div className="text-sm font-bold">{contourResult.contours.length}</div>
+                    <div className="text-[10px] text-muted-foreground">Curvas</div>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <Label className="text-xs whitespace-nowrap">Intervalo (m)</Label>
+                <Select value={String(contourInterval)} onValueChange={v => setContourInterval(Number(v))}>
+                  <SelectTrigger className="w-24 h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 5, 10, 20, 50].map(i => (
+                      <SelectItem key={i} value={String(i)}>{i}m</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" onClick={handleGenerateContours}>Gerar Curvas de Nível</Button>
+                {contourResult && contourResult.contours.length > 0 && (
+                  <Button size="sm" variant="outline" onClick={() => {
+                    const features = contourResult.contours.flatMap(c =>
+                      c.segments.map(seg => ({
+                        type: "Feature" as const,
+                        properties: { elevation: c.elevation },
+                        geometry: { type: "LineString" as const, coordinates: seg },
+                      }))
+                    );
+                    const geojson = JSON.stringify({ type: "FeatureCollection", features }, null, 2);
+                    const blob = new Blob([geojson], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = "curvas_nivel.geojson"; a.click();
+                    URL.revokeObjectURL(url);
+                    toast.success("Curvas exportadas como GeoJSON");
+                  }}>
+                    <Download className="h-3 w-3 mr-1" /> GeoJSON
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {trechos.length > 0 && (
           <Card>
             <CardHeader><CardTitle>Trechos ({trechos.length})</CardTitle></CardHeader>
@@ -600,6 +714,23 @@ const HydroNetwork = () => {
           </Card>
         )}
 
+        {/* Inline QEsg/QWater dimensioning */}
+        {trechos.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Calculator className="h-4 w-4" /> Dimensionamento Hidráulico (QEsg / QWater)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Dimensione diâmetros de esgoto (Manning/NBR 9649) e água (Hazen-Williams/NBR 12218) diretamente aqui.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <QEsgWaterPanel pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />
+            </CardContent>
+          </Card>
+        )}
+
         {/* Validation Report */}
         <ValidationReport
           open={showValidation}
@@ -697,26 +828,17 @@ const HydroNetwork = () => {
                 </h1>
                 <p className="text-muted-foreground mt-1">{moduleNames[activeModule] || "Plataforma de Saneamento"}</p>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => {
-                  saveHydroProject({
-                    pontos, trechos, rdos, planning: null, scheduleResult,
-                    savedAt: new Date().toISOString(), projectName: "HydroNetwork",
-                  });
-                  toast.success("Projeto salvo localmente!");
-                }}> Salvar Projeto</Button>
-                <Button variant="outline" size="sm" onClick={() => {
-                  const saved = loadHydroProject();
-                  if (!saved) { toast.error("Nenhum projeto salvo encontrado."); return; }
-                  if (saved.pontos?.length) setPontos(saved.pontos);
-                  if (saved.trechos?.length) setTrechos(saved.trechos);
-                  if (saved.rdos?.length) setRdos(saved.rdos);
-                  if (saved.scheduleResult) setScheduleResult(saved.scheduleResult);
-                  toast.success(`Projeto restaurado: ${saved.pontos?.length || 0} pontos, ${saved.trechos?.length || 0} trechos`);
-                }}>"‚ Carregar Projeto</Button>
+              <div className="flex gap-2 items-center">
+                <ProjectSelector
+                  currentProjectId={currentProjectId}
+                  currentProjectName={currentProjectName}
+                  getData={getProjectData}
+                  onLoadProject={handleLoadProject}
+                  onProjectChange={handleProjectChange}
+                />
                 <Button variant="outline" size="sm" onClick={() => {
                   toast.info(`Pontos: ${pontos.length} | Trechos: ${trechos.length} | RDOs: ${rdos.length} | Camadas: ${getAllLayers().length} | CRS: ${getSpatialProject().crs.name}`);
-                }}>âœ… Verificar Plataforma</Button>
+                }}>Verificar Plataforma</Button>
               </div>
             </div>
             {renderModule()}

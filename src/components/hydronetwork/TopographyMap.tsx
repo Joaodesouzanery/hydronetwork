@@ -17,12 +17,18 @@ import { CoordinateTransformDialog } from "@/components/hydronetwork/CoordinateT
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+export interface ContourLineData {
+  elevation: number;
+  segments: Array<[number, number][]>;
+}
+
 interface TopographyMapProps {
   pontos: PontoTopografico[];
   trechos: Trecho[];
   onTrechosChange?: (trechos: Trecho[]) => void;
   onClearAll?: () => void;
   onPontosChange?: (pontos: PontoTopografico[]) => void;
+  contourLines?: ContourLineData[];
 }
 
 type TipoRedeManualMap = "agua" | "esgoto" | "drenagem" | "recalque" | "outro";
@@ -45,7 +51,7 @@ const TILE_LAYERS: Record<string, { url: string; attribution: string; name: stri
   terrain: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", attribution: "© Esri", name: "Ruas" },
 };
 
-export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, onPontosChange }: TopographyMapProps) => {
+export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, onPontosChange, contourLines }: TopographyMapProps) => {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
@@ -61,6 +67,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   const [showTransformDialog, setShowTransformDialog] = useState(false);
   const markersRef = useRef<L.CircleMarker[]>([]);
   const polylinesRef = useRef<L.Polyline[]>([]);
+  const contourLayersRef = useRef<L.Polyline[]>([]);
   const [tileKey, setTileKey] = useState("osm");
   const [utmZone, setUtmZone] = useState<string>(String(getGlobalUtmZone() || "auto"));
   const [utmZoneVersion, setUtmZoneVersion] = useState(0);
@@ -435,6 +442,44 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       setTimeout(() => map.invalidateSize(), 500);
     }
   }, [pontos, trechos, getPointCoords, handleMarkerClick, handleTrechoClick, drawMode, drawOrigin, selectedPoint, deleteMode, selectedForDelete, selectedTrechosForDelete, bulkMoveMode, draggedNodeId, structureMode, selectedTrechoIdx, batchSelectedTrechos]);
+
+  // Render contour lines
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    contourLayersRef.current.forEach(l => l.remove());
+    contourLayersRef.current = [];
+    if (!contourLines || contourLines.length === 0) return;
+
+    const detectedCRS = pontos.length > 0
+      ? detectBatchCRS(pontos.map(p => ({ x: p.x, y: p.y })))
+      : { type: "local" as const, baseLatLng: [-23.55, -46.63] as [number, number] };
+
+    const minElev = Math.min(...contourLines.map(c => c.elevation));
+    const maxElev = Math.max(...contourLines.map(c => c.elevation));
+    const range = maxElev - minElev || 1;
+
+    for (const contour of contourLines) {
+      const t = (contour.elevation - minElev) / range;
+      // Color gradient: blue (low) → green (mid) → red (high)
+      const r = Math.round(t < 0.5 ? 0 : (t - 0.5) * 2 * 255);
+      const g = Math.round(t < 0.5 ? t * 2 * 200 : (1 - t) * 2 * 200);
+      const b = Math.round(t < 0.5 ? (1 - t * 2) * 255 : 0);
+      const color = `rgb(${r},${g},${b})`;
+
+      for (const seg of contour.segments) {
+        const latLngs = seg.map(([x, y]) => {
+          const [lat, lng] = getMapCoordinatesWithCRS(x, y, detectedCRS);
+          return [lat, lng] as [number, number];
+        });
+        if (latLngs.length < 2) continue;
+        const line = L.polyline(latLngs, { color, weight: 1.2, opacity: 0.6 });
+        line.bindTooltip(`${contour.elevation.toFixed(1)}m`, { sticky: true });
+        line.addTo(map);
+        contourLayersRef.current.push(line);
+      }
+    }
+  }, [contourLines, pontos]);
 
   const handleFitBounds = () => {
     if (pontos.length === 0) return;

@@ -1,7 +1,14 @@
 /**
  * Shared planning store using localStorage for data persistence
  * between Planning, OpenProject, and ProjectLibre modules.
+ *
+ * Now includes:
+ * - Multi-project versioning (named projects)
+ * - Supabase sync (cloud backup, cross-device)
+ * - IndexedDB fallback (large datasets >5MB)
  */
+
+import { supabase } from "@/lib/supabase";
 
 export interface SharedTask {
   id: string;
@@ -142,13 +149,203 @@ export async function loadHydroProjectAsync(): Promise<HydroProjectSave | null> 
   }
 }
 
-/** Save async — always writes to IndexedDB as backup */
-export async function saveHydroProjectAsync(data: HydroProjectSave): Promise<void> {
+/** Save async — writes to localStorage, IndexedDB, AND Supabase */
+export async function saveHydroProjectAsync(
+  data: HydroProjectSave,
+  projectId?: string,
+): Promise<void> {
   data.savedAt = new Date().toISOString();
   const json = JSON.stringify(data);
   try {
     localStorage.setItem(PROJECT_SAVE_KEY, json);
   } catch { /* localStorage full */ }
-  // Always write to IndexedDB as durable backup
   await idbPut(PROJECT_SAVE_KEY, data).catch(() => {});
+  // Sync to Supabase (fire-and-forget)
+  if (projectId) {
+    syncProjectToSupabase(data, projectId).catch(() => {});
+  }
+}
+
+// ══════════════════════════════════════
+// Supabase sync (cloud persistence)
+// ══════════════════════════════════════
+
+async function getUserId(): Promise<string | null> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id || null;
+  } catch { return null; }
+}
+
+export async function syncProjectToSupabase(
+  data: HydroProjectSave,
+  projectId?: string,
+): Promise<string> {
+  const userId = await getUserId();
+  const id = projectId || crypto.randomUUID();
+  try {
+    const { error } = await (supabase as any)
+      .from("hydro_dimensioning_projects")
+      .upsert({
+        id,
+        user_id: userId || undefined,
+        nome: data.projectName || "HydroNetwork",
+        project_data: {
+          pontos: data.pontos,
+          trechos: data.trechos,
+          rdos: data.rdos,
+          planning: data.planning,
+          scheduleResult: data.scheduleResult,
+          savedAt: data.savedAt,
+        },
+      }, { onConflict: "id" });
+    if (error) throw error;
+  } catch (err) {
+    console.error("[HydroSync] Supabase upsert failed:", err);
+  }
+  return id;
+}
+
+export async function loadProjectFromSupabase(
+  projectId?: string,
+): Promise<{ id: string; data: HydroProjectSave } | null> {
+  try {
+    const userId = await getUserId();
+    let query = (supabase as any)
+      .from("hydro_dimensioning_projects")
+      .select("*")
+      .order("updated_at", { ascending: false });
+    if (userId) query = query.eq("user_id", userId);
+    if (projectId) query = query.eq("id", projectId);
+    query = query.limit(1);
+    const { data, error } = await query;
+    if (error) throw error;
+    if (data && data.length > 0) {
+      const row = data[0];
+      const pd = row.project_data || {};
+      return {
+        id: row.id,
+        data: {
+          pontos: pd.pontos || [],
+          trechos: pd.trechos || [],
+          rdos: pd.rdos || [],
+          planning: pd.planning || null,
+          scheduleResult: pd.scheduleResult || null,
+          savedAt: pd.savedAt || row.updated_at,
+          projectName: row.nome,
+        },
+      };
+    }
+  } catch { /* fallback to local */ }
+  return null;
+}
+
+export interface ProjectListItem {
+  id: string;
+  nome: string;
+  updatedAt: string;
+  pontosCount: number;
+  trechosCount: number;
+}
+
+export async function listSupabaseProjects(): Promise<ProjectListItem[]> {
+  try {
+    const userId = await getUserId();
+    let query = (supabase as any)
+      .from("hydro_dimensioning_projects")
+      .select("id, nome, updated_at, project_data")
+      .order("updated_at", { ascending: false });
+    if (userId) query = query.eq("user_id", userId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []).map((r: any) => ({
+      id: r.id,
+      nome: r.nome || "Sem nome",
+      updatedAt: r.updated_at,
+      pontosCount: r.project_data?.pontos?.length || 0,
+      trechosCount: r.project_data?.trechos?.length || 0,
+    }));
+  } catch { return []; }
+}
+
+export async function deleteProjectFromSupabase(projectId: string): Promise<void> {
+  try {
+    const userId = await getUserId();
+    let query = (supabase as any).from("hydro_dimensioning_projects").delete().eq("id", projectId);
+    if (userId) query = query.eq("user_id", userId);
+    await query;
+  } catch (err) {
+    console.error("[HydroSync] Delete failed:", err);
+  }
+}
+
+// ══════════════════════════════════════
+// Multi-project local index
+// ══════════════════════════════════════
+
+const PROJECTS_INDEX_KEY = "hydronetwork_projects_index";
+
+interface LocalProjectIndex {
+  projects: Array<{ id: string; nome: string; updatedAt: string; pontosCount: number; trechosCount: number }>;
+}
+
+export function getLocalProjectIndex(): LocalProjectIndex {
+  try {
+    const data = localStorage.getItem(PROJECTS_INDEX_KEY);
+    return data ? JSON.parse(data) : { projects: [] };
+  } catch { return { projects: [] }; }
+}
+
+function saveLocalProjectIndex(index: LocalProjectIndex): void {
+  try { localStorage.setItem(PROJECTS_INDEX_KEY, JSON.stringify(index)); } catch {}
+}
+
+export async function saveProjectAs(
+  name: string,
+  data: HydroProjectSave,
+): Promise<string> {
+  const id = crypto.randomUUID();
+  data.projectName = name;
+  data.savedAt = new Date().toISOString();
+
+  // Save to localStorage as current project
+  saveHydroProject(data);
+
+  // Update local index
+  const index = getLocalProjectIndex();
+  index.projects = index.projects.filter(p => p.id !== id);
+  index.projects.unshift({
+    id, nome: name, updatedAt: data.savedAt,
+    pontosCount: data.pontos.length, trechosCount: data.trechos.length,
+  });
+  saveLocalProjectIndex(index);
+
+  // Sync to Supabase
+  await syncProjectToSupabase(data, id).catch(() => {});
+  return id;
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  // Remove from local index
+  const index = getLocalProjectIndex();
+  index.projects = index.projects.filter(p => p.id !== projectId);
+  saveLocalProjectIndex(index);
+  // Remove from Supabase
+  await deleteProjectFromSupabase(projectId).catch(() => {});
+}
+
+export async function listAllProjects(): Promise<ProjectListItem[]> {
+  // Merge local + Supabase lists
+  const local = getLocalProjectIndex().projects;
+  const remote = await listSupabaseProjects().catch(() => [] as ProjectListItem[]);
+  const merged = new Map<string, ProjectListItem>();
+  for (const p of local) merged.set(p.id, p);
+  for (const p of remote) {
+    if (!merged.has(p.id) || new Date(p.updatedAt) > new Date(merged.get(p.id)!.updatedAt)) {
+      merged.set(p.id, p);
+    }
+  }
+  return Array.from(merged.values()).sort((a, b) =>
+    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
 }
