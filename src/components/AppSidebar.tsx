@@ -4,7 +4,7 @@ import {
   Calendar, Beaker, Waves, Layers, FileText, Map, Shield, ClipboardList,
   Plus, History, Image, AlertCircle, Archive, HeadphonesIcon, Settings,
   BarChart3, ClipboardCheck, Activity, DollarSign, Building2, Bell, Clock,
-  BookOpen, Smile, Mail, Linkedin
+  BookOpen, Smile, Mail, Linkedin, FileCheck2
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -26,6 +26,7 @@ const monitoringItems = [
   { title: "Alertas", url: "/alerts", icon: Bell },
   { title: "Atrasos de Projeto", url: "/project-delays", icon: Clock },
   { title: "LPS", url: "/hydronetwork/lps", icon: ClipboardCheck },
+  { title: "Controle de Aprovação", url: "/approval-control", icon: FileCheck2 },
 ];
 
 const leanItems = [
