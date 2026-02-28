@@ -7,7 +7,7 @@ import {
   Droplets, MapPin, BarChart3, Calendar, ClipboardList, FileSpreadsheet,
   Upload, Settings2, Users, Zap, ArrowRight, ChevronDown,
   Globe, Calculator, Layers, GitBranch, Shield, Eye, Map, DollarSign,
-  Palette, AlertTriangle, Building2, Ruler
+  Palette, AlertTriangle, Building2, Ruler, Newspaper
 } from "lucide-react";
 
 const CostMapSVG = () => (
@@ -114,6 +114,9 @@ const HydroNetworkLanding = () => {
             <a href="#screenshots" className="hover:text-white transition-colors" style={{ color: "#94a3b8" }}>Plataforma</a>
             <a href="#modulos" className="hover:text-white transition-colors" style={{ color: "#94a3b8" }}>Módulos</a>
             <a href="#normas" className="hover:text-white transition-colors" style={{ color: "#94a3b8" }}>Normas</a>
+            <a href="/hub.html" className="hover:text-white transition-colors flex items-center gap-1" style={{ color: "#e8c547" }}>
+              <Newspaper className="h-3.5 w-3.5" /> Hub
+            </a>
           </nav>
           <Button onClick={() => navigate("/hydronetwork")} className="font-semibold text-sm" style={{ background: "#c9a227", color: "#1a1f2e" }}>
             ACESSAR PLATAFORMA
@@ -148,6 +151,10 @@ const HydroNetworkLanding = () => {
             <Button size="lg" variant="outline" onClick={() => document.getElementById("modulos")?.scrollIntoView({ behavior: "smooth" })}
               className="font-bold text-lg px-8" style={{ borderColor: "#c9a227", color: "#c9a227" }}>
               Ver Módulos
+            </Button>
+            <Button size="lg" variant="outline" onClick={() => window.location.href = "/hub.html"}
+              className="font-bold text-lg px-8" style={{ borderColor: "#3d6cb9", color: "#e8c547" }}>
+              <Newspaper className="mr-2 h-5 w-5" /> Hub de Notícias
             </Button>
           </div>
 
