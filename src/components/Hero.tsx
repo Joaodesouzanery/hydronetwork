@@ -261,7 +261,7 @@ const Hero = () => {
             <a href="#modulos" className="hover:text-foreground transition-colors">Módulos</a>
             <a href="#diferenciais" className="hover:text-foreground transition-colors">Diferenciais</a>
             <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
-            <a href="/hub/" className="hover:text-foreground transition-colors flex items-center gap-1 text-primary">
+            <a href="/hub/index.html" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors flex items-center gap-1 text-primary">
               <Newspaper className="w-3.5 h-3.5" /> Hub
             </a>
           </div>
@@ -349,7 +349,7 @@ const Hero = () => {
                   size="lg"
                   variant="outline"
                   className="text-lg px-8 py-6 rounded-xl border-primary/30 text-primary hover:bg-primary/10"
-                  onClick={() => window.location.href = '/hub/'}
+                  onClick={() => window.open('/hub/index.html', '_blank')}
                 >
                   <Newspaper className="w-5 h-5 mr-2" />
                   Hub de Notícias

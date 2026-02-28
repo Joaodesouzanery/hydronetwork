@@ -114,7 +114,7 @@ const HydroNetworkLanding = () => {
             <a href="#screenshots" className="hover:text-white transition-colors" style={{ color: "#94a3b8" }}>Plataforma</a>
             <a href="#modulos" className="hover:text-white transition-colors" style={{ color: "#94a3b8" }}>Módulos</a>
             <a href="#normas" className="hover:text-white transition-colors" style={{ color: "#94a3b8" }}>Normas</a>
-            <a href="/hub/" className="hover:text-white transition-colors flex items-center gap-1" style={{ color: "#e8c547" }}>
+            <a href="/hub/index.html" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors flex items-center gap-1" style={{ color: "#e8c547" }}>
               <Newspaper className="h-3.5 w-3.5" /> Hub
             </a>
           </nav>
@@ -152,7 +152,7 @@ const HydroNetworkLanding = () => {
               className="font-bold text-lg px-8" style={{ borderColor: "#c9a227", color: "#c9a227" }}>
               Ver Módulos
             </Button>
-            <Button size="lg" variant="outline" onClick={() => window.location.href = "/hub/"}
+            <Button size="lg" variant="outline" onClick={() => window.open('/hub/index.html', '_blank')}
               className="font-bold text-lg px-8" style={{ borderColor: "#3d6cb9", color: "#e8c547" }}>
               <Newspaper className="mr-2 h-5 w-5" /> Hub de Notícias
             </Button>
