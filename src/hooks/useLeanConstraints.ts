@@ -112,7 +112,7 @@ export function useLeanConstraints(filters: ConstraintFilters) {
     commitments,
     loading: constraintsQuery.isLoading || commitmentsQuery.isLoading,
     needsSetup: false,
-    usingLocalStorage: true,
+    usingLocalStorage: local.isUsingLocalStorage(),
     ppcData,
     currentPPC,
     constraintsByArea,
