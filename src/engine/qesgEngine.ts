@@ -243,3 +243,105 @@ export function dimensionSewerNetwork(
     resumo: { total: resultados.length, atendem, naoAtendem: resultados.length - atendem },
   };
 }
+
+// ══════════════════════════════════════
+// Network topology utilities
+// ══════════════════════════════════════
+
+export interface SewerNodeInput {
+  id: string;
+  vazaoLocal: number; // L/s contribution at this node
+}
+
+/**
+ * Accumulate sewer flow through the network topology.
+ *
+ * For a linear series of segments A→B→C, segment B→C carries the flow
+ * from A→B plus the local contribution at B.
+ *
+ * For branched networks, each segment's flow equals the sum of all
+ * upstream local contributions (topological sort).
+ */
+export function accumulateSewerFlow(
+  trechos: SewerSegmentInput[],
+  nodeFlows: SewerNodeInput[]
+): SewerSegmentInput[] {
+  const flowMap = new Map<string, number>();
+  for (const nf of nodeFlows) flowMap.set(nf.id, nf.vazaoLocal);
+
+  // Build adjacency: downstream[nodeId] = list of segment indices leaving this node
+  // Each segment goes from node "upstream" to node "downstream"
+  // We extract node IDs from segment IDs formatted as "from-to"
+  const segmentNodes = trechos.map(t => {
+    const parts = t.id.split("-");
+    // Handle IDs that themselves contain dashes (e.g. "PV-1-PV-2")
+    const mid = Math.floor(parts.length / 2);
+    return { from: parts.slice(0, mid).join("-"), to: parts.slice(mid).join("-") };
+  });
+
+  // Build in-degree and upstream map
+  const inDegree = new Map<string, number>();
+  const upstreamOf = new Map<string, number[]>(); // nodeId → segment indices that feed INTO it
+  const downstreamOf = new Map<string, number[]>(); // nodeId → segment indices that leave it
+  const allNodes = new Set<string>();
+
+  segmentNodes.forEach((sn, i) => {
+    allNodes.add(sn.from);
+    allNodes.add(sn.to);
+    inDegree.set(sn.to, (inDegree.get(sn.to) || 0) + 1);
+    if (!inDegree.has(sn.from)) inDegree.set(sn.from, 0);
+    const up = upstreamOf.get(sn.to) || [];
+    up.push(i);
+    upstreamOf.set(sn.to, up);
+    const dn = downstreamOf.get(sn.from) || [];
+    dn.push(i);
+    downstreamOf.set(sn.from, dn);
+  });
+
+  // Topological sort (Kahn's algorithm)
+  const queue: string[] = [];
+  for (const [node, deg] of inDegree) {
+    if (deg === 0) queue.push(node);
+  }
+
+  // Accumulated flow arriving at each node
+  const nodeAccum = new Map<string, number>();
+  for (const n of allNodes) nodeAccum.set(n, flowMap.get(n) || 0);
+
+  const segmentFlows = new Array<number>(trechos.length).fill(0);
+
+  while (queue.length > 0) {
+    const node = queue.shift()!;
+    const accum = nodeAccum.get(node) || 0;
+
+    // Propagate to downstream segments
+    const downSegs = downstreamOf.get(node) || [];
+    for (const si of downSegs) {
+      segmentFlows[si] = accum;
+      const toNode = segmentNodes[si].to;
+      nodeAccum.set(toNode, (nodeAccum.get(toNode) || 0) + accum);
+      inDegree.set(toNode, (inDegree.get(toNode) || 0) - 1);
+      if ((inDegree.get(toNode) || 0) <= 0) queue.push(toNode);
+    }
+  }
+
+  return trechos.map((t, i) => ({
+    ...t,
+    vazaoLps: Math.max(segmentFlows[i], t.vazaoLps), // never less than input
+  }));
+}
+
+/** PV (poço de visita) depth calculation */
+export function calcPVDepth(cotaTerreno: number, cotaFundo: number): number {
+  return cotaTerreno - cotaFundo;
+}
+
+/** Population-based flow: Q = Pop × qpc × K1 × K2 / 86400 (L/s) */
+export function calcPopulationFlow(
+  populacao: number,
+  qpcLitrosDia: number,
+  k1 = 1.2,
+  k2 = 1.5
+): number {
+  return (populacao * qpcLitrosDia * k1 * k2) / 86400;
+}

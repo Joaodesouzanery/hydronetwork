@@ -193,3 +193,47 @@ export function dimensionWaterNetwork(
     resumo: { total: resultados.length, atendem, naoAtendem: resultados.length - atendem },
   };
 }
+
+// ══════════════════════════════════════
+// Network pressure propagation
+// ══════════════════════════════════════
+
+export interface WaterNodeInput {
+  id: string;
+  cota: number;
+  demanda: number; // L/s
+}
+
+/**
+ * Propagate pressure through a linear water network.
+ * Starting from a source node (reservoir), calculates cumulative
+ * head loss and resulting pressure at each downstream node.
+ *
+ * Returns array of { nodeId, pressao (mca), hfAcumulada }.
+ */
+export function propagateNetworkPressure(
+  nodes: WaterNodeInput[],
+  results: WaterSegmentResult[],
+  sourceElevation: number
+): { nodeId: string; pressao: number; hfAcumulada: number }[] {
+  let cumulativeHf = 0;
+  return nodes.map((n, i) => {
+    if (i > 0 && results[i - 1]) {
+      cumulativeHf += results[i - 1].perdaCargaM;
+    }
+    const pressao = sourceElevation - n.cota - cumulativeHf;
+    return {
+      nodeId: n.id,
+      pressao: Math.round(pressao * 100) / 100,
+      hfAcumulada: Math.round(cumulativeHf * 1000) / 1000,
+    };
+  });
+}
+
+/** Hazen-Williams coefficient lookup by material name */
+export function getHWCoefficient(material: string): number {
+  return COEF_HW[material] || 140;
+}
+
+/** Available material names */
+export const MATERIAIS_AGUA = Object.keys(COEF_HW);
