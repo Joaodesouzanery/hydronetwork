@@ -132,6 +132,7 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
   const [velMaxEsg, setVelMaxEsg] = useState(5.0);
   const [tensaoMin, setTensaoMin] = useState(1.0);
   const [diamMinEsg, setDiamMinEsg] = useState(150);
+  const [vazaoEsg, setVazaoEsg] = useState(1.5);
   const [autoApply, setAutoApply] = useState(false);
 
   const sewerTrechos = useMemo(() =>
@@ -148,7 +149,7 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
       return {
         id: `${t.idInicio}-${t.idFim}`, comprimento: t.comprimento,
         cotaMontante: p0?.cota ?? 0, cotaJusante: p1?.cota ?? 0,
-        vazaoLps: 1.5, tipoTubo: t.material || "PVC",
+        vazaoLps: vazaoEsg, tipoTubo: t.material || "PVC",
       };
     });
     const { resultados, resumo } = dimensionSewerNetwork(inputs, {
@@ -157,7 +158,7 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
     setSewerResults(resultados);
     setSewerResumo({ total: resumo.total, atendem: resumo.atendem });
     toast.success(`QEsg: ${resumo.atendem}/${resumo.total} trechos atendem NBR 9649`);
-  }, [sewerTrechos, pontos, manning, laminaMax, velMinEsg, velMaxEsg, tensaoMin, diamMinEsg]);
+  }, [sewerTrechos, pontos, manning, laminaMax, velMinEsg, velMaxEsg, tensaoMin, diamMinEsg, vazaoEsg]);
 
   const applyDiameters = useCallback(() => {
     if (sewerResults.length === 0) return;
@@ -198,10 +199,10 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Waves className="h-5 w-5 text-amber-600" /> Rede de Esgoto — QEsg (NBR 9649)
+            <Waves className="h-5 w-5 text-amber-600" /> Rede de Esgoto — Dimensionamento (NBR 9649)
           </CardTitle>
           <CardDescription className="text-xs">
-            τ = 10000·Rh·I | v_c = 6·√(g·Rh) | I_min = 0.0055·Q^(-0.47)
+            τ = 10000·Rh·I | v_c = 6·√(g·Rh) | I_min = 0.0055·Q^(-0.47) | Motor: QEsg
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -216,7 +217,8 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
             </div>
           )}
 
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+          <div className="grid grid-cols-3 md:grid-cols-7 gap-3">
+            <div><Label className="text-xs">Vazão (L/s)</Label><Input type="number" step="0.1" value={vazaoEsg} onChange={e => setVazaoEsg(Number(e.target.value))} /></div>
             <div><Label className="text-xs">Manning (n)</Label><Input type="number" step="0.001" value={manning} onChange={e => setManning(Number(e.target.value))} /></div>
             <div><Label className="text-xs">y/D máx</Label><Input type="number" step="0.05" value={laminaMax} onChange={e => setLaminaMax(Number(e.target.value))} /></div>
             <div><Label className="text-xs">V mín (m/s)</Label><Input type="number" step="0.1" value={velMinEsg} onChange={e => setVelMinEsg(Number(e.target.value))} /></div>
