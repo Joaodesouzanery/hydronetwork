@@ -96,6 +96,7 @@ export const BudgetCostModule = ({ trechos, pontos }: BudgetCostModuleProps) => 
   const [uf, setUf] = useState("SP");
   const [mesRef, setMesRef] = useState("12/2024");
   const [bdiPct, setBdiPct] = useState(25);
+  const [tipoPavimento, setTipoPavimento] = useState("terra");
   const [customCosts, setCustomCosts] = useState<any[] | null>(null);
   const [rows, setRows] = useState<BudgetTrecho[]>([]);
 
@@ -166,9 +167,12 @@ export const BudgetCostModule = ({ trechos, pontos }: BudgetCostModuleProps) => 
       const custoEnv = volEnv * db.reaterro[2].custo;
       const custoReat = volReat * db.reaterro[0].custo;
       const custoBota = volBota * 12.50;
-      const custoSubbase = areaPav * 0.20 * db.pavimentacao[0].custo;
-      const custoBase = areaPav * 0.15 * db.pavimentacao[1].custo;
-      const custoAsfalto = areaPav * db.pavimentacao[2].custo;
+      let custoSubbase = 0, custoBase = 0, custoAsfalto = 0;
+      if (tipoPavimento !== "terra") {
+        custoSubbase = areaPav * 0.20 * db.pavimentacao[0].custo;
+        custoBase = areaPav * 0.15 * db.pavimentacao[1].custo;
+        if (tipoPavimento === "asfalto") custoAsfalto = areaPav * db.pavimentacao[2].custo;
+      }
       const custoPV = getPVCusto(prof);
 
       const subtotal = custoEsc + custoEscor + custoTubo + custoBerco + custoEnv + custoReat + custoBota + custoSubbase + custoBase + custoAsfalto + custoPV;
@@ -332,6 +336,17 @@ export const BudgetCostModule = ({ trechos, pontos }: BudgetCostModuleProps) => 
                   <Label>BDI (%)</Label>
                   <Input type="number" value={bdiPct} onChange={e => setBdiPct(Number(e.target.value))} />
                   <p className="text-xs text-muted-foreground mt-1">Bonificação e Despesas Indiretas (padrão: 25%)</p>
+                </div>
+                <div>
+                  <Label>Tipo de Pavimento</Label>
+                  <Select value={tipoPavimento} onValueChange={setTipoPavimento}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[["terra", "Terra (sem pavimentação)"], ["asfalto", "Asfalto (CBUQ)"], ["concreto", "Concreto"], ["bloquete", "Bloquete"]].map(([v, l]) => (
+                        <SelectItem key={v} value={v}>{l}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               {baseCustos === "custom" && (

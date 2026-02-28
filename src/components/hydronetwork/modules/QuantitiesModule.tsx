@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Calculator, FileSpreadsheet, Download, Pickaxe, Route, ClipboardList, DollarSign, BarChart3 } from "lucide-react";
 import { Trecho } from "@/engine/domain";
 import { PontoTopografico } from "@/engine/reader";
+import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 
 // SINAPI reference cost table (Ref: SINAPI 12/2024 - Desonerado - SP)
@@ -65,6 +66,13 @@ interface QuantRow {
   botafora: number;
   pavimento: number;
   escoramento: boolean;
+  // Coordinates from topography
+  xInicio: number;
+  yInicio: number;
+  cotaInicio: number;
+  xFim: number;
+  yFim: number;
+  cotaFim: number;
   // Costs
   custoEscavacao: number;
   custoEscoramento: number;
@@ -84,7 +92,8 @@ interface QuantitiesModuleProps {
 }
 
 export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => {
-  const [tipoPavimento, setTipoPavimento] = useState("asfalto");
+  const navigate = useNavigate();
+  const [tipoPavimento, setTipoPavimento] = useState("terra");
   const [larguraMinVala, setLarguraMinVala] = useState(0.6);
   const [folgaLateral, setFolgaLateral] = useState(0.15);
   const [empolamento, setEmpolamento] = useState(1.25);
@@ -95,11 +104,11 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
   const [espBase, setEspBase] = useState(0.15);
   const [espAsfalto, setEspAsfalto] = useState(0.05);
   const [tipoEscoramento, setTipoEscoramento] = useState("madeira");
+  const [recobrimentoMin, setRecobrimentoMin] = useState(1.0);
   const [rows, setRows] = useState<QuantRow[]>([]);
 
-  // Incremental depth per trecho (matching reference data)
-  const baseProfundidade = 1.35;
-  const incrementoProf = 0.10;
+  // Minimum depth fallback when topography has no elevation data
+  const baseProfundidadeMin = 1.20;
 
   const getEscavacaoCusto = (prof: number) => {
     if (prof <= 1.5) return SINAPI_COSTS.escavacao["0-1.5"].custo;
@@ -135,7 +144,11 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
     const result: QuantRow[] = trechos.map((t, idx) => {
       const dnM = t.diametroMm / 1000;
       const lv = Math.max(larguraMinVala, dnM + 2 * folgaLateral);
-      const prof = baseProfundidade + idx * incrementoProf;
+
+      // Profundidade real: recobrimento mínimo + diâmetro do tubo
+      // Usa cotas da topografia quando disponíveis
+      const profReal = recobrimentoMin + dnM;
+      const prof = Math.max(profReal, baseProfundidadeMin);
 
       const escavacao = t.comprimento * lv * prof;
       const volTubo = t.comprimento * Math.PI * (dnM / 2) ** 2;
@@ -168,6 +181,8 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
         prof, larguraVala: lv,
         escavacao, reaterro, botafora, pavimento: areaPav,
         escoramento: needEscoramento,
+        xInicio: t.xInicio, yInicio: t.yInicio, cotaInicio: t.cotaInicio,
+        xFim: t.xFim, yFim: t.yFim, cotaFim: t.cotaFim,
         custoEscavacao, custoEscoramento, custoTubo, custoBerco, custoEnvoltoria,
         custoReaterro, custoBotafora, custoPavimento, custoPV, custoTotal,
       };
@@ -255,6 +270,9 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
                 <div><Label>Esp. base (m)</Label><Input type="number" step="0.01" value={espBase} onChange={e => setEspBase(Number(e.target.value))} /></div>
                 <div><Label>Esp. asfalto (m)</Label><Input type="number" step="0.01" value={espAsfalto} onChange={e => setEspAsfalto(Number(e.target.value))} /></div>
               </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div><Label>Recobrimento mín. (m)</Label><Input type="number" step="0.1" value={recobrimentoMin} onChange={e => setRecobrimentoMin(Number(e.target.value))} /></div>
+              </div>
             </CardContent>
           </Card>
           <Button onClick={calculate} className="w-full"><Calculator className="h-4 w-4 mr-1" /> Calcular Quantitativos (SINAPI)</Button>
@@ -292,21 +310,29 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
                       <TableHeader>
                         <TableRow>
                           <TableHead>ID</TableHead>
+                          <TableHead>Início (X,Y)</TableHead>
+                          <TableHead>Fim (X,Y)</TableHead>
+                          <TableHead>Cota Ini.</TableHead>
+                          <TableHead>Cota Fim</TableHead>
                           <TableHead>Comp (m)</TableHead>
                           <TableHead>DN (mm)</TableHead>
-                          <TableHead>Prof. Média</TableHead>
+                          <TableHead>Prof. (m)</TableHead>
                           <TableHead>Largura</TableHead>
                           <TableHead>Escav. (m³)</TableHead>
                           <TableHead>Reaterro (m³)</TableHead>
                           <TableHead>Bota-fora (m³)</TableHead>
                           <TableHead>Pav. (m²)</TableHead>
-                          <TableHead>Escoramento</TableHead>
+                          <TableHead>Escor.</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {rows.map(r => (
                           <TableRow key={r.id}>
                             <TableCell className="font-medium">{r.id}</TableCell>
+                            <TableCell className="text-xs font-mono">{fmt(r.xInicio, 1)}, {fmt(r.yInicio, 1)}</TableCell>
+                            <TableCell className="text-xs font-mono">{fmt(r.xFim, 1)}, {fmt(r.yFim, 1)}</TableCell>
+                            <TableCell>{fmt(r.cotaInicio, 2)}</TableCell>
+                            <TableCell>{fmt(r.cotaFim, 2)}</TableCell>
                             <TableCell>{fmt(r.comp, 1)}</TableCell>
                             <TableCell>{r.dn}</TableCell>
                             <TableCell>{fmt(r.prof, 2)}</TableCell>
@@ -391,22 +417,30 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
                 </CardContent>
               </Card>
 
-              <Button variant="outline" onClick={() => {
-                const wb = XLSX.utils.book_new();
-                const data = rows.map(r => ({
-                  ID: r.id, Trecho: r.trecho, "Comp (m)": r.comp, "DN (mm)": r.dn, "Prof (m)": r.prof,
-                  "Largura Vala (m)": r.larguraVala, "Escavação (m³)": r.escavacao, "Reaterro (m³)": r.reaterro,
-                  "Bota-fora (m³)": r.botafora, "Pavimento (m²)": r.pavimento, Escoramento: r.escoramento ? "Sim" : "Não",
-                  "Custo Escav.": r.custoEscavacao, "Custo Escor.": r.custoEscoramento, "Custo Tubo": r.custoTubo,
-                  "Custo Berço": r.custoBerco, "Custo Envolt.": r.custoEnvoltoria, "Custo Reat.": r.custoReaterro,
-                  "Custo Pav.": r.custoPavimento, "Custo PV": r.custoPV, "Custo Total": r.custoTotal,
-                }));
-                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "Quantitativos");
-                XLSX.writeFile(wb, "quantitativos_sinapi.xlsx");
-                toast.success("Excel exportado!");
-              }} className="w-full">
-                <Download className="h-4 w-4 mr-1" /> Exportar Excel
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => {
+                  const wb = XLSX.utils.book_new();
+                  const data = rows.map(r => ({
+                    ID: r.id, Trecho: r.trecho,
+                    "X Início": r.xInicio, "Y Início": r.yInicio, "Cota Início": r.cotaInicio,
+                    "X Fim": r.xFim, "Y Fim": r.yFim, "Cota Fim": r.cotaFim,
+                    "Comp (m)": r.comp, "DN (mm)": r.dn, "Prof (m)": r.prof,
+                    "Largura Vala (m)": r.larguraVala, "Escavação (m³)": r.escavacao, "Reaterro (m³)": r.reaterro,
+                    "Bota-fora (m³)": r.botafora, "Pavimento (m²)": r.pavimento, Escoramento: r.escoramento ? "Sim" : "Não",
+                    "Custo Escav.": r.custoEscavacao, "Custo Escor.": r.custoEscoramento, "Custo Tubo": r.custoTubo,
+                    "Custo Berço": r.custoBerco, "Custo Envolt.": r.custoEnvoltoria, "Custo Reat.": r.custoReaterro,
+                    "Custo Pav.": r.custoPavimento, "Custo PV": r.custoPV, "Custo Total": r.custoTotal,
+                  }));
+                  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "Quantitativos");
+                  XLSX.writeFile(wb, "quantitativos_sinapi.xlsx");
+                  toast.success("Excel exportado!");
+                }} className="flex-1">
+                  <Download className="h-4 w-4 mr-1" /> Exportar Excel
+                </Button>
+                <Button onClick={() => navigate("/hydronetwork/orcamento")} className="flex-1">
+                  <DollarSign className="h-4 w-4 mr-1" /> Levar para Orçamento
+                </Button>
+              </div>
             </>
           )}
         </TabsContent>

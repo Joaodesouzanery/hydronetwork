@@ -1,17 +1,24 @@
-import { useState, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Calculator, Upload, Droplets, AlertTriangle, Link, Ruler, Zap } from "lucide-react";
+import {
+  Calculator, Waves, CheckCircle, XCircle, Download,
+  AlertTriangle, Zap, RefreshCw, Map,
+} from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
-import { manningVelocity, raioHidraulico, areaCircular } from "@/engine/hydraulics";
-import { NodeMapWidget, ConnectionData } from "@/components/hydronetwork/NodeMapWidget";
+import {
+  dimensionSewerNetwork,
+  type SewerSegmentInput,
+  type SewerSegmentResult,
+} from "@/engine/qesgEngine";
+import { detectBatchCRS, getMapCoordinatesWithCRS } from "@/engine/hydraulics";
+import L from "leaflet";
 
 interface SewerModuleProps {
   pontos: PontoTopografico[];
@@ -19,264 +26,278 @@ interface SewerModuleProps {
   onTrechosChange: (t: Trecho[]) => void;
 }
 
-interface SewerNode {
-  id: string; x: number; y: number; cotaTerreno: number; cotaFundo: number; demanda?: number;
-}
+/** Inline Leaflet map showing sewer dimensioning results */
+const SewerMapView = ({
+  pontos, trechos, results,
+}: { pontos: PontoTopografico[]; trechos: Trecho[]; results: SewerSegmentResult[] }) => {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<L.Map | null>(null);
 
-interface SewerResult {
-  id: string; de: string; para: string; comp: number; dn: number;
-  i: number; q: number; v: number; yD: number; status: "OK" | "WARN";
-}
+  const crs = useMemo(() => detectBatchCRS(pontos), [pontos]);
+
+  const getCoords = useCallback(
+    (p: PontoTopografico): [number, number] => getMapCoordinatesWithCRS(p.x, p.y, crs),
+    [crs],
+  );
+
+  useEffect(() => {
+    if (!mapRef.current || pontos.length === 0) return;
+
+    // Create or reset map
+    if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; }
+    const map = L.map(mapRef.current, { zoomControl: true });
+    mapInstance.current = map;
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OSM",
+    }).addTo(map);
+
+    const resultMap = new Map(results.map(r => [r.id, r]));
+    const bounds: L.LatLngExpression[] = [];
+
+    // Draw trechos
+    trechos.forEach(t => {
+      const pI = pontos.find(p => p.id === t.idInicio);
+      const pF = pontos.find(p => p.id === t.idFim);
+      if (!pI || !pF) return;
+
+      const coordI = getCoords(pI);
+      const coordF = getCoords(pF);
+      bounds.push(coordI, coordF);
+
+      const segId = `${t.idInicio}-${t.idFim}`;
+      const res = resultMap.get(segId);
+      const ok = res?.atendeNorma ?? true;
+      const color = ok ? "#22c55e" : "#ef4444";
+
+      const line = L.polyline([coordI, coordF], { color, weight: 4, opacity: 0.85 }).addTo(map);
+
+      const tooltipText = res
+        ? `${segId} | DN${res.diametroMm} | V=${res.velocidadeMs.toFixed(2)} m/s | τ=${res.tensaoTrativa.toFixed(2)} Pa`
+        : segId;
+      line.bindTooltip(tooltipText, { sticky: true });
+
+      if (res) {
+        line.bindPopup(`
+          <div style="font-size:12px;line-height:1.6">
+            <strong>${segId}</strong><br/>
+            <b>DN:</b> ${res.diametroMm} mm<br/>
+            <b>V:</b> ${res.velocidadeMs.toFixed(3)} m/s<br/>
+            <b>V crítica:</b> ${res.velocidadeCriticaMs.toFixed(3)} m/s<br/>
+            <b>y/D:</b> ${res.laminaDagua.toFixed(3)}<br/>
+            <b>τ:</b> ${res.tensaoTrativa.toFixed(2)} Pa<br/>
+            <b>Decliv.:</b> ${(res.declividadeUsada * 100).toFixed(3)}%<br/>
+            <b>Status:</b> ${res.atendeNorma ? "OK" : "FALHA"}<br/>
+            ${res.observacoes.length > 0 ? `<b>Obs:</b> ${res.observacoes.join("; ")}` : ""}
+          </div>
+        `);
+      }
+    });
+
+    // Draw pontos as circles
+    pontos.forEach(p => {
+      const coords = getCoords(p);
+      L.circleMarker(coords, { radius: 5, color: "#1e40af", fillColor: "#3b82f6", fillOpacity: 0.8 })
+        .addTo(map)
+        .bindTooltip(`${p.id} (${p.cota.toFixed(2)}m)`, { direction: "top" });
+    });
+
+    if (bounds.length > 0) {
+      map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30] });
+    }
+
+    return () => { if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; } };
+  }, [pontos, trechos, results, getCoords]);
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Map className="h-4 w-4 text-green-600" /> Mapa da Rede de Esgoto
+        </CardTitle>
+        <CardDescription className="text-xs">Verde = atende NBR 9649 | Vermelho = falha</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div ref={mapRef} className="h-[400px] rounded-lg border" />
+      </CardContent>
+    </Card>
+  );
+};
 
 export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModuleProps) => {
-  const [qpc, setQpc] = useState(160);
+  const [sewerResults, setSewerResults] = useState<SewerSegmentResult[]>([]);
+  const [sewerResumo, setSewerResumo] = useState<{ total: number; atendem: number } | null>(null);
   const [manning, setManning] = useState(0.013);
-  const [velMin, setVelMin] = useState(0.6);
-  const [velMax, setVelMax] = useState(5.0);
   const [laminaMax, setLaminaMax] = useState(0.75);
-  const [nodes, setNodes] = useState<SewerNode[]>([]);
-  const [newNode, setNewNode] = useState({ id: "", x: 0, y: 0, cotaTerreno: 0, cotaFundo: 0 });
-  const [calculated, setCalculated] = useState(false);
-  const [mapConnections, setMapConnections] = useState<ConnectionData[]>([]);
+  const [velMinEsg, setVelMinEsg] = useState(0.6);
+  const [velMaxEsg, setVelMaxEsg] = useState(5.0);
+  const [tensaoMin, setTensaoMin] = useState(1.0);
+  const [diamMinEsg, setDiamMinEsg] = useState(150);
+  const [autoApply, setAutoApply] = useState(false);
 
-  const addNode = () => {
-    if (!newNode.id.trim()) { toast.error("ID obrigatório"); return; }
-    setNodes([...nodes, { ...newNode }]);
-    setNewNode({ id: `PV${nodes.length + 2}`, x: 0, y: 0, cotaTerreno: 0, cotaFundo: 0 });
-    toast.success("Nó adicionado");
-  };
+  const sewerTrechos = useMemo(() =>
+    trechos.filter(t => {
+      const tipo = t.tipoRedeManual || "esgoto";
+      return tipo === "esgoto" || tipo === "outro";
+    }), [trechos]);
 
-  const removeNode = (id: string) => setNodes(nodes.filter(n => n.id !== id));
+  const dimensionSewer = useCallback(() => {
+    if (sewerTrechos.length === 0) { toast.error("Nenhum trecho de esgoto encontrado."); return; }
+    const inputs: SewerSegmentInput[] = sewerTrechos.map(t => {
+      const p0 = pontos.find(p => p.id === t.idInicio);
+      const p1 = pontos.find(p => p.id === t.idFim);
+      return {
+        id: `${t.idInicio}-${t.idFim}`, comprimento: t.comprimento,
+        cotaMontante: p0?.cota ?? 0, cotaJusante: p1?.cota ?? 0,
+        vazaoLps: 1.5, tipoTubo: t.material || "PVC",
+      };
+    });
+    const { resultados, resumo } = dimensionSewerNetwork(inputs, {
+      manning, laminaMax, velMin: velMinEsg, velMax: velMaxEsg, tensaoMin, diamMinMm: diamMinEsg,
+    });
+    setSewerResults(resultados);
+    setSewerResumo({ total: resumo.total, atendem: resumo.atendem });
+    toast.success(`QEsg: ${resumo.atendem}/${resumo.total} trechos atendem NBR 9649`);
+  }, [sewerTrechos, pontos, manning, laminaMax, velMinEsg, velMaxEsg, tensaoMin, diamMinEsg]);
 
-  const transferFromTopography = () => {
-    if (pontos.length === 0) { toast.error("Nenhum ponto na topografia"); return; }
-    const newNodes: SewerNode[] = pontos.map(p => ({
-      id: p.id, x: p.x, y: p.y, cotaTerreno: p.cota, cotaFundo: p.cota - 1.5
+  const applyDiameters = useCallback(() => {
+    if (sewerResults.length === 0) return;
+    const m = new Map(sewerResults.map(r => [r.id, r.diametroMm]));
+    onTrechosChange(trechos.map(t => {
+      const d = m.get(`${t.idInicio}-${t.idFim}`);
+      return d ? { ...t, diametroMm: d } : t;
     }));
-    setNodes(newNodes);
-    // Auto-generate sequential connections
-    const conns: ConnectionData[] = newNodes.slice(0, -1).map((n, i) => ({
-      from: n.id, to: newNodes[i + 1].id, color: "#22c55e", label: `${n.id} → ${newNodes[i + 1].id}`
-    }));
-    setMapConnections(conns);
-    toast.success(`${newNodes.length} nós transferidos da topografia`);
-  };
+    toast.success("Diâmetros de esgoto aplicados aos trechos");
+  }, [sewerResults, trechos, onTrechosChange]);
 
-  const results = useMemo<SewerResult[]>(() => {
-    if (nodes.length < 2 || !calculated) return [];
-    const res: SewerResult[] = [];
-    const iMin = 0.005;
-    const qDesign = 19.61;
-    for (let i = 0; i < nodes.length - 1; i++) {
-      const n1 = nodes[i]; const n2 = nodes[i + 1];
-      const dx = n2.x - n1.x; const dy = n2.y - n1.y;
-      const comp = Math.sqrt(dx * dx + dy * dy);
-      if (comp === 0) continue;
-      const slope = (n1.cotaFundo - n2.cotaFundo) / comp;
-      const dn = comp > 40 ? 500 : 600;
-      const D = dn / 1000;
-      const sCalc = Math.abs(slope) < iMin ? iMin : Math.abs(slope);
-      const yD = slope < iMin ? 0.736 : Math.min(laminaMax, 0.75);
-      const yAbs = yD * D;
-      const R = raioHidraulico(D, yAbs);
-      const v = manningVelocity(R, sCalc, manning);
-      const isWarn = slope < iMin || slope < 0;
-      res.push({
-        id: `T${String(i + 1).padStart(2, "0")}`, de: `P${String(i + 1).padStart(2, "0")}`,
-        para: `P${String(i + 2).padStart(2, "0")}`, comp: Math.round(comp * 10) / 10,
-        dn, i: slope, q: qDesign, v: parseFloat(v.toFixed(3)),
-        yD: parseFloat(yD.toFixed(3)), status: isWarn ? "WARN" : "OK",
-      });
+  // Auto-apply diameters after rebuild
+  useEffect(() => {
+    if (autoApply && sewerResults.length > 0) {
+      applyDiameters();
+      setAutoApply(false);
     }
-    return res;
-  }, [nodes, calculated, manning, laminaMax]);
+  }, [autoApply, sewerResults, applyDiameters]);
 
-  const warnings = useMemo(() => results.filter(r => r.i < 0.005).map(r => ({
-    trecho: `${r.de}-${r.para}`, msg: `Declividade ${(r.i * 100).toFixed(2)}% < 0.5%`,
-  })), [results]);
-
-  const summary = useMemo(() => {
-    if (results.length === 0) return null;
-    const totalComp = results.reduce((s, r) => s + r.comp, 0);
-    const avgV = results.reduce((s, r) => s + r.v, 0) / results.length;
-    return { trechos: results.length, extensao: totalComp, velMedia: avgV, alertas: warnings.length };
-  }, [results, warnings]);
-
-  const calculate = () => {
-    if (nodes.length < 2) { toast.error("Mínimo 2 nós"); return; }
-    setCalculated(true);
-    toast.success(`Cálculo de esgoto executado com ${nodes.length} nós.`);
+  const handleRebuild = () => {
+    setAutoApply(true);
+    dimensionSewer();
   };
 
-  const loadDemo = () => {
-    const demo: SewerNode[] = [
-      { id: "PV1", x: 350000, y: 7400000, cotaTerreno: 105.0, cotaFundo: 103.5 },
-      { id: "PV2", x: 350050, y: 7400030, cotaTerreno: 104.2, cotaFundo: 102.7 },
-      { id: "PV3", x: 350100, y: 7400060, cotaTerreno: 103.5, cotaFundo: 102.0 },
-      { id: "PV4", x: 350150, y: 7400090, cotaTerreno: 102.8, cotaFundo: 101.3 },
-      { id: "PV5", x: 350200, y: 7400120, cotaTerreno: 102.0, cotaFundo: 100.5 },
-    ];
-    setNodes(demo);
-    setMapConnections(demo.slice(0, -1).map((n, i) => ({
-      from: n.id, to: demo[i + 1].id, color: "#22c55e", label: `${n.id} → ${demo[i + 1].id}`
-    })));
-    setCalculated(false);
-    toast.success("Demo de esgoto carregado");
+  const exportCSV = () => {
+    if (sewerResults.length === 0) return;
+    let csv = "Trecho;DN (mm);DN Calc (mm);V (m/s);V Crit (m/s);y/D;Tensao (Pa);Decliv Min;Decliv Usada;Status;Obs\n";
+    for (const r of sewerResults) csv += `${r.id};${r.diametroMm};${r.diametroCalculadoMm};${r.velocidadeMs};${r.velocidadeCriticaMs};${r.laminaDagua};${r.tensaoTrativa};${r.declividadeMin};${r.declividadeUsada};${r.atendeNorma ? "OK" : "NAO"};${r.observacoes.join(" | ")}\n`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url;
+    a.download = "dimensionamento_esgoto.csv"; a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Droplets className="h-5 w-5 text-green-600" /> Parâmetros de Esgoto</CardTitle>
-            <CardDescription>Rede de esgoto por gravidade</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div><Label>Contribuição per capita qpc (L/hab/dia)</Label><Input type="number" value={qpc} onChange={e => setQpc(Number(e.target.value))} /></div>
-            <div><Label>Coeficiente de Manning</Label><Input type="number" step="0.001" value={manning} onChange={e => setManning(Number(e.target.value))} /></div>
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label>Vel. Mínima (m/s)</Label><Input type="number" step="0.1" value={velMin} onChange={e => setVelMin(Number(e.target.value))} /></div>
-              <div><Label>Vel. Máxima (m/s)</Label><Input type="number" step="0.1" value={velMax} onChange={e => setVelMax(Number(e.target.value))} /></div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Waves className="h-5 w-5 text-amber-600" /> Rede de Esgoto — QEsg (NBR 9649)
+          </CardTitle>
+          <CardDescription className="text-xs">
+            τ = 10000·Rh·I | v_c = 6·√(g·Rh) | I_min = 0.0055·Q^(-0.47)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {sewerTrechos.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-green-600">
+                {sewerTrechos.length} trechos de esgoto
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                (filtrados por tipoRedeManual = "esgoto" ou "outro")
+              </span>
             </div>
-            <div><Label>Lâmina máxima y/D</Label><Input type="number" step="0.01" value={laminaMax} onChange={e => setLaminaMax(Number(e.target.value))} /></div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Adicionar Nó</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label>ID</Label><Input value={newNode.id} onChange={e => setNewNode({ ...newNode, id: e.target.value })} placeholder="PV1" /></div>
-              <div><Label>X</Label><Input type="number" value={newNode.x} onChange={e => setNewNode({ ...newNode, x: Number(e.target.value) })} /></div>
-              <div><Label>Y</Label><Input type="number" value={newNode.y} onChange={e => setNewNode({ ...newNode, y: Number(e.target.value) })} /></div>
-              <div><Label>Cota Terreno</Label><Input type="number" step="0.01" value={newNode.cotaTerreno} onChange={e => setNewNode({ ...newNode, cotaTerreno: Number(e.target.value) })} /></div>
-              <div className="col-span-2"><Label>Cota de Fundo</Label><Input type="number" step="0.01" value={newNode.cotaFundo} onChange={e => setNewNode({ ...newNode, cotaFundo: Number(e.target.value) })} /></div>
+          )}
+
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+            <div><Label className="text-xs">Manning (n)</Label><Input type="number" step="0.001" value={manning} onChange={e => setManning(Number(e.target.value))} /></div>
+            <div><Label className="text-xs">y/D máx</Label><Input type="number" step="0.05" value={laminaMax} onChange={e => setLaminaMax(Number(e.target.value))} /></div>
+            <div><Label className="text-xs">V mín (m/s)</Label><Input type="number" step="0.1" value={velMinEsg} onChange={e => setVelMinEsg(Number(e.target.value))} /></div>
+            <div><Label className="text-xs">V máx (m/s)</Label><Input type="number" step="0.1" value={velMaxEsg} onChange={e => setVelMaxEsg(Number(e.target.value))} /></div>
+            <div><Label className="text-xs">Tensão mín (Pa)</Label><Input type="number" step="0.1" value={tensaoMin} onChange={e => setTensaoMin(Number(e.target.value))} /></div>
+            <div><Label className="text-xs">DN mín (mm)</Label><Input type="number" step="50" value={diamMinEsg} onChange={e => setDiamMinEsg(Number(e.target.value))} /></div>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={dimensionSewer} disabled={sewerTrechos.length === 0}>
+              <Calculator className="h-4 w-4 mr-1" /> Dimensionar ({sewerTrechos.length} trechos)
+            </Button>
+            {sewerResults.length > 0 && (
+              <>
+                <Button variant="secondary" onClick={handleRebuild}>
+                  <RefreshCw className="h-4 w-4 mr-1" /> Rebuild Rede
+                </Button>
+                <Button variant="outline" onClick={applyDiameters}>
+                  <Zap className="h-4 w-4 mr-1" /> Aplicar Diâmetros
+                </Button>
+                <Button variant="outline" onClick={exportCSV}>
+                  <Download className="h-4 w-4 mr-1" /> CSV
+                </Button>
+              </>
+            )}
+          </div>
+
+          {sewerResumo && (
+            <div className="flex gap-3 text-sm">
+              <Badge variant="outline">{sewerResumo.total} trechos</Badge>
+              <Badge className="bg-green-500">{sewerResumo.atendem} OK</Badge>
+              {sewerResumo.total - sewerResumo.atendem > 0 && (
+                <Badge variant="destructive">{sewerResumo.total - sewerResumo.atendem} falha</Badge>
+              )}
             </div>
-            <Button onClick={addNode} className="w-full"><Plus className="h-4 w-4 mr-1" /> Adicionar Nó</Button>
-          </CardContent>
-        </Card>
-      </div>
+          )}
 
-      <div className="flex gap-2 flex-wrap">
-        <Button onClick={transferFromTopography} variant="outline"><Upload className="h-4 w-4 mr-1" /> Transferir da Topografia</Button>
-        <Button onClick={calculate}><Calculator className="h-4 w-4 mr-1" /> Calcular Esgoto</Button>
-        <Button onClick={loadDemo} variant="secondary">Carregar Demo</Button>
-      </div>
-
-      {nodes.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle>Nós de Esgoto ({nodes.length})</CardTitle></CardHeader>
-          <CardContent>
-            <div className="max-h-[300px] overflow-auto">
+          {sewerResults.length > 0 && (
+            <div className="border rounded-lg overflow-auto max-h-80">
               <Table>
-                <TableHeader><TableRow>
-                  <TableHead>ID</TableHead><TableHead>X</TableHead><TableHead>Y</TableHead>
-                  <TableHead>Cota Terreno</TableHead><TableHead>Cota Fundo</TableHead><TableHead>Prof.</TableHead><TableHead></TableHead>
-                </TableRow></TableHeader>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Trecho</TableHead>
+                    <TableHead>DN</TableHead>
+                    <TableHead>V (m/s)</TableHead>
+                    <TableHead>y/D</TableHead>
+                    <TableHead>τ (Pa)</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
-                  {nodes.map(n => (
-                    <TableRow key={n.id}>
-                      <TableCell className="font-medium">{n.id}</TableCell>
-                      <TableCell>{n.x.toFixed(3)}</TableCell><TableCell>{n.y.toFixed(3)}</TableCell>
-                      <TableCell>{n.cotaTerreno.toFixed(3)}</TableCell><TableCell>{n.cotaFundo.toFixed(3)}</TableCell>
-                      <TableCell><Badge>{(n.cotaTerreno - n.cotaFundo).toFixed(2)}m</Badge></TableCell>
-                      <TableCell><Button size="icon" variant="ghost" onClick={() => removeNode(n.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+                  {sewerResults.map(r => (
+                    <TableRow key={r.id} className={!r.atendeNorma ? "bg-red-50 dark:bg-red-950/20" : ""}>
+                      <TableCell className="font-mono text-xs">{r.id}</TableCell>
+                      <TableCell className="font-semibold">{r.diametroMm}</TableCell>
+                      <TableCell>{r.velocidadeMs.toFixed(2)}</TableCell>
+                      <TableCell>{r.laminaDagua.toFixed(3)}</TableCell>
+                      <TableCell>{r.tensaoTrativa.toFixed(2)}</TableCell>
+                      <TableCell>
+                        {r.atendeNorma
+                          ? <Badge className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" />OK</Badge>
+                          : <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Falha</Badge>}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
 
-      {/* Interactive Node Map */}
-      {nodes.length > 0 && (
-        <NodeMapWidget
-          nodes={nodes.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cotaTerreno, demanda: n.demanda }))}
-          connections={mapConnections}
-          onConnectionsChange={setMapConnections}
-          onNodeDemandChange={(nodeId, demanda) => setNodes(nodes.map(n => n.id === nodeId ? { ...n, demanda } : n))}
-          onNodesDelete={(ids) => {
-            setNodes(prev => prev.filter(n => !ids.includes(n.id)));
-            setCalculated(false);
-          }}
-          title="Mapa da Rede de Esgoto"
-          accentColor="#22c55e"
-          editable
-        />
-      )}
+          {sewerTrechos.length === 0 && (
+            <div className="flex items-center gap-2 p-3 bg-muted rounded-lg text-sm text-muted-foreground">
+              <AlertTriangle className="h-4 w-4" /> Nenhum trecho de esgoto. Importe uma rede na Topografia primeiro.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-      {calculated && results.length > 0 && summary && (
-        <>
-          <Card className="border-green-500/30">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Droplets className="h-5 w-5 text-green-600" /> Resultados - Rede de Esgoto
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                <div className="bg-muted/50 rounded-lg p-3 text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1"><Link className="h-4 w-4 text-blue-600" /></div>
-                  <div className="text-2xl font-bold text-blue-600">{summary.trechos}</div>
-                  <div className="text-xs text-muted-foreground">Trechos</div>
-                </div>
-                <div className="bg-muted/50 rounded-lg p-3 text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1"><Ruler className="h-4 w-4 text-green-600" /></div>
-                  <div className="text-2xl font-bold text-green-600">{summary.extensao.toFixed(1)} m</div>
-                  <div className="text-xs text-muted-foreground">Extensão Total</div>
-                </div>
-                <div className="bg-muted/50 rounded-lg p-3 text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1"><Zap className="h-4 w-4 text-purple-600" /></div>
-                  <div className="text-2xl font-bold text-purple-600">{summary.velMedia.toFixed(2)} m/s</div>
-                  <div className="text-xs text-muted-foreground">Velocidade Média</div>
-                </div>
-                <div className="bg-muted/50 rounded-lg p-3 text-center">
-                  <div className="flex items-center justify-center gap-1 mb-1"><AlertTriangle className="h-4 w-4 text-yellow-600" /></div>
-                  <div className="text-2xl font-bold text-yellow-600">{summary.alertas}</div>
-                  <div className="text-xs text-muted-foreground">Alertas</div>
-                </div>
-              </div>
-              {warnings.length > 0 && (
-                <Card className="mb-4 border-yellow-400/30 bg-yellow-500/5">
-                  <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2">📋 Validação Normativa</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="max-h-[200px] overflow-auto space-y-1">
-                      {warnings.map((w, i) => <p key={i} className="text-sm text-yellow-700 dark:text-yellow-400">{w.trecho}: {w.msg}</p>)}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">📋 Resultados Detalhados</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="max-h-[400px] overflow-auto">
-                    <Table>
-                      <TableHeader><TableRow>
-                        <TableHead>ID</TableHead><TableHead>De</TableHead><TableHead>Para</TableHead>
-                        <TableHead>Comp (m)</TableHead><TableHead>DN (mm)</TableHead><TableHead>i (m/m)</TableHead>
-                        <TableHead>Q (L/s)</TableHead><TableHead>V (m/s)</TableHead><TableHead>y/D</TableHead><TableHead>Status</TableHead>
-                      </TableRow></TableHeader>
-                      <TableBody>
-                        {results.map(r => (
-                          <TableRow key={r.id}>
-                            <TableCell className="font-medium">{r.id}</TableCell>
-                            <TableCell>{r.de}</TableCell><TableCell>{r.para}</TableCell>
-                            <TableCell>{r.comp.toFixed(1)}</TableCell><TableCell>{r.dn}</TableCell>
-                            <TableCell>{r.i.toFixed(4)}</TableCell><TableCell>{r.q.toFixed(2)}</TableCell>
-                            <TableCell>{r.v.toFixed(3)}</TableCell><TableCell>{r.yD.toFixed(3)}</TableCell>
-                            <TableCell><Badge className={r.status === "OK" ? "bg-green-500" : "bg-yellow-500"}>{r.status}</Badge></TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            </CardContent>
-          </Card>
-        </>
+      {/* Interactive map — shows after dimensioning */}
+      {sewerResults.length > 0 && pontos.length > 0 && (
+        <SewerMapView pontos={pontos} trechos={sewerTrechos} results={sewerResults} />
       )}
     </div>
   );

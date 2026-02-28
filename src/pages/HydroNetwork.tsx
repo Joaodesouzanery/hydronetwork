@@ -263,7 +263,7 @@ const HydroNetwork = () => {
       case "esgoto":
         return <SewerModule pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />;
       case "agua":
-        return <WaterModule pontos={pontos} />;
+        return <WaterModule pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />;
       case "drenagem":
         return <DrainageModule pontos={pontos} />;
       case "quantitativos":

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,261 +7,188 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Calculator, Upload, Droplets, AlertTriangle, Link, Ruler, ClipboardList } from "lucide-react";
+import {
+  Calculator, Droplets, CheckCircle, XCircle, Download,
+  AlertTriangle, Zap,
+} from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
-import { hazenWilliamsHeadloss, hazenWilliamsVelocity } from "@/engine/hydraulics";
-import { NodeMapWidget, ConnectionData } from "@/components/hydronetwork/NodeMapWidget";
-
-interface WaterNode {
-  id: string; x: number; y: number; cota: number; demanda: number;
-}
-
-interface WaterResult {
-  id: string; de: string; para: string; comp: number; dn: number;
-  q: number; v: number; hf: number; pressao: number; status: "OK" | "WARN";
-}
+import { Trecho } from "@/engine/domain";
+import {
+  dimensionWaterNetwork,
+  type WaterSegmentInput,
+  type WaterSegmentResult,
+} from "@/engine/qwaterEngine";
 
 interface WaterModuleProps {
   pontos: PontoTopografico[];
+  trechos: Trecho[];
+  onTrechosChange: (t: Trecho[]) => void;
 }
 
-export const WaterModule = ({ pontos }: WaterModuleProps) => {
-  const [hazenC, setHazenC] = useState(140);
-  const [pressaoMin, setPressaoMin] = useState(10);
-  const [velMax, setVelMax] = useState(3.5);
-  const [dnMin, setDnMin] = useState("50");
-  const [nodes, setNodes] = useState<WaterNode[]>([]);
-  const [newNode, setNewNode] = useState({ id: "", x: 0, y: 0, cota: 0, demanda: 2.0 });
-  const [calculated, setCalculated] = useState(false);
-  const [mapConnections, setMapConnections] = useState<ConnectionData[]>([]);
+export const WaterModule = ({ pontos, trechos, onTrechosChange }: WaterModuleProps) => {
+  const [waterResults, setWaterResults] = useState<WaterSegmentResult[]>([]);
+  const [waterResumo, setWaterResumo] = useState<{ total: number; atendem: number } | null>(null);
+  const [formula, setFormula] = useState<"hazen-williams" | "colebrook">("hazen-williams");
+  const [coefHW, setCoefHW] = useState(140);
+  const [velMinAgua, setVelMinAgua] = useState(0.6);
+  const [velMaxAgua, setVelMaxAgua] = useState(3.5);
+  const [pressaoMin, setPressaoMin] = useState(10.0);
+  const [pressaoMax, setPressaoMax] = useState(50.0);
+  const [diamMinAgua, setDiamMinAgua] = useState(50);
 
-  const addNode = () => {
-    if (!newNode.id.trim()) { toast.error("ID obrigatório"); return; }
-    setNodes([...nodes, { ...newNode }]);
-    setNewNode({ id: `N${nodes.length + 2}`, x: 0, y: 0, cota: 0, demanda: 2.0 });
-  };
+  const waterTrechos = useMemo(() =>
+    trechos.filter(t => {
+      const tipo = t.tipoRedeManual || "esgoto";
+      return tipo === "agua" || tipo === "outro";
+    }), [trechos]);
 
-  const transferFromTopography = () => {
-    if (pontos.length === 0) { toast.error("Nenhum ponto na topografia"); return; }
-    const newNodes = pontos.map(p => ({ id: p.id, x: p.x, y: p.y, cota: p.cota, demanda: 2.0 }));
-    setNodes(newNodes);
-    setMapConnections(newNodes.slice(0, -1).map((n, i) => ({
-      from: n.id, to: newNodes[i + 1].id, color: "#06b6d4", label: `${n.id} → ${newNodes[i + 1].id}`
-    })));
-    toast.success(`${pontos.length} nós transferidos`);
-  };
+  const dimensionWater = useCallback(() => {
+    if (waterTrechos.length === 0) { toast.error("Nenhum trecho de água encontrado."); return; }
+    const inputs: WaterSegmentInput[] = waterTrechos.map(t => {
+      const p0 = pontos.find(p => p.id === t.idInicio);
+      const p1 = pontos.find(p => p.id === t.idFim);
+      return {
+        id: `${t.idInicio}-${t.idFim}`, comprimento: t.comprimento,
+        cotaMontante: p0?.cota ?? 0, cotaJusante: p1?.cota ?? 0,
+        vazaoLps: 0.5, material: t.material || "PVC",
+      };
+    });
+    const { resultados, resumo } = dimensionWaterNetwork(inputs, {
+      formula, coefHW, velMin: velMinAgua, velMax: velMaxAgua, pressaoMin, pressaoMax, diamMinMm: diamMinAgua,
+    });
+    setWaterResults(resultados);
+    setWaterResumo({ total: resumo.total, atendem: resumo.atendem });
+    toast.success(`QWater: ${resumo.atendem}/${resumo.total} trechos atendem NBR 12218`);
+  }, [waterTrechos, pontos, formula, coefHW, velMinAgua, velMaxAgua, pressaoMin, pressaoMax, diamMinAgua]);
 
-  const loadDemo = () => {
-    const demo: WaterNode[] = [
-      { id: "N1", x: 350000, y: 7400000, cota: 105.0, demanda: 3.0 },
-      { id: "N2", x: 350060, y: 7400020, cota: 103.5, demanda: 2.5 },
-      { id: "N3", x: 350120, y: 7400050, cota: 102.0, demanda: 4.0 },
-      { id: "N4", x: 350180, y: 7400080, cota: 101.0, demanda: 1.5 },
-    ];
-    setNodes(demo);
-    setMapConnections(demo.slice(0, -1).map((n, i) => ({
-      from: n.id, to: demo[i + 1].id, color: "#06b6d4", label: `${n.id} → ${demo[i + 1].id}`
-    })));
-    setCalculated(false);
-    toast.success("Demo de água carregado");
-  };
+  const applyDiameters = useCallback(() => {
+    if (waterResults.length === 0) return;
+    const m = new Map(waterResults.map(r => [r.id, r.diametroMm]));
+    onTrechosChange(trechos.map(t => {
+      const d = m.get(`${t.idInicio}-${t.idFim}`);
+      return d ? { ...t, diametroMm: d } : t;
+    }));
+    toast.success("Diâmetros de água aplicados aos trechos");
+  }, [waterResults, trechos, onTrechosChange]);
 
-  const handleNodeDemandChange = (nodeId: string, demanda: number) => {
-    setNodes(nodes.map(n => n.id === nodeId ? { ...n, demanda } : n));
-  };
-
-  const results = useMemo<WaterResult[]>(() => {
-    if (nodes.length < 2 || !calculated) return [];
-    const res: WaterResult[] = [];
-    const dn = parseInt(dnMin);
-    const D = dn / 1000;
-    let cumulativePressureLoss = 0;
-    for (let i = 0; i < nodes.length - 1; i++) {
-      const n1 = nodes[i]; const n2 = nodes[i + 1];
-      const dx = n2.x - n1.x; const dy = n2.y - n1.y;
-      const comp = Math.sqrt(dx * dx + dy * dy);
-      if (comp === 0) continue;
-      const q = n1.demanda / 1000;
-      const v = hazenWilliamsVelocity(q, D);
-      const hf = hazenWilliamsHeadloss(q, D, comp, hazenC);
-      cumulativePressureLoss += hf;
-      const pressao = nodes[0].cota - n2.cota - cumulativePressureLoss;
-      res.push({
-        id: `L${i + 1}`, de: `P${String(i + 1).padStart(2, "0")}`, para: `P${String(i + 2).padStart(2, "0")}`,
-        comp: Math.round(comp * 10) / 10, dn, q: n1.demanda,
-        v: parseFloat(v.toFixed(3)), hf: parseFloat(hf.toFixed(4)),
-        pressao: parseFloat(pressao.toFixed(1)), status: pressao < pressaoMin ? "WARN" : "OK",
-      });
-    }
-    return res;
-  }, [nodes, calculated, dnMin, hazenC, pressaoMin]);
-
-  const warnings = useMemo(() => results.filter(r => r.pressao < pressaoMin).map(r => ({
-    trecho: `${r.de}-${r.para}`, msg: `Pressão ${r.pressao.toFixed(1)} < ${pressaoMin} mca em ${r.para}`,
-  })), [results, pressaoMin]);
-
-  const summary = useMemo(() => {
-    if (results.length === 0) return null;
-    const totalComp = results.reduce((s, r) => s + r.comp, 0);
-    const minPressao = Math.min(...results.map(r => r.pressao));
-    return { trechos: results.length, extensao: totalComp, pressaoMin: minPressao, alertas: warnings.length };
-  }, [results, warnings]);
-
-  const calculate = () => {
-    if (nodes.length < 2) { toast.error("Mínimo 2 nós"); return; }
-    setCalculated(true);
-    toast.success(`Cálculo de água: ${nodes.length} nós, C=${hazenC}, Pmin=${pressaoMin} mca`);
+  const exportCSV = () => {
+    if (waterResults.length === 0) return;
+    let csv = "Trecho;DN (mm);V (m/s);hf (m);J (m/m);P jus (mca);Status;Obs\n";
+    for (const r of waterResults) csv += `${r.id};${r.diametroMm};${r.velocidadeMs};${r.perdaCargaM};${r.perdaCargaUnitaria};${r.pressaoJusante ?? "-"};${r.atendeNorma ? "OK" : "NAO"};${r.observacoes.join(" | ")}\n`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url;
+    a.download = "dimensionamento_agua.csv"; a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Droplets className="h-5 w-5 text-cyan-600" /> Parâmetros de Água</CardTitle>
-            <CardDescription>Rede de água pressurizada (Hazen-Williams)</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div><Label>Coef. Hazen-Williams C</Label><Input type="number" value={hazenC} onChange={e => setHazenC(Number(e.target.value))} /></div>
-            <div><Label>Pressão mínima (mca)</Label><Input type="number" value={pressaoMin} onChange={e => setPressaoMin(Number(e.target.value))} /></div>
-            <div><Label>Velocidade máxima (m/s)</Label><Input type="number" step="0.1" value={velMax} onChange={e => setVelMax(Number(e.target.value))} /></div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Droplets className="h-5 w-5 text-blue-600" /> Rede de Água — QWater (NBR 12218)
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Hazen-Williams: hf = 10.643·Q^1.85 / (C^1.85·D^4.87)·L
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {waterTrechos.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-blue-600">
+                {waterTrechos.length} trechos de água
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                (filtrados por tipoRedeManual = "agua" ou "outro")
+              </span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
             <div>
-              <Label>DN Mínimo (mm)</Label>
-              <Select value={dnMin} onValueChange={setDnMin}>
+              <Label className="text-xs">Fórmula</Label>
+              <Select value={formula} onValueChange={v => setFormula(v as "hazen-williams" | "colebrook")}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="50">50 mm</SelectItem>
-                  <SelectItem value="75">75 mm</SelectItem>
-                  <SelectItem value="100">100 mm</SelectItem>
+                  <SelectItem value="hazen-williams">Hazen-Williams</SelectItem>
+                  <SelectItem value="colebrook">Colebrook-White</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Adicionar Nó</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label>ID</Label><Input value={newNode.id} onChange={e => setNewNode({ ...newNode, id: e.target.value })} placeholder="N1" /></div>
-              <div><Label>X</Label><Input type="number" value={newNode.x} onChange={e => setNewNode({ ...newNode, x: Number(e.target.value) })} /></div>
-              <div><Label>Y</Label><Input type="number" value={newNode.y} onChange={e => setNewNode({ ...newNode, y: Number(e.target.value) })} /></div>
-              <div><Label>Cota</Label><Input type="number" step="0.01" value={newNode.cota} onChange={e => setNewNode({ ...newNode, cota: Number(e.target.value) })} /></div>
-              <div className="col-span-2"><Label>Demanda (L/s)</Label><Input type="number" step="0.1" value={newNode.demanda} onChange={e => setNewNode({ ...newNode, demanda: Number(e.target.value) })} /></div>
+            <div><Label className="text-xs">C (H-W)</Label><Input type="number" step="5" value={coefHW} onChange={e => setCoefHW(Number(e.target.value))} /></div>
+            <div><Label className="text-xs">V mín (m/s)</Label><Input type="number" step="0.1" value={velMinAgua} onChange={e => setVelMinAgua(Number(e.target.value))} /></div>
+            <div><Label className="text-xs">V máx (m/s)</Label><Input type="number" step="0.1" value={velMaxAgua} onChange={e => setVelMaxAgua(Number(e.target.value))} /></div>
+            <div><Label className="text-xs">P mín (mca)</Label><Input type="number" step="1" value={pressaoMin} onChange={e => setPressaoMin(Number(e.target.value))} /></div>
+            <div><Label className="text-xs">DN mín (mm)</Label><Input type="number" step="25" value={diamMinAgua} onChange={e => setDiamMinAgua(Number(e.target.value))} /></div>
+          </div>
+
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={dimensionWater} disabled={waterTrechos.length === 0}>
+              <Calculator className="h-4 w-4 mr-1" /> Dimensionar ({waterTrechos.length} trechos)
+            </Button>
+            {waterResults.length > 0 && (
+              <>
+                <Button variant="outline" onClick={applyDiameters}>
+                  <Zap className="h-4 w-4 mr-1" /> Aplicar Diâmetros
+                </Button>
+                <Button variant="outline" onClick={exportCSV}>
+                  <Download className="h-4 w-4 mr-1" /> CSV
+                </Button>
+              </>
+            )}
+          </div>
+
+          {waterResumo && (
+            <div className="flex gap-3 text-sm">
+              <Badge variant="outline">{waterResumo.total} trechos</Badge>
+              <Badge className="bg-green-500">{waterResumo.atendem} OK</Badge>
+              {waterResumo.total - waterResumo.atendem > 0 && (
+                <Badge variant="destructive">{waterResumo.total - waterResumo.atendem} falha</Badge>
+              )}
             </div>
-            <Button onClick={addNode} className="w-full"><Plus className="h-4 w-4 mr-1" /> Adicionar Nó</Button>
-          </CardContent>
-        </Card>
-      </div>
+          )}
 
-      <div className="flex gap-2 flex-wrap">
-        <Button onClick={transferFromTopography} variant="outline"><Upload className="h-4 w-4 mr-1" /> Transferir da Topografia</Button>
-        <Button onClick={calculate}><Calculator className="h-4 w-4 mr-1" /> Calcular Água</Button>
-        <Button onClick={loadDemo} variant="secondary">Carregar Demo</Button>
-      </div>
-
-      {nodes.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle>Nós de Água ({nodes.length})</CardTitle></CardHeader>
-          <CardContent>
-            <div className="max-h-[300px] overflow-auto">
+          {waterResults.length > 0 && (
+            <div className="border rounded-lg overflow-auto max-h-80">
               <Table>
-                <TableHeader><TableRow>
-                  <TableHead>ID</TableHead><TableHead>X</TableHead><TableHead>Y</TableHead>
-                  <TableHead>Cota</TableHead><TableHead>Demanda (L/s)</TableHead><TableHead></TableHead>
-                </TableRow></TableHeader>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Trecho</TableHead>
+                    <TableHead>DN</TableHead>
+                    <TableHead>V (m/s)</TableHead>
+                    <TableHead>hf (m)</TableHead>
+                    <TableHead>P jus (mca)</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
-                  {nodes.map(n => (
-                    <TableRow key={n.id}>
-                      <TableCell className="font-medium">{n.id}</TableCell>
-                      <TableCell>{n.x.toFixed(3)}</TableCell><TableCell>{n.y.toFixed(3)}</TableCell>
-                      <TableCell>{n.cota.toFixed(3)}</TableCell><TableCell>{n.demanda.toFixed(1)}</TableCell>
-                      <TableCell><Button size="icon" variant="ghost" onClick={() => setNodes(nodes.filter(nd => nd.id !== n.id))}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+                  {waterResults.map(r => (
+                    <TableRow key={r.id} className={!r.atendeNorma ? "bg-red-50 dark:bg-red-950/20" : ""}>
+                      <TableCell className="font-mono text-xs">{r.id}</TableCell>
+                      <TableCell className="font-semibold">{r.diametroMm}</TableCell>
+                      <TableCell>{r.velocidadeMs.toFixed(2)}</TableCell>
+                      <TableCell>{r.perdaCargaM.toFixed(3)}</TableCell>
+                      <TableCell>{r.pressaoJusante?.toFixed(1) ?? "-"}</TableCell>
+                      <TableCell>
+                        {r.atendeNorma
+                          ? <Badge className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" />OK</Badge>
+                          : <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Falha</Badge>}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
 
-      <NodeMapWidget
-        nodes={nodes.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cota, demanda: n.demanda }))}
-        connections={mapConnections}
-        onConnectionsChange={setMapConnections}
-        onNodeDemandChange={handleNodeDemandChange}
-        onNodesDelete={(ids) => {
-          setNodes(prev => prev.filter(n => !ids.includes(n.id)));
-          setCalculated(false);
-        }}
-        title="Mapa da Rede de Água"
-        accentColor="#06b6d4"
-        editable
-      />
-
-      {calculated && results.length > 0 && summary && (
-        <Card className="border-cyan-500/30">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Droplets className="h-5 w-5 text-cyan-600" /> Resultados - Rede de Água</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-blue-600">{summary.trechos}</div>
-                <div className="text-xs text-muted-foreground">Trechos</div>
-              </div>
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-green-600">{summary.extensao.toFixed(1)} m</div>
-                <div className="text-xs text-muted-foreground">Extensão Total</div>
-              </div>
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-cyan-600">{summary.pressaoMin.toFixed(1)} mca</div>
-                <div className="text-xs text-muted-foreground">Pressão Mínima</div>
-              </div>
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-yellow-600">{summary.alertas}</div>
-                <div className="text-xs text-muted-foreground">Alertas</div>
-              </div>
+          {waterTrechos.length === 0 && (
+            <div className="flex items-center gap-2 p-3 bg-muted rounded-lg text-sm text-muted-foreground">
+              <AlertTriangle className="h-4 w-4" /> Nenhum trecho de água. Importe uma rede e marque trechos como "Água" na Topografia.
             </div>
-            {warnings.length > 0 && (
-              <Card className="mb-4 border-yellow-400/30 bg-yellow-500/5">
-                <CardHeader className="pb-2"><CardTitle className="text-sm"><ClipboardList className="h-4 w-4 inline-block mr-1" /> Validação Normativa</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="max-h-[200px] overflow-auto space-y-1">
-                    {warnings.map((w, i) => <p key={i} className="text-sm text-yellow-700 dark:text-yellow-400">{w.trecho}: {w.msg}</p>)}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm"><ClipboardList className="h-4 w-4 inline-block mr-1" /> Resultados Detalhados</CardTitle></CardHeader>
-              <CardContent>
-                <div className="max-h-[400px] overflow-auto">
-                  <Table>
-                    <TableHeader><TableRow>
-                      <TableHead>ID</TableHead><TableHead>De</TableHead><TableHead>Para</TableHead>
-                      <TableHead>Comp (m)</TableHead><TableHead>DN (mm)</TableHead><TableHead>Q (L/s)</TableHead>
-                      <TableHead>V (m/s)</TableHead><TableHead>hf (m)</TableHead><TableHead>Status</TableHead>
-                    </TableRow></TableHeader>
-                    <TableBody>
-                      {results.map(r => (
-                        <TableRow key={r.id}>
-                          <TableCell className="font-medium">{r.id}</TableCell>
-                          <TableCell>{r.de}</TableCell><TableCell>{r.para}</TableCell>
-                          <TableCell>{r.comp.toFixed(1)}</TableCell><TableCell>{r.dn}</TableCell>
-                          <TableCell>{r.q.toFixed(2)}</TableCell><TableCell>{r.v.toFixed(3)}</TableCell>
-                          <TableCell>{r.hf.toFixed(4)}</TableCell>
-                          <TableCell><Badge className={r.status === "OK" ? "bg-green-500" : "bg-yellow-500"}>{r.status}</Badge></TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
