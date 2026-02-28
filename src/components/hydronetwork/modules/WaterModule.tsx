@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Calculator, Droplets, CheckCircle, XCircle, Download,
-  AlertTriangle, Zap, RefreshCw, Map, Plus, Trash2,
+  AlertTriangle, Zap, RefreshCw, Plus, Trash2,
   Upload, Settings, MapPin, ClipboardList, BarChart3, TrendingUp,
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
@@ -24,10 +24,10 @@ import {
   type WaterSegmentResult,
   type WaterNodeInput,
 } from "@/engine/qwaterEngine";
-import { detectBatchCRS, getMapCoordinatesWithCRS } from "@/engine/hydraulics";
 import { NodeMapWidget, ConnectionData } from "@/components/hydronetwork/NodeMapWidget";
+import { NetworkMapView } from "@/components/hydronetwork/modules/NetworkMapView";
+import { WATER_DEFAULTS, DEMO_UTM_ORIGIN } from "@/config/defaults";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, BarChart, Bar } from "recharts";
-import L from "leaflet";
 
 // ══════════════════════════════════════
 // Interfaces
@@ -47,110 +47,42 @@ interface WaterModuleProps {
   onTrechosChange: (t: Trecho[]) => void;
 }
 
-// ══════════════════════════════════════
-// Leaflet map sub-component (QWater results)
-// ══════════════════════════════════════
+// ── Water map tooltip/popup formatters ──
+const formatWaterTooltip = (segId: string, r: WaterSegmentResult) =>
+  `${segId} | DN${r.diametroMm} | V=${r.velocidadeMs.toFixed(2)} m/s | P=${r.pressaoJusante?.toFixed(1) ?? "-"} mca`;
 
-const WaterMapView = ({
-  pontos, trechos, results,
-}: { pontos: PontoTopografico[]; trechos: Trecho[]; results: WaterSegmentResult[] }) => {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<L.Map | null>(null);
-  const crs = useMemo(() => detectBatchCRS(pontos), [pontos]);
-  const getCoords = useCallback(
-    (p: PontoTopografico): [number, number] => getMapCoordinatesWithCRS(p.x, p.y, crs),
-    [crs],
-  );
-
-  useEffect(() => {
-    if (!mapRef.current || pontos.length === 0) return;
-    if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; }
-    const map = L.map(mapRef.current, { zoomControl: true });
-    mapInstance.current = map;
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OSM" }).addTo(map);
-
-    const resultMap = new Map(results.map(r => [r.id, r]));
-    const bounds: L.LatLngExpression[] = [];
-
-    trechos.forEach(t => {
-      const pI = pontos.find(p => p.id === t.idInicio);
-      const pF = pontos.find(p => p.id === t.idFim);
-      if (!pI || !pF) return;
-      const coordI = getCoords(pI);
-      const coordF = getCoords(pF);
-      bounds.push(coordI, coordF);
-
-      const segId = `${t.idInicio}-${t.idFim}`;
-      const res = resultMap.get(segId);
-      const ok = res?.atendeNorma ?? true;
-      const color = ok ? "#3b82f6" : "#ef4444";
-      const line = L.polyline([coordI, coordF], { color, weight: 4, opacity: 0.85 }).addTo(map);
-      const tooltipText = res
-        ? `${segId} | DN${res.diametroMm} | V=${res.velocidadeMs.toFixed(2)} m/s | P=${res.pressaoJusante?.toFixed(1) ?? "-"} mca`
-        : segId;
-      line.bindTooltip(tooltipText, { sticky: true });
-      if (res) {
-        line.bindPopup(`
-          <div style="font-size:12px;line-height:1.6">
-            <strong>${segId}</strong><br/>
-            <b>DN:</b> ${res.diametroMm} mm<br/>
-            <b>V:</b> ${res.velocidadeMs.toFixed(3)} m/s<br/>
-            <b>hf:</b> ${res.perdaCargaM.toFixed(3)} m<br/>
-            <b>J:</b> ${res.perdaCargaUnitaria.toFixed(5)} m/m<br/>
-            <b>P jus:</b> ${res.pressaoJusante?.toFixed(1) ?? "-"} mca<br/>
-            <b>Status:</b> ${res.atendeNorma ? "OK" : "FALHA"}<br/>
-            ${res.observacoes.length > 0 ? `<b>Obs:</b> ${res.observacoes.join("; ")}` : ""}
-          </div>
-        `);
-      }
-    });
-
-    pontos.forEach(p => {
-      const coords = getCoords(p);
-      L.circleMarker(coords, { radius: 5, color: "#1e40af", fillColor: "#60a5fa", fillOpacity: 0.8 })
-        .addTo(map)
-        .bindTooltip(`${p.id} (${p.cota.toFixed(2)}m)`, { direction: "top" });
-    });
-
-    if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30] });
-    return () => { if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; } };
-  }, [pontos, trechos, results, getCoords]);
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <Map className="h-4 w-4 text-blue-600" /> Mapa da Rede de Agua
-        </CardTitle>
-        <CardDescription className="text-xs">Azul = atende NBR 12218 | Vermelho = falha</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div ref={mapRef} className="h-[400px] rounded-lg border" />
-      </CardContent>
-    </Card>
-  );
-};
+const formatWaterPopup = (segId: string, r: WaterSegmentResult) => `
+  <div style="font-size:12px;line-height:1.6">
+    <strong>${segId}</strong><br/>
+    <b>DN:</b> ${r.diametroMm} mm<br/>
+    <b>V:</b> ${r.velocidadeMs.toFixed(3)} m/s<br/>
+    <b>hf:</b> ${r.perdaCargaM.toFixed(3)} m<br/>
+    <b>J:</b> ${r.perdaCargaUnitaria.toFixed(5)} m/m<br/>
+    <b>P jus:</b> ${r.pressaoJusante?.toFixed(1) ?? "-"} mca<br/>
+    <b>Status:</b> ${r.atendeNorma ? "OK" : "FALHA"}<br/>
+    ${r.observacoes.length > 0 ? `<b>Obs:</b> ${r.observacoes.join("; ")}` : ""}
+  </div>`;
 
 // ══════════════════════════════════════
 // Main WaterModule
 // ══════════════════════════════════════
 
 export const WaterModule = ({ pontos, trechos, onTrechosChange }: WaterModuleProps) => {
-  // ── Parameters ──
-  const [formula, setFormula] = useState<"hazen-williams" | "colebrook">("hazen-williams");
-  const [coefHW, setCoefHW] = useState(140);
-  const [velMinAgua, setVelMinAgua] = useState(0.6);
-  const [velMaxAgua, setVelMaxAgua] = useState(3.5);
-  const [pressaoMin, setPressaoMin] = useState(10.0);
-  const [pressaoMax, setPressaoMax] = useState(50.0);
-  const [diamMinAgua, setDiamMinAgua] = useState(50);
-  const [materialAgua, setMaterialAgua] = useState("PVC");
-  const [vazaoAgua, setVazaoAgua] = useState(0.5);
+  // ── Parameters (from centralized config) ──
+  const [formula, setFormula] = useState<"hazen-williams" | "colebrook">(WATER_DEFAULTS.formula);
+  const [coefHW, setCoefHW] = useState(WATER_DEFAULTS.coefHW);
+  const [velMinAgua, setVelMinAgua] = useState(WATER_DEFAULTS.velMin);
+  const [velMaxAgua, setVelMaxAgua] = useState(WATER_DEFAULTS.velMax);
+  const [pressaoMin, setPressaoMin] = useState(WATER_DEFAULTS.pressaoMin);
+  const [pressaoMax, setPressaoMax] = useState(WATER_DEFAULTS.pressaoMax);
+  const [diamMinAgua, setDiamMinAgua] = useState(WATER_DEFAULTS.diamMinMm);
+  const [materialAgua, setMaterialAgua] = useState(WATER_DEFAULTS.defaultMaterial);
+  const [vazaoAgua, setVazaoAgua] = useState(WATER_DEFAULTS.defaultVazaoLps);
 
   // ── Water Nodes ──
   const [waterNodes, setWaterNodes] = useState<WaterNode[]>([]);
   const [newNode, setNewNode] = useState<WaterNode>({
-    id: "N1", x: 0, y: 0, cota: 100, demanda: 0.5,
+    id: "N1", x: 0, y: 0, cota: 100, demanda: WATER_DEFAULTS.defaultVazaoLps,
   });
   const [mapConnections, setMapConnections] = useState<ConnectionData[]>([]);
 
@@ -179,35 +111,36 @@ export const WaterModule = ({ pontos, trechos, onTrechosChange }: WaterModulePro
     if (waterNodes.some(n => n.id === newNode.id)) { toast.error("ID ja existe"); return; }
     setWaterNodes([...waterNodes, { ...newNode }]);
     setNewNode({
-      id: `N${waterNodes.length + 2}`, x: 0, y: 0, cota: 100, demanda: 0.5,
+      id: `N${waterNodes.length + 2}`, x: 0, y: 0, cota: 100, demanda: WATER_DEFAULTS.defaultVazaoLps,
     });
   };
 
   const transferFromTopography = () => {
     if (pontos.length === 0) { toast.error("Nenhum ponto na topografia"); return; }
     const newNodes: WaterNode[] = pontos.map(p => ({
-      id: p.id, x: p.x, y: p.y, cota: p.cota, demanda: 0.5,
+      id: p.id, x: p.x, y: p.y, cota: p.cota, demanda: WATER_DEFAULTS.defaultVazaoLps,
     }));
     setWaterNodes(newNodes);
     setMapConnections(newNodes.slice(0, -1).map((n, i) => ({
       from: n.id, to: newNodes[i + 1].id,
-      color: "#3b82f6", label: `${n.id} > ${newNodes[i + 1].id}`,
+      color: WATER_DEFAULTS.mapAccentColor, label: `${n.id} > ${newNodes[i + 1].id}`,
     })));
     toast.success(`${pontos.length} nos transferidos da topografia`);
   };
 
   const loadDemo = () => {
+    const { x: X0, y: Y0 } = DEMO_UTM_ORIGIN;
     const demo: WaterNode[] = [
-      { id: "RES", x: 350000, y: 7400000, cota: 110.0, demanda: 0 },
-      { id: "N1", x: 350080, y: 7400020, cota: 105.0, demanda: 0.8 },
-      { id: "N2", x: 350160, y: 7400050, cota: 102.0, demanda: 1.2 },
-      { id: "N3", x: 350220, y: 7400070, cota: 100.0, demanda: 0.6 },
-      { id: "N4", x: 350280, y: 7400090, cota: 98.0, demanda: 0.4 },
+      { id: "RES", x: X0,       y: Y0,       cota: 110.0, demanda: 0 },
+      { id: "N1",  x: X0 + 80,  y: Y0 + 20,  cota: 105.0, demanda: 0.8 },
+      { id: "N2",  x: X0 + 160, y: Y0 + 50,  cota: 102.0, demanda: 1.2 },
+      { id: "N3",  x: X0 + 220, y: Y0 + 70,  cota: 100.0, demanda: 0.6 },
+      { id: "N4",  x: X0 + 280, y: Y0 + 90,  cota: 98.0,  demanda: 0.4 },
     ];
     setWaterNodes(demo);
     setMapConnections(demo.slice(0, -1).map((n, i) => ({
       from: n.id, to: demo[i + 1].id,
-      color: "#3b82f6", label: `${n.id} > ${demo[i + 1].id}`,
+      color: WATER_DEFAULTS.mapAccentColor, label: `${n.id} > ${demo[i + 1].id}`,
     })));
     toast.success("Demo de agua carregado (5 nos)");
   };
@@ -604,7 +537,20 @@ export const WaterModule = ({ pontos, trechos, onTrechosChange }: WaterModulePro
 
           {/* Leaflet map after dimensioning */}
           {waterResults.length > 0 && pontos.length > 0 && (
-            <WaterMapView pontos={pontos} trechos={waterTrechos} results={waterResults} />
+            <NetworkMapView<WaterSegmentResult>
+              pontos={pontos}
+              trechos={waterTrechos}
+              results={waterResults}
+              okColor={WATER_DEFAULTS.mapOkColor}
+              failColor={WATER_DEFAULTS.mapFailColor}
+              markerColor={WATER_DEFAULTS.markerColor}
+              markerFillColor={WATER_DEFAULTS.markerFillColor}
+              title="Mapa da Rede de Agua"
+              description="Azul = atende NBR 12218 | Vermelho = falha"
+              iconColorClass="text-blue-600"
+              formatTooltip={formatWaterTooltip}
+              formatPopup={formatWaterPopup}
+            />
           )}
         </TabsContent>
 

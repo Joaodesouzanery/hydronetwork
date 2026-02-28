@@ -13,6 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import { calculateProjectDelays, summarizeDelays, getDelayStatusColor, type ProjectDelay } from "@/utils/projectDelays";
+import { DELAY_THRESHOLDS, isValidEmail } from "@/config/defaults";
 import {
   Clock, AlertTriangle, CheckCircle, XCircle, Building2,
   Bell, Mail, TrendingDown, BarChart3, Calendar, ArrowRight
@@ -21,17 +23,6 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, Cell
 } from "recharts";
-
-interface ProjectDelay {
-  project: any;
-  totalDays: number;
-  elapsedDays: number;
-  expectedProgress: number;
-  actualProgress: number;
-  delayPercent: number;
-  delayDays: number;
-  status: "on_track" | "warning" | "critical" | "overdue";
-}
 
 const ProjectDelays = () => {
   const navigate = useNavigate();
@@ -65,39 +56,11 @@ const ProjectDelays = () => {
     }
   };
 
-  const delays: ProjectDelay[] = useMemo(() => {
-    const now = new Date();
-    return projects
-      .filter(p => p.start_date)
-      .map(p => {
-        const start = new Date(p.start_date);
-        const end = p.end_date ? new Date(p.end_date) : new Date(start.getTime() + 365 * 24 * 60 * 60 * 1000);
-        const totalDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
-        const elapsedDays = Math.max(0, Math.ceil((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
-        const expectedProgress = Math.min(100, (elapsedDays / totalDays) * 100);
-        const actualProgress = p.progress ?? 0;
-        const delayPercent = Math.max(0, expectedProgress - actualProgress);
-        const delayDays = Math.round((delayPercent / 100) * totalDays);
-
-        let status: ProjectDelay["status"] = "on_track";
-        if (now > end) status = "overdue";
-        else if (delayPercent > 20) status = "critical";
-        else if (delayPercent > 10) status = "warning";
-
-        return { project: p, totalDays, elapsedDays, expectedProgress, actualProgress, delayPercent, delayDays, status };
-      })
-      .sort((a, b) => b.delayPercent - a.delayPercent);
-  }, [projects]);
+  const delays: ProjectDelay[] = useMemo(() => calculateProjectDelays(projects), [projects]);
 
   const filtered = filter === "all" ? delays : delays.filter(d => d.status === filter);
 
-  const summary = useMemo(() => ({
-    total: delays.length,
-    onTrack: delays.filter(d => d.status === "on_track").length,
-    warning: delays.filter(d => d.status === "warning").length,
-    critical: delays.filter(d => d.status === "critical").length,
-    overdue: delays.filter(d => d.status === "overdue").length,
-  }), [delays]);
+  const summary = useMemo(() => summarizeDelays(delays), [delays]);
 
   const chartData = filtered.slice(0, 10).map(d => ({
     name: d.project.name.length > 20 ? d.project.name.substring(0, 20) + "…" : d.project.name,
@@ -115,25 +78,18 @@ const ProjectDelays = () => {
     }
   };
 
-  const getBarColor = (status: string) => {
-    switch (status) {
-      case "on_track": return "#22c55e";
-      case "warning": return "#eab308";
-      case "critical": return "#ef4444";
-      case "overdue": return "#7f1d1d";
-      default: return "#3b82f6";
-    }
-  };
+  const getBarColor = getDelayStatusColor;
 
   const handleSaveAlertConfig = async () => {
     if (!alertEmail.trim()) { toast.error("Informe um e-mail"); return; }
+    if (!isValidEmail(alertEmail)) { toast.error("E-mail inválido"); return; }
     const { data: session } = await supabase.auth.getSession();
     if (!session?.session) return;
 
     const { error } = await supabase.from("alertas_config").insert([{
       user_id: session.session.user.id,
       tipo_alerta: "atraso_cronograma",
-      condicao: { threshold_percent: 10 },
+      condicao: { threshold_percent: DELAY_THRESHOLDS.alertThresholdPercent },
       destinatarios: [alertEmail],
       ativo: emailAlerts,
     }]);
@@ -305,7 +261,7 @@ const ProjectDelays = () => {
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Alertas são disparados quando o desvio de progresso supera 10%. Para configurações avançadas, acesse a página de Alertas.
+                  Alertas são disparados quando o desvio de progresso supera {DELAY_THRESHOLDS.alertThresholdPercent}%. Para configurações avançadas, acesse a página de Alertas.
                 </p>
               </CardContent>
             </Card>

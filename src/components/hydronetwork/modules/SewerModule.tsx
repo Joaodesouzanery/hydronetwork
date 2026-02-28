@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Calculator, Waves, CheckCircle, XCircle, Download,
-  AlertTriangle, Zap, RefreshCw, Map, Plus, Trash2,
+  AlertTriangle, Zap, RefreshCw, Plus, Trash2,
   Upload, Settings, Users, ClipboardList, BarChart3,
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
@@ -24,9 +24,10 @@ import {
   type SewerSegmentResult,
   type SewerNodeInput,
 } from "@/engine/qesgEngine";
-import { detectBatchCRS, getMapCoordinatesWithCRS } from "@/engine/hydraulics";
 import { NodeMapWidget, ConnectionData } from "@/components/hydronetwork/NodeMapWidget";
-import L from "leaflet";
+import { NetworkMapView } from "@/components/hydronetwork/modules/NetworkMapView";
+import { SEWER_DEFAULTS, DEMO_UTM_ORIGIN } from "@/config/defaults";
+import { sewerParamsSchema, sewerNodeSchema } from "@/config/schemas";
 
 // ══════════════════════════════════════
 // Interfaces
@@ -47,116 +48,48 @@ interface SewerModuleProps {
   onTrechosChange: (t: Trecho[]) => void;
 }
 
-// ══════════════════════════════════════
-// Leaflet map sub-component (QEsg results)
-// ══════════════════════════════════════
+// ── Sewer map tooltip/popup formatters ──
+const formatSewerTooltip = (segId: string, r: SewerSegmentResult) =>
+  `${segId} | DN${r.diametroMm} | V=${r.velocidadeMs.toFixed(2)} m/s | t=${r.tensaoTrativa.toFixed(2)} Pa`;
 
-const SewerMapView = ({
-  pontos, trechos, results,
-}: { pontos: PontoTopografico[]; trechos: Trecho[]; results: SewerSegmentResult[] }) => {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<L.Map | null>(null);
-  const crs = useMemo(() => detectBatchCRS(pontos), [pontos]);
-  const getCoords = useCallback(
-    (p: PontoTopografico): [number, number] => getMapCoordinatesWithCRS(p.x, p.y, crs),
-    [crs],
-  );
-
-  useEffect(() => {
-    if (!mapRef.current || pontos.length === 0) return;
-    if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; }
-    const map = L.map(mapRef.current, { zoomControl: true });
-    mapInstance.current = map;
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OSM" }).addTo(map);
-
-    const resultMap = new Map(results.map(r => [r.id, r]));
-    const bounds: L.LatLngExpression[] = [];
-
-    trechos.forEach(t => {
-      const pI = pontos.find(p => p.id === t.idInicio);
-      const pF = pontos.find(p => p.id === t.idFim);
-      if (!pI || !pF) return;
-      const coordI = getCoords(pI);
-      const coordF = getCoords(pF);
-      bounds.push(coordI, coordF);
-
-      const segId = `${t.idInicio}-${t.idFim}`;
-      const res = resultMap.get(segId);
-      const ok = res?.atendeNorma ?? true;
-      const color = ok ? "#22c55e" : "#ef4444";
-      const line = L.polyline([coordI, coordF], { color, weight: 4, opacity: 0.85 }).addTo(map);
-      const tooltipText = res
-        ? `${segId} | DN${res.diametroMm} | V=${res.velocidadeMs.toFixed(2)} m/s | t=${res.tensaoTrativa.toFixed(2)} Pa`
-        : segId;
-      line.bindTooltip(tooltipText, { sticky: true });
-      if (res) {
-        line.bindPopup(`
-          <div style="font-size:12px;line-height:1.6">
-            <strong>${segId}</strong><br/>
-            <b>DN:</b> ${res.diametroMm} mm<br/>
-            <b>V:</b> ${res.velocidadeMs.toFixed(3)} m/s<br/>
-            <b>V crit:</b> ${res.velocidadeCriticaMs.toFixed(3)} m/s<br/>
-            <b>y/D:</b> ${res.laminaDagua.toFixed(3)}<br/>
-            <b>t:</b> ${res.tensaoTrativa.toFixed(2)} Pa<br/>
-            <b>Decliv.:</b> ${(res.declividadeUsada * 100).toFixed(3)}%<br/>
-            <b>Status:</b> ${res.atendeNorma ? "OK" : "FALHA"}<br/>
-            ${res.observacoes.length > 0 ? `<b>Obs:</b> ${res.observacoes.join("; ")}` : ""}
-          </div>
-        `);
-      }
-    });
-
-    pontos.forEach(p => {
-      const coords = getCoords(p);
-      L.circleMarker(coords, { radius: 5, color: "#92400e", fillColor: "#f59e0b", fillOpacity: 0.8 })
-        .addTo(map)
-        .bindTooltip(`${p.id} (${p.cota.toFixed(2)}m)`, { direction: "top" });
-    });
-
-    if (bounds.length > 0) map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30] });
-    return () => { if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; } };
-  }, [pontos, trechos, results, getCoords]);
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <Map className="h-4 w-4 text-amber-600" /> Mapa da Rede de Esgoto
-        </CardTitle>
-        <CardDescription className="text-xs">Verde = atende NBR 9649 | Vermelho = falha</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div ref={mapRef} className="h-[400px] rounded-lg border" />
-      </CardContent>
-    </Card>
-  );
-};
+const formatSewerPopup = (segId: string, r: SewerSegmentResult) => `
+  <div style="font-size:12px;line-height:1.6">
+    <strong>${segId}</strong><br/>
+    <b>DN:</b> ${r.diametroMm} mm<br/>
+    <b>V:</b> ${r.velocidadeMs.toFixed(3)} m/s<br/>
+    <b>V crit:</b> ${r.velocidadeCriticaMs.toFixed(3)} m/s<br/>
+    <b>y/D:</b> ${r.laminaDagua.toFixed(3)}<br/>
+    <b>t:</b> ${r.tensaoTrativa.toFixed(2)} Pa<br/>
+    <b>Decliv.:</b> ${(r.declividadeUsada * 100).toFixed(3)}%<br/>
+    <b>Status:</b> ${r.atendeNorma ? "OK" : "FALHA"}<br/>
+    ${r.observacoes.length > 0 ? `<b>Obs:</b> ${r.observacoes.join("; ")}` : ""}
+  </div>`;
 
 // ══════════════════════════════════════
 // Main SewerModule
 // ══════════════════════════════════════
 
 export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModuleProps) => {
-  // ── Parameters ──
-  const [manning, setManning] = useState(0.013);
-  const [laminaMax, setLaminaMax] = useState(0.75);
-  const [velMinEsg, setVelMinEsg] = useState(0.6);
-  const [velMaxEsg, setVelMaxEsg] = useState(5.0);
-  const [tensaoMin, setTensaoMin] = useState(1.0);
-  const [diamMinEsg, setDiamMinEsg] = useState(150);
-  const [material, setMaterial] = useState("PVC");
+  // ── Parameters (from centralized config) ──
+  const [manning, setManning] = useState(SEWER_DEFAULTS.manning.PVC);
+  const [laminaMax, setLaminaMax] = useState(SEWER_DEFAULTS.laminaMax);
+  const [velMinEsg, setVelMinEsg] = useState(SEWER_DEFAULTS.velMin);
+  const [velMaxEsg, setVelMaxEsg] = useState(SEWER_DEFAULTS.velMax);
+  const [tensaoMin, setTensaoMin] = useState(SEWER_DEFAULTS.tensaoMin);
+  const [diamMinEsg, setDiamMinEsg] = useState(SEWER_DEFAULTS.diamMinMm);
+  const [material, setMaterial] = useState(SEWER_DEFAULTS.defaultMaterial);
 
   // Flow method: "fixa" or "percapita"
   const [metodoVazao, setMetodoVazao] = useState<"fixa" | "percapita">("fixa");
-  const [vazaoEsg, setVazaoEsg] = useState(1.5);
-  const [qpcLitrosDia, setQpcLitrosDia] = useState(160);
-  const [k1, setK1] = useState(1.2);
-  const [k2, setK2] = useState(1.5);
+  const [vazaoEsg, setVazaoEsg] = useState(SEWER_DEFAULTS.defaultVazaoLps);
+  const [qpcLitrosDia, setQpcLitrosDia] = useState(SEWER_DEFAULTS.defaultQpcLitrosDia);
+  const [k1, setK1] = useState(SEWER_DEFAULTS.defaultK1);
+  const [k2, setK2] = useState(SEWER_DEFAULTS.defaultK2);
 
   // ── PV Nodes ──
   const [pvNodes, setPvNodes] = useState<SewerNode[]>([]);
   const [newPV, setNewPV] = useState<SewerNode>({
-    id: "PV1", x: 0, y: 0, cotaTerreno: 100, cotaFundo: 98.5, populacao: 50,
+    id: "PV1", x: 0, y: 0, cotaTerreno: 100, cotaFundo: 100 - SEWER_DEFAULTS.defaultCotaFundoOffset, populacao: SEWER_DEFAULTS.defaultPopulacao,
   });
   const [mapConnections, setMapConnections] = useState<ConnectionData[]>([]);
 
@@ -172,11 +105,11 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
       return tipo === "esgoto" || tipo === "outro";
     }), [trechos]);
 
-  // ── Material → Manning auto-fill ──
+  // ── Material → Manning auto-fill (from config) ──
   const handleMaterialChange = (mat: string) => {
     setMaterial(mat);
-    if (mat === "PVC") setManning(0.013);
-    else if (mat === "Concreto") setManning(0.015);
+    const n = SEWER_DEFAULTS.manning[mat];
+    if (n) setManning(n);
   };
 
   // ── PV management ──
@@ -186,7 +119,7 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
     setPvNodes([...pvNodes, { ...newPV }]);
     setNewPV({
       id: `PV${pvNodes.length + 2}`, x: 0, y: 0,
-      cotaTerreno: 100, cotaFundo: 98.5, populacao: 50,
+      cotaTerreno: 100, cotaFundo: 100 - SEWER_DEFAULTS.defaultCotaFundoOffset, populacao: SEWER_DEFAULTS.defaultPopulacao,
     });
   };
 
@@ -194,29 +127,30 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
     if (pontos.length === 0) { toast.error("Nenhum ponto na topografia"); return; }
     const newNodes: SewerNode[] = pontos.map(p => ({
       id: p.id, x: p.x, y: p.y,
-      cotaTerreno: p.cota, cotaFundo: p.cota - 1.5,
-      populacao: 50,
+      cotaTerreno: p.cota, cotaFundo: p.cota - SEWER_DEFAULTS.defaultCotaFundoOffset,
+      populacao: SEWER_DEFAULTS.defaultPopulacao,
     }));
     setPvNodes(newNodes);
     setMapConnections(newNodes.slice(0, -1).map((n, i) => ({
       from: n.id, to: newNodes[i + 1].id,
-      color: "#f59e0b", label: `${n.id} > ${newNodes[i + 1].id}`,
+      color: SEWER_DEFAULTS.mapAccentColor, label: `${n.id} > ${newNodes[i + 1].id}`,
     })));
     toast.success(`${pontos.length} PVs transferidos da topografia`);
   };
 
   const loadDemo = () => {
+    const { x: X0, y: Y0 } = DEMO_UTM_ORIGIN;
     const demo: SewerNode[] = [
-      { id: "PV1", x: 350000, y: 7400000, cotaTerreno: 106.0, cotaFundo: 104.5, populacao: 80 },
-      { id: "PV2", x: 350070, y: 7400030, cotaTerreno: 104.5, cotaFundo: 103.0, populacao: 120 },
-      { id: "PV3", x: 350140, y: 7400060, cotaTerreno: 103.0, cotaFundo: 101.5, populacao: 60 },
-      { id: "PV4", x: 350180, y: 7400075, cotaTerreno: 102.0, cotaFundo: 100.5, populacao: 40 },
-      { id: "PV5", x: 350210, y: 7400090, cotaTerreno: 101.5, cotaFundo: 100.0, populacao: 0 },
+      { id: "PV1", x: X0,       y: Y0,       cotaTerreno: 106.0, cotaFundo: 104.5, populacao: 80 },
+      { id: "PV2", x: X0 + 70,  y: Y0 + 30,  cotaTerreno: 104.5, cotaFundo: 103.0, populacao: 120 },
+      { id: "PV3", x: X0 + 140, y: Y0 + 60,  cotaTerreno: 103.0, cotaFundo: 101.5, populacao: 60 },
+      { id: "PV4", x: X0 + 180, y: Y0 + 75,  cotaTerreno: 102.0, cotaFundo: 100.5, populacao: 40 },
+      { id: "PV5", x: X0 + 210, y: Y0 + 90,  cotaTerreno: 101.5, cotaFundo: 100.0, populacao: 0 },
     ];
     setPvNodes(demo);
     setMapConnections(demo.slice(0, -1).map((n, i) => ({
       from: n.id, to: demo[i + 1].id,
-      color: "#f59e0b", label: `${n.id} > ${demo[i + 1].id}`,
+      color: SEWER_DEFAULTS.mapAccentColor, label: `${n.id} > ${demo[i + 1].id}`,
     })));
     toast.success("Demo de esgoto carregado (5 PVs)");
   };
@@ -474,7 +408,7 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
                           <TableCell>{n.y.toFixed(1)}</TableCell>
                           <TableCell>{n.cotaTerreno.toFixed(2)}</TableCell>
                           <TableCell>{n.cotaFundo.toFixed(2)}</TableCell>
-                          <TableCell className={calcPVDepth(n.cotaTerreno, n.cotaFundo) > 4 ? "text-red-600 font-semibold" : ""}>
+                          <TableCell className={calcPVDepth(n.cotaTerreno, n.cotaFundo) > SEWER_DEFAULTS.pvDepthWarning ? "text-red-600 font-semibold" : ""}>
                             {calcPVDepth(n.cotaTerreno, n.cotaFundo).toFixed(2)}
                           </TableCell>
                           <TableCell>{n.populacao}</TableCell>
@@ -623,7 +557,20 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
 
           {/* Leaflet map after dimensioning */}
           {sewerResults.length > 0 && pontos.length > 0 && (
-            <SewerMapView pontos={pontos} trechos={sewerTrechos} results={sewerResults} />
+            <NetworkMapView<SewerSegmentResult>
+              pontos={pontos}
+              trechos={sewerTrechos}
+              results={sewerResults}
+              okColor={SEWER_DEFAULTS.mapOkColor}
+              failColor={SEWER_DEFAULTS.mapFailColor}
+              markerColor={SEWER_DEFAULTS.markerColor}
+              markerFillColor={SEWER_DEFAULTS.markerFillColor}
+              title="Mapa da Rede de Esgoto"
+              description="Verde = atende NBR 9649 | Vermelho = falha"
+              iconColorClass="text-amber-600"
+              formatTooltip={formatSewerTooltip}
+              formatPopup={formatSewerPopup}
+            />
           )}
         </TabsContent>
 
@@ -701,9 +648,9 @@ export const SewerModule = ({ pontos, trechos, onTrechosChange }: SewerModulePro
                                 <TableCell className="font-medium">{n.id}</TableCell>
                                 <TableCell>{n.cotaTerreno.toFixed(2)}</TableCell>
                                 <TableCell>{n.cotaFundo.toFixed(2)}</TableCell>
-                                <TableCell className={depth > 4 ? "font-semibold text-red-600" : ""}>{depth.toFixed(2)}</TableCell>
+                                <TableCell className={depth > SEWER_DEFAULTS.pvDepthWarning ? "font-semibold text-red-600" : ""}>{depth.toFixed(2)}</TableCell>
                                 <TableCell>
-                                  {depth <= 4
+                                  {depth <= SEWER_DEFAULTS.pvDepthWarning
                                     ? <Badge className="bg-green-500/20 text-green-700"><CheckCircle className="h-3 w-3 mr-1" />OK</Badge>
                                     : <Badge variant="destructive" className="bg-yellow-500/20 text-yellow-700"><AlertTriangle className="h-3 w-3 mr-1" />&gt;4m</Badge>}
                                 </TableCell>

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import * as XLSX from "xlsx";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,22 +29,23 @@ import { PerfilLongitudinal } from "@/components/hydronetwork/PerfilLongitudinal
 import { RDOHydroModule } from "@/components/hydronetwork/RDOHydroModule";
 import { PlanningModule } from "@/components/hydronetwork/PlanningModule";
 import { downloadDXF } from "@/lib/dxfExporter";
-import { SewerModule } from "@/components/hydronetwork/modules/SewerModule";
-import { WaterModule } from "@/components/hydronetwork/modules/WaterModule";
-import { DrainageModule } from "@/components/hydronetwork/modules/DrainageModule";
-import { QuantitiesModule } from "@/components/hydronetwork/modules/QuantitiesModule";
-import { EpanetModule } from "@/components/hydronetwork/modules/EpanetModule";
-import { EpanetProModule } from "@/components/hydronetwork/modules/EpanetProModule";
-import { SwmmModule } from "@/components/hydronetwork/modules/SwmmModule";
-import { OpenProjectModule } from "@/components/hydronetwork/modules/OpenProjectModule";
-import { ProjectLibreModule } from "@/components/hydronetwork/modules/ProjectLibreModule";
-import { QgisModule } from "@/components/hydronetwork/modules/QgisModule";
-import { PeerReviewModule } from "@/components/hydronetwork/modules/PeerReviewModule";
-import { BudgetCostModule } from "@/components/hydronetwork/modules/BudgetCostModule";
-import { BdiModule } from "@/components/hydronetwork/modules/BdiModule";
-import { RDOPlanningModule } from "@/components/hydronetwork/modules/RDOPlanningModule";
-import { LPSModule } from "@/components/hydronetwork/modules/LPSModule";
-import { QEsgWaterModule } from "@/components/hydronetwork/modules/QEsgWaterModule";
+// Lazy-loaded modules for code splitting — only loaded when navigated to
+const SewerModule = lazy(() => import("@/components/hydronetwork/modules/SewerModule").then(m => ({ default: m.SewerModule })));
+const WaterModule = lazy(() => import("@/components/hydronetwork/modules/WaterModule").then(m => ({ default: m.WaterModule })));
+const DrainageModule = lazy(() => import("@/components/hydronetwork/modules/DrainageModule").then(m => ({ default: m.DrainageModule })));
+const QuantitiesModule = lazy(() => import("@/components/hydronetwork/modules/QuantitiesModule").then(m => ({ default: m.QuantitiesModule })));
+const EpanetModule = lazy(() => import("@/components/hydronetwork/modules/EpanetModule").then(m => ({ default: m.EpanetModule })));
+const EpanetProModule = lazy(() => import("@/components/hydronetwork/modules/EpanetProModule").then(m => ({ default: m.EpanetProModule })));
+const SwmmModule = lazy(() => import("@/components/hydronetwork/modules/SwmmModule").then(m => ({ default: m.SwmmModule })));
+const OpenProjectModule = lazy(() => import("@/components/hydronetwork/modules/OpenProjectModule").then(m => ({ default: m.OpenProjectModule })));
+const ProjectLibreModule = lazy(() => import("@/components/hydronetwork/modules/ProjectLibreModule").then(m => ({ default: m.ProjectLibreModule })));
+const QgisModule = lazy(() => import("@/components/hydronetwork/modules/QgisModule").then(m => ({ default: m.QgisModule })));
+const PeerReviewModule = lazy(() => import("@/components/hydronetwork/modules/PeerReviewModule").then(m => ({ default: m.PeerReviewModule })));
+const BudgetCostModule = lazy(() => import("@/components/hydronetwork/modules/BudgetCostModule").then(m => ({ default: m.BudgetCostModule })));
+const BdiModule = lazy(() => import("@/components/hydronetwork/modules/BdiModule").then(m => ({ default: m.BdiModule })));
+const RDOPlanningModule = lazy(() => import("@/components/hydronetwork/modules/RDOPlanningModule").then(m => ({ default: m.RDOPlanningModule })));
+const LPSModule = lazy(() => import("@/components/hydronetwork/modules/LPSModule").then(m => ({ default: m.LPSModule })));
+const QEsgWaterModule = lazy(() => import("@/components/hydronetwork/modules/QEsgWaterModule").then(m => ({ default: m.QEsgWaterModule })));
 import { QEsgWaterPanel } from "@/components/hydronetwork/panels/QEsgWaterPanel";
 import { getRasterGrid } from "@/engine/rasterStore";
 import { extractContours, type ContourExtractionResult } from "@/engine/contourExtractor";
@@ -841,7 +842,9 @@ const HydroNetwork = () => {
                 }}>Verificar Plataforma</Button>
               </div>
             </div>
-            {renderModule()}
+            <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>}>
+              {renderModule()}
+            </Suspense>
           </div>
         </main>
       </div>
