@@ -10,7 +10,7 @@ import {
   Workflow, Gauge, Ruler, Upload, Settings2, GitBranch, CloudRain,
   Beaker, Waves, FileSpreadsheet, Activity, Eye, Calculator, Calendar,
   Lock, Smartphone, Monitor, Server, ExternalLink, AlertTriangle, Lightbulb,
-  Linkedin, MessageSquare, Send, ChevronLeft
+  Linkedin, MessageSquare, Send, ChevronLeft, Newspaper
 } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 import Autoplay from "embla-carousel-autoplay";
@@ -261,6 +261,9 @@ const Hero = () => {
             <a href="#modulos" className="hover:text-foreground transition-colors">Módulos</a>
             <a href="#diferenciais" className="hover:text-foreground transition-colors">Diferenciais</a>
             <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
+            <a href="/hub.html" className="hover:text-foreground transition-colors flex items-center gap-1 text-primary">
+              <Newspaper className="w-3.5 h-3.5" /> Hub
+            </a>
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={() => navigate('/auth')}>Entrar</Button>
@@ -341,6 +344,15 @@ const Hero = () => {
                     <Play className="w-5 h-5 mr-2" />
                     Agendar Demonstração
                   </a>
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="text-lg px-8 py-6 rounded-xl border-primary/30 text-primary hover:bg-primary/10"
+                  onClick={() => window.location.href = '/hub.html'}
+                >
+                  <Newspaper className="w-5 h-5 mr-2" />
+                  Hub de Notícias
                 </Button>
               </div>
 
