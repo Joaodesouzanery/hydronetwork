@@ -2,6 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hero Section — Custom Animations */
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes fade-up {
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes scroll-dot {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(16px); }
+}
+
 /* Lean Constraints - Pulsing marker for critical constraints */
 @keyframes pulse-constraint {
   0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
