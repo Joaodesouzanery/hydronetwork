@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import {
   Calculator, Droplets, CheckCircle, XCircle, Download,
   AlertTriangle, Zap, Upload, Settings, MapPin,
   Map as MapIcon, TableProperties, TrendingUp, BarChart3,
-  Mountain, Play, FileDown,
+  Mountain, Play, FileDown, Save, CloudOff,
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
@@ -34,6 +34,8 @@ import { LongitudinalProfile } from "@/components/hydronetwork/modules/Longitudi
 import { WATER_DEFAULTS, DEMO_UTM_ORIGIN } from "@/config/defaults";
 import { useSpatialData } from "@/hooks/useSpatialData";
 import { getNodesByOrigin } from "@/core/spatial";
+import { useDimensioningPersistence } from "@/hooks/useDimensioningPersistence";
+import type { WaterDimensioningState } from "@/engine/sharedPlanningStore";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
@@ -120,6 +122,64 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   // ── EPANET integration ──
   const [epanetResults, setEpanetResults] = useState<any>(null);
   const [epanetRunning, setEpanetRunning] = useState(false);
+
+  // ── Persistence ──
+  const persistence = useDimensioningPersistence("water");
+  const restoredRef = useRef(false);
+
+  // Load saved state on mount
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    persistence.load().then((saved) => {
+      if (!saved) return;
+      const s = saved as WaterDimensioningState;
+      if (s.nodeAttrs?.length > 0) setWaterNodeAttrs(s.nodeAttrs);
+      if (s.edgeAttrs?.length > 0) setWaterEdgeAttrs(s.edgeAttrs);
+      if (s.results?.length > 0) {
+        setWaterResults(s.results);
+        const atendem = s.results.filter((r: any) => r.atendeNorma).length;
+        setWaterResumo({ total: s.results.length, atendem });
+      }
+      if (s.pressureData?.length > 0) setPressureData(s.pressureData);
+      if (s.gisPontos?.length > 0) setGisPontos(s.gisPontos);
+      if (s.gisTrechos?.length > 0) setGisTrechos(s.gisTrechos);
+      if (s.params) {
+        if (s.params.formula) setFormula(s.params.formula as "hazen-williams" | "colebrook");
+        if (s.params.coefHW) setCoefHW(s.params.coefHW);
+        if (s.params.velMin) setVelMinAgua(s.params.velMin);
+        if (s.params.velMax) setVelMaxAgua(s.params.velMax);
+        if (s.params.pressaoMin) setPressaoMin(s.params.pressaoMin);
+        if (s.params.pressaoMax) setPressaoMax(s.params.pressaoMax);
+        if (s.params.diamMin) setDiamMinAgua(s.params.diamMin);
+        if (s.params.material) setMaterialAgua(s.params.material);
+        if (s.params.vazao) setVazaoAgua(s.params.vazao);
+      }
+    });
+  }, []);
+
+  // Auto-save on state changes (debounced)
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    const hasData = waterNodeAttrs.length > 0 || waterEdgeAttrs.length > 0 || waterResults.length > 0 || gisPontos.length > 0;
+    if (!hasData) return;
+    const state: WaterDimensioningState = {
+      nodeAttrs: waterNodeAttrs,
+      edgeAttrs: waterEdgeAttrs,
+      results: waterResults,
+      pressureData,
+      params: {
+        formula, coefHW, velMin: velMinAgua, velMax: velMaxAgua,
+        pressaoMin, pressaoMax, diamMin: diamMinAgua,
+        material: materialAgua, vazao: vazaoAgua,
+      },
+      gisPontos,
+      gisTrechos,
+    };
+    persistence.save(state);
+  }, [waterNodeAttrs, waterEdgeAttrs, waterResults, pressureData,
+      gisPontos, gisTrechos, formula, coefHW, velMinAgua, velMaxAgua,
+      pressaoMin, pressaoMax, diamMinAgua, materialAgua, vazaoAgua]);
 
   // ── Derived ──
   const activePontos = spatial.legacyPontos.length > 0
@@ -355,6 +415,22 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="flex-1" />
+        {persistence.status === "saving" && (
+          <Badge variant="outline" className="text-yellow-600 text-xs animate-pulse">Salvando...</Badge>
+        )}
+        {persistence.status === "saved" && persistence.lastSaved && (
+          <Badge variant="outline" className="text-green-600 text-xs">
+            <Save className="h-3 w-3 mr-1" />Salvo {persistence.lastSaved}
+          </Badge>
+        )}
+        {persistence.status === "error" && (
+          <Badge variant="outline" className="text-red-600 text-xs">
+            <CloudOff className="h-3 w-3 mr-1" />Erro ao salvar
+          </Badge>
+        )}
+      </div>
       <Tabs defaultValue="mapa">
         <TabsList className="grid grid-cols-5 w-full max-w-2xl">
           <TabsTrigger value="mapa"><MapIcon className="h-3.5 w-3.5 mr-1" />Mapa</TabsTrigger>

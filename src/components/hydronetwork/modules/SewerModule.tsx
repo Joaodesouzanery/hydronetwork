@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import {
   Calculator, Waves, CheckCircle, XCircle, Download,
   AlertTriangle, Zap, Upload, Settings, Users,
   Map as MapIcon, TableProperties, Activity, Mountain,
+  Save, CloudOff,
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
@@ -33,6 +34,8 @@ import { LongitudinalProfile } from "@/components/hydronetwork/modules/Longitudi
 import { SEWER_DEFAULTS, DEMO_UTM_ORIGIN } from "@/config/defaults";
 import { useSpatialData } from "@/hooks/useSpatialData";
 import { getNodesByOrigin } from "@/core/spatial";
+import { useDimensioningPersistence } from "@/hooks/useDimensioningPersistence";
+import type { SewerDimensioningState } from "@/engine/sharedPlanningStore";
 
 // ══════════════════════════════════════
 // Interfaces
@@ -139,6 +142,67 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
 
   // ── Step messages ──
   const [stepMessage, setStepMessage] = useState<Record<string, string>>({});
+
+  // ── Persistence ──
+  const persistence = useDimensioningPersistence("sewer");
+  const restoredRef = useRef(false);
+
+  // Load saved state on mount
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    persistence.load().then((saved) => {
+      if (!saved) return;
+      const s = saved as SewerDimensioningState;
+      if (s.nodeAttrs?.length > 0) setSewerNodeAttrs(s.nodeAttrs);
+      if (s.edgeAttrs?.length > 0) setSewerEdgeAttrs(s.edgeAttrs);
+      if (s.results?.length > 0) {
+        setSewerResults(s.results);
+        const atendem = s.results.filter((r: any) => r.atendeNorma).length;
+        setSewerResumo({ total: s.results.length, atendem });
+      }
+      if (s.stepStatus) setStepStatus(s.stepStatus);
+      if (s.gisPontos?.length > 0) setGisPontos(s.gisPontos);
+      if (s.gisTrechos?.length > 0) setGisTrechos(s.gisTrechos);
+      if (s.params) {
+        if (s.params.manning) setManning(s.params.manning);
+        if (s.params.laminaMax) setLaminaMax(s.params.laminaMax);
+        if (s.params.velMin) setVelMinEsg(s.params.velMin);
+        if (s.params.velMax) setVelMaxEsg(s.params.velMax);
+        if (s.params.tensaoMin) setTensaoMin(s.params.tensaoMin);
+        if (s.params.diamMin) setDiamMinEsg(s.params.diamMin);
+        if (s.params.material) setMaterial(s.params.material);
+        if (s.params.metodoVazao) setMetodoVazao(s.params.metodoVazao as "fixa" | "percapita");
+        if (s.params.vazao) setVazaoEsg(s.params.vazao);
+        if (s.params.qpc) setQpcLitrosDia(s.params.qpc);
+        if (s.params.k1) setK1(s.params.k1);
+        if (s.params.k2) setK2(s.params.k2);
+      }
+    });
+  }, []);
+
+  // Auto-save on state changes (debounced)
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    const hasData = sewerNodeAttrs.length > 0 || sewerEdgeAttrs.length > 0 || sewerResults.length > 0 || gisPontos.length > 0;
+    if (!hasData) return;
+    const state: SewerDimensioningState = {
+      nodeAttrs: sewerNodeAttrs,
+      edgeAttrs: sewerEdgeAttrs,
+      results: sewerResults,
+      params: {
+        manning, laminaMax, velMin: velMinEsg, velMax: velMaxEsg,
+        tensaoMin, diamMin: diamMinEsg, material, metodoVazao,
+        vazao: vazaoEsg, qpc: qpcLitrosDia, k1, k2,
+      },
+      stepStatus,
+      gisPontos,
+      gisTrechos,
+    };
+    persistence.save(state);
+  }, [sewerNodeAttrs, sewerEdgeAttrs, sewerResults, stepStatus,
+      gisPontos, gisTrechos, manning, laminaMax, velMinEsg, velMaxEsg,
+      tensaoMin, diamMinEsg, material, metodoVazao, vazaoEsg, qpcLitrosDia, k1, k2]);
 
   // ── Derived ──
   const activePontos = spatial.legacyPontos.length > 0
@@ -942,7 +1006,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   return (
     <div className="space-y-4">
       {/* Step toolbar */}
-      <div className="flex flex-wrap gap-1 p-2 bg-muted rounded-lg">
+      <div className="flex flex-wrap gap-1 p-2 bg-muted rounded-lg items-center">
         <Button variant={activeStep === "mapa" ? "default" : "ghost"} size="sm" onClick={() => setActiveStep("mapa")}>
           <MapIcon className="h-3.5 w-3.5 mr-1" />Mapa
         </Button>
@@ -954,6 +1018,21 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
             {stepStatus[step.id] === "done" && <CheckCircle className="h-3 w-3 ml-1 text-green-500" />}
           </Button>
         ))}
+        <div className="ml-auto flex items-center gap-1">
+          {persistence.status === "saving" && (
+            <Badge variant="outline" className="text-yellow-600 text-xs animate-pulse">Salvando...</Badge>
+          )}
+          {persistence.status === "saved" && persistence.lastSaved && (
+            <Badge variant="outline" className="text-green-600 text-xs">
+              <Save className="h-3 w-3 mr-1" />Salvo {persistence.lastSaved}
+            </Badge>
+          )}
+          {persistence.status === "error" && (
+            <Badge variant="outline" className="text-red-600 text-xs">
+              <CloudOff className="h-3 w-3 mr-1" />Erro ao salvar
+            </Badge>
+          )}
+        </div>
       </div>
 
       {/* Active panel content */}

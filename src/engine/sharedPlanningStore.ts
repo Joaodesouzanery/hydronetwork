@@ -58,6 +58,49 @@ export function clearSharedPlanning(): void {
 }
 
 // Full project save (all hydro data)
+export interface SewerDimensioningState {
+  nodeAttrs: any[];
+  edgeAttrs: any[];
+  results: any[];
+  params: {
+    manning: number;
+    laminaMax: number;
+    velMin: number;
+    velMax: number;
+    tensaoMin: number;
+    diamMin: number;
+    material: string;
+    metodoVazao: string;
+    vazao: number;
+    qpc: number;
+    k1: number;
+    k2: number;
+  };
+  stepStatus: Record<string, string>;
+  gisPontos: any[];
+  gisTrechos: any[];
+}
+
+export interface WaterDimensioningState {
+  nodeAttrs: any[];
+  edgeAttrs: any[];
+  results: any[];
+  pressureData: any[];
+  params: {
+    formula: string;
+    coefHW: number;
+    velMin: number;
+    velMax: number;
+    pressaoMin: number;
+    pressaoMax: number;
+    diamMin: number;
+    material: string;
+    vazao: number;
+  };
+  gisPontos: any[];
+  gisTrechos: any[];
+}
+
 export interface HydroProjectSave {
   pontos: any[];
   trechos: any[];
@@ -66,6 +109,8 @@ export interface HydroProjectSave {
   scheduleResult: any;
   savedAt: string;
   projectName: string;
+  sewerState?: SewerDimensioningState;
+  waterState?: WaterDimensioningState;
 }
 
 const PROJECT_SAVE_KEY = "hydronetwork_project_save";
@@ -196,6 +241,8 @@ export async function syncProjectToSupabase(
           rdos: data.rdos,
           planning: data.planning,
           scheduleResult: data.scheduleResult,
+          sewerState: data.sewerState,
+          waterState: data.waterState,
           savedAt: data.savedAt,
         },
       }, { onConflict: "id" });
@@ -231,6 +278,8 @@ export async function loadProjectFromSupabase(
           rdos: pd.rdos || [],
           planning: pd.planning || null,
           scheduleResult: pd.scheduleResult || null,
+          sewerState: pd.sewerState || undefined,
+          waterState: pd.waterState || undefined,
           savedAt: pd.savedAt || row.updated_at,
           projectName: row.nome,
         },
