@@ -386,3 +386,123 @@ export function distributeZoneDemand(
 
   return demandMap;
 }
+
+// ══════════════════════════════════════
+// Network numbering (BFS from reservoirs)
+// ══════════════════════════════════════
+
+export interface WaterNetworkNode {
+  id: string;
+  x: number;
+  y: number;
+  cota: number;
+  tipo: string;
+}
+
+export interface WaterNetworkEdge {
+  key: string;
+  dcId: string;
+  idInicio: string;
+  idFim: string;
+  comprimento: number;
+  diametro: number;
+}
+
+/**
+ * Auto-number water network: assign sequential IDs to nodes and edges
+ * following BFS from reservoir nodes (source → consumers).
+ */
+export function numberWaterNetwork(
+  nodes: WaterNetworkNode[],
+  edges: WaterNetworkEdge[]
+): { nodes: WaterNetworkNode[]; edges: WaterNetworkEdge[] } {
+  if (edges.length === 0) return { nodes, edges };
+
+  // Build adjacency (bidirectional for water networks)
+  const adj = new Map<string, { nodeId: string; edgeIdx: number }[]>();
+  const allNodeIds = new Set<string>();
+
+  for (const n of nodes) allNodeIds.add(n.id);
+  edges.forEach((e, idx) => {
+    allNodeIds.add(e.idInicio);
+    allNodeIds.add(e.idFim);
+    const fromList = adj.get(e.idInicio) || [];
+    fromList.push({ nodeId: e.idFim, edgeIdx: idx });
+    adj.set(e.idInicio, fromList);
+    const toList = adj.get(e.idFim) || [];
+    toList.push({ nodeId: e.idInicio, edgeIdx: idx });
+    adj.set(e.idFim, toList);
+  });
+
+  // Find reservoir nodes (source nodes)
+  const reservoirs = nodes.filter(n =>
+    n.tipo === "reservoir" || n.tipo === "reservatorio" || n.tipo === "RES"
+  );
+
+  // BFS from reservoirs
+  const visited = new Set<string>();
+  const order: string[] = [];
+  const queue: string[] = [];
+
+  // Start from reservoirs; if none found, start from highest-elevation node
+  if (reservoirs.length > 0) {
+    for (const r of reservoirs) {
+      queue.push(r.id);
+      visited.add(r.id);
+    }
+  } else {
+    const sorted = [...nodes].sort((a, b) => b.cota - a.cota);
+    if (sorted.length > 0) {
+      queue.push(sorted[0].id);
+      visited.add(sorted[0].id);
+    }
+  }
+
+  while (queue.length > 0) {
+    const nodeId = queue.shift()!;
+    order.push(nodeId);
+    for (const neighbor of adj.get(nodeId) || []) {
+      if (!visited.has(neighbor.nodeId)) {
+        visited.add(neighbor.nodeId);
+        queue.push(neighbor.nodeId);
+      }
+    }
+  }
+
+  // Add any remaining unvisited nodes (disconnected segments)
+  for (const id of allNodeIds) {
+    if (!visited.has(id)) order.push(id);
+  }
+
+  // Name nodes: reservoirs keep type prefix, junctions get NÓ-xxx
+  const nodeNameMap = new Map<string, string>();
+  let junctionIdx = 0;
+  let resIdx = 0;
+  for (const id of order) {
+    const node = nodes.find(n => n.id === id);
+    const isRes = node && (node.tipo === "reservoir" || node.tipo === "reservatorio" || node.tipo === "RES");
+    if (isRes) {
+      resIdx++;
+      nodeNameMap.set(id, `RES-${String(resIdx).padStart(3, "0")}`);
+    } else {
+      junctionIdx++;
+      nodeNameMap.set(id, `NÓ-${String(junctionIdx).padStart(3, "0")}`);
+    }
+  }
+
+  // Number edges
+  let edgeIdx = 0;
+  const numberedEdges = edges.map(e => ({
+    ...e,
+    dcId: `T${String(++edgeIdx).padStart(3, "0")}`,
+    idInicio: nodeNameMap.get(e.idInicio) || e.idInicio,
+    idFim: nodeNameMap.get(e.idFim) || e.idFim,
+  }));
+
+  const renamedNodes = nodes.map(n => ({
+    ...n,
+    id: nodeNameMap.get(n.id) || n.id,
+  }));
+
+  return { nodes: renamedNodes, edges: numberedEdges };
+}

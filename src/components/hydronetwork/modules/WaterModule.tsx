@@ -21,6 +21,7 @@ import {
   dimensionWaterNetwork,
   propagateNetworkPressure,
   getHWCoefficient,
+  numberWaterNetwork,
   MATERIAIS_AGUA,
   type WaterSegmentInput,
   type WaterSegmentResult,
@@ -277,6 +278,20 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
 
   // ── Dimensioning ──
   const dimensionWater = useCallback(() => {
+    // Parameter validation
+    if (velMinAgua >= velMaxAgua) {
+      toast.error(`V mín (${velMinAgua}) deve ser menor que V máx (${velMaxAgua})`);
+      return;
+    }
+    if (pressaoMin >= pressaoMax) {
+      toast.error(`P mín (${pressaoMin}) deve ser menor que P máx (${pressaoMax})`);
+      return;
+    }
+    if (coefHW <= 0) {
+      toast.error("Coeficiente Hazen-Williams deve ser maior que zero");
+      return;
+    }
+
     let inputs: WaterSegmentInput[];
 
     if (waterEdgeAttrs.length > 0) {
@@ -660,6 +675,110 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
               </CardContent>
             </Card>
           </div>
+
+          {/* Network tools: MDT import + Numbering */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5 text-blue-600" /> Ferramentas de Rede
+              </CardTitle>
+              <CardDescription>Importar MDT, numerar rede e preencher cotas</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-2 flex-wrap">
+                <Button variant="outline" size="sm" onClick={async () => {
+                  const input = document.createElement("input");
+                  input.type = "file";
+                  input.accept = ".tif,.tiff";
+                  input.onchange = async (ev) => {
+                    const file = (ev.target as HTMLInputElement).files?.[0];
+                    if (!file) return;
+                    try {
+                      const buffer = await file.arrayBuffer();
+                      const { parseGeoTIFF } = await import("@/engine/tifReader");
+                      const { setRasterGrid } = await import("@/engine/rasterStore");
+                      const result = await parseGeoTIFF(buffer, 10000, -9999, true);
+                      if (result.grid) {
+                        setRasterGrid(result.grid, { width: result.width, height: result.height, noDataValue: result.noDataValue });
+                        toast.success(`MDT carregado: ${result.width}×${result.height} pixels (${file.name})`);
+                      }
+                    } catch (err: any) {
+                      toast.error(`Erro ao carregar MDT: ${err.message}`);
+                    }
+                  };
+                  input.click();
+                }}>
+                  <Upload className="h-3.5 w-3.5 mr-1" /> Importar TIF (MDT)
+                </Button>
+                <Button variant="outline" size="sm" onClick={async () => {
+                  const { fillNodeElevations, fillEdgeElevations } = await import("@/engine/elevationExtractor");
+                  const { getRasterGrid } = await import("@/engine/rasterStore");
+                  if (!getRasterGrid()) {
+                    toast.error("Importe um arquivo TIF (MDT) primeiro");
+                    return;
+                  }
+                  const { updated, skipped } = fillNodeElevations();
+                  if (updated > 0) fillEdgeElevations();
+                  spatial.refresh();
+                  // Update node attrs with new cotas
+                  if (waterNodeAttrs.length > 0) {
+                    const { getSpatialProject } = await import("@/core/spatial");
+                    const project = getSpatialProject();
+                    const updatedNodes = waterNodeAttrs.map(n => {
+                      const spatialNode = project.nodes.get(n.id);
+                      return spatialNode ? { ...n, cota: spatialNode.z ?? n.cota } : n;
+                    });
+                    setWaterNodeAttrs(updatedNodes);
+                  }
+                  toast.success(`${updated} cotas atualizadas via MDT${skipped > 0 ? ` (${skipped} fora do raster)` : ""}`);
+                }}>
+                  <Mountain className="h-3.5 w-3.5 mr-1" /> Preencher Cotas (MDT)
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => {
+                  const nodes = waterNodeAttrs.length > 0
+                    ? waterNodeAttrs.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cota, tipo: n.tipo }))
+                    : activePontos.map(p => ({ id: p.id, x: p.x, y: p.y, cota: p.cota, tipo: "junction" }));
+                  const edges = waterEdgeAttrs.length > 0
+                    ? waterEdgeAttrs.map(e => ({ key: e.key, dcId: e.dcId || "", idInicio: e.idInicio, idFim: e.idFim, comprimento: e.comprimento, diametro: e.diametro }))
+                    : waterTrechos.map((t, i) => ({ key: `${t.idInicio}-${t.idFim}`, dcId: `T${String(i + 1).padStart(3, "0")}`, idInicio: t.idInicio, idFim: t.idFim, comprimento: t.comprimento, diametro: t.diametroMm || 100 }));
+                  if (edges.length === 0) {
+                    toast.error("Nenhum trecho para numerar. Importe dados no Mapa primeiro.");
+                    return;
+                  }
+                  try {
+                    const result = numberWaterNetwork(nodes, edges);
+                    // Update node attrs with renamed IDs
+                    if (waterNodeAttrs.length > 0) {
+                      const updatedNodes = waterNodeAttrs.map((n, i) => ({
+                        ...n,
+                        id: result.nodes[i]?.id ?? n.id,
+                      }));
+                      setWaterNodeAttrs(updatedNodes);
+                    }
+                    // Update edge attrs
+                    if (waterEdgeAttrs.length > 0) {
+                      const updatedEdges = waterEdgeAttrs.map((e, i) => ({
+                        ...e,
+                        dcId: result.edges[i]?.dcId ?? e.dcId,
+                        idInicio: result.edges[i]?.idInicio ?? e.idInicio,
+                        idFim: result.edges[i]?.idFim ?? e.idFim,
+                      }));
+                      setWaterEdgeAttrs(updatedEdges);
+                    }
+                    toast.success(`Rede numerada: ${result.edges.length} trechos, ${result.nodes.length} nós`);
+                  } catch (err: any) {
+                    toast.error(err.message || "Erro ao numerar a rede");
+                  }
+                }}>
+                  <TrendingUp className="h-3.5 w-3.5 mr-1" /> Numerar Rede
+                </Button>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <Badge variant="outline">{activePontos.length} pontos</Badge>
+                <Badge variant="outline">{waterTrechos.length} trechos</Badge>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ═══════ TAB 3: REDE ═══════ */}

@@ -144,8 +144,6 @@ const Hero = () => {
   const [dialogDismissed, setDialogDismissed] = useState(false);
   const [activeModule, setActiveModule] = useState(0);
   const [visibleSections, setVisibleSections] = useState<Set<string>>(new Set());
-  const [suggestionText, setSuggestionText] = useState("");
-  const [suggestionSent, setSuggestionSent] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowContactDialog(true), 8000);
@@ -267,6 +265,11 @@ const Hero = () => {
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={() => navigate('/auth')}>Entrar</Button>
+            <Button variant="outline" size="sm" asChild>
+              <a href="https://calendly.com/joaodsouzanery/apresentacao-personalrh" target="_blank" rel="noopener noreferrer">
+                Agendar Demo
+              </a>
+            </Button>
             <Button size="sm" onClick={() => navigate('/hydronetwork')} className="bg-primary hover:bg-primary/90">
               Acessar Plataforma
             </Button>
@@ -426,8 +429,32 @@ const Hero = () => {
         </div>
       </section>
 
-      {/* ═══════════════ SHOWCASE CAROUSEL ═══════════════ */}
-      <ShowcaseCarousel />
+      {/* ═══════════════ BADGES DE CONFORMIDADE ═══════════════ */}
+      <section className="py-10 border-b border-border bg-muted/20">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-6">
+            <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Em conformidade com</p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-4 max-w-4xl mx-auto">
+            {[
+              { label: "ABNT NBR 9649", desc: "Rede de Esgoto" },
+              { label: "ABNT NBR 12218", desc: "Rede de Água" },
+              { label: "ABNT NBR 14486", desc: "Sistemas Enterrados" },
+              { label: "SINAPI", desc: "Composições de Custo" },
+              { label: "SICRO", desc: "Custos Rodoviários" },
+              { label: "TCU 2622/2013", desc: "BDI Referencial" },
+            ].map((badge, i) => (
+              <div key={i} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card shadow-sm">
+                <Shield className="w-4 h-4 text-primary flex-shrink-0" />
+                <div>
+                  <p className="text-xs font-bold text-foreground">{badge.label}</p>
+                  <p className="text-[10px] text-muted-foreground">{badge.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* ═══════════════ STATS BAR ═══════════════ */}
       <section className="py-16 border-y border-border bg-card">
@@ -513,9 +540,14 @@ const Hero = () => {
             ))}
           </div>
 
-          <div className="text-center mt-10">
+          <div className="text-center mt-10 flex flex-col sm:flex-row gap-3 justify-center">
             <Button variant="outline" size="lg" onClick={() => document.getElementById("modulos")?.scrollIntoView({ behavior: "smooth" })}>
               Ver Todos os Módulos <ChevronDown className="ml-2 w-4 h-4" />
+            </Button>
+            <Button size="lg" asChild className="bg-primary hover:bg-primary/90">
+              <a href="https://calendly.com/joaodsouzanery/apresentacao-personalrh" target="_blank" rel="noopener noreferrer">
+                Agendar Demonstração <ArrowRight className="ml-2 w-4 h-4" />
+              </a>
             </Button>
           </div>
         </div>
@@ -566,13 +598,23 @@ const Hero = () => {
             ))}
           </div>
 
-          <div className="text-center mt-10">
+          <div className="text-center mt-10 flex flex-col sm:flex-row gap-4 justify-center">
             <Button
               size="lg"
               onClick={() => navigate('/hydronetwork')}
               className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-6 rounded-xl text-lg"
             >
               Acessar Plataforma Completa <ArrowRight className="ml-2 w-5 h-5" />
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="px-8 py-6 rounded-xl text-lg border-white/30 text-white hover:bg-white/10"
+              asChild
+            >
+              <a href="https://calendly.com/joaodsouzanery/apresentacao-personalrh" target="_blank" rel="noopener noreferrer">
+                Agendar Demonstração
+              </a>
             </Button>
           </div>
         </div>
@@ -610,118 +652,13 @@ const Hero = () => {
               </tbody>
             </table>
           </div>
-        </div>
-      </section>
 
-      {/* ═══════════════ TECNOLOGIA E SEGURANÇA ═══════════════ */}
-      <section data-animate id="tecnologia" className={`py-20 bg-background transition-all duration-700 ${isVisible("tecnologia") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}>
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-5xl font-black">
-              Tecnologia de Ponta e{" "}
-              <span className="text-primary">Segurança Inabalável</span>
-            </h2>
-          </div>
-          <div className="max-w-4xl mx-auto grid sm:grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { icon: Globe, title: "100% Web", desc: "React + TypeScript. Acesse de qualquer lugar, a qualquer hora." },
-              { icon: MapPin, title: "Mapas Leaflet", desc: "Precisão GIS para engenharia. Visualização geoespacial avançada." },
-              { icon: Lock, title: "Dados Seguros", desc: "Criptografia e backup 24/7. Seus projetos protegidos com máxima segurança." },
-              { icon: Smartphone, title: "Responsivo", desc: "Desktop, tablet e celular. Trabalhe com flexibilidade em qualquer dispositivo." },
-            ].map((item, i) => (
-              <div key={i} className="p-6 rounded-xl border border-border bg-card text-center hover:shadow-lg hover:border-primary/30 transition-all">
-                <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-3">
-                  <item.icon className="w-6 h-6 text-primary" />
-                </div>
-                <h3 className="font-bold text-sm mb-1">{item.title}</h3>
-                <p className="text-xs text-muted-foreground">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════ CONSTRUDATA OBRAS ═══════════════ */}
-      <section className="py-20 bg-muted/30">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto">
-            <div className="p-8 rounded-2xl border-2 border-dashed border-secondary/40 bg-secondary/5">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-secondary to-secondary/70 flex items-center justify-center">
-                  <Building2 className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-black">ConstruData — Obras</h2>
-                  <p className="text-sm text-muted-foreground">Plataforma de gestão de obras civis</p>
-                </div>
-              </div>
-              <p className="text-muted-foreground mb-6">
-                Além do HydroNetwork, oferecemos o <strong className="text-foreground">ConstruData Obras</strong> — com{" "}
-                <strong className="text-foreground">26 módulos</strong> focados em gestão operacional:
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-6">
-                {[
-                  "Gestão de Projetos", "RDO Digital", "Controle de Produção", "Gestão de Equipes",
-                  "Materiais & Estoque", "Pedidos de Material", "Orçamentos com BDI", "Dashboard 360°",
-                  "Alertas Inteligentes", "QR Codes", "Manutenção Predial", "CRM Completo",
-                  "RH & Escalas CLT", "Checklists", "Ocorrências", "Relatórios de Ligação",
-                ].map((m, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs p-2 rounded-lg bg-card border border-border">
-                    <Check className="w-3.5 h-3.5 text-secondary flex-shrink-0" />
-                    <span>{m}</span>
-                  </div>
-                ))}
-              </div>
-              <Button variant="outline" className="border-secondary/50 text-secondary hover:bg-secondary/10" onClick={() => navigate('/modules')}>
-                Ver Catálogo Completo <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════ SUGGESTION FORM ═══════════════ */}
-      <section className="py-20 bg-background">
-        <div className="container mx-auto px-4">
-          <div className="max-w-2xl mx-auto">
-            <div className="p-8 rounded-2xl border border-primary/20 bg-primary/5 text-center space-y-6">
-              <div className="w-14 h-14 rounded-full bg-primary/15 flex items-center justify-center mx-auto">
-                <Lightbulb className="w-7 h-7 text-primary" />
-              </div>
-              <div>
-                <h2 className="text-2xl md:text-3xl font-black mb-2">
-                  Tem uma ideia de funcionalidade?
-                </h2>
-                <p className="text-muted-foreground">
-                  Tem alguma funcionalidade ou sistema que, se tivesse, otimizaria muito sua operação e seu tempo?{" "}
-                  <strong className="text-foreground">Conte pra gente e podemos criar pra você!</strong>
-                </p>
-              </div>
-              {suggestionSent ? (
-                <div className="flex items-center gap-2 justify-center text-emerald-600 font-bold">
-                  <Check className="w-5 h-5" /> Obrigado! Sua sugestão foi enviada com sucesso.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <textarea
-                    value={suggestionText}
-                    onChange={(e) => setSuggestionText(e.target.value)}
-                    placeholder="Descreva a funcionalidade que você gostaria de ter..."
-                    className="w-full p-4 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground resize-none h-28 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  <Button
-                    className="w-full sm:w-auto px-8"
-                    disabled={!suggestionText.trim()}
-                    onClick={() => {
-                      window.open(`mailto:construdata.contato@gmail.com?subject=Sugestão de Funcionalidade&body=${encodeURIComponent(suggestionText)}`, '_blank');
-                      setSuggestionSent(true);
-                    }}
-                  >
-                    <Send className="w-4 h-4 mr-2" /> Enviar Sugestão
-                  </Button>
-                </div>
-              )}
-            </div>
+          <div className="text-center mt-10">
+            <Button size="lg" asChild className="bg-primary hover:bg-primary/90 px-8 py-6 rounded-xl text-lg">
+              <a href="https://calendly.com/joaodsouzanery/apresentacao-personalrh" target="_blank" rel="noopener noreferrer">
+                Agendar Demonstração Personalizada <ArrowRight className="ml-2 w-5 h-5" />
+              </a>
+            </Button>
           </div>
         </div>
       </section>
@@ -806,16 +743,16 @@ const Hero = () => {
         </div>
       </footer>
 
-      {/* Floating Contact */}
-      {dialogDismissed && !showContactDialog && (
-        <Button
-          onClick={() => setShowContactDialog(true)}
-          className="fixed bottom-6 right-6 z-50 rounded-full w-14 h-14 shadow-lg hover:shadow-xl transition-all bg-primary"
-          size="icon"
-        >
-          <Mail className="h-6 w-6" />
-        </Button>
-      )}
+      {/* WhatsApp Floating Button */}
+      <a
+        href="https://wa.me/5521999999999"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-[#25D366] hover:bg-[#20BD5A] shadow-lg hover:shadow-xl transition-all flex items-center justify-center"
+        title="Fale conosco pelo WhatsApp"
+      >
+        <MessageSquare className="h-6 w-6 text-white" />
+      </a>
 
       <ContactDialog open={showContactDialog} onOpenChange={handleDialogClose} />
     </div>

@@ -49,7 +49,7 @@ import { AttributeTableEditor, SewerNodeAttributes, SewerEdgeAttributes } from "
 import { LongitudinalProfile } from "@/components/hydronetwork/modules/LongitudinalProfile";
 import { SEWER_DEFAULTS, DEMO_UTM_ORIGIN } from "@/config/defaults";
 import { useSpatialData } from "@/hooks/useSpatialData";
-import { getNodesByOrigin } from "@/core/spatial";
+import { getNodesByOrigin, getAllLayers, getSpatialProject } from "@/core/spatial";
 import { useDimensioningPersistence } from "@/hooks/useDimensioningPersistence";
 import type { SewerDimensioningState } from "@/engine/sharedPlanningStore";
 import { QEsgConfigDialog } from "@/components/hydronetwork/modules/QEsgConfigDialog";
@@ -239,6 +239,43 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     onTrechosChange?.(t);
   };
 
+  // ── Sync node/edge attrs → GIS + SpatialCore ──
+  const syncNodeAttrsToGis = useCallback((attrs: SewerNodeAttributes[]) => {
+    setSewerNodeAttrs(attrs);
+    const newPontos = attrs.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cotaTerreno }));
+    handleGisPontosChange(newPontos);
+    // Sync elevation to SpatialCore
+    const project = getSpatialProject();
+    for (const n of attrs) {
+      const spatialNode = project.nodes.get(n.id);
+      if (spatialNode) {
+        spatialNode.z = n.cotaTerreno;
+        if (n.cotaFundo !== undefined) spatialNode.cotaFundo = n.cotaFundo;
+        if (n.profundidade !== undefined) spatialNode.profundidade = n.profundidade;
+      }
+    }
+    spatial.refresh();
+  }, [handleGisPontosChange, spatial]);
+
+  const syncEdgeAttrsToGis = useCallback((attrs: SewerEdgeAttributes[]) => {
+    setSewerEdgeAttrs(attrs);
+    // Update trechos with edge attribute data
+    const updatedTrechos = activeTrechos.map(t => {
+      const attr = attrs.find(e => e.key === `${t.idInicio}-${t.idFim}` || e.idInicio === t.idInicio && e.idFim === t.idFim);
+      if (attr) {
+        return {
+          ...t,
+          cotaInicio: attr.cotaTerrenoM ?? t.cotaInicio,
+          cotaFim: attr.cotaTerrenoJ ?? t.cotaFim,
+          comprimento: attr.comprimento > 0 ? attr.comprimento : t.comprimento,
+          diametroMm: attr.diametro ?? t.diametroMm,
+        };
+      }
+      return t;
+    });
+    handleGisTrechosChange(updatedTrechos);
+  }, [activeTrechos, handleGisTrechosChange]);
+
   // ── Sync QEsg config → hydraulic parameters ──
   const handleConfigChange = (newConfig: QEsgProjectConfig) => {
     setQesgConfig(newConfig);
@@ -366,6 +403,18 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
       if (!t.tipoRedeManual) return true; // include unclassified trechos
       return t.tipoRedeManual === "esgoto" || t.tipoRedeManual === "outro";
     }), [activeTrechos]);
+
+  // ── Available layers for QEsg config dialog ──
+  const availableLayers = useMemo(() => {
+    const layers = getAllLayers();
+    return layers.map(l => ({
+      id: l.id,
+      name: l.name,
+      type: (l.geometryType === "Point" ? "point"
+           : l.geometryType === "LineString" ? "line"
+           : "polygon") as "line" | "point" | "raster" | "polygon",
+    }));
+  }, [spatial.nodes, spatial.edges]);
 
   const handleMaterialChange = (mat: string) => {
     setMaterial(mat);
@@ -560,19 +609,22 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   const resultColoredConnections = useMemo(() => {
     if (sewerResults.length === 0) return undefined;
     const resultMap = new Map(sewerResults.map(r => [r.id, r]));
+    const psMap = new Map(sewerEdgeAttrs.map(e => [e.key, e.pontaSeca]));
     return activeTrechos
       .filter(t => !t.tipoRedeManual || t.tipoRedeManual === "esgoto" || t.tipoRedeManual === "outro")
       .map(t => {
         const key = `${t.idInicio}-${t.idFim}`;
         const r = resultMap.get(key);
+        const isPontaSeca = (psMap.get(key) ?? 0) > 0;
         return {
           from: t.idInicio,
           to: t.idFim,
-          color: r ? (r.atendeNorma ? "#22c55e" : "#ef4444") : "#ef4444",
-          label: r ? `${key} DN${r.diametroMm} V=${r.velocidadeMs.toFixed(2)}` : key,
+          color: isPontaSeca ? "#f59e0b" : (r ? (r.atendeNorma ? "#22c55e" : "#ef4444") : "#ef4444"),
+          label: r ? `${key}${isPontaSeca ? " [PS]" : ""} DN${r.diametroMm} V=${r.velocidadeMs.toFixed(2)}` : key,
+          dashArray: isPontaSeca ? "8 4" : undefined,
         };
       });
-  }, [sewerResults, activeTrechos]);
+  }, [sewerResults, activeTrechos, sewerEdgeAttrs]);
 
   // ── Stats ──
   const alertCount = sewerResults.filter(r => !r.atendeNorma).length;
@@ -725,6 +777,10 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                   </Card>
                 </div>
 
+                <Button variant="outline" onClick={() => { markDone("s00"); toast.success("Configuração aplicada"); }}>
+                  <CheckCircle className="h-4 w-4 mr-1" /> Aplicar Configuração Rápida
+                </Button>
+
                 {stepStatus.s00 === "done" && (
                   <div className="flex items-center gap-2 text-sm text-green-600">
                     <CheckCircle className="h-4 w-4" /> Configuração aplicada
@@ -739,6 +795,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
               onOpenChange={setConfigOpen}
               config={qesgConfig}
               onConfigChange={handleConfigChange}
+              availableLayers={availableLayers}
             />
           </div>
         );
@@ -964,21 +1021,48 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
             toast.info(`${multiVertexCount} trecho(s) com múltiplos vértices detectado(s). Usando comprimento real.`);
           }
 
-          const result = numberSewerNetwork(nodes, edges);
+          let result: ReturnType<typeof numberSewerNetwork>;
+          try {
+            result = numberSewerNetwork(nodes, edges);
+          } catch (err: any) {
+            toast.error(err.message || "Erro ao numerar a rede. Verifique a topologia.");
+            return;
+          }
 
-          // Update sewerEdgeAttrs with new dcId and PVM/PVJ
+          // Build old→new ID mapping for nodes
+          const nodeIdMap = new Map<string, string>();
+          nodes.forEach((n, i) => {
+            if (result.nodes[i] && result.nodes[i].id !== n.id) {
+              nodeIdMap.set(n.id, result.nodes[i].id);
+            }
+          });
+
+          // Update sewerEdgeAttrs with new dcId and remapped PVM/PVJ
           if (sewerEdgeAttrs.length > 0) {
             const updatedEdges = sewerEdgeAttrs.map((e, i) => ({
               ...e,
               dcId: result.edges[i]?.dcId ?? e.dcId,
+              idInicio: result.edges[i]?.idInicio ?? e.idInicio,
+              idFim: result.edges[i]?.idFim ?? e.idFim,
             }));
             setSewerEdgeAttrs(updatedEdges);
+          }
+
+          // Update sewerNodeAttrs with renamed IDs
+          if (sewerNodeAttrs.length > 0) {
+            const updatedNodes = sewerNodeAttrs.map(n => ({
+              ...n,
+              id: nodeIdMap.get(n.id) ?? n.id,
+            }));
+            setSewerNodeAttrs(updatedNodes);
           }
 
           // Also update trechos names to reflect numbering
           const updatedTrechos = activeTrechos.map((t, i) => ({
             ...t,
             nomeTrecho: result.edges[i]?.dcId ?? t.nomeTrecho,
+            idInicio: nodeIdMap.get(t.idInicio) ?? t.idInicio,
+            idFim: nodeIdMap.get(t.idFim) ?? t.idFim,
           }));
           handleGisTrechosChange(updatedTrechos);
 
@@ -1212,10 +1296,60 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
 
       // ═══════ S04: ATUALIZA COTA TN VIA MDT (QEsg Button 04) ═══════
       case "s04": {
+        // Import TIF directly without opening Map tab
+        const handleDirectTifImport = async () => {
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = ".tif,.tiff";
+          input.onchange = async (ev) => {
+            const file = (ev.target as HTMLInputElement).files?.[0];
+            if (!file) return;
+            setMdtProgress(10);
+            try {
+              const buffer = await file.arrayBuffer();
+              const { parseGeoTIFF } = await import("@/engine/tifReader");
+              const { setRasterGrid } = await import("@/engine/rasterStore");
+              setMdtProgress(30);
+              const result = await parseGeoTIFF(buffer, 10000, -9999, true);
+              if (result.grid) {
+                setRasterGrid(result.grid, {
+                  width: result.width,
+                  height: result.height,
+                  noDataValue: result.noDataValue,
+                });
+                toast.success(`MDT carregado: ${result.width}×${result.height} pixels (${file.name})`);
+              } else {
+                toast.error("Erro: Raster sem dados de grid.");
+              }
+            } catch (err: any) {
+              toast.error(`Erro ao carregar MDT: ${err.message}`);
+            }
+            setMdtProgress(null);
+          };
+          input.click();
+        };
+
+        // Use existing node cotas (from imported data) to fill edges
+        const handleUsarCotasExistentes = () => {
+          const nodes = sewerNodeAttrs.length > 0
+            ? sewerNodeAttrs.map(n => ({ id: n.id, x: n.x, y: n.y, cotaTerreno: n.cotaTerreno, cotaFundo: n.cotaFundo }))
+            : activePontos.map(p => ({ id: p.id, x: p.x, y: p.y, cotaTerreno: p.cota, cotaFundo: p.cota - 1.5 }));
+          const validCotas = nodes.filter(n => n.cotaTerreno > 0);
+          if (validCotas.length === 0) {
+            toast.error("Nenhum nó com cota válida (> 0). Preencha as cotas manualmente na tabela de atributos.");
+            return;
+          }
+          // Mark done since cotas already exist
+          const msg = `${validCotas.length}/${nodes.length} nós já possuem cotas. Prossiga para S05 (Preenche Campos).`;
+          setStepMessage(prev => ({ ...prev, s04: msg }));
+          toast.success(msg);
+          markDone("s04");
+        };
+
         const doAtualizaCotaMDT = async () => {
           const raster = getRasterGrid();
           if (!raster) {
-            toast.error("Nenhum raster MDT carregado. Importe um arquivo .tif (GeoTIFF) na aba Mapa primeiro.");
+            toast.error("Nenhum raster MDT carregado. Use 'Importar TIF Direto' abaixo ou importe na aba Mapa.");
             return;
           }
 
@@ -1384,12 +1518,32 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                 </div>
               )}
 
+              {/* Direct TIF import + manual fallback */}
+              {!getRasterGrid() && (
+                <div className="border border-amber-500/30 bg-amber-50 dark:bg-amber-950/10 rounded-lg p-3 space-y-2">
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                    Nenhum MDT carregado. Opções:
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button variant="outline" size="sm" onClick={handleDirectTifImport}>
+                      <Upload className="h-3.5 w-3.5 mr-1" /> Importar TIF Direto
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleUsarCotasExistentes}>
+                      <TableProperties className="h-3.5 w-3.5 mr-1" /> Usar Cotas Existentes
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setActiveStep("mapa")}>
+                      <MapIcon className="h-3.5 w-3.5 mr-1" /> Ir para Mapa
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Raster status */}
               <div className="flex items-center gap-2 text-xs">
                 {getRasterGrid() ? (
                   <Badge className="bg-green-500">MDT carregado</Badge>
                 ) : (
-                  <Badge variant="destructive">Nenhum MDT (importe .tif no Mapa)</Badge>
+                  <Badge variant="outline" className="text-amber-600">Nenhum MDT</Badge>
                 )}
                 <Badge variant="outline">{sewerNodeAttrs.length} nós</Badge>
                 <Badge variant="outline">{sewerEdgeAttrs.length} trechos</Badge>

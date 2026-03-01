@@ -558,6 +558,7 @@ export function AttributeTableEditor({
                         <TableHead className="w-20">Decl (%)</TableHead>
                         <TableHead className="w-20">Material</TableHead>
                         <TableHead className="w-16">Q lat</TableHead>
+                        <TableHead className="w-14">PS</TableHead>
                         <TableHead className="w-16">Etapa</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -648,6 +649,15 @@ export function AttributeTableEditor({
                               className="h-7 text-xs w-16"
                               value={e.contribuicaoLateral}
                               onChange={ev => updateSewerEdge(e.key, "contribuicaoLateral", parseFloat(ev.target.value) || 0)}
+                            />
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <input
+                              type="checkbox"
+                              checked={e.pontaSeca > 0}
+                              onChange={ev => updateSewerEdge(e.key, "pontaSeca", ev.target.checked ? 1 : 0)}
+                              className="h-4 w-4 accent-amber-500 cursor-pointer"
+                              title="Ponta Seca"
                             />
                           </TableCell>
                           <TableCell>

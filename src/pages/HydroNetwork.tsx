@@ -46,6 +46,7 @@ const BdiModule = lazy(() => import("@/components/hydronetwork/modules/BdiModule
 const RDOPlanningModule = lazy(() => import("@/components/hydronetwork/modules/RDOPlanningModule").then(m => ({ default: m.RDOPlanningModule })));
 const LPSModule = lazy(() => import("@/components/hydronetwork/modules/LPSModule").then(m => ({ default: m.LPSModule })));
 const QEsgWaterModule = lazy(() => import("@/components/hydronetwork/modules/QEsgWaterModule").then(m => ({ default: m.QEsgWaterModule })));
+const ElevatorStationModule = lazy(() => import("@/components/hydronetwork/modules/ElevatorStationModule").then(m => ({ default: m.ElevatorStationModule })));
 import { QEsgWaterPanel } from "@/components/hydronetwork/panels/QEsgWaterPanel";
 import { getRasterGrid } from "@/engine/rasterStore";
 import { extractContours, type ContourExtractionResult } from "@/engine/contourExtractor";
@@ -297,6 +298,8 @@ const HydroNetwork = () => {
         return <LPSModule pontos={pontos} trechos={trechos} />;
       case "qesg-qwater":
         return <QEsgWaterModule pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />;
+      case "elevatoria":
+        return <ElevatorStationModule />;
       case "perfil":
         return <PerfilLongitudinal pontos={pontos} trechos={trechos} />;
       case "mapa":
@@ -814,6 +817,7 @@ const HydroNetwork = () => {
     perfil: "Perfil Longitudinal", mapa: "Mapa Interativo", exportacao: "Exportacao GIS",
     lps: "LPS — Last Planner System",
     "qesg-qwater": "QEsg / QWater — Dimensionamento Hidráulico",
+    elevatoria: "Estação Elevatória — Dimensionamento e Orçamento",
   };
 
   return (

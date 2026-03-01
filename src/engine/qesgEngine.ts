@@ -414,21 +414,38 @@ export function numberSewerNetwork(
     }
   }
 
+  // Detect cycles: if order doesn't contain all nodes, there's a cycle
+  if (order.length < allNodeIds.size) {
+    const cycleNodes = [...allNodeIds].filter(n => !order.includes(n));
+    throw new Error(
+      `Ciclo detectado na rede: ${cycleNodes.length} nó(s) em ciclo. ` +
+      `IDs: ${cycleNodes.slice(0, 5).join(', ')}${cycleNodes.length > 5 ? '...' : ''}. ` +
+      `Verifique a topologia e corrija as conexões.`
+    );
+  }
+
   // Name nodes as PV-001, PV-002... in topological order
   const nodeNameMap = new Map<string, string>();
   order.forEach((id, i) => {
     nodeNameMap.set(id, `PV-${String(i + 1).padStart(3, "0")}`);
   });
 
-  // Number edges
-  const edgeMap = new Map(edges.map(e => [`${e.idInicio}-${e.idFim}`, e]));
+  // Number edges with remapped node IDs
   let edgeIdx = 0;
   const numberedEdges = edges.map(e => ({
     ...e,
     dcId: `C${String(++edgeIdx).padStart(3, "0")}`,
+    idInicio: nodeNameMap.get(e.idInicio) || e.idInicio,
+    idFim: nodeNameMap.get(e.idFim) || e.idFim,
   }));
 
-  return { nodes, edges: numberedEdges };
+  // Rename nodes
+  const renamedNodes = nodes.map(n => ({
+    ...n,
+    id: nodeNameMap.get(n.id) || n.id,
+  }));
+
+  return { nodes: renamedNodes, edges: numberedEdges };
 }
 
 /**
