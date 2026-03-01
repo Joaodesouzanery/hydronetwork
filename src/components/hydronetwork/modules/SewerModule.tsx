@@ -6,12 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
   Calculator, Waves, CheckCircle, XCircle, Download,
   AlertTriangle, Zap, Upload, Settings, Users,
   Map as MapIcon, TableProperties, Activity, Mountain,
-  Save, CloudOff,
+  Save, CloudOff, ArrowRight, Hash, Layers, RefreshCw,
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
@@ -36,6 +37,15 @@ import { useSpatialData } from "@/hooks/useSpatialData";
 import { getNodesByOrigin } from "@/core/spatial";
 import { useDimensioningPersistence } from "@/hooks/useDimensioningPersistence";
 import type { SewerDimensioningState } from "@/engine/sharedPlanningStore";
+import { QEsgConfigDialog } from "@/components/hydronetwork/modules/QEsgConfigDialog";
+import {
+  QESG_EDGE_FIELDS,
+  QESG_NODE_FIELDS,
+  type QEsgProjectConfig,
+  DEFAULT_QESG_CONFIG,
+} from "@/engine/qesgFields";
+import { sampleElevation, fillNodeElevations, fillEdgeElevations } from "@/engine/elevationExtractor";
+import { getRasterGrid } from "@/engine/rasterStore";
 
 // ══════════════════════════════════════
 // Interfaces
@@ -97,6 +107,21 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   const [sewerNodeAttrs, setSewerNodeAttrs] = useState<SewerNodeAttributes[]>([]);
   const [sewerEdgeAttrs, setSewerEdgeAttrs] = useState<SewerEdgeAttributes[]>([]);
 
+  // ── QEsg Config Dialog ──
+  const [configOpen, setConfigOpen] = useState(false);
+  const [qesgConfig, setQesgConfig] = useState<QEsgProjectConfig>({ ...DEFAULT_QESG_CONFIG });
+
+  // ── MDT Progress ──
+  const [mdtProgress, setMdtProgress] = useState<number | null>(null);
+  const mdtCancelRef = useRef(false);
+
+  // ── Verifica Campos state ──
+  const [verificaCamposResult, setVerificaCamposResult] = useState<{
+    missing: string[];
+    present: string[];
+  } | null>(null);
+  const [showCreateFieldsConfirm, setShowCreateFieldsConfirm] = useState(false);
+
   // ── Step state ──
   const [activeStep, setActiveStep] = useState<StepId>("mapa");
   const [stepStatus, setStepStatus] = useState<Record<string, "pending" | "done">>({});
@@ -135,6 +160,22 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   const handleGisTrechosChange = (t: Trecho[]) => {
     setGisTrechos(t);
     onTrechosChange?.(t);
+  };
+
+  // ── Sync QEsg config → hydraulic parameters ──
+  const handleConfigChange = (newConfig: QEsgProjectConfig) => {
+    setQesgConfig(newConfig);
+    setManning(newConfig.manning);
+    setLaminaMax(newConfig.laminaMaxima);
+    setVelMinEsg(newConfig.velMinima);
+    setVelMaxEsg(newConfig.velMaxima);
+    setTensaoMin(newConfig.tensaoMinima);
+    setDiamMinEsg(newConfig.diametroMinimo);
+    setMaterial(newConfig.material);
+    setQpcLitrosDia(newConfig.perCapita);
+    setK1(newConfig.k1);
+    setK2(newConfig.k2);
+    markDone("s00");
   };
 
   // ── Hydraulic parameters ──
@@ -501,282 +542,583 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
           </div>
         );
 
-      // ═══════ S00: CONFIG ═══════
+      // ═══════ S00: CONFIG (QEsg-style modal) ═══════
       case "s00":
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Waves className="h-5 w-5 text-amber-600" /> Parâmetros Hidráulicos
+                  <Settings className="h-5 w-5 text-amber-600" /> Configuração do Projeto
                 </CardTitle>
-                <CardDescription>NBR 9649 / NBR 14486</CardDescription>
+                <CardDescription>
+                  Configure layers, parâmetros hidráulicos, tubos padrão e opções de cálculo.
+                  Configuração idêntica ao QEsg do QGIS.
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-xs">Material</Label>
-                    <Select value={material} onValueChange={handleMaterialChange}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PVC">PVC (n=0.013)</SelectItem>
-                        <SelectItem value="Concreto">Concreto (n=0.015)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div><Label className="text-xs">Manning (n)</Label><Input type="number" step="0.001" value={manning} onChange={e => setManning(Number(e.target.value))} /></div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div><Label className="text-xs">y/D máx</Label><Input type="number" step="0.05" value={laminaMax} onChange={e => setLaminaMax(Number(e.target.value))} /></div>
-                  <div><Label className="text-xs">DN mín (mm)</Label><Input type="number" step="50" value={diamMinEsg} onChange={e => setDiamMinEsg(Number(e.target.value))} /></div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div><Label className="text-xs">V mín (m/s)</Label><Input type="number" step="0.1" value={velMinEsg} onChange={e => setVelMinEsg(Number(e.target.value))} /></div>
-                  <div><Label className="text-xs">V máx (m/s)</Label><Input type="number" step="0.1" value={velMaxEsg} onChange={e => setVelMaxEsg(Number(e.target.value))} /></div>
-                </div>
-                <div>
-                  <Label className="text-xs">Tensão trativa mín (Pa)</Label>
-                  <Input type="number" step="0.1" value={tensaoMin} onChange={e => setTensaoMin(Number(e.target.value))} />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs">Ponta Seca</Label>
-                  <input type="checkbox" checked={pontaSecaEnabled} onChange={e => setPontaSecaEnabled(e.target.checked)} />
-                  <span className="text-xs text-muted-foreground">Usar vazão mínima 1.5 L/s em trechos de ponta seca</span>
-                </div>
-              </CardContent>
-            </Card>
+              <CardContent className="space-y-4">
+                <Button onClick={() => setConfigOpen(true)} size="lg" className="w-full">
+                  <Settings className="h-4 w-4 mr-2" /> Abrir Configuração QEsg
+                </Button>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-amber-600" /> Contribuição de Vazão
-                </CardTitle>
-                <CardDescription>Método de cálculo da vazão</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <Label className="text-xs">Método</Label>
-                  <Select value={metodoVazao} onValueChange={v => setMetodoVazao(v as "fixa" | "percapita")}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fixa">Vazão fixa (L/s)</SelectItem>
-                      <SelectItem value="percapita">Per capita (Pop × qpc)</SelectItem>
-                    </SelectContent>
-                  </Select>
+                {/* Quick summary of current config */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                  <div className="bg-muted/50 rounded p-2">
+                    <span className="font-medium">Material:</span> {material} (n={manning})
+                  </div>
+                  <div className="bg-muted/50 rounded p-2">
+                    <span className="font-medium">DN mín:</span> {diamMinEsg} mm
+                  </div>
+                  <div className="bg-muted/50 rounded p-2">
+                    <span className="font-medium">y/D máx:</span> {laminaMax}
+                  </div>
+                  <div className="bg-muted/50 rounded p-2">
+                    <span className="font-medium">Norma:</span> {qesgConfig.norma}
+                  </div>
+                  <div className="bg-muted/50 rounded p-2">
+                    <span className="font-medium">V mín/máx:</span> {velMinEsg}/{velMaxEsg} m/s
+                  </div>
+                  <div className="bg-muted/50 rounded p-2">
+                    <span className="font-medium">τ mín:</span> {tensaoMin} Pa
+                  </div>
+                  <div className="bg-muted/50 rounded p-2">
+                    <span className="font-medium">Per capita:</span> {qpcLitrosDia} L/hab.dia
+                  </div>
+                  <div className="bg-muted/50 rounded p-2">
+                    <span className="font-medium">K1×K2:</span> {k1}×{k2}
+                  </div>
                 </div>
-                {metodoVazao === "fixa" ? (
-                  <div><Label className="text-xs">Vazão (L/s)</Label><Input type="number" step="0.1" value={vazaoEsg} onChange={e => setVazaoEsg(Number(e.target.value))} /></div>
-                ) : (
-                  <>
-                    <div><Label className="text-xs">Quota per capita (L/hab/dia)</Label><Input type="number" step="10" value={qpcLitrosDia} onChange={e => setQpcLitrosDia(Number(e.target.value))} /></div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div><Label className="text-xs">K1</Label><Input type="number" step="0.1" value={k1} onChange={e => setK1(Number(e.target.value))} /></div>
-                      <div><Label className="text-xs">K2</Label><Input type="number" step="0.1" value={k2} onChange={e => setK2(Number(e.target.value))} /></div>
-                    </div>
-                    <div className="bg-muted/50 rounded p-2 text-xs text-center">
-                      Q = Pop × {qpcLitrosDia} × {k1} × {k2} / 86400
-                    </div>
-                  </>
+
+                {/* Quick inline controls */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader className="py-2 px-3">
+                      <CardTitle className="text-sm flex items-center gap-1">
+                        <Waves className="h-4 w-4 text-amber-600" /> Parâmetros Rápidos
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 px-3 pb-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs">Material</Label>
+                          <Select value={material} onValueChange={handleMaterialChange}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PVC">PVC (n=0.013)</SelectItem>
+                              <SelectItem value="Concreto">Concreto (n=0.015)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div><Label className="text-xs">Manning (n)</Label><Input type="number" step="0.001" value={manning} onChange={e => setManning(Number(e.target.value))} /></div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs">Ponta Seca</Label>
+                        <input type="checkbox" checked={pontaSecaEnabled} onChange={e => setPontaSecaEnabled(e.target.checked)} />
+                        <span className="text-xs text-muted-foreground">Vazão mín 1.5 L/s</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="py-2 px-3">
+                      <CardTitle className="text-sm flex items-center gap-1">
+                        <Users className="h-4 w-4 text-amber-600" /> Vazão
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 px-3 pb-3">
+                      <div>
+                        <Label className="text-xs">Método</Label>
+                        <Select value={metodoVazao} onValueChange={v => setMetodoVazao(v as "fixa" | "percapita")}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="fixa">Vazão fixa (L/s)</SelectItem>
+                            <SelectItem value="percapita">Per capita (Pop × qpc)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {metodoVazao === "fixa" ? (
+                        <div><Label className="text-xs">Vazão (L/s)</Label><Input type="number" step="0.1" value={vazaoEsg} onChange={e => setVazaoEsg(Number(e.target.value))} /></div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><Label className="text-xs">K1</Label><Input type="number" step="0.1" value={k1} onChange={e => setK1(Number(e.target.value))} /></div>
+                          <div><Label className="text-xs">K2</Label><Input type="number" step="0.1" value={k2} onChange={e => setK2(Number(e.target.value))} /></div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {stepStatus.s00 === "done" && (
+                  <div className="flex items-center gap-2 text-sm text-green-600">
+                    <CheckCircle className="h-4 w-4" /> Configuração aplicada
+                  </div>
                 )}
               </CardContent>
             </Card>
+
+            {/* Config Dialog */}
+            <QEsgConfigDialog
+              open={configOpen}
+              onOpenChange={setConfigOpen}
+              config={qesgConfig}
+              onConfigChange={handleConfigChange}
+            />
           </div>
         );
 
-      // ═══════ S01: CAMPOS ═══════
-      case "s01":
+      // ═══════ S01: VERIFICA CAMPOS (QEsg Button 01) ═══════
+      case "s01": {
+        // Check which standard QEsg fields exist vs. missing
+        const checkFields = () => {
+          const allRequiredEdge = QESG_EDGE_FIELDS.map(f => f.name);
+          const existingEdgeFields = new Set<string>();
+
+          // Check sewerEdgeAttrs for existing field mappings
+          if (sewerEdgeAttrs.length > 0) {
+            const sample = sewerEdgeAttrs[0];
+            if (sample.dcId) existingEdgeFields.add("DC_ID");
+            if (sample.idInicio) { existingEdgeFields.add("PVM"); existingEdgeFields.add("PVJ"); }
+            if (sample.comprimento) existingEdgeFields.add("LENGTH");
+            if (sample.cotaTerrenoM !== undefined) { existingEdgeFields.add("CTM"); existingEdgeFields.add("CTJ"); }
+            if (sample.cotaColetorM !== undefined) { existingEdgeFields.add("CCM"); existingEdgeFields.add("CCJ"); }
+            if (sample.diametro) existingEdgeFields.add("DIAMETER");
+            if (sample.declividade !== undefined) existingEdgeFields.add("DECL");
+            if (sample.manning) existingEdgeFields.add("MANNING");
+            if (sample.material) existingEdgeFields.add("ETAPA");
+            if (sample.contribuicaoLateral !== undefined) existingEdgeFields.add("CONTR_LADO");
+            if (sample.pontaSeca !== undefined) existingEdgeFields.add("PONTA_SECA");
+            if (sample.observacao !== undefined) existingEdgeFields.add("OBS");
+          }
+
+          // For segments coming from trechos
+          if (sewerTrechos.length > 0 && sewerEdgeAttrs.length === 0) {
+            existingEdgeFields.add("PVM");
+            existingEdgeFields.add("PVJ");
+            existingEdgeFields.add("LENGTH");
+          }
+
+          const missing = allRequiredEdge.filter(f => !existingEdgeFields.has(f));
+          const present = allRequiredEdge.filter(f => existingEdgeFields.has(f));
+
+          setVerificaCamposResult({ missing, present });
+
+          if (missing.length === 0) {
+            toast.success("Todos os campos QEsg já existem!");
+            markDone("s01");
+          } else {
+            setShowCreateFieldsConfirm(true);
+          }
+        };
+
+        const createAllFields = () => {
+          let nodesCreated = 0;
+          let edgesCreated = 0;
+
+          if (sewerNodeAttrs.length === 0 && activePontos.length > 0) {
+            const nodes: SewerNodeAttributes[] = activePontos.map(p => ({
+              id: p.id,
+              tipo: assignments.nodeTypes.get(p.id) || "pv",
+              cotaTerreno: p.cota,
+              cotaFundo: p.cota - 1.5,
+              profundidade: 1.5,
+              x: p.x,
+              y: p.y,
+              populacao: 0,
+              vazaoConcentrada: 0,
+              observacao: "",
+            }));
+            setSewerNodeAttrs(nodes);
+            nodesCreated = nodes.length;
+          }
+
+          if (sewerEdgeAttrs.length === 0 && sewerTrechos.length > 0) {
+            const edges: SewerEdgeAttributes[] = sewerTrechos.map((t, i) => ({
+              key: `${t.idInicio}-${t.idFim}`,
+              dcId: `C${String(i + 1).padStart(3, "0")}`,
+              idInicio: t.idInicio,
+              idFim: t.idFim,
+              comprimento: t.comprimento,
+              cotaTerrenoM: t.cotaInicio,
+              cotaTerrenoJ: t.cotaFim,
+              cotaColetorM: t.cotaInicio - 1.5,
+              cotaColetorJ: t.cotaFim - 1.5,
+              manning,
+              diametro: t.diametroMm || 150,
+              declividade: t.declividade,
+              material: t.material || "PVC",
+              contribuicaoLateral: 0,
+              pontaSeca: 0,
+              etapa: "1",
+              observacao: "",
+            }));
+            setSewerEdgeAttrs(edges);
+            edgesCreated = edges.length;
+          } else if (sewerEdgeAttrs.length > 0) {
+            edgesCreated = sewerEdgeAttrs.length;
+          }
+
+          const msg = `Campos criados: ${nodesCreated} nós, ${edgesCreated} trechos — todos os ${QESG_EDGE_FIELDS.length} campos QEsg disponíveis`;
+          setStepMessage(prev => ({ ...prev, s01: msg }));
+          toast.success(msg);
+          setShowCreateFieldsConfirm(false);
+          markDone("s01");
+        };
+
         return (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <TableProperties className="h-5 w-5 text-amber-600" /> Verificar / Criar Campos
+                <TableProperties className="h-5 w-5 text-amber-600" /> 01 — Verifica Campos
               </CardTitle>
-              <CardDescription>Cria atributos de nós e trechos (SewerNodeAttributes e SewerEdgeAttributes) se não existirem.</CardDescription>
+              <CardDescription>
+                Verifica se o layer de rede possui todos os {QESG_EDGE_FIELDS.length} campos padrão do QEsg.
+                Se não existirem, pergunta se deseja criar automaticamente.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button onClick={() => {
-                let nodesCreated = 0;
-                let edgesCreated = 0;
-
-                if (sewerNodeAttrs.length === 0 && activePontos.length > 0) {
-                  const nodes: SewerNodeAttributes[] = activePontos.map(p => ({
-                    id: p.id,
-                    tipo: assignments.nodeTypes.get(p.id) || "pv",
-                    cotaTerreno: p.cota,
-                    cotaFundo: p.cota - 1.5,
-                    profundidade: 1.5,
-                    x: p.x,
-                    y: p.y,
-                    populacao: 0,
-                    vazaoConcentrada: 0,
-                    observacao: "",
-                  }));
-                  setSewerNodeAttrs(nodes);
-                  nodesCreated = nodes.length;
-                }
-
-                if (sewerEdgeAttrs.length === 0 && sewerTrechos.length > 0) {
-                  const edges: SewerEdgeAttributes[] = sewerTrechos.map((t, i) => ({
-                    key: `${t.idInicio}-${t.idFim}`,
-                    dcId: `C${String(i + 1).padStart(3, "0")}`,
-                    idInicio: t.idInicio,
-                    idFim: t.idFim,
-                    comprimento: t.comprimento,
-                    cotaTerrenoM: t.cotaInicio,
-                    cotaTerrenoJ: t.cotaFim,
-                    cotaColetorM: t.cotaInicio - 1.5,
-                    cotaColetorJ: t.cotaFim - 1.5,
-                    manning,
-                    diametro: t.diametroMm || 150,
-                    declividade: t.declividade,
-                    material: t.material || "PVC",
-                    contribuicaoLateral: 0,
-                    pontaSeca: 0,
-                    etapa: "1",
-                    observacao: "",
-                  }));
-                  setSewerEdgeAttrs(edges);
-                  edgesCreated = edges.length;
-                }
-
-                if (nodesCreated > 0 || edgesCreated > 0) {
-                  const msg = `Campos criados: ${nodesCreated} nós, ${edgesCreated} trechos`;
-                  setStepMessage(prev => ({ ...prev, s01: msg }));
-                  toast.success(msg);
-                  markDone("s01");
-                } else {
-                  const existing = `Campos já existem: ${sewerNodeAttrs.length} nós, ${sewerEdgeAttrs.length} trechos`;
-                  setStepMessage(prev => ({ ...prev, s01: existing }));
-                  toast.info(existing);
-                  markDone("s01");
-                }
-              }}>
-                <TableProperties className="h-4 w-4 mr-1" /> Verificar/Criar Campos
+              <Button onClick={checkFields}>
+                <TableProperties className="h-4 w-4 mr-1" /> Verificar Campos
               </Button>
+
+              {/* Confirmation dialog */}
+              {showCreateFieldsConfirm && verificaCamposResult && verificaCamposResult.missing.length > 0 && (
+                <Card className="border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20">
+                  <CardContent className="py-3 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-yellow-700 dark:text-yellow-400">
+                      <AlertTriangle className="h-4 w-4" />
+                      {verificaCamposResult.missing.length} campo(s) ausente(s). Deseja criar automaticamente?
+                    </div>
+                    <div className="grid grid-cols-3 md:grid-cols-5 gap-1 text-xs">
+                      {QESG_EDGE_FIELDS.map(f => {
+                        const isMissing = verificaCamposResult!.missing.includes(f.name);
+                        return (
+                          <div
+                            key={f.name}
+                            className={`rounded px-1.5 py-0.5 font-mono ${
+                              isMissing
+                                ? "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400"
+                                : "bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-400"
+                            }`}
+                            title={f.description}
+                          >
+                            {isMissing ? "✗" : "✓"} {f.name}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={createAllFields} size="sm">
+                        <CheckCircle className="h-3.5 w-3.5 mr-1" /> Sim, criar campos
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setShowCreateFieldsConfirm(false)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {stepMessage.s01 && (
                 <div className="text-sm text-muted-foreground bg-muted/50 rounded p-2">{stepMessage.s01}</div>
               )}
               <div className="flex gap-3 text-xs text-muted-foreground">
                 <Badge variant="outline">{sewerNodeAttrs.length} nós</Badge>
                 <Badge variant="outline">{sewerEdgeAttrs.length} trechos</Badge>
+                <Badge variant="outline">{QESG_EDGE_FIELDS.length} campos padrão</Badge>
               </div>
+
+              {/* Fields reference */}
+              <details className="text-xs">
+                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                  Campos obrigatórios do QEsg ({QESG_EDGE_FIELDS.length})
+                </summary>
+                <div className="mt-2 grid grid-cols-2 gap-1">
+                  {QESG_EDGE_FIELDS.map(f => (
+                    <div key={f.name} className="flex gap-2">
+                      <span className="font-mono font-medium w-24">{f.name}</span>
+                      <span className="text-muted-foreground">{f.description}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </CardContent>
           </Card>
         );
+      }
 
-      // ═══════ S02: NUMERAR ═══════
-      case "s02":
+      // ═══════ S02: NUMERAR REDE (QEsg Button 02) ═══════
+      case "s02": {
+        const doNumerarRede = () => {
+          const nodes = sewerNodeAttrs.length > 0
+            ? sewerNodeAttrs.map(n => ({ id: n.id, x: n.x, y: n.y, cotaTerreno: n.cotaTerreno, cotaFundo: n.cotaFundo }))
+            : activePontos.map(p => ({ id: p.id, x: p.x, y: p.y, cotaTerreno: p.cota, cotaFundo: p.cota - 1.5 }));
+
+          const edges = sewerEdgeAttrs.length > 0
+            ? sewerEdgeAttrs.map(e => ({
+                key: e.key, dcId: e.dcId, idInicio: e.idInicio, idFim: e.idFim,
+                comprimento: e.comprimento, cotaTerrenoM: e.cotaTerrenoM, cotaTerrenoJ: e.cotaTerrenoJ,
+                cotaColetorM: e.cotaColetorM, cotaColetorJ: e.cotaColetorJ,
+                manning: e.manning, diametro: e.diametro, declividade: e.declividade,
+              }))
+            : sewerTrechos.map((t, i) => ({
+                key: `${t.idInicio}-${t.idFim}`, dcId: `C${String(i + 1).padStart(3, "0")}`,
+                idInicio: t.idInicio, idFim: t.idFim, comprimento: t.comprimento,
+                cotaTerrenoM: t.cotaInicio, cotaTerrenoJ: t.cotaFim,
+                cotaColetorM: t.cotaInicio - 1.5, cotaColetorJ: t.cotaFim - 1.5,
+                manning, diametro: t.diametroMm, declividade: t.declividade,
+              }));
+
+          if (edges.length === 0) {
+            toast.error("Nenhum trecho para numerar. Importe dados no Mapa primeiro.");
+            return;
+          }
+
+          // Detect multivertex polylines (more than 2 vertices per edge)
+          let multiVertexCount = 0;
+          for (const t of sewerTrechos) {
+            const dx = (t.xFim - t.xInicio);
+            const dy = (t.yFim - t.yInicio);
+            const straightDist = Math.sqrt(dx * dx + dy * dy);
+            if (t.comprimento > 0 && straightDist > 0 && t.comprimento / straightDist > 1.05) {
+              multiVertexCount++;
+            }
+          }
+          if (multiVertexCount > 0) {
+            toast.info(`${multiVertexCount} trecho(s) com múltiplos vértices detectado(s). Usando comprimento real.`);
+          }
+
+          const result = numberSewerNetwork(nodes, edges);
+
+          // Update sewerEdgeAttrs with new dcId and PVM/PVJ
+          if (sewerEdgeAttrs.length > 0) {
+            const updatedEdges = sewerEdgeAttrs.map((e, i) => ({
+              ...e,
+              dcId: result.edges[i]?.dcId ?? e.dcId,
+            }));
+            setSewerEdgeAttrs(updatedEdges);
+          }
+
+          // Also update trechos names to reflect numbering
+          const updatedTrechos = activeTrechos.map((t, i) => ({
+            ...t,
+            nomeTrecho: result.edges[i]?.dcId ?? t.nomeTrecho,
+          }));
+          handleGisTrechosChange(updatedTrechos);
+
+          const msg = `Rede numerada: ${result.edges.length} trechos, ${nodes.length} nós (PV-001...PV-${String(nodes.length).padStart(3, "0")})`;
+          setStepMessage(prev => ({ ...prev, s02: msg }));
+          toast.success(msg);
+          markDone("s02");
+        };
+
         return (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Zap className="h-5 w-5 text-amber-600" /> Numerar Rede
+                <Hash className="h-5 w-5 text-amber-600" /> 02 — Numerar Rede
               </CardTitle>
-              <CardDescription>Atribui numeração sequencial (DC_ID) aos trechos da rede de esgoto seguindo ordem topológica.</CardDescription>
+              <CardDescription>
+                Detecta topologia, ordena de montante a jusante e atribui DC_ID, PVM, PVJ, Coletor e Trecho
+                seguindo o fluxo do QEsg original.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button onClick={() => {
-                const nodes = sewerNodeAttrs.length > 0
-                  ? sewerNodeAttrs.map(n => ({ id: n.id, x: n.x, y: n.y, cotaTerreno: n.cotaTerreno, cotaFundo: n.cotaFundo }))
-                  : activePontos.map(p => ({ id: p.id, x: p.x, y: p.y, cotaTerreno: p.cota, cotaFundo: p.cota - 1.5 }));
+              <div className="flex gap-2 flex-wrap">
+                <Button onClick={doNumerarRede}>
+                  <Hash className="h-4 w-4 mr-1" /> Numerar Rede
+                </Button>
+              </div>
 
-                const edges = sewerEdgeAttrs.length > 0
-                  ? sewerEdgeAttrs.map(e => ({
-                      key: e.key, dcId: e.dcId, idInicio: e.idInicio, idFim: e.idFim,
-                      comprimento: e.comprimento, cotaTerrenoM: e.cotaTerrenoM, cotaTerrenoJ: e.cotaTerrenoJ,
-                      cotaColetorM: e.cotaColetorM, cotaColetorJ: e.cotaColetorJ,
-                      manning: e.manning, diametro: e.diametro, declividade: e.declividade,
-                    }))
-                  : sewerTrechos.map((t, i) => ({
-                      key: `${t.idInicio}-${t.idFim}`, dcId: `C${String(i + 1).padStart(3, "0")}`,
-                      idInicio: t.idInicio, idFim: t.idFim, comprimento: t.comprimento,
-                      cotaTerrenoM: t.cotaInicio, cotaTerrenoJ: t.cotaFim,
-                      cotaColetorM: t.cotaInicio - 1.5, cotaColetorJ: t.cotaFim - 1.5,
-                      manning, diametro: t.diametroMm, declividade: t.declividade,
-                    }));
+              {/* Flow direction info */}
+              <div className="bg-muted/50 rounded p-3 text-xs space-y-1">
+                <p className="font-medium">Fluxo do processo:</p>
+                <div className="flex items-center gap-1">
+                  <span>Detectar topologia</span>
+                  <ArrowRight className="h-3 w-3" />
+                  <span>Ordenar montante→jusante</span>
+                  <ArrowRight className="h-3 w-3" />
+                  <span>Atribuir DC_ID</span>
+                  <ArrowRight className="h-3 w-3" />
+                  <span>Preencher PVM/PVJ</span>
+                </div>
+              </div>
 
-                if (edges.length === 0) {
-                  toast.error("Nenhum trecho para numerar. Importe dados no Mapa primeiro.");
-                  return;
-                }
-
-                const result = numberSewerNetwork(nodes, edges);
-
-                // Update sewerEdgeAttrs with new dcId numbering
-                if (sewerEdgeAttrs.length > 0) {
-                  const updatedEdges = sewerEdgeAttrs.map((e, i) => ({
-                    ...e,
-                    dcId: result.edges[i]?.dcId ?? e.dcId,
-                  }));
-                  setSewerEdgeAttrs(updatedEdges);
-                }
-
-                const msg = `Rede numerada: ${result.edges.length} trechos`;
-                setStepMessage(prev => ({ ...prev, s02: msg }));
-                toast.success(msg);
-                markDone("s02");
-              }}>
-                <Zap className="h-4 w-4 mr-1" /> Numerar Rede
-              </Button>
               {stepMessage.s02 && (
                 <div className="text-sm text-muted-foreground bg-muted/50 rounded p-2">{stepMessage.s02}</div>
               )}
             </CardContent>
           </Card>
         );
+      }
 
-      // ═══════ S03: NÓS ═══════
-      case "s03":
+      // ═══════ S03: CRIA/ATUALIZA LAYER DE PVs (QEsg Button 03) ═══════
+      case "s03": {
+        const criarOuAtualizarNos = () => {
+          // Collect all unique node IDs from edge endpoints
+          const nodeIds = new Set<string>();
+          for (const t of sewerTrechos) {
+            nodeIds.add(t.idInicio);
+            nodeIds.add(t.idFim);
+          }
+          // Also from sewerEdgeAttrs
+          for (const e of sewerEdgeAttrs) {
+            nodeIds.add(e.idInicio);
+            nodeIds.add(e.idFim);
+          }
+
+          if (nodeIds.size === 0 && activePontos.length === 0) {
+            toast.error("Nenhum dado de rede. Importe no Mapa primeiro.");
+            return;
+          }
+
+          // Existing node map for update
+          const existingMap = new Map(sewerNodeAttrs.map(n => [n.id, n]));
+          let created = 0;
+          let updated = 0;
+
+          const nodes: SewerNodeAttributes[] = Array.from(nodeIds).map(id => {
+            const existing = existingMap.get(id);
+            const p = activePontos.find(pt => pt.id === id);
+
+            if (existing) {
+              // Update: refresh coordinates from points if available
+              updated++;
+              return {
+                ...existing,
+                x: p?.x ?? existing.x,
+                y: p?.y ?? existing.y,
+                cotaTerreno: p?.cota ?? existing.cotaTerreno,
+              };
+            }
+
+            // Create new node
+            created++;
+            return {
+              id,
+              tipo: assignments.nodeTypes.get(id) || "pv",
+              cotaTerreno: p?.cota ?? 0,
+              cotaFundo: p ? p.cota - (qesgConfig.recobrimentoMinimo + 0.6) : 0,
+              profundidade: qesgConfig.recobrimentoMinimo + 0.6,
+              x: p?.x ?? 0,
+              y: p?.y ?? 0,
+              populacao: 0,
+              vazaoConcentrada: 0,
+              observacao: "",
+            };
+          });
+
+          // Also add any isolated points
+          for (const p of activePontos) {
+            if (!nodeIds.has(p.id)) {
+              const existing = existingMap.get(p.id);
+              if (!existing) {
+                created++;
+                nodes.push({
+                  id: p.id,
+                  tipo: assignments.nodeTypes.get(p.id) || "pv",
+                  cotaTerreno: p.cota,
+                  cotaFundo: p.cota - (qesgConfig.recobrimentoMinimo + 0.6),
+                  profundidade: qesgConfig.recobrimentoMinimo + 0.6,
+                  x: p.x,
+                  y: p.y,
+                  populacao: 0,
+                  vazaoConcentrada: 0,
+                  observacao: "",
+                });
+              }
+            }
+          }
+
+          setSewerNodeAttrs(nodes);
+
+          // Update GIS points to match
+          const newPontos = nodes.map(n => ({
+            id: n.id,
+            x: n.x,
+            y: n.y,
+            cota: n.cotaTerreno,
+          }));
+          handleGisPontosChange(newPontos);
+
+          const action = sewerNodeAttrs.length > 0 ? "Atualizado" : "Criado";
+          const msg = `${action} layer de PVs: ${created} criados, ${updated} atualizados (${nodes.length} total). Campo COTA_TN preenchido.`;
+          setStepMessage(prev => ({ ...prev, s03: msg }));
+          toast.success(msg);
+          markDone("s03");
+        };
+
         return (
           <div className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5 text-amber-600" /> Criar Layer de Nós
+                  <Layers className="h-5 w-5 text-amber-600" /> 03 — Cria / Atualiza Layer de PVs
                 </CardTitle>
-                <CardDescription>Cria atributos de nós a partir dos pontos da rede, caso ainda não existam.</CardDescription>
+                <CardDescription>
+                  Cria automaticamente layer de pontos (Nós/PVs) nos endpoints dos trechos.
+                  Gera campo COTA_TN. Se já existir, atualiza.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Button onClick={() => {
-                  if (sewerNodeAttrs.length > 0) {
-                    toast.info(`Nós já existem: ${sewerNodeAttrs.length} nós`);
-                    return;
-                  }
+                <div className="flex gap-2 flex-wrap">
+                  <Button onClick={criarOuAtualizarNos}>
+                    <Layers className="h-4 w-4 mr-1" />
+                    {sewerNodeAttrs.length > 0 ? "Atualizar Layer de PVs" : "Criar Layer de PVs"}
+                  </Button>
+                  {sewerNodeAttrs.length > 0 && (
+                    <Button variant="outline" size="sm" onClick={() => {
+                      setSewerNodeAttrs([]);
+                      toast.info("Layer de nós removido. Clique em Criar para recriar.");
+                    }}>
+                      <RefreshCw className="h-3.5 w-3.5 mr-1" /> Resetar Nós
+                    </Button>
+                  )}
+                </div>
 
-                  // Create nodes from edge endpoints
-                  const nodeIds = new Set<string>();
-                  for (const t of sewerTrechos) {
-                    nodeIds.add(t.idInicio);
-                    nodeIds.add(t.idFim);
-                  }
+                {sewerNodeAttrs.length > 0 && (
+                  <div className="border rounded-lg overflow-auto max-h-48">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">ID</TableHead>
+                          <TableHead className="text-xs">Tipo</TableHead>
+                          <TableHead className="text-xs">COTA_TN</TableHead>
+                          <TableHead className="text-xs">Cota Fundo</TableHead>
+                          <TableHead className="text-xs">Prof. (m)</TableHead>
+                          <TableHead className="text-xs">X</TableHead>
+                          <TableHead className="text-xs">Y</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sewerNodeAttrs.slice(0, 20).map(n => (
+                          <TableRow key={n.id}>
+                            <TableCell className="font-mono text-xs">{n.id}</TableCell>
+                            <TableCell className="text-xs">{n.tipo.toUpperCase()}</TableCell>
+                            <TableCell className="text-xs font-medium">{n.cotaTerreno.toFixed(2)}</TableCell>
+                            <TableCell className="text-xs">{n.cotaFundo.toFixed(2)}</TableCell>
+                            <TableCell className="text-xs">{n.profundidade.toFixed(2)}</TableCell>
+                            <TableCell className="text-xs">{n.x.toFixed(1)}</TableCell>
+                            <TableCell className="text-xs">{n.y.toFixed(1)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {sewerNodeAttrs.length > 20 && (
+                      <div className="text-xs text-center text-muted-foreground py-1">
+                        ... e mais {sewerNodeAttrs.length - 20} nós
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                  const nodes: SewerNodeAttributes[] = Array.from(nodeIds).map(id => {
-                    const p = activePontos.find(pt => pt.id === id);
-                    return {
-                      id,
-                      tipo: assignments.nodeTypes.get(id) || "pv",
-                      cotaTerreno: p?.cota ?? 0,
-                      cotaFundo: p ? p.cota - 1.5 : 0,
-                      profundidade: 1.5,
-                      x: p?.x ?? 0,
-                      y: p?.y ?? 0,
-                      populacao: 0,
-                      vazaoConcentrada: 0,
-                      observacao: "",
-                    };
-                  });
-
-                  setSewerNodeAttrs(nodes);
-                  const msg = `${nodes.length} nós criados a partir dos endpoints dos trechos`;
-                  setStepMessage(prev => ({ ...prev, s03: msg }));
-                  toast.success(msg);
-                  markDone("s03");
-                }} variant="outline" size="sm">
-                  <Settings className="h-4 w-4 mr-1" /> Criar Nós
-                </Button>
                 {stepMessage.s03 && (
                   <div className="text-sm text-muted-foreground bg-muted/50 rounded p-2">{stepMessage.s03}</div>
                 )}
+
+                <div className="flex gap-3 text-xs text-muted-foreground">
+                  <Badge variant="outline">{sewerNodeAttrs.length} nós</Badge>
+                  <Badge variant="outline">{sewerTrechos.length} trechos</Badge>
+                </div>
               </CardContent>
             </Card>
 
@@ -789,71 +1131,249 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
             />
           </div>
         );
+      }
 
-      // ═══════ S04: PREENCHER ═══════
-      case "s04":
+      // ═══════ S04: ATUALIZA COTA TN VIA MDT (QEsg Button 04) ═══════
+      case "s04": {
+        const doAtualizaCotaMDT = async () => {
+          const raster = getRasterGrid();
+          if (!raster) {
+            toast.error("Nenhum raster MDT carregado. Importe um arquivo .tif (GeoTIFF) na aba Mapa primeiro.");
+            return;
+          }
+
+          const allNodes = sewerNodeAttrs.length > 0 ? [...sewerNodeAttrs] : [];
+          if (allNodes.length === 0 && activePontos.length > 0) {
+            // Create temporary node list from points
+            for (const p of activePontos) {
+              allNodes.push({
+                id: p.id,
+                tipo: "pv",
+                cotaTerreno: p.cota,
+                cotaFundo: p.cota - 1.5,
+                profundidade: 1.5,
+                x: p.x,
+                y: p.y,
+                populacao: 0,
+                vazaoConcentrada: 0,
+                observacao: "",
+              });
+            }
+          }
+
+          if (allNodes.length === 0) {
+            toast.error("Nenhum nó disponível. Execute o passo 03 (Criar PVs) primeiro.");
+            return;
+          }
+
+          mdtCancelRef.current = false;
+          setMdtProgress(0);
+
+          const totalItems = allNodes.length + sewerEdgeAttrs.length + sewerTrechos.length;
+          let processed = 0;
+          let nodesUpdated = 0;
+          let nodesSkipped = 0;
+
+          // Process nodes in batches to keep UI responsive
+          const updatedNodes = [...allNodes];
+          const batchSize = 50;
+
+          for (let i = 0; i < updatedNodes.length; i += batchSize) {
+            if (mdtCancelRef.current) {
+              toast.warning("Operação cancelada pelo usuário.");
+              setMdtProgress(null);
+              return;
+            }
+
+            const end = Math.min(i + batchSize, updatedNodes.length);
+            for (let j = i; j < end; j++) {
+              const node = updatedNodes[j];
+              const elevation = sampleElevation(node.x, node.y);
+              if (elevation !== null) {
+                updatedNodes[j] = {
+                  ...node,
+                  cotaTerreno: Math.round(elevation * 100) / 100,
+                  profundidade: Math.round((elevation - node.cotaFundo) * 100) / 100,
+                };
+                nodesUpdated++;
+              } else {
+                nodesSkipped++;
+              }
+              processed++;
+            }
+
+            setMdtProgress(Math.round((processed / totalItems) * 100));
+            // Yield to UI
+            await new Promise(resolve => setTimeout(resolve, 0));
+          }
+
+          setSewerNodeAttrs(updatedNodes);
+
+          // Update CTM/CTJ on edges
+          let edgesUpdated = 0;
+          if (sewerEdgeAttrs.length > 0) {
+            const nodeMap = new Map(updatedNodes.map(n => [n.id, n]));
+            const updatedEdges = sewerEdgeAttrs.map(e => {
+              const fromNode = nodeMap.get(e.idInicio);
+              const toNode = nodeMap.get(e.idFim);
+              processed++;
+              if (fromNode || toNode) {
+                edgesUpdated++;
+                const ctm = fromNode?.cotaTerreno ?? e.cotaTerrenoM;
+                const ctj = toNode?.cotaTerreno ?? e.cotaTerrenoJ;
+                return {
+                  ...e,
+                  cotaTerrenoM: ctm,
+                  cotaTerrenoJ: ctj,
+                  declividade: e.comprimento > 0
+                    ? Math.round(((e.cotaColetorM - e.cotaColetorJ) / e.comprimento) * 1e6) / 1e6
+                    : e.declividade,
+                };
+              }
+              return e;
+            });
+            setSewerEdgeAttrs(updatedEdges);
+            setMdtProgress(Math.round((processed / totalItems) * 100));
+          }
+
+          // Update trechos CTM/CTJ
+          if (sewerTrechos.length > 0) {
+            const nodeMap = new Map(updatedNodes.map(n => [n.id, n]));
+            const updatedTrechos = activeTrechos.map(t => {
+              const fromNode = nodeMap.get(t.idInicio);
+              const toNode = nodeMap.get(t.idFim);
+              processed++;
+              return {
+                ...t,
+                cotaInicio: fromNode?.cotaTerreno ?? t.cotaInicio,
+                cotaFim: toNode?.cotaTerreno ?? t.cotaFim,
+              };
+            });
+            handleGisTrechosChange(updatedTrechos);
+          }
+
+          // Also update SpatialCore
+          const { updated: spatialUpdated } = fillNodeElevations();
+          if (spatialUpdated > 0) fillEdgeElevations();
+          spatial.refresh();
+
+          // Update GIS points
+          const newPontos = updatedNodes.map(n => ({
+            id: n.id, x: n.x, y: n.y, cota: n.cotaTerreno,
+          }));
+          handleGisPontosChange(newPontos);
+
+          setMdtProgress(100);
+
+          const msg = `MDT: ${nodesUpdated} nós atualizados, ${nodesSkipped} fora do raster, ${edgesUpdated} trechos CTM/CTJ atualizados`;
+          setStepMessage(prev => ({ ...prev, s04: msg }));
+          toast.success(msg);
+          markDone("s04");
+
+          // Clear progress after 2s
+          setTimeout(() => setMdtProgress(null), 2000);
+        };
+
+        // Also keep the original "fill from nodes" functionality
+        const doPreencherCampos = () => {
+          const nodes = sewerNodeAttrs.length > 0
+            ? sewerNodeAttrs.map(n => ({ id: n.id, x: n.x, y: n.y, cotaTerreno: n.cotaTerreno, cotaFundo: n.cotaFundo }))
+            : activePontos.map(p => ({ id: p.id, x: p.x, y: p.y, cotaTerreno: p.cota, cotaFundo: p.cota - 1.5 }));
+
+          const edges = sewerEdgeAttrs.length > 0
+            ? sewerEdgeAttrs.map(e => ({
+                key: e.key, dcId: e.dcId, idInicio: e.idInicio, idFim: e.idFim,
+                comprimento: e.comprimento, cotaTerrenoM: e.cotaTerrenoM, cotaTerrenoJ: e.cotaTerrenoJ,
+                cotaColetorM: e.cotaColetorM, cotaColetorJ: e.cotaColetorJ,
+                manning: e.manning, diametro: e.diametro, declividade: e.declividade,
+              }))
+            : sewerTrechos.map((t, i) => ({
+                key: `${t.idInicio}-${t.idFim}`, dcId: `C${String(i + 1).padStart(3, "0")}`,
+                idInicio: t.idInicio, idFim: t.idFim, comprimento: t.comprimento,
+                cotaTerrenoM: t.cotaInicio, cotaTerrenoJ: t.cotaFim,
+                cotaColetorM: t.cotaInicio - 1.5, cotaColetorJ: t.cotaFim - 1.5,
+                manning, diametro: t.diametroMm, declividade: t.declividade,
+              }));
+
+          if (edges.length === 0) {
+            toast.error("Nenhum trecho para preencher.");
+            return;
+          }
+
+          const filledEdges = fillFieldsFromNodes(nodes, edges);
+
+          if (sewerEdgeAttrs.length > 0) {
+            const updatedEdges = sewerEdgeAttrs.map((e, i) => ({
+              ...e,
+              cotaTerrenoM: filledEdges[i]?.cotaTerrenoM ?? e.cotaTerrenoM,
+              cotaTerrenoJ: filledEdges[i]?.cotaTerrenoJ ?? e.cotaTerrenoJ,
+              cotaColetorM: filledEdges[i]?.cotaColetorM ?? e.cotaColetorM,
+              cotaColetorJ: filledEdges[i]?.cotaColetorJ ?? e.cotaColetorJ,
+              declividade: filledEdges[i]?.declividade ?? e.declividade,
+            }));
+            setSewerEdgeAttrs(updatedEdges);
+          }
+
+          const msg = `${filledEdges.length} trechos preenchidos com dados dos nós`;
+          setStepMessage(prev => ({ ...prev, s04: msg }));
+          toast.success(msg);
+          markDone("s04");
+        };
+
         return (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <TableProperties className="h-5 w-5 text-amber-600" /> Preencher Campos
+                <Mountain className="h-5 w-5 text-amber-600" /> 04 — Atualiza Cota TN via MDT
               </CardTitle>
-              <CardDescription>Transfere cotas de terreno dos nós para os trechos (montante/jusante) e recalcula declividades.</CardDescription>
+              <CardDescription>
+                Amostra valores do raster MDT para cada nó (COTA_TN) e atualiza CTM/CTJ dos trechos.
+                Usa coordenadas reprojetadas (mesmo CRS do raster).
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button onClick={() => {
-                const nodes = sewerNodeAttrs.length > 0
-                  ? sewerNodeAttrs.map(n => ({ id: n.id, x: n.x, y: n.y, cotaTerreno: n.cotaTerreno, cotaFundo: n.cotaFundo }))
-                  : activePontos.map(p => ({ id: p.id, x: p.x, y: p.y, cotaTerreno: p.cota, cotaFundo: p.cota - 1.5 }));
+              <div className="flex gap-2 flex-wrap">
+                <Button onClick={doAtualizaCotaMDT} disabled={mdtProgress !== null && mdtProgress < 100}>
+                  <Mountain className="h-4 w-4 mr-1" /> Atualizar Cota TN via MDT
+                </Button>
+                <Button onClick={doPreencherCampos} variant="outline">
+                  <TableProperties className="h-4 w-4 mr-1" /> Preencher Campos (Nós→Trechos)
+                </Button>
+                {mdtProgress !== null && mdtProgress < 100 && (
+                  <Button variant="destructive" size="sm" onClick={() => { mdtCancelRef.current = true; }}>
+                    <XCircle className="h-3.5 w-3.5 mr-1" /> Cancelar
+                  </Button>
+                )}
+              </div>
 
-                const edges = sewerEdgeAttrs.length > 0
-                  ? sewerEdgeAttrs.map(e => ({
-                      key: e.key, dcId: e.dcId, idInicio: e.idInicio, idFim: e.idFim,
-                      comprimento: e.comprimento, cotaTerrenoM: e.cotaTerrenoM, cotaTerrenoJ: e.cotaTerrenoJ,
-                      cotaColetorM: e.cotaColetorM, cotaColetorJ: e.cotaColetorJ,
-                      manning: e.manning, diametro: e.diametro, declividade: e.declividade,
-                    }))
-                  : sewerTrechos.map((t, i) => ({
-                      key: `${t.idInicio}-${t.idFim}`, dcId: `C${String(i + 1).padStart(3, "0")}`,
-                      idInicio: t.idInicio, idFim: t.idFim, comprimento: t.comprimento,
-                      cotaTerrenoM: t.cotaInicio, cotaTerrenoJ: t.cotaFim,
-                      cotaColetorM: t.cotaInicio - 1.5, cotaColetorJ: t.cotaFim - 1.5,
-                      manning, diametro: t.diametroMm, declividade: t.declividade,
-                    }));
+              {/* Progress bar */}
+              {mdtProgress !== null && (
+                <div className="space-y-1">
+                  <Progress value={mdtProgress} className="h-3" />
+                  <div className="text-xs text-muted-foreground text-center">
+                    {mdtProgress < 100 ? `Processando... ${mdtProgress}%` : "Concluído!"}
+                  </div>
+                </div>
+              )}
 
-                if (edges.length === 0) {
-                  toast.error("Nenhum trecho para preencher.");
-                  return;
-                }
+              {/* Raster status */}
+              <div className="flex items-center gap-2 text-xs">
+                {getRasterGrid() ? (
+                  <Badge className="bg-green-500">MDT carregado</Badge>
+                ) : (
+                  <Badge variant="destructive">Nenhum MDT (importe .tif no Mapa)</Badge>
+                )}
+                <Badge variant="outline">{sewerNodeAttrs.length} nós</Badge>
+                <Badge variant="outline">{sewerEdgeAttrs.length} trechos</Badge>
+              </div>
 
-                const filledEdges = fillFieldsFromNodes(nodes, edges);
-
-                // Merge filled data back to sewerEdgeAttrs
-                if (sewerEdgeAttrs.length > 0) {
-                  const updatedEdges = sewerEdgeAttrs.map((e, i) => ({
-                    ...e,
-                    cotaTerrenoM: filledEdges[i]?.cotaTerrenoM ?? e.cotaTerrenoM,
-                    cotaTerrenoJ: filledEdges[i]?.cotaTerrenoJ ?? e.cotaTerrenoJ,
-                    cotaColetorM: filledEdges[i]?.cotaColetorM ?? e.cotaColetorM,
-                    cotaColetorJ: filledEdges[i]?.cotaColetorJ ?? e.cotaColetorJ,
-                    declividade: filledEdges[i]?.declividade ?? e.declividade,
-                  }));
-                  setSewerEdgeAttrs(updatedEdges);
-                }
-
-                const msg = `${filledEdges.length} trechos preenchidos com dados dos nós`;
-                setStepMessage(prev => ({ ...prev, s04: msg }));
-                toast.success(msg);
-                markDone("s04");
-              }}>
-                <TableProperties className="h-4 w-4 mr-1" /> Preencher Campos
-              </Button>
               {stepMessage.s04 && (
                 <div className="text-sm text-muted-foreground bg-muted/50 rounded p-2">{stepMessage.s04}</div>
               )}
             </CardContent>
           </Card>
         );
+      }
 
       // ═══════ S05: VAZÃO ═══════
       case "s05":
