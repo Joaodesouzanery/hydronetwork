@@ -269,12 +269,26 @@ export function accumulateSewerFlow(
   const flowMap = new Map<string, number>();
   for (const nf of nodeFlows) flowMap.set(nf.id, nf.vazaoLocal);
 
+  // Build set of known node IDs for smart segment ID parsing
+  const knownNodeIds = new Set(nodeFlows.map(nf => nf.id));
+
   // Build adjacency: downstream[nodeId] = list of segment indices leaving this node
   // Each segment goes from node "upstream" to node "downstream"
   // We extract node IDs from segment IDs formatted as "from-to"
   const segmentNodes = trechos.map(t => {
-    const parts = t.id.split("-");
-    // Handle IDs that themselves contain dashes (e.g. "PV-1-PV-2")
+    // Try to find a split position where both parts are known node IDs
+    const id = t.id;
+    for (let i = 1; i < id.length; i++) {
+      if (id[i] === "-") {
+        const from = id.substring(0, i);
+        const to = id.substring(i + 1);
+        if (knownNodeIds.has(from) && knownNodeIds.has(to)) {
+          return { from, to };
+        }
+      }
+    }
+    // Fallback: midpoint split for backward compatibility
+    const parts = id.split("-");
     const mid = Math.floor(parts.length / 2);
     return { from: parts.slice(0, mid).join("-"), to: parts.slice(mid).join("-") };
   });

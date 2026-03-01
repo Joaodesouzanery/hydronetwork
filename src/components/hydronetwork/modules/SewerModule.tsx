@@ -230,14 +230,14 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     if (trechos && trechos.length > 0 && gisTrechos.length === 0) setGisTrechos(trechos);
   }, [trechos?.length]);
 
-  const handleGisPontosChange = (p: PontoTopografico[]) => {
+  const handleGisPontosChange = useCallback((p: PontoTopografico[]) => {
     setGisPontos(p);
     onPontosChange?.(p);
-  };
-  const handleGisTrechosChange = (t: Trecho[]) => {
+  }, [onPontosChange]);
+  const handleGisTrechosChange = useCallback((t: Trecho[]) => {
     setGisTrechos(t);
     onTrechosChange?.(t);
-  };
+  }, [onTrechosChange]);
 
   // ── Derived (must be declared before any useCallback that references them) ──
   const activePontos = spatial.legacyPontos.length > 0
@@ -559,9 +559,10 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
 
     toast.success(`QEsg: ${resumo.atendem}/${resumo.total} atendem NBR 9649`);
     markDone("s07");
-  }, [sewerEdgeAttrs, sewerNodeAttrs, sewerTrechos, activePontos, manning, laminaMax,
-      velMinEsg, velMaxEsg, tensaoMin, diamMinEsg, vazaoEsg, material, metodoVazao,
-      qpcLitrosDia, k1, k2]);
+  }, [sewerEdgeAttrs, sewerNodeAttrs, sewerTrechos, activePontos, activeTrechos,
+      manning, laminaMax, velMinEsg, velMaxEsg, tensaoMin, diamMinEsg, vazaoEsg,
+      material, metodoVazao, qpcLitrosDia, k1, k2, pontaSecaEnabled,
+      handleGisTrechosChange, spatial]);
 
   const applyDiameters = useCallback(() => {
     if (sewerResults.length === 0) return;
@@ -571,7 +572,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
       return d ? { ...t, diametroMm: d } : t;
     }));
     toast.success("Diâmetros aplicados");
-  }, [sewerResults, activeTrechos]);
+  }, [sewerResults, activeTrechos, handleGisTrechosChange]);
 
   const exportCSV = () => {
     if (sewerResults.length === 0) return;

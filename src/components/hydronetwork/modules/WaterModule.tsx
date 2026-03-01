@@ -95,14 +95,14 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     if (trechos && trechos.length > 0 && gisTrechos.length === 0) setGisTrechos(trechos);
   }, [trechos?.length]);
 
-  const handleGisPontosChange = (p: PontoTopografico[]) => {
+  const handleGisPontosChange = useCallback((p: PontoTopografico[]) => {
     setGisPontos(p);
     onPontosChange?.(p);
-  };
-  const handleGisTrechosChange = (t: Trecho[]) => {
+  }, [onPontosChange]);
+  const handleGisTrechosChange = useCallback((t: Trecho[]) => {
     setGisTrechos(t);
     onTrechosChange?.(t);
-  };
+  }, [onTrechosChange]);
 
   // ── Hydraulic parameters ──
   const [formula, setFormula] = useState<"hazen-williams" | "colebrook">(WATER_DEFAULTS.formula);
@@ -368,8 +368,9 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     }
 
     toast.success(`QWater: ${resumo.atendem}/${resumo.total} atendem NBR 12218`);
-  }, [waterEdgeAttrs, waterNodeAttrs, waterTrechos, activePontos, formula, coefHW,
-      velMinAgua, velMaxAgua, pressaoMin, pressaoMax, diamMinAgua, vazaoAgua, materialAgua]);
+  }, [waterEdgeAttrs, waterNodeAttrs, waterTrechos, activePontos, activeTrechos,
+      formula, coefHW, velMinAgua, velMaxAgua, pressaoMin, pressaoMax, diamMinAgua,
+      vazaoAgua, materialAgua, handleGisTrechosChange, spatial]);
 
   const applyDiameters = useCallback(() => {
     if (waterResults.length === 0) return;
@@ -379,7 +380,7 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
       return d ? { ...t, diametroMm: d } : t;
     }));
     toast.success("Diâmetros aplicados");
-  }, [waterResults, activeTrechos]);
+  }, [waterResults, activeTrechos, handleGisTrechosChange]);
 
   // ── Run EPANET ──
   const runEpanet = useCallback(async () => {

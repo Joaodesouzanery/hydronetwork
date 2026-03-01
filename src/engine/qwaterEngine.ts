@@ -328,19 +328,19 @@ function pointInPolygon(x: number, y: number, polygon: [number, number][]): bool
  * Calculate demand at each junction based on which hydraulic zone(s) it belongs to.
  * Distributes zone population demand equally among junctions within the zone.
  * Equivalent to QWater's zone-based demand distribution.
+ *
+ * Requires nodes with x,y coordinates for point-in-polygon testing.
  */
 export function calcHydraulicZoneDemand(
-  nodes: WaterNodeInput[],
+  nodes: { id: string; x: number; y: number; cota: number; demanda: number }[],
   zones: DemandZone[]
 ): { nodeId: string; demandaLps: number; zonaId: string }[] {
   const results: { nodeId: string; demandaLps: number; zonaId: string }[] = [];
 
   for (const zone of zones) {
-    // Find which junctions are in this zone
+    // Find which junctions are in this zone using actual x,y coordinates
     const nodesInZone = nodes.filter(n =>
-      pointInPolygon(n.cota !== undefined ? n.cota : 0, 0, zone.polygon) ||
-      // Simplified: use x,y if available
-      true // Will be refined by caller providing proper coordinates
+      pointInPolygon(n.x, n.y, zone.polygon)
     );
 
     if (nodesInZone.length === 0) continue;
