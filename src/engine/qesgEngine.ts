@@ -619,3 +619,506 @@ export function checkInterferences(
 
   return conflicts;
 }
+
+// ══════════════════════════════════════
+// Button 08: Minimum Cover Points
+// ══════════════════════════════════════
+
+export interface MinCoverAlertPoint {
+  id: string;
+  edgeKey: string;
+  x: number;
+  y: number;
+  cotaTerreno: number;
+  cotaColetor: number;
+  recobrimento: number;
+  recobrimentoMinimo: number;
+  deficit: number;
+}
+
+/**
+ * Find points along the network where cover (CTN - CColetor - DN) is less
+ * than the configured minimum.  Returns alert points at each offending endpoint.
+ */
+export function findMinCoverPoints(
+  nodes: SewerNetworkNode[],
+  edges: SewerNetworkEdge[],
+  results: SewerSegmentResult[],
+  recobrimentoMinimo: number
+): MinCoverAlertPoint[] {
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+  const resultMap = new Map(results.map(r => [r.id, r]));
+  const alerts: MinCoverAlertPoint[] = [];
+  let idx = 0;
+
+  for (const edge of edges) {
+    const key = edge.key || `${edge.idInicio}-${edge.idFim}`;
+    const result = resultMap.get(key) || resultMap.get(edge.dcId);
+    const diamM = (result?.diametroMm || edge.diametro || 150) / 1000;
+
+    // Check upstream end
+    const fromNode = nodeMap.get(edge.idInicio);
+    if (fromNode) {
+      const recM = fromNode.cotaTerreno - edge.cotaColetorM - diamM;
+      if (recM < recobrimentoMinimo) {
+        alerts.push({
+          id: `REC-${++idx}`,
+          edgeKey: key,
+          x: fromNode.x,
+          y: fromNode.y,
+          cotaTerreno: fromNode.cotaTerreno,
+          cotaColetor: edge.cotaColetorM,
+          recobrimento: Math.round(recM * 100) / 100,
+          recobrimentoMinimo,
+          deficit: Math.round((recobrimentoMinimo - recM) * 100) / 100,
+        });
+      }
+    }
+
+    // Check downstream end
+    const toNode = nodeMap.get(edge.idFim);
+    if (toNode) {
+      const recJ = toNode.cotaTerreno - edge.cotaColetorJ - diamM;
+      if (recJ < recobrimentoMinimo) {
+        alerts.push({
+          id: `REC-${++idx}`,
+          edgeKey: key,
+          x: toNode.x,
+          y: toNode.y,
+          cotaTerreno: toNode.cotaTerreno,
+          cotaColetor: edge.cotaColetorJ,
+          recobrimento: Math.round(recJ * 100) / 100,
+          recobrimentoMinimo,
+          deficit: Math.round((recobrimentoMinimo - recJ) * 100) / 100,
+        });
+      }
+    }
+  }
+
+  return alerts;
+}
+
+// ══════════════════════════════════════
+// Diameter Summary
+// ══════════════════════════════════════
+
+export interface DiameterSummaryRow {
+  diametro: number;
+  quantidade: number;
+  extensaoTotal: number;
+  extensaoMedia: number;
+}
+
+export function summarizeByDiameter(
+  edges: SewerNetworkEdge[],
+  results: SewerSegmentResult[]
+): DiameterSummaryRow[] {
+  const resultMap = new Map(results.map(r => [r.id, r]));
+  const groups = new Map<number, { count: number; length: number }>();
+
+  for (const edge of edges) {
+    const key = edge.key || `${edge.idInicio}-${edge.idFim}`;
+    const result = resultMap.get(key) || resultMap.get(edge.dcId);
+    const dn = result?.diametroMm || edge.diametro || 150;
+    const existing = groups.get(dn) || { count: 0, length: 0 };
+    existing.count++;
+    existing.length += edge.comprimento;
+    groups.set(dn, existing);
+  }
+
+  return Array.from(groups.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([dn, g]) => ({
+      diametro: dn,
+      quantidade: g.count,
+      extensaoTotal: Math.round(g.length * 100) / 100,
+      extensaoMedia: Math.round((g.length / g.count) * 100) / 100,
+    }));
+}
+
+// ══════════════════════════════════════
+// DXF Import (minimal parser for CAD/Sancad)
+// ══════════════════════════════════════
+
+export interface DxfImportedLine {
+  x1: number; y1: number; z1: number;
+  x2: number; y2: number; z2: number;
+  layer: string;
+}
+
+export interface DxfImportedPoint {
+  x: number; y: number; z: number;
+  layer: string;
+  label?: string;
+}
+
+export function parseDxfText(dxfContent: string): {
+  lines: DxfImportedLine[];
+  points: DxfImportedPoint[];
+} {
+  const lines: DxfImportedLine[] = [];
+  const points: DxfImportedPoint[] = [];
+
+  // Split into lines and process entity by entity
+  const rawLines = dxfContent.split("\n").map(l => l.trim());
+
+  let i = 0;
+  let inEntities = false;
+
+  while (i < rawLines.length) {
+    const code = rawLines[i];
+    const value = rawLines[i + 1] || "";
+
+    if (code === "2" && value === "ENTITIES") {
+      inEntities = true;
+      i += 2;
+      continue;
+    }
+    if (code === "0" && value === "ENDSEC" && inEntities) {
+      break;
+    }
+
+    if (inEntities && code === "0" && value === "LINE") {
+      let layer = "0", x1 = 0, y1 = 0, z1 = 0, x2 = 0, y2 = 0, z2 = 0;
+      i += 2;
+      while (i < rawLines.length && !(rawLines[i] === "0" && rawLines[i + 1] !== undefined && !rawLines[i + 1].match(/^\d/))) {
+        const c = rawLines[i], v = rawLines[i + 1] || "";
+        if (c === "8") layer = v;
+        else if (c === "10") x1 = parseFloat(v);
+        else if (c === "20") y1 = parseFloat(v);
+        else if (c === "30") z1 = parseFloat(v);
+        else if (c === "11") x2 = parseFloat(v);
+        else if (c === "21") y2 = parseFloat(v);
+        else if (c === "31") z2 = parseFloat(v);
+        i += 2;
+        if (rawLines[i] === "0") break;
+      }
+      lines.push({ x1, y1, z1, x2, y2, z2, layer });
+      continue;
+    }
+
+    if (inEntities && code === "0" && (value === "POINT" || value === "INSERT")) {
+      let layer = "0", x = 0, y = 0, z = 0;
+      i += 2;
+      while (i < rawLines.length) {
+        const c = rawLines[i], v = rawLines[i + 1] || "";
+        if (c === "8") layer = v;
+        else if (c === "10") x = parseFloat(v);
+        else if (c === "20") y = parseFloat(v);
+        else if (c === "30") z = parseFloat(v);
+        i += 2;
+        if (rawLines[i] === "0") break;
+      }
+      points.push({ x, y, z, layer });
+      continue;
+    }
+
+    if (inEntities && code === "0" && value === "LWPOLYLINE") {
+      let layer = "0";
+      const verts: { x: number; y: number; z: number }[] = [];
+      let elevation = 0;
+      i += 2;
+      while (i < rawLines.length) {
+        const c = rawLines[i], v = rawLines[i + 1] || "";
+        if (c === "8") layer = v;
+        else if (c === "38") elevation = parseFloat(v);
+        else if (c === "10") {
+          const vtx = { x: parseFloat(v), y: 0, z: elevation };
+          // Read Y (code 20) next
+          if (rawLines[i + 2] === "20") {
+            vtx.y = parseFloat(rawLines[i + 3]);
+            i += 2;
+          }
+          verts.push(vtx);
+        }
+        i += 2;
+        if (rawLines[i] === "0") break;
+      }
+      // Convert polyline to individual line segments
+      for (let j = 0; j < verts.length - 1; j++) {
+        lines.push({
+          x1: verts[j].x, y1: verts[j].y, z1: verts[j].z,
+          x2: verts[j + 1].x, y2: verts[j + 1].y, z2: verts[j + 1].z,
+          layer,
+        });
+      }
+      continue;
+    }
+
+    i += 2;
+  }
+
+  return { lines, points };
+}
+
+// ══════════════════════════════════════
+// DXF Export (enhanced for sewer networks)
+// ══════════════════════════════════════
+
+export function exportSewerDxf(
+  nodes: SewerNetworkNode[],
+  edges: SewerNetworkEdge[],
+  results: SewerSegmentResult[]
+): string {
+  const resultMap = new Map(results.map(r => [r.id, r]));
+
+  // Collect unique diameters for layer names
+  const diameters = new Set<number>();
+  for (const r of results) diameters.add(r.diametroMm);
+
+  let dxf = `0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n${diameters.size + 2}\n`;
+
+  // PV layer
+  dxf += `0\nLAYER\n2\nPVs\n70\n0\n62\n3\n6\nCONTINUOUS\n`;
+
+  // One layer per diameter
+  let colorIdx = 1;
+  for (const dn of Array.from(diameters).sort((a, b) => a - b)) {
+    dxf += `0\nLAYER\n2\nDN${dn}\n70\n0\n62\n${colorIdx++ % 7 + 1}\n6\nCONTINUOUS\n`;
+  }
+
+  dxf += `0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n`;
+
+  // Draw PVs as circles + text
+  for (const n of nodes) {
+    dxf += `0\nCIRCLE\n8\nPVs\n10\n${n.x.toFixed(4)}\n20\n${n.y.toFixed(4)}\n30\n${n.cotaTerreno.toFixed(4)}\n40\n0.5\n`;
+    dxf += `0\nTEXT\n8\nPVs\n10\n${(n.x + 1).toFixed(4)}\n20\n${(n.y + 1).toFixed(4)}\n30\n${n.cotaTerreno.toFixed(4)}\n40\n1.2\n1\n${n.id}\n`;
+  }
+
+  // Draw edges by diameter layer
+  for (const edge of edges) {
+    const key = edge.key || `${edge.idInicio}-${edge.idFim}`;
+    const result = resultMap.get(key) || resultMap.get(edge.dcId);
+    const dn = result?.diametroMm || edge.diametro || 150;
+    const layerName = `DN${dn}`;
+
+    const fromNode = nodes.find(n => n.id === edge.idInicio);
+    const toNode = nodes.find(n => n.id === edge.idFim);
+    if (!fromNode || !toNode) continue;
+
+    dxf += `0\nLINE\n8\n${layerName}\n10\n${fromNode.x.toFixed(4)}\n20\n${fromNode.y.toFixed(4)}\n30\n${edge.cotaColetorM.toFixed(4)}\n11\n${toNode.x.toFixed(4)}\n21\n${toNode.y.toFixed(4)}\n31\n${edge.cotaColetorJ.toFixed(4)}\n`;
+
+    // Label at midpoint
+    const mx = (fromNode.x + toNode.x) / 2;
+    const my = (fromNode.y + toNode.y) / 2;
+    const mz = (edge.cotaColetorM + edge.cotaColetorJ) / 2;
+    dxf += `0\nTEXT\n8\n${layerName}\n10\n${mx.toFixed(4)}\n20\n${(my + 1).toFixed(4)}\n30\n${mz.toFixed(4)}\n40\n1.0\n1\n${edge.dcId} DN${dn}\n`;
+  }
+
+  dxf += `0\nENDSEC\n0\nEOF\n`;
+  return dxf;
+}
+
+// ══════════════════════════════════════
+// LandXML Import/Export (Civil 3D)
+// ══════════════════════════════════════
+
+export interface LandXMLPipe {
+  name: string;
+  startStructure: string;
+  endStructure: string;
+  diameter: number;
+  length: number;
+  invertStart: number;
+  invertEnd: number;
+  material: string;
+}
+
+export interface LandXMLStructure {
+  name: string;
+  x: number;
+  y: number;
+  rimElevation: number;
+  invertElevation: number;
+}
+
+export function parseLandXML(xmlText: string): {
+  pipes: LandXMLPipe[];
+  structures: LandXMLStructure[];
+} {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, "text/xml");
+  const pipes: LandXMLPipe[] = [];
+  const structures: LandXMLStructure[] = [];
+
+  // Parse structures
+  const structNodes = doc.querySelectorAll("Struct, Structure");
+  structNodes.forEach(sNode => {
+    const name = sNode.getAttribute("name") || sNode.getAttribute("Name") || "";
+    const center = sNode.querySelector("Center");
+    let x = 0, y = 0;
+    if (center) {
+      const coords = (center.textContent || "").trim().split(/\s+/);
+      y = parseFloat(coords[0]) || 0;  // LandXML: northing first
+      x = parseFloat(coords[1]) || 0;
+    }
+    const rim = parseFloat(sNode.getAttribute("elevRim") || sNode.getAttribute("ElevRim") || "0");
+    const invert = parseFloat(sNode.getAttribute("elevSump") || sNode.getAttribute("ElevSump") || "0");
+    structures.push({ name, x, y, rimElevation: rim, invertElevation: invert });
+  });
+
+  // Parse pipes
+  const pipeNodes = doc.querySelectorAll("Pipe");
+  pipeNodes.forEach(pNode => {
+    const name = pNode.getAttribute("name") || pNode.getAttribute("Name") || "";
+    const refStart = pNode.getAttribute("refStart") || pNode.getAttribute("RefStart") || "";
+    const refEnd = pNode.getAttribute("refEnd") || pNode.getAttribute("RefEnd") || "";
+    const diam = parseFloat(pNode.getAttribute("diameter") || pNode.getAttribute("Diameter") || "0.15") * 1000;
+    const length = parseFloat(pNode.getAttribute("length") || pNode.getAttribute("Length") || "0");
+
+    const startEl = pNode.querySelector("Start, PipeStart");
+    const endEl = pNode.querySelector("End, PipeEnd");
+    const invertStart = parseFloat(startEl?.getAttribute("elev") || startEl?.textContent || "0");
+    const invertEnd = parseFloat(endEl?.getAttribute("elev") || endEl?.textContent || "0");
+    const mat = pNode.getAttribute("material") || "PVC";
+
+    pipes.push({ name, startStructure: refStart, endStructure: refEnd, diameter: diam, length, invertStart, invertEnd, material: mat });
+  });
+
+  return { pipes, structures };
+}
+
+export function exportLandXML(
+  nodes: SewerNetworkNode[],
+  edges: SewerNetworkEdge[],
+  results: SewerSegmentResult[],
+  projectName = "QEsg_Web"
+): string {
+  const resultMap = new Map(results.map(r => [r.id, r]));
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+  xml += `<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2">\n`;
+  xml += `  <Project name="${projectName}" />\n`;
+  xml += `  <PipeNetworks name="Sewer">\n`;
+  xml += `    <PipeNetwork name="Rede_Esgoto" pipeNetType="storm">\n`;
+  xml += `      <Structs>\n`;
+
+  for (const n of nodes) {
+    xml += `        <Struct name="${n.id}" elevRim="${n.cotaTerreno.toFixed(3)}" elevSump="${n.cotaFundo.toFixed(3)}">\n`;
+    xml += `          <Center>${n.y.toFixed(4)} ${n.x.toFixed(4)}</Center>\n`;
+    xml += `        </Struct>\n`;
+  }
+
+  xml += `      </Structs>\n`;
+  xml += `      <Pipes>\n`;
+
+  for (const edge of edges) {
+    const key = edge.key || `${edge.idInicio}-${edge.idFim}`;
+    const result = resultMap.get(key) || resultMap.get(edge.dcId);
+    const dn = result?.diametroMm || edge.diametro || 150;
+    const diamM = dn / 1000;
+
+    xml += `        <Pipe name="${edge.dcId}" refStart="${edge.idInicio}" refEnd="${edge.idFim}" diameter="${diamM.toFixed(3)}" length="${edge.comprimento.toFixed(3)}" material="${edge.key ? 'PVC' : 'PVC'}">\n`;
+    xml += `          <CircPipe diameter="${diamM.toFixed(3)}" />\n`;
+    xml += `        </Pipe>\n`;
+  }
+
+  xml += `      </Pipes>\n`;
+  xml += `    </PipeNetwork>\n`;
+  xml += `  </PipeNetworks>\n`;
+  xml += `</LandXML>\n`;
+
+  return xml;
+}
+
+// ══════════════════════════════════════
+// Report Generation
+// ══════════════════════════════════════
+
+export function generateProjectReport(
+  config: {
+    populacaoInicial: number;
+    populacaoSaturacao: number;
+    perCapita: number;
+    k1: number;
+    k2: number;
+    coefRetorno: number;
+    taxaInfiltracao: number;
+    manning: number;
+    material: string;
+    norma: string;
+    diametroMinimo: number;
+    recobrimentoMinimo: number;
+    laminaMaxima: number;
+    tensaoMinima: number;
+    velMinima: number;
+    velMaxima: number;
+  },
+  nodeCount: number,
+  edgeCount: number
+): string {
+  return `
+╔══════════════════════════════════════════════════════╗
+║              DADOS DO PROJETO — QEsg Web             ║
+╠══════════════════════════════════════════════════════╣
+║ Norma Técnica:       ${config.norma.padEnd(30)} ║
+║ Material Padrão:     ${config.material.padEnd(30)} ║
+║ Manning (n):         ${config.manning.toFixed(4).padEnd(30)} ║
+╠══════════════════════════════════════════════════════╣
+║ DADOS POPULACIONAIS                                  ║
+║ Pop. Inicial:        ${String(config.populacaoInicial).padEnd(30)} ║
+║ Pop. Saturação:      ${String(config.populacaoSaturacao).padEnd(30)} ║
+║ Per Capita:          ${(config.perCapita + " L/hab.dia").padEnd(30)} ║
+║ K1:                  ${config.k1.toFixed(2).padEnd(30)} ║
+║ K2:                  ${config.k2.toFixed(2).padEnd(30)} ║
+║ Coef. Retorno:       ${config.coefRetorno.toFixed(2).padEnd(30)} ║
+║ Tx. Infiltração:     ${(config.taxaInfiltracao + " L/s.m").padEnd(30)} ║
+╠══════════════════════════════════════════════════════╣
+║ CRITÉRIOS HIDRÁULICOS                                ║
+║ Diâmetro Mínimo:     ${(config.diametroMinimo + " mm").padEnd(30)} ║
+║ Recobr. Mínimo:      ${(config.recobrimentoMinimo + " m").padEnd(30)} ║
+║ Lâmina Máxima:       ${(config.laminaMaxima + " (y/D)").padEnd(30)} ║
+║ Tensão Mín:          ${(config.tensaoMinima + " Pa").padEnd(30)} ║
+║ Vel. Mín:            ${(config.velMinima + " m/s").padEnd(30)} ║
+║ Vel. Máx:            ${(config.velMaxima + " m/s").padEnd(30)} ║
+╠══════════════════════════════════════════════════════╣
+║ REDE                                                 ║
+║ Nós (PVs):           ${String(nodeCount).padEnd(30)} ║
+║ Trechos:             ${String(edgeCount).padEnd(30)} ║
+╚══════════════════════════════════════════════════════╝
+`.trim();
+}
+
+export function generateResultsCSV(
+  edges: SewerNetworkEdge[],
+  nodes: SewerNetworkNode[],
+  results: SewerSegmentResult[]
+): string {
+  const resultMap = new Map(results.map(r => [r.id, r]));
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+  let csv = "DC_ID;PVM;PVJ;LENGTH;CTM;CTJ;CCM;CCJ;PRFM;PRFJ;DIAMETER;DN_CALC;DECL;VEL;VEL_CRIT;Y/D;TRATIVA;STATUS;OBS\n";
+
+  for (const edge of edges) {
+    const key = edge.key || `${edge.idInicio}-${edge.idFim}`;
+    const r = resultMap.get(key) || resultMap.get(edge.dcId);
+    const fromNode = nodeMap.get(edge.idInicio);
+    const toNode = nodeMap.get(edge.idFim);
+    const prfM = fromNode ? (fromNode.cotaTerreno - edge.cotaColetorM) : 0;
+    const prfJ = toNode ? (toNode.cotaTerreno - edge.cotaColetorJ) : 0;
+
+    csv += [
+      edge.dcId,
+      edge.idInicio,
+      edge.idFim,
+      edge.comprimento.toFixed(2),
+      edge.cotaTerrenoM.toFixed(2),
+      edge.cotaTerrenoJ.toFixed(2),
+      edge.cotaColetorM.toFixed(2),
+      edge.cotaColetorJ.toFixed(2),
+      prfM.toFixed(2),
+      prfJ.toFixed(2),
+      r?.diametroMm || edge.diametro,
+      r?.diametroCalculadoMm || "",
+      (r?.declividadeUsada || edge.declividade || 0).toFixed(6),
+      r?.velocidadeMs.toFixed(3) || "",
+      r?.velocidadeCriticaMs.toFixed(3) || "",
+      r?.laminaDagua.toFixed(4) || "",
+      r?.tensaoTrativa.toFixed(3) || "",
+      r?.atendeNorma ? "OK" : "FALHA",
+      r?.observacoes?.join(" | ") || "",
+    ].join(";") + "\n";
+  }
+
+  return csv;
+}
