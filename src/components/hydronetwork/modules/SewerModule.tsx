@@ -6,12 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Calculator, Waves, CheckCircle, XCircle, Download,
   AlertTriangle, Zap, Upload, Settings, Users,
-  Map as MapIcon, TableProperties, Activity,
+  Map as MapIcon, TableProperties, Activity, Mountain,
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
@@ -20,6 +19,8 @@ import {
   dimensionSewerNetwork,
   accumulateSewerFlow,
   calcPopulationFlow,
+  numberSewerNetwork,
+  fillFieldsFromNodes,
   type SewerSegmentInput,
   type SewerSegmentResult,
   type SewerNodeInput,
@@ -30,17 +31,34 @@ import { ElementTypeAssigner, ElementAssignment } from "@/components/hydronetwor
 import { AttributeTableEditor, SewerNodeAttributes, SewerEdgeAttributes } from "@/components/hydronetwork/modules/AttributeTableEditor";
 import { LongitudinalProfile } from "@/components/hydronetwork/modules/LongitudinalProfile";
 import { SEWER_DEFAULTS, DEMO_UTM_ORIGIN } from "@/config/defaults";
+import { useSpatialData } from "@/hooks/useSpatialData";
+import { getNodesByOrigin } from "@/core/spatial";
 
 // ══════════════════════════════════════
 // Interfaces
 // ══════════════════════════════════════
 
 interface SewerModuleProps {
-  pontos: PontoTopografico[];
-  trechos: Trecho[];
+  pontos?: PontoTopografico[];
+  trechos?: Trecho[];
   onPontosChange?: (p: PontoTopografico[]) => void;
-  onTrechosChange: (t: Trecho[]) => void;
+  onTrechosChange?: (t: Trecho[]) => void;
 }
+
+// ── Step definitions ──
+
+type StepId = "mapa" | "s00" | "s01" | "s02" | "s03" | "s04" | "s05" | "s06" | "s07";
+
+const steps: { id: StepId; num: string; label: string }[] = [
+  { id: "s00", num: "00", label: "Config" },
+  { id: "s01", num: "01", label: "Campos" },
+  { id: "s02", num: "02", label: "Numerar" },
+  { id: "s03", num: "03", label: "Nós" },
+  { id: "s04", num: "04", label: "Preencher" },
+  { id: "s05", num: "05", label: "Vazão" },
+  { id: "s06", num: "06", label: "Dimensionar" },
+  { id: "s07", num: "07", label: "Perfil" },
+];
 
 // ── Map formatters ──
 const formatSewerTooltip = (segId: string, r: SewerSegmentResult) =>
@@ -60,26 +78,34 @@ const formatSewerPopup = (segId: string, r: SewerSegmentResult) => `
   </div>`;
 
 // ══════════════════════════════════════
-// Main Component — 5 GIS Tabs
+// Main Component — Sequential Toolbar
 // ══════════════════════════════════════
 
 export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }: SewerModuleProps) => {
+  // ── Spatial data (primary source) ──
+  const spatial = useSpatialData("qesg");
+
   // ── GIS data ──
-  const [gisPontos, setGisPontos] = useState<PontoTopografico[]>(pontos);
-  const [gisTrechos, setGisTrechos] = useState<Trecho[]>(trechos);
+  const [gisPontos, setGisPontos] = useState<PontoTopografico[]>(pontos || []);
+  const [gisTrechos, setGisTrechos] = useState<Trecho[]>(trechos || []);
   const [assignments, setAssignments] = useState<ElementAssignment>({
     nodeTypes: new Map(), edgeTypes: new Map(),
   });
   const [sewerNodeAttrs, setSewerNodeAttrs] = useState<SewerNodeAttributes[]>([]);
   const [sewerEdgeAttrs, setSewerEdgeAttrs] = useState<SewerEdgeAttributes[]>([]);
 
+  // ── Step state ──
+  const [activeStep, setActiveStep] = useState<StepId>("mapa");
+  const [stepStatus, setStepStatus] = useState<Record<string, "pending" | "done">>({});
+  const markDone = (stepId: StepId) => setStepStatus(prev => ({ ...prev, [stepId]: "done" }));
+
   // Sync external data into GIS state on first load
   useEffect(() => {
-    if (pontos.length > 0 && gisPontos.length === 0) setGisPontos(pontos);
-  }, [pontos.length]);
+    if (pontos && pontos.length > 0 && gisPontos.length === 0) setGisPontos(pontos);
+  }, [pontos?.length]);
   useEffect(() => {
-    if (trechos.length > 0 && gisTrechos.length === 0) setGisTrechos(trechos);
-  }, [trechos.length]);
+    if (trechos && trechos.length > 0 && gisTrechos.length === 0) setGisTrechos(trechos);
+  }, [trechos?.length]);
 
   const handleGisPontosChange = (p: PontoTopografico[]) => {
     setGisPontos(p);
@@ -87,7 +113,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   };
   const handleGisTrechosChange = (t: Trecho[]) => {
     setGisTrechos(t);
-    onTrechosChange(t);
+    onTrechosChange?.(t);
   };
 
   // ── Hydraulic parameters ──
@@ -98,6 +124,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   const [tensaoMin, setTensaoMin] = useState(SEWER_DEFAULTS.tensaoMin);
   const [diamMinEsg, setDiamMinEsg] = useState(SEWER_DEFAULTS.diamMinMm);
   const [material, setMaterial] = useState(SEWER_DEFAULTS.defaultMaterial);
+  const [pontaSecaEnabled, setPontaSecaEnabled] = useState(false);
 
   // Flow parameters
   const [metodoVazao, setMetodoVazao] = useState<"fixa" | "percapita">("fixa");
@@ -110,9 +137,20 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   const [sewerResults, setSewerResults] = useState<SewerSegmentResult[]>([]);
   const [sewerResumo, setSewerResumo] = useState<{ total: number; atendem: number } | null>(null);
 
+  // ── Step messages ──
+  const [stepMessage, setStepMessage] = useState<Record<string, string>>({});
+
   // ── Derived ──
-  const activePontos = gisPontos.length > 0 ? gisPontos : pontos;
-  const activeTrechos = gisTrechos.length > 0 ? gisTrechos : trechos;
+  const activePontos = spatial.legacyPontos.length > 0
+    ? spatial.legacyPontos
+    : gisPontos.length > 0
+      ? gisPontos
+      : (pontos || []);
+  const activeTrechos = spatial.legacyTrechos.length > 0
+    ? spatial.legacyTrechos
+    : gisTrechos.length > 0
+      ? gisTrechos
+      : (trechos || []);
   const sewerTrechos = useMemo(() =>
     activeTrechos.filter(t => {
       const tipo = t.tipoRedeManual || "esgoto";
@@ -127,10 +165,20 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
 
   // ── Transfer / Demo ──
   const transferFromTopography = () => {
-    if (pontos.length === 0) { toast.error("Nenhum ponto na topografia"); return; }
-    setGisPontos(pontos);
-    setGisTrechos(trechos);
-    toast.success(`${pontos.length} pontos transferidos da topografia`);
+    spatial.importFromTopography();
+    const topoNodes = getNodesByOrigin("topografia");
+    if (topoNodes.length === 0 && (!pontos || (pontos.length === 0))) {
+      toast.error("Nenhum ponto na topografia"); return;
+    }
+    // If spatial import worked
+    if (spatial.nodes.length > 0) {
+      setGisPontos(spatial.legacyPontos);
+      setGisTrechos(spatial.legacyTrechos);
+    } else if (pontos && pontos.length > 0) {
+      setGisPontos(pontos);
+      setGisTrechos(trechos || []);
+    }
+    toast.success(`Dados transferidos da topografia`);
   };
 
   const loadDemo = () => {
@@ -209,6 +257,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     setSewerResults(resultados);
     setSewerResumo({ total: resumo.total, atendem: resumo.atendem });
     toast.success(`QEsg: ${resumo.atendem}/${resumo.total} atendem NBR 9649`);
+    markDone("s06");
   }, [sewerEdgeAttrs, sewerNodeAttrs, sewerTrechos, activePontos, manning, laminaMax,
       velMinEsg, velMaxEsg, tensaoMin, diamMinEsg, vazaoEsg, material, metodoVazao,
       qpcLitrosDia, k1, k2]);
@@ -262,37 +311,46 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     ? Math.round((sewerResumo.atendem / Math.max(sewerResumo.total, 1)) * 100) : 0;
   const canDimension = sewerEdgeAttrs.length > 0 || sewerTrechos.length > 0;
 
-  return (
-    <div className="space-y-4">
-      <Tabs defaultValue="mapa">
-        <TabsList className="grid grid-cols-5 w-full max-w-2xl">
-          <TabsTrigger value="mapa"><MapIcon className="h-3.5 w-3.5 mr-1" />Mapa</TabsTrigger>
-          <TabsTrigger value="config"><Settings className="h-3.5 w-3.5 mr-1" />Configuração</TabsTrigger>
-          <TabsTrigger value="rede"><TableProperties className="h-3.5 w-3.5 mr-1" />Rede</TabsTrigger>
-          <TabsTrigger value="dimensionamento"><Calculator className="h-3.5 w-3.5 mr-1" />Dimensionamento</TabsTrigger>
-          <TabsTrigger value="perfil"><Activity className="h-3.5 w-3.5 mr-1" />Perfil</TabsTrigger>
-        </TabsList>
+  // ══════════════════════════════════════
+  // Panel rendering
+  // ══════════════════════════════════════
 
-        {/* ═══════ TAB 1: MAPA ═══════ */}
-        <TabsContent value="mapa" className="space-y-4">
-          <GisMapTab
-            networkType="esgoto"
-            pontos={gisPontos}
-            trechos={gisTrechos}
-            onPontosChange={handleGisPontosChange}
-            onTrechosChange={handleGisTrechosChange}
-            accentColor="#ef4444"
-          />
-          <div className="flex gap-2 flex-wrap">
-            <Button onClick={transferFromTopography} variant="outline" size="sm">
-              <Upload className="h-4 w-4 mr-1" /> Transferir da Topografia
-            </Button>
-            <Button onClick={loadDemo} variant="secondary" size="sm">Carregar Demo</Button>
+  const renderActivePanel = () => {
+    switch (activeStep) {
+      // ═══════ MAPA ═══════
+      case "mapa":
+        return (
+          <div className="space-y-4">
+            <GisMapTab
+              networkType="esgoto"
+              pontos={gisPontos}
+              trechos={gisTrechos}
+              onPontosChange={handleGisPontosChange}
+              onTrechosChange={handleGisTrechosChange}
+              accentColor="#ef4444"
+            />
+            <div className="flex gap-2 flex-wrap">
+              <Button onClick={transferFromTopography} variant="outline" size="sm">
+                <Upload className="h-4 w-4 mr-1" /> Transferir da Topografia
+              </Button>
+              <Button onClick={loadDemo} variant="secondary" size="sm">Carregar Demo</Button>
+              <Button onClick={async () => {
+                const { fillNodeElevations, fillEdgeElevations } = await import("@/engine/elevationExtractor");
+                const { updated, noRaster } = fillNodeElevations();
+                if (noRaster) { toast.error("Importe um TIF/GeoTIFF primeiro"); return; }
+                fillEdgeElevations();
+                spatial.refresh();
+                toast.success(`${updated} cotas preenchidas do MDT`);
+              }} variant="outline" size="sm">
+                <Mountain className="h-4 w-4 mr-1" /> Preencher Cota (MDT)
+              </Button>
+            </div>
           </div>
-        </TabsContent>
+        );
 
-        {/* ═══════ TAB 2: CONFIGURAÇÃO ═══════ */}
-        <TabsContent value="config" className="space-y-4">
+      // ═══════ S00: CONFIG ═══════
+      case "s00":
+        return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardHeader>
@@ -326,6 +384,11 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                 <div>
                   <Label className="text-xs">Tensão trativa mín (Pa)</Label>
                   <Input type="number" step="0.1" value={tensaoMin} onChange={e => setTensaoMin(Number(e.target.value))} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs">Ponta Seca</Label>
+                  <input type="checkbox" checked={pontaSecaEnabled} onChange={e => setPontaSecaEnabled(e.target.checked)} />
+                  <span className="text-xs text-muted-foreground">Usar vazão mínima 1.5 L/s em trechos de ponta seca</span>
                 </div>
               </CardContent>
             </Card>
@@ -365,165 +428,536 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
               </CardContent>
             </Card>
           </div>
-        </TabsContent>
+        );
 
-        {/* ═══════ TAB 3: REDE ═══════ */}
-        <TabsContent value="rede" className="space-y-4">
-          <ElementTypeAssigner
-            networkType="esgoto"
-            pontos={activePontos}
-            trechos={sewerTrechos}
-            assignments={assignments}
-            onAssignmentsChange={setAssignments}
-          />
-          <AttributeTableEditor
-            networkType="esgoto"
-            pontos={activePontos}
-            trechos={sewerTrechos}
-            assignments={assignments}
-            sewerNodes={sewerNodeAttrs}
-            sewerEdges={sewerEdgeAttrs}
-            onSewerNodesChange={setSewerNodeAttrs}
-            onSewerEdgesChange={setSewerEdgeAttrs}
-          />
-        </TabsContent>
-
-        {/* ═══════ TAB 4: DIMENSIONAMENTO ═══════ */}
-        <TabsContent value="dimensionamento" className="space-y-4">
+      // ═══════ S01: CAMPOS ═══════
+      case "s01":
+        return (
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Waves className="h-5 w-5 text-amber-600" /> Dimensionamento QEsg (NBR 9649)
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TableProperties className="h-5 w-5 text-amber-600" /> Verificar / Criar Campos
               </CardTitle>
-              <CardDescription className="text-xs">
-                τ = 10000·Rh·I | v_c = 6·√(g·Rh) | I_min = 0.0055·Q^(-0.47)
-              </CardDescription>
+              <CardDescription>Cria atributos de nós e trechos (SewerNodeAttributes e SewerEdgeAttributes) se não existirem.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex gap-2 flex-wrap">
-                {sewerEdgeAttrs.length > 0 && (
-                  <Badge variant="outline" className="text-amber-600">{sewerEdgeAttrs.length} trechos (atributos)</Badge>
-                )}
-                {sewerEdgeAttrs.length === 0 && sewerTrechos.length > 0 && (
-                  <Badge variant="outline" className="text-amber-600">{sewerTrechos.length} trechos (GIS)</Badge>
-                )}
+              <Button onClick={() => {
+                let nodesCreated = 0;
+                let edgesCreated = 0;
+
+                if (sewerNodeAttrs.length === 0 && activePontos.length > 0) {
+                  const nodes: SewerNodeAttributes[] = activePontos.map(p => ({
+                    id: p.id,
+                    tipo: assignments.nodeTypes.get(p.id) || "pv",
+                    cotaTerreno: p.cota,
+                    cotaFundo: p.cota - 1.5,
+                    profundidade: 1.5,
+                    x: p.x,
+                    y: p.y,
+                    populacao: 0,
+                    vazaoConcentrada: 0,
+                    observacao: "",
+                  }));
+                  setSewerNodeAttrs(nodes);
+                  nodesCreated = nodes.length;
+                }
+
+                if (sewerEdgeAttrs.length === 0 && sewerTrechos.length > 0) {
+                  const edges: SewerEdgeAttributes[] = sewerTrechos.map((t, i) => ({
+                    key: `${t.idInicio}-${t.idFim}`,
+                    dcId: `C${String(i + 1).padStart(3, "0")}`,
+                    idInicio: t.idInicio,
+                    idFim: t.idFim,
+                    comprimento: t.comprimento,
+                    cotaTerrenoM: t.cotaInicio,
+                    cotaTerrenoJ: t.cotaFim,
+                    cotaColetorM: t.cotaInicio - 1.5,
+                    cotaColetorJ: t.cotaFim - 1.5,
+                    manning,
+                    diametro: t.diametroMm || 150,
+                    declividade: t.declividade,
+                    material: t.material || "PVC",
+                    contribuicaoLateral: 0,
+                    pontaSeca: 0,
+                    etapa: "1",
+                    observacao: "",
+                  }));
+                  setSewerEdgeAttrs(edges);
+                  edgesCreated = edges.length;
+                }
+
+                if (nodesCreated > 0 || edgesCreated > 0) {
+                  const msg = `Campos criados: ${nodesCreated} nós, ${edgesCreated} trechos`;
+                  setStepMessage(prev => ({ ...prev, s01: msg }));
+                  toast.success(msg);
+                  markDone("s01");
+                } else {
+                  const existing = `Campos já existem: ${sewerNodeAttrs.length} nós, ${sewerEdgeAttrs.length} trechos`;
+                  setStepMessage(prev => ({ ...prev, s01: existing }));
+                  toast.info(existing);
+                  markDone("s01");
+                }
+              }}>
+                <TableProperties className="h-4 w-4 mr-1" /> Verificar/Criar Campos
+              </Button>
+              {stepMessage.s01 && (
+                <div className="text-sm text-muted-foreground bg-muted/50 rounded p-2">{stepMessage.s01}</div>
+              )}
+              <div className="flex gap-3 text-xs text-muted-foreground">
+                <Badge variant="outline">{sewerNodeAttrs.length} nós</Badge>
+                <Badge variant="outline">{sewerEdgeAttrs.length} trechos</Badge>
               </div>
+            </CardContent>
+          </Card>
+        );
 
-              <div className="flex gap-2 flex-wrap">
-                <Button onClick={dimensionSewer} disabled={!canDimension}>
-                  <Calculator className="h-4 w-4 mr-1" /> Dimensionar
-                </Button>
-                {sewerResults.length > 0 && (
-                  <>
-                    <Button variant="outline" onClick={applyDiameters}>
-                      <Zap className="h-4 w-4 mr-1" /> Aplicar Diâmetros
-                    </Button>
-                    <Button variant="outline" onClick={exportCSV}>
-                      <Download className="h-4 w-4 mr-1" /> CSV
-                    </Button>
-                  </>
-                )}
-              </div>
+      // ═══════ S02: NUMERAR ═══════
+      case "s02":
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-amber-600" /> Numerar Rede
+              </CardTitle>
+              <CardDescription>Atribui numeração sequencial (DC_ID) aos trechos da rede de esgoto seguindo ordem topológica.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button onClick={() => {
+                const nodes = sewerNodeAttrs.length > 0
+                  ? sewerNodeAttrs.map(n => ({ id: n.id, x: n.x, y: n.y, cotaTerreno: n.cotaTerreno, cotaFundo: n.cotaFundo }))
+                  : activePontos.map(p => ({ id: p.id, x: p.x, y: p.y, cotaTerreno: p.cota, cotaFundo: p.cota - 1.5 }));
 
-              {sewerResumo && (
-                <div className="flex gap-3 text-sm">
-                  <Badge variant="outline">{sewerResumo.total} trechos</Badge>
-                  <Badge className="bg-green-500">{sewerResumo.atendem} OK</Badge>
-                  {sewerResumo.total - sewerResumo.atendem > 0 && (
-                    <Badge variant="destructive">{sewerResumo.total - sewerResumo.atendem} falha</Badge>
-                  )}
-                  <Badge variant="outline">{compliance}%</Badge>
-                </div>
-              )}
+                const edges = sewerEdgeAttrs.length > 0
+                  ? sewerEdgeAttrs.map(e => ({
+                      key: e.key, dcId: e.dcId, idInicio: e.idInicio, idFim: e.idFim,
+                      comprimento: e.comprimento, cotaTerrenoM: e.cotaTerrenoM, cotaTerrenoJ: e.cotaTerrenoJ,
+                      cotaColetorM: e.cotaColetorM, cotaColetorJ: e.cotaColetorJ,
+                      manning: e.manning, diametro: e.diametro, declividade: e.declividade,
+                    }))
+                  : sewerTrechos.map((t, i) => ({
+                      key: `${t.idInicio}-${t.idFim}`, dcId: `C${String(i + 1).padStart(3, "0")}`,
+                      idInicio: t.idInicio, idFim: t.idFim, comprimento: t.comprimento,
+                      cotaTerrenoM: t.cotaInicio, cotaTerrenoJ: t.cotaFim,
+                      cotaColetorM: t.cotaInicio - 1.5, cotaColetorJ: t.cotaFim - 1.5,
+                      manning, diametro: t.diametroMm, declividade: t.declividade,
+                    }));
 
-              {sewerResults.length > 0 && (
-                <div className="border rounded-lg overflow-auto max-h-80">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Trecho</TableHead>
-                        <TableHead>DN (mm)</TableHead>
-                        <TableHead>DN Calc</TableHead>
-                        <TableHead>V (m/s)</TableHead>
-                        <TableHead>V Crít</TableHead>
-                        <TableHead>y/D</TableHead>
-                        <TableHead>τ (Pa)</TableHead>
-                        <TableHead>Decliv (%)</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {sewerResults.map(r => (
-                        <TableRow key={r.id} className={!r.atendeNorma ? "bg-red-50 dark:bg-red-950/20" : ""}>
-                          <TableCell className="font-mono text-xs">{r.id}</TableCell>
-                          <TableCell className="font-semibold">{r.diametroMm}</TableCell>
-                          <TableCell>{r.diametroCalculadoMm}</TableCell>
-                          <TableCell>{r.velocidadeMs.toFixed(3)}</TableCell>
-                          <TableCell>{r.velocidadeCriticaMs.toFixed(3)}</TableCell>
-                          <TableCell>{r.laminaDagua.toFixed(3)}</TableCell>
-                          <TableCell>{r.tensaoTrativa.toFixed(2)}</TableCell>
-                          <TableCell>{(r.declividadeUsada * 100).toFixed(3)}</TableCell>
-                          <TableCell>
-                            {r.atendeNorma
-                              ? <Badge className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" />OK</Badge>
-                              : <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Falha</Badge>}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+                if (edges.length === 0) {
+                  toast.error("Nenhum trecho para numerar. Importe dados no Mapa primeiro.");
+                  return;
+                }
 
-              {alertCount > 0 && (
-                <Card className="border-yellow-500/30 bg-yellow-500/5">
-                  <CardContent className="py-3">
-                    <div className="max-h-[150px] overflow-auto space-y-1">
-                      {sewerResults.filter(r => !r.atendeNorma).map(r => (
-                        <div key={r.id} className="text-xs text-yellow-700">
-                          <strong>{r.id}:</strong> {r.observacoes.join("; ")}
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                const result = numberSewerNetwork(nodes, edges);
 
-              {!canDimension && (
-                <div className="flex items-center gap-2 p-3 bg-muted rounded-lg text-sm text-muted-foreground">
-                  <AlertTriangle className="h-4 w-4" /> Importe dados no "Mapa" ou preencha a "Rede".
-                </div>
+                // Update sewerEdgeAttrs with new dcId numbering
+                if (sewerEdgeAttrs.length > 0) {
+                  const updatedEdges = sewerEdgeAttrs.map((e, i) => ({
+                    ...e,
+                    dcId: result.edges[i]?.dcId ?? e.dcId,
+                  }));
+                  setSewerEdgeAttrs(updatedEdges);
+                }
+
+                const msg = `Rede numerada: ${result.edges.length} trechos`;
+                setStepMessage(prev => ({ ...prev, s02: msg }));
+                toast.success(msg);
+                markDone("s02");
+              }}>
+                <Zap className="h-4 w-4 mr-1" /> Numerar Rede
+              </Button>
+              {stepMessage.s02 && (
+                <div className="text-sm text-muted-foreground bg-muted/50 rounded p-2">{stepMessage.s02}</div>
               )}
             </CardContent>
           </Card>
+        );
 
-          {sewerResults.length > 0 && activePontos.length > 0 && (
-            <NetworkMapView<SewerSegmentResult>
+      // ═══════ S03: NÓS ═══════
+      case "s03":
+        return (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5 text-amber-600" /> Criar Layer de Nós
+                </CardTitle>
+                <CardDescription>Cria atributos de nós a partir dos pontos da rede, caso ainda não existam.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button onClick={() => {
+                  if (sewerNodeAttrs.length > 0) {
+                    toast.info(`Nós já existem: ${sewerNodeAttrs.length} nós`);
+                    return;
+                  }
+
+                  // Create nodes from edge endpoints
+                  const nodeIds = new Set<string>();
+                  for (const t of sewerTrechos) {
+                    nodeIds.add(t.idInicio);
+                    nodeIds.add(t.idFim);
+                  }
+
+                  const nodes: SewerNodeAttributes[] = Array.from(nodeIds).map(id => {
+                    const p = activePontos.find(pt => pt.id === id);
+                    return {
+                      id,
+                      tipo: assignments.nodeTypes.get(id) || "pv",
+                      cotaTerreno: p?.cota ?? 0,
+                      cotaFundo: p ? p.cota - 1.5 : 0,
+                      profundidade: 1.5,
+                      x: p?.x ?? 0,
+                      y: p?.y ?? 0,
+                      populacao: 0,
+                      vazaoConcentrada: 0,
+                      observacao: "",
+                    };
+                  });
+
+                  setSewerNodeAttrs(nodes);
+                  const msg = `${nodes.length} nós criados a partir dos endpoints dos trechos`;
+                  setStepMessage(prev => ({ ...prev, s03: msg }));
+                  toast.success(msg);
+                  markDone("s03");
+                }} variant="outline" size="sm">
+                  <Settings className="h-4 w-4 mr-1" /> Criar Nós
+                </Button>
+                {stepMessage.s03 && (
+                  <div className="text-sm text-muted-foreground bg-muted/50 rounded p-2">{stepMessage.s03}</div>
+                )}
+              </CardContent>
+            </Card>
+
+            <ElementTypeAssigner
+              networkType="esgoto"
               pontos={activePontos}
               trechos={sewerTrechos}
-              results={sewerResults}
-              okColor={SEWER_DEFAULTS.mapOkColor}
-              failColor={SEWER_DEFAULTS.mapFailColor}
-              markerColor={SEWER_DEFAULTS.markerColor}
-              markerFillColor={SEWER_DEFAULTS.markerFillColor}
-              title="Mapa — Rede Dimensionada"
-              description="Verde = atende NBR 9649 | Vermelho = falha"
-              iconColorClass="text-amber-600"
-              formatTooltip={formatSewerTooltip}
-              formatPopup={formatSewerPopup}
+              assignments={assignments}
+              onAssignmentsChange={setAssignments}
             />
-          )}
-        </TabsContent>
+          </div>
+        );
 
-        {/* ═══════ TAB 5: PERFIL ═══════ */}
-        <TabsContent value="perfil" className="space-y-4">
-          <LongitudinalProfile
-            sewerNodes={profileNodes}
-            sewerEdges={profileEdges}
-            results={sewerResults.length > 0 ? sewerResults : undefined}
-          />
-        </TabsContent>
-      </Tabs>
+      // ═══════ S04: PREENCHER ═══════
+      case "s04":
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TableProperties className="h-5 w-5 text-amber-600" /> Preencher Campos
+              </CardTitle>
+              <CardDescription>Transfere cotas de terreno dos nós para os trechos (montante/jusante) e recalcula declividades.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button onClick={() => {
+                const nodes = sewerNodeAttrs.length > 0
+                  ? sewerNodeAttrs.map(n => ({ id: n.id, x: n.x, y: n.y, cotaTerreno: n.cotaTerreno, cotaFundo: n.cotaFundo }))
+                  : activePontos.map(p => ({ id: p.id, x: p.x, y: p.y, cotaTerreno: p.cota, cotaFundo: p.cota - 1.5 }));
+
+                const edges = sewerEdgeAttrs.length > 0
+                  ? sewerEdgeAttrs.map(e => ({
+                      key: e.key, dcId: e.dcId, idInicio: e.idInicio, idFim: e.idFim,
+                      comprimento: e.comprimento, cotaTerrenoM: e.cotaTerrenoM, cotaTerrenoJ: e.cotaTerrenoJ,
+                      cotaColetorM: e.cotaColetorM, cotaColetorJ: e.cotaColetorJ,
+                      manning: e.manning, diametro: e.diametro, declividade: e.declividade,
+                    }))
+                  : sewerTrechos.map((t, i) => ({
+                      key: `${t.idInicio}-${t.idFim}`, dcId: `C${String(i + 1).padStart(3, "0")}`,
+                      idInicio: t.idInicio, idFim: t.idFim, comprimento: t.comprimento,
+                      cotaTerrenoM: t.cotaInicio, cotaTerrenoJ: t.cotaFim,
+                      cotaColetorM: t.cotaInicio - 1.5, cotaColetorJ: t.cotaFim - 1.5,
+                      manning, diametro: t.diametroMm, declividade: t.declividade,
+                    }));
+
+                if (edges.length === 0) {
+                  toast.error("Nenhum trecho para preencher.");
+                  return;
+                }
+
+                const filledEdges = fillFieldsFromNodes(nodes, edges);
+
+                // Merge filled data back to sewerEdgeAttrs
+                if (sewerEdgeAttrs.length > 0) {
+                  const updatedEdges = sewerEdgeAttrs.map((e, i) => ({
+                    ...e,
+                    cotaTerrenoM: filledEdges[i]?.cotaTerrenoM ?? e.cotaTerrenoM,
+                    cotaTerrenoJ: filledEdges[i]?.cotaTerrenoJ ?? e.cotaTerrenoJ,
+                    cotaColetorM: filledEdges[i]?.cotaColetorM ?? e.cotaColetorM,
+                    cotaColetorJ: filledEdges[i]?.cotaColetorJ ?? e.cotaColetorJ,
+                    declividade: filledEdges[i]?.declividade ?? e.declividade,
+                  }));
+                  setSewerEdgeAttrs(updatedEdges);
+                }
+
+                const msg = `${filledEdges.length} trechos preenchidos com dados dos nós`;
+                setStepMessage(prev => ({ ...prev, s04: msg }));
+                toast.success(msg);
+                markDone("s04");
+              }}>
+                <TableProperties className="h-4 w-4 mr-1" /> Preencher Campos
+              </Button>
+              {stepMessage.s04 && (
+                <div className="text-sm text-muted-foreground bg-muted/50 rounded p-2">{stepMessage.s04}</div>
+              )}
+            </CardContent>
+          </Card>
+        );
+
+      // ═══════ S05: VAZÃO ═══════
+      case "s05":
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Waves className="h-5 w-5 text-amber-600" /> Cálculo de Vazão
+              </CardTitle>
+              <CardDescription>Calcula e acumula vazões na rede por método fixo ou per capita.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-xs">Método</Label>
+                <Select value={metodoVazao} onValueChange={v => setMetodoVazao(v as "fixa" | "percapita")}>
+                  <SelectTrigger className="w-[250px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fixa">Vazão fixa (L/s)</SelectItem>
+                    <SelectItem value="percapita">Per capita (Pop × qpc)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {metodoVazao === "fixa" ? (
+                <div><Label className="text-xs">Vazão (L/s)</Label><Input type="number" step="0.1" value={vazaoEsg} onChange={e => setVazaoEsg(Number(e.target.value))} className="w-[200px]" /></div>
+              ) : (
+                <>
+                  <div><Label className="text-xs">Quota per capita (L/hab/dia)</Label><Input type="number" step="10" value={qpcLitrosDia} onChange={e => setQpcLitrosDia(Number(e.target.value))} className="w-[200px]" /></div>
+                  <div className="grid grid-cols-2 gap-2 max-w-xs">
+                    <div><Label className="text-xs">K1</Label><Input type="number" step="0.1" value={k1} onChange={e => setK1(Number(e.target.value))} /></div>
+                    <div><Label className="text-xs">K2</Label><Input type="number" step="0.1" value={k2} onChange={e => setK2(Number(e.target.value))} /></div>
+                  </div>
+                  <div className="bg-muted/50 rounded p-2 text-xs text-center max-w-xs">
+                    Q = Pop × {qpcLitrosDia} × {k1} × {k2} / 86400
+                  </div>
+                </>
+              )}
+              <Button onClick={() => {
+                let inputs: SewerSegmentInput[];
+                if (sewerEdgeAttrs.length > 0) {
+                  inputs = sewerEdgeAttrs.map(e => ({
+                    id: e.key, comprimento: e.comprimento,
+                    cotaMontante: e.cotaColetorM, cotaJusante: e.cotaColetorJ,
+                    vazaoLps: metodoVazao === "fixa" ? vazaoEsg : 0,
+                    tipoTubo: e.material,
+                  }));
+                } else if (sewerTrechos.length > 0) {
+                  inputs = sewerTrechos.map(t => ({
+                    id: `${t.idInicio}-${t.idFim}`, comprimento: t.comprimento,
+                    cotaMontante: t.cotaInicio, cotaJusante: t.cotaFim,
+                    vazaoLps: vazaoEsg, tipoTubo: material,
+                  }));
+                } else {
+                  toast.error("Nenhum trecho disponível.");
+                  return;
+                }
+
+                if (metodoVazao === "percapita") {
+                  const nodeFlows: SewerNodeInput[] = sewerNodeAttrs.length > 0
+                    ? sewerNodeAttrs.map(n => ({
+                        id: n.id,
+                        vazaoLocal: calcPopulationFlow(n.populacao, qpcLitrosDia, k1, k2) + n.vazaoConcentrada,
+                      }))
+                    : activePontos.map(p => ({
+                        id: p.id,
+                        vazaoLocal: calcPopulationFlow(SEWER_DEFAULTS.defaultPopulacao, qpcLitrosDia, k1, k2),
+                      }));
+                  if (nodeFlows.length > 0) inputs = accumulateSewerFlow(inputs, nodeFlows);
+                }
+
+                const msg = `Vazão calculada para ${inputs.length} trechos (${metodoVazao})`;
+                setStepMessage(prev => ({ ...prev, s05: msg }));
+                toast.success(msg);
+                markDone("s05");
+              }}>
+                <Calculator className="h-4 w-4 mr-1" /> Calcular Vazão
+              </Button>
+              {stepMessage.s05 && (
+                <div className="text-sm text-muted-foreground bg-muted/50 rounded p-2">{stepMessage.s05}</div>
+              )}
+            </CardContent>
+          </Card>
+        );
+
+      // ═══════ S06: DIMENSIONAR ═══════
+      case "s06":
+        return (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Waves className="h-5 w-5 text-amber-600" /> Dimensionamento QEsg (NBR 9649)
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  τ = 10000·Rh·I | v_c = 6·√(g·Rh) | I_min = 0.0055·Q^(-0.47)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2 flex-wrap">
+                  {sewerEdgeAttrs.length > 0 && (
+                    <Badge variant="outline" className="text-amber-600">{sewerEdgeAttrs.length} trechos (atributos)</Badge>
+                  )}
+                  {sewerEdgeAttrs.length === 0 && sewerTrechos.length > 0 && (
+                    <Badge variant="outline" className="text-amber-600">{sewerTrechos.length} trechos (GIS)</Badge>
+                  )}
+                </div>
+
+                <div className="flex gap-2 flex-wrap">
+                  <Button onClick={dimensionSewer} disabled={!canDimension}>
+                    <Calculator className="h-4 w-4 mr-1" /> Dimensionar
+                  </Button>
+                  {sewerResults.length > 0 && (
+                    <>
+                      <Button variant="outline" onClick={applyDiameters}>
+                        <Zap className="h-4 w-4 mr-1" /> Aplicar Diâmetros
+                      </Button>
+                      <Button variant="outline" onClick={exportCSV}>
+                        <Download className="h-4 w-4 mr-1" /> CSV
+                      </Button>
+                    </>
+                  )}
+                </div>
+
+                {sewerResumo && (
+                  <div className="flex gap-3 text-sm">
+                    <Badge variant="outline">{sewerResumo.total} trechos</Badge>
+                    <Badge className="bg-green-500">{sewerResumo.atendem} OK</Badge>
+                    {sewerResumo.total - sewerResumo.atendem > 0 && (
+                      <Badge variant="destructive">{sewerResumo.total - sewerResumo.atendem} falha</Badge>
+                    )}
+                    <Badge variant="outline">{compliance}%</Badge>
+                  </div>
+                )}
+
+                {sewerResults.length > 0 && (
+                  <div className="border rounded-lg overflow-auto max-h-80">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Trecho</TableHead>
+                          <TableHead>DN (mm)</TableHead>
+                          <TableHead>DN Calc</TableHead>
+                          <TableHead>V (m/s)</TableHead>
+                          <TableHead>V Crít</TableHead>
+                          <TableHead>y/D</TableHead>
+                          <TableHead>τ (Pa)</TableHead>
+                          <TableHead>Decliv (%)</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sewerResults.map(r => (
+                          <TableRow key={r.id} className={!r.atendeNorma ? "bg-red-50 dark:bg-red-950/20" : ""}>
+                            <TableCell className="font-mono text-xs">{r.id}</TableCell>
+                            <TableCell className="font-semibold">{r.diametroMm}</TableCell>
+                            <TableCell>{r.diametroCalculadoMm}</TableCell>
+                            <TableCell>{r.velocidadeMs.toFixed(3)}</TableCell>
+                            <TableCell>{r.velocidadeCriticaMs.toFixed(3)}</TableCell>
+                            <TableCell>{r.laminaDagua.toFixed(3)}</TableCell>
+                            <TableCell>{r.tensaoTrativa.toFixed(2)}</TableCell>
+                            <TableCell>{(r.declividadeUsada * 100).toFixed(3)}</TableCell>
+                            <TableCell>
+                              {r.atendeNorma
+                                ? <Badge className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" />OK</Badge>
+                                : <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Falha</Badge>}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
+                {alertCount > 0 && (
+                  <Card className="border-yellow-500/30 bg-yellow-500/5">
+                    <CardContent className="py-3">
+                      <div className="max-h-[150px] overflow-auto space-y-1">
+                        {sewerResults.filter(r => !r.atendeNorma).map(r => (
+                          <div key={r.id} className="text-xs text-yellow-700">
+                            <strong>{r.id}:</strong> {r.observacoes.join("; ")}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {!canDimension && (
+                  <div className="flex items-center gap-2 p-3 bg-muted rounded-lg text-sm text-muted-foreground">
+                    <AlertTriangle className="h-4 w-4" /> Importe dados no "Mapa" ou preencha a "Rede".
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {sewerResults.length > 0 && activePontos.length > 0 && (
+              <NetworkMapView<SewerSegmentResult>
+                pontos={activePontos}
+                trechos={sewerTrechos}
+                results={sewerResults}
+                okColor={SEWER_DEFAULTS.mapOkColor}
+                failColor={SEWER_DEFAULTS.mapFailColor}
+                markerColor={SEWER_DEFAULTS.markerColor}
+                markerFillColor={SEWER_DEFAULTS.markerFillColor}
+                title="Mapa — Rede Dimensionada"
+                description="Verde = atende NBR 9649 | Vermelho = falha"
+                iconColorClass="text-amber-600"
+                formatTooltip={formatSewerTooltip}
+                formatPopup={formatSewerPopup}
+              />
+            )}
+          </div>
+        );
+
+      // ═══════ S07: PERFIL ═══════
+      case "s07":
+        return (
+          <div className="space-y-4">
+            <LongitudinalProfile
+              sewerNodes={profileNodes}
+              sewerEdges={profileEdges}
+              results={sewerResults.length > 0 ? sewerResults : undefined}
+            />
+            <Button variant="outline" onClick={() => {
+              import("@/lib/dxfExporter").then(({ downloadDXF }) => {
+                downloadDXF(activePontos, sewerTrechos, "qesg_rede.dxf");
+                toast.success("DXF exportado");
+              });
+            }} size="sm">
+              <Download className="h-4 w-4 mr-1" /> Exportar DXF
+            </Button>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Step toolbar */}
+      <div className="flex flex-wrap gap-1 p-2 bg-muted rounded-lg">
+        <Button variant={activeStep === "mapa" ? "default" : "ghost"} size="sm" onClick={() => setActiveStep("mapa")}>
+          <MapIcon className="h-3.5 w-3.5 mr-1" />Mapa
+        </Button>
+        {steps.map(step => (
+          <Button key={step.id} variant={activeStep === step.id ? "default" : "ghost"} size="sm"
+            onClick={() => setActiveStep(step.id)}
+            className={stepStatus[step.id] === "done" ? "border-green-500 border" : ""}>
+            <span className="font-mono text-xs mr-1">{step.num}</span>{step.label}
+            {stepStatus[step.id] === "done" && <CheckCircle className="h-3 w-3 ml-1 text-green-500" />}
+          </Button>
+        ))}
+      </div>
+
+      {/* Active panel content */}
+      {renderActivePanel()}
     </div>
   );
 };

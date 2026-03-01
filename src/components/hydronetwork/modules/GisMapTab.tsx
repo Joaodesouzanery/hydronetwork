@@ -17,6 +17,11 @@ import { NodeMapWidget, NodeData, ConnectionData } from "@/components/hydronetwo
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from "@/engine/domain";
 import { classifyNetworkType } from "@/engine/geometry";
+import {
+  createLayer, addNode, addEdge,
+  type OriginModule, type LayerDiscipline,
+} from "@/core/spatial";
+import { bumpSpatialVersion } from "@/hooks/useSpatialData";
 
 export interface GisMapTabProps {
   networkType: "esgoto" | "agua";
@@ -25,6 +30,7 @@ export interface GisMapTabProps {
   onPontosChange: (pontos: PontoTopografico[]) => void;
   onTrechosChange: (trechos: Trecho[]) => void;
   accentColor?: string;
+  originModule?: OriginModule;
 }
 
 export function GisMapTab({
@@ -34,6 +40,7 @@ export function GisMapTab({
   onPontosChange,
   onTrechosChange,
   accentColor = networkType === "esgoto" ? "#ef4444" : "#3b82f6",
+  originModule,
 }: GisMapTabProps) {
   const [mapMode, setMapMode] = useState<"view" | "import">("view");
 
@@ -71,11 +78,39 @@ export function GisMapTab({
     onPontosChange([...pontos, ...importedPontos]);
     onTrechosChange([...trechos, ...importedTrechos]);
 
+    // Write to Spatial Core if originModule is specified
+    if (originModule) {
+      const discipline: LayerDiscipline = networkType === "agua" ? "agua" : "esgoto";
+      const layer = createLayer({
+        name: `Import ${networkType} ${new Date().toLocaleTimeString()}`,
+        discipline,
+        geometryType: "Mixed",
+        source: "imported",
+        originModule,
+      });
+      for (const p of importedPontos) {
+        addNode({
+          id: p.id, x: p.x, y: p.y, z: p.cota,
+          tipo: "generic", layerId: layer.id, origin_module: originModule,
+        });
+      }
+      for (const t of importedTrechos) {
+        addEdge({
+          id: `${t.idInicio}-${t.idFim}`,
+          startNodeId: t.idInicio, endNodeId: t.idFim,
+          dn: t.diametroMm, material: t.material, tipoRede: t.tipoRede,
+          layerId: layer.id, origin_module: originModule,
+          comprimento: t.comprimento, declividade: t.declividade,
+        });
+      }
+      bumpSpatialVersion();
+    }
+
     toast.success(
       `Importados: ${importedPontos.length} pontos, ${importedTrechos.length} trechos`
     );
     setMapMode("view");
-  }, [pontos, trechos, onPontosChange, onTrechosChange]);
+  }, [pontos, trechos, onPontosChange, onTrechosChange, originModule, networkType]);
 
   // Handle node movement on map
   const handleNodeMove = useCallback((nodeId: string, x: number, y: number) => {

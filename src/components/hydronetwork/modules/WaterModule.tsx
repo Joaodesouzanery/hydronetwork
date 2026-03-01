@@ -12,6 +12,7 @@ import {
   Calculator, Droplets, CheckCircle, XCircle, Download,
   AlertTriangle, Zap, Upload, Settings, MapPin,
   Map as MapIcon, TableProperties, TrendingUp, BarChart3,
+  Mountain, Play, FileDown,
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
@@ -31,6 +32,8 @@ import { ElementTypeAssigner, ElementAssignment } from "@/components/hydronetwor
 import { AttributeTableEditor, WaterNodeAttributes, WaterEdgeAttributes } from "@/components/hydronetwork/modules/AttributeTableEditor";
 import { LongitudinalProfile } from "@/components/hydronetwork/modules/LongitudinalProfile";
 import { WATER_DEFAULTS, DEMO_UTM_ORIGIN } from "@/config/defaults";
+import { useSpatialData } from "@/hooks/useSpatialData";
+import { getNodesByOrigin } from "@/core/spatial";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
@@ -42,10 +45,10 @@ import {
 // ══════════════════════════════════════
 
 interface WaterModuleProps {
-  pontos: PontoTopografico[];
-  trechos: Trecho[];
+  pontos?: PontoTopografico[];
+  trechos?: Trecho[];
   onPontosChange?: (p: PontoTopografico[]) => void;
-  onTrechosChange: (t: Trecho[]) => void;
+  onTrechosChange?: (t: Trecho[]) => void;
 }
 
 // ── Map formatters ──
@@ -69,9 +72,12 @@ const formatWaterPopup = (segId: string, r: WaterSegmentResult) => `
 // ══════════════════════════════════════
 
 export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }: WaterModuleProps) => {
+  // ── Spatial data (primary source) ──
+  const spatial = useSpatialData("qwater");
+
   // ── GIS data ──
-  const [gisPontos, setGisPontos] = useState<PontoTopografico[]>(pontos);
-  const [gisTrechos, setGisTrechos] = useState<Trecho[]>(trechos);
+  const [gisPontos, setGisPontos] = useState<PontoTopografico[]>(pontos || []);
+  const [gisTrechos, setGisTrechos] = useState<Trecho[]>(trechos || []);
   const [assignments, setAssignments] = useState<ElementAssignment>({
     nodeTypes: new Map(), edgeTypes: new Map(),
   });
@@ -80,11 +86,11 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
 
   // Sync external data on first load
   useEffect(() => {
-    if (pontos.length > 0 && gisPontos.length === 0) setGisPontos(pontos);
-  }, [pontos.length]);
+    if (pontos && pontos.length > 0 && gisPontos.length === 0) setGisPontos(pontos);
+  }, [pontos?.length]);
   useEffect(() => {
-    if (trechos.length > 0 && gisTrechos.length === 0) setGisTrechos(trechos);
-  }, [trechos.length]);
+    if (trechos && trechos.length > 0 && gisTrechos.length === 0) setGisTrechos(trechos);
+  }, [trechos?.length]);
 
   const handleGisPontosChange = (p: PontoTopografico[]) => {
     setGisPontos(p);
@@ -92,7 +98,7 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   };
   const handleGisTrechosChange = (t: Trecho[]) => {
     setGisTrechos(t);
-    onTrechosChange(t);
+    onTrechosChange?.(t);
   };
 
   // ── Hydraulic parameters ──
@@ -111,9 +117,21 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   const [waterResumo, setWaterResumo] = useState<{ total: number; atendem: number } | null>(null);
   const [pressureData, setPressureData] = useState<{ nodeId: string; pressao: number; hfAcumulada: number }[]>([]);
 
+  // ── EPANET integration ──
+  const [epanetResults, setEpanetResults] = useState<any>(null);
+  const [epanetRunning, setEpanetRunning] = useState(false);
+
   // ── Derived ──
-  const activePontos = gisPontos.length > 0 ? gisPontos : pontos;
-  const activeTrechos = gisTrechos.length > 0 ? gisTrechos : trechos;
+  const activePontos = spatial.legacyPontos.length > 0
+    ? spatial.legacyPontos
+    : gisPontos.length > 0
+      ? gisPontos
+      : (pontos || []);
+  const activeTrechos = spatial.legacyTrechos.length > 0
+    ? spatial.legacyTrechos
+    : gisTrechos.length > 0
+      ? gisTrechos
+      : (trechos || []);
   const waterTrechos = useMemo(() =>
     activeTrechos.filter(t => {
       const tipo = t.tipoRedeManual || "esgoto";
@@ -127,10 +145,20 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
 
   // ── Transfer / Demo ──
   const transferFromTopography = () => {
-    if (pontos.length === 0) { toast.error("Nenhum ponto na topografia"); return; }
-    setGisPontos(pontos);
-    setGisTrechos(trechos);
-    toast.success(`${pontos.length} pontos transferidos da topografia`);
+    spatial.importFromTopography();
+    const topoNodes = getNodesByOrigin("topografia");
+    if (topoNodes.length === 0 && (!pontos || pontos.length === 0)) {
+      toast.error("Nenhum ponto na topografia"); return;
+    }
+    // If spatial import worked
+    if (spatial.nodes.length > 0) {
+      setGisPontos(spatial.legacyPontos);
+      setGisTrechos(spatial.legacyTrechos);
+    } else if (pontos && pontos.length > 0) {
+      setGisPontos(pontos);
+      setGisTrechos(trechos || []);
+    }
+    toast.success(`Dados transferidos da topografia`);
   };
 
   const loadDemo = () => {
@@ -240,6 +268,38 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     toast.success("Diâmetros aplicados");
   }, [waterResults, activeTrechos]);
 
+  // ── Run EPANET ──
+  const runEpanet = useCallback(async () => {
+    if (waterNodeAttrs.length === 0 || waterEdgeAttrs.length === 0) {
+      toast.error("Preencha a tabela de Rede primeiro (nós e trechos).");
+      return;
+    }
+    setEpanetRunning(true);
+    try {
+      const { runWaterEpanet, epanetResultsToWater } = await import("@/engine/qwaterEpanetBridge");
+      const simResult = await runWaterEpanet(waterNodeAttrs, waterEdgeAttrs);
+      const { updatedNodes, linkResults } = epanetResultsToWater(simResult, waterNodeAttrs);
+      setWaterNodeAttrs(updatedNodes);
+      setEpanetResults({ nodes: simResult.nodes, links: linkResults, converged: simResult.converged });
+      toast.success(`EPANET: simulação concluída (${simResult.nodes.length} nós, ${simResult.links.length} links)`);
+    } catch (err: any) {
+      toast.error(`Erro EPANET: ${err.message}`);
+    } finally {
+      setEpanetRunning(false);
+    }
+  }, [waterNodeAttrs, waterEdgeAttrs]);
+
+  // ── Export DXF ──
+  const exportDxf = useCallback(() => {
+    const pts = activePontos;
+    const segs = activeTrechos.filter(t => (t.tipoRedeManual || "agua") === "agua");
+    if (pts.length === 0) { toast.error("Sem dados para exportar"); return; }
+    import("@/lib/dxfExporter").then(({ downloadDXF }) => {
+      downloadDXF(pts, segs, "qwater_rede.dxf");
+      toast.success("DXF exportado");
+    });
+  }, [activePontos, activeTrechos]);
+
   const exportCSV = () => {
     if (waterResults.length === 0) return;
     let csv = "Trecho;DN (mm);V (m/s);hf (m);J (m/m);P jus (mca);Status;Obs\n";
@@ -313,10 +373,21 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
             onPontosChange={handleGisPontosChange}
             onTrechosChange={handleGisTrechosChange}
             accentColor="#3b82f6"
+            originModule="qwater"
           />
           <div className="flex gap-2 flex-wrap">
             <Button onClick={transferFromTopography} variant="outline" size="sm">
               <Upload className="h-4 w-4 mr-1" /> Transferir da Topografia
+            </Button>
+            <Button onClick={async () => {
+              const { fillNodeElevations, fillEdgeElevations } = await import("@/engine/elevationExtractor");
+              const { updated, noRaster } = fillNodeElevations();
+              if (noRaster) { toast.error("Importe um arquivo TIF/GeoTIFF primeiro"); return; }
+              fillEdgeElevations();
+              spatial.refresh();
+              toast.success(`${updated} cotas preenchidas do MDT`);
+            }} variant="outline" size="sm">
+              <Mountain className="h-4 w-4 mr-1" /> Preencher Cota (MDT)
             </Button>
             <Button onClick={loadDemo} variant="secondary" size="sm">Carregar Demo</Button>
           </div>
@@ -454,6 +525,34 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                   </>
                 )}
               </div>
+
+              {/* QWater QGIS Sequential Actions */}
+              <Card className="border-blue-200 dark:border-blue-800">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Play className="h-4 w-4 text-blue-600" /> QWater — Sequência QGIS
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Fluxo completo: Vazão → EPANET → Diâmetro Econômico → Exportar
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" variant="outline" onClick={dimensionWater} disabled={!canDimension}>
+                      <Droplets className="h-4 w-4 mr-1" /> Calc Flow
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={runEpanet} disabled={epanetRunning || waterNodeAttrs.length === 0}>
+                      <Play className="h-4 w-4 mr-1" /> {epanetRunning ? "Simulando..." : "Run EPANET"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={applyDiameters} disabled={waterResults.length === 0}>
+                      <Zap className="h-4 w-4 mr-1" /> Economic Diameter
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={exportDxf} disabled={activePontos.length === 0}>
+                      <FileDown className="h-4 w-4 mr-1" /> Export DXF
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
 
               {waterResumo && (
                 <div className="flex gap-3 text-sm">

@@ -14,15 +14,13 @@ import { SewerModule } from "@/components/hydronetwork/modules/SewerModule";
 import { WaterModule } from "@/components/hydronetwork/modules/WaterModule";
 
 interface QEsgWaterPanelProps {
-  pontos: PontoTopografico[];
-  trechos: Trecho[];
+  pontos?: PontoTopografico[];
+  trechos?: Trecho[];
   onTrechosChange?: (t: Trecho[]) => void;
 }
 
 export const QEsgWaterPanel = ({ pontos, trechos, onTrechosChange }: QEsgWaterPanelProps) => {
   const [activeTab, setActiveTab] = useState<"qesg" | "qwater">("qesg");
-
-  const handleTrechosChange = onTrechosChange ?? (() => {});
 
   return (
     <Tabs value={activeTab} onValueChange={v => setActiveTab(v as "qesg" | "qwater")}>
@@ -36,11 +34,11 @@ export const QEsgWaterPanel = ({ pontos, trechos, onTrechosChange }: QEsgWaterPa
       </TabsList>
 
       <TabsContent value="qesg">
-        <SewerModule pontos={pontos} trechos={trechos} onTrechosChange={handleTrechosChange} />
+        <SewerModule pontos={pontos} trechos={trechos} onTrechosChange={onTrechosChange} />
       </TabsContent>
 
       <TabsContent value="qwater">
-        <WaterModule pontos={pontos} trechos={trechos} onTrechosChange={handleTrechosChange} />
+        <WaterModule pontos={pontos} trechos={trechos} onTrechosChange={onTrechosChange} />
       </TabsContent>
     </Tabs>
   );

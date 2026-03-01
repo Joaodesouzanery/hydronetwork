@@ -10,8 +10,8 @@ import { Trecho } from "@/engine/domain";
 import { QEsgWaterPanel } from "@/components/hydronetwork/panels/QEsgWaterPanel";
 
 interface QEsgWaterModuleProps {
-  pontos: PontoTopografico[];
-  trechos: Trecho[];
+  pontos?: PontoTopografico[];
+  trechos?: Trecho[];
   onTrechosChange?: (t: Trecho[]) => void;
 }
 
