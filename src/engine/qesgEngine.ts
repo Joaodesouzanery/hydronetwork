@@ -345,3 +345,277 @@ export function calcPopulationFlow(
 ): number {
   return (populacao * qpcLitrosDia * k1 * k2) / 86400;
 }
+
+// ══════════════════════════════════════
+// Network numbering utilities (QEsg Button 01-02)
+// ══════════════════════════════════════
+
+export interface SewerNetworkNode {
+  id: string;
+  x: number;
+  y: number;
+  cotaTerreno: number;
+  cotaFundo: number;
+}
+
+export interface SewerNetworkEdge {
+  key: string;
+  dcId: string;
+  idInicio: string;
+  idFim: string;
+  comprimento: number;
+  cotaTerrenoM: number;
+  cotaTerrenoJ: number;
+  cotaColetorM: number;
+  cotaColetorJ: number;
+  manning: number;
+  diametro: number;
+  declividade: number;
+}
+
+/**
+ * Auto-number sewer network: assign sequential DC_IDs to edges
+ * and PV names to nodes following topological order (upstream → downstream).
+ * Equivalent to QEsg Buttons 01 (Sketching) and 02 (Sketching Names).
+ */
+export function numberSewerNetwork(
+  nodes: SewerNetworkNode[],
+  edges: SewerNetworkEdge[]
+): { nodes: SewerNetworkNode[]; edges: SewerNetworkEdge[] } {
+  if (edges.length === 0) return { nodes, edges };
+
+  // Build adjacency: find head nodes (in-degree = 0)
+  const inDegree = new Map<string, number>();
+  const downstream = new Map<string, string[]>();
+  const allNodeIds = new Set<string>();
+
+  for (const e of edges) {
+    allNodeIds.add(e.idInicio);
+    allNodeIds.add(e.idFim);
+    inDegree.set(e.idFim, (inDegree.get(e.idFim) || 0) + 1);
+    if (!inDegree.has(e.idInicio)) inDegree.set(e.idInicio, 0);
+    const ds = downstream.get(e.idInicio) || [];
+    ds.push(e.idFim);
+    downstream.set(e.idInicio, ds);
+  }
+
+  // Topological sort
+  const queue: string[] = [];
+  for (const [n, d] of inDegree) if (d === 0) queue.push(n);
+  const order: string[] = [];
+  const deg = new Map(inDegree);
+
+  while (queue.length > 0) {
+    const node = queue.shift()!;
+    order.push(node);
+    for (const next of downstream.get(node) || []) {
+      deg.set(next, (deg.get(next) || 1) - 1);
+      if ((deg.get(next) || 0) <= 0) queue.push(next);
+    }
+  }
+
+  // Name nodes as PV-001, PV-002... in topological order
+  const nodeNameMap = new Map<string, string>();
+  order.forEach((id, i) => {
+    nodeNameMap.set(id, `PV-${String(i + 1).padStart(3, "0")}`);
+  });
+
+  // Number edges
+  const edgeMap = new Map(edges.map(e => [`${e.idInicio}-${e.idFim}`, e]));
+  let edgeIdx = 0;
+  const numberedEdges = edges.map(e => ({
+    ...e,
+    dcId: `C${String(++edgeIdx).padStart(3, "0")}`,
+  }));
+
+  return { nodes, edges: numberedEdges };
+}
+
+/**
+ * Fill segment fields from node data (QEsg Button 04 equivalent).
+ * Transfers terrain elevations from nodes to upstream/downstream segment fields.
+ */
+export function fillFieldsFromNodes(
+  nodes: SewerNetworkNode[],
+  edges: SewerNetworkEdge[],
+  defaultDepth = 1.5
+): SewerNetworkEdge[] {
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+  return edges.map(e => {
+    const fromNode = nodeMap.get(e.idInicio);
+    const toNode = nodeMap.get(e.idFim);
+    const ctm = fromNode?.cotaTerreno ?? e.cotaTerrenoM;
+    const ctj = toNode?.cotaTerreno ?? e.cotaTerrenoJ;
+    const ccm = fromNode ? fromNode.cotaFundo : ctm - defaultDepth;
+    const ccj = toNode ? toNode.cotaFundo : ctj - defaultDepth;
+    const decl = e.comprimento > 0 ? (ccm - ccj) / e.comprimento : e.declividade;
+
+    return {
+      ...e,
+      cotaTerrenoM: ctm,
+      cotaTerrenoJ: ctj,
+      cotaColetorM: ccm,
+      cotaColetorJ: ccj,
+      declividade: Math.round(decl * 1e6) / 1e6,
+    };
+  });
+}
+
+/**
+ * Generate longitudinal profile data for a collector path.
+ * Returns an array of data points for Recharts visualization.
+ */
+export interface ProfilePoint {
+  distancia: number;
+  cotaTerreno: number;
+  cotaColetor: number;
+  cotaCoroa: number;
+  laminaDagua: number;
+  nodeId: string;
+  diametro: number;
+  declividade: number;
+  profundidade: number;
+}
+
+export function generateProfileData(
+  nodes: SewerNetworkNode[],
+  edges: SewerNetworkEdge[],
+  results?: SewerSegmentResult[]
+): ProfilePoint[] {
+  if (edges.length === 0) return [];
+
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+  const resultMap = new Map<string, SewerSegmentResult>();
+  if (results) {
+    for (const r of results) resultMap.set(r.id, r);
+  }
+
+  // Build chain
+  const adjacency = new Map<string, SewerNetworkEdge>();
+  const inDeg = new Map<string, number>();
+
+  for (const e of edges) {
+    adjacency.set(e.idInicio, e);
+    inDeg.set(e.idFim, (inDeg.get(e.idFim) || 0) + 1);
+    if (!inDeg.has(e.idInicio)) inDeg.set(e.idInicio, 0);
+  }
+
+  // Find head node
+  let head = edges[0].idInicio;
+  for (const [nodeId, deg] of inDeg) {
+    if (deg === 0 && adjacency.has(nodeId)) { head = nodeId; break; }
+  }
+
+  const points: ProfilePoint[] = [];
+  let cumDist = 0;
+  let current = head;
+
+  // Starting node
+  const startNode = nodeMap.get(current);
+  if (startNode) {
+    points.push({
+      distancia: 0,
+      cotaTerreno: startNode.cotaTerreno,
+      cotaColetor: startNode.cotaFundo,
+      cotaCoroa: startNode.cotaFundo,
+      laminaDagua: startNode.cotaFundo,
+      nodeId: current,
+      diametro: 0,
+      declividade: 0,
+      profundidade: startNode.cotaTerreno - startNode.cotaFundo,
+    });
+  }
+
+  const visited = new Set<string>();
+  while (adjacency.has(current) && !visited.has(current)) {
+    visited.add(current);
+    const edge = adjacency.get(current)!;
+    cumDist += edge.comprimento;
+
+    const endNode = nodeMap.get(edge.idFim);
+    const key = edge.key || `${edge.idInicio}-${edge.idFim}`;
+    const result = resultMap.get(key) || resultMap.get(edge.dcId);
+    const diamM = (result?.diametroMm || edge.diametro) / 1000;
+    const yd = result?.laminaDagua || 0;
+    const cf = endNode?.cotaFundo ?? edge.cotaColetorJ;
+    const ct = endNode?.cotaTerreno ?? edge.cotaTerrenoJ;
+
+    points.push({
+      distancia: Math.round(cumDist * 10) / 10,
+      cotaTerreno: ct,
+      cotaColetor: cf,
+      cotaCoroa: cf + diamM,
+      laminaDagua: cf + yd * diamM,
+      nodeId: edge.idFim,
+      diametro: result?.diametroMm || edge.diametro,
+      declividade: edge.declividade,
+      profundidade: Math.round((ct - cf) * 100) / 100,
+    });
+
+    current = edge.idFim;
+  }
+
+  return points;
+}
+
+/**
+ * Check for interference conflicts: verify that collector invert is deep enough
+ * and doesn't conflict with other infrastructure at known elevations.
+ */
+export interface InterferencePoint {
+  x: number;
+  y: number;
+  cotaInterferencia: number;
+  descricao: string;
+}
+
+export function checkInterferences(
+  edges: SewerNetworkEdge[],
+  interferences: InterferencePoint[],
+  nodes: SewerNetworkNode[],
+  minClearance = 0.3
+): { edgeKey: string; interferencia: string; conflito: boolean; folga: number }[] {
+  if (interferences.length === 0) return [];
+
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+  const conflicts: { edgeKey: string; interferencia: string; conflito: boolean; folga: number }[] = [];
+
+  for (const edge of edges) {
+    const fromNode = nodeMap.get(edge.idInicio);
+    const toNode = nodeMap.get(edge.idFim);
+    if (!fromNode || !toNode) continue;
+
+    for (const interf of interferences) {
+      // Check if interference is near this segment (simple bounding box)
+      const minX = Math.min(fromNode.x, toNode.x) - 5;
+      const maxX = Math.max(fromNode.x, toNode.x) + 5;
+      const minY = Math.min(fromNode.y, toNode.y) - 5;
+      const maxY = Math.max(fromNode.y, toNode.y) + 5;
+
+      if (interf.x < minX || interf.x > maxX || interf.y < minY || interf.y > maxY) continue;
+
+      // Interpolate collector elevation at interference position
+      const totalDist = edge.comprimento;
+      if (totalDist <= 0) continue;
+
+      const dx = interf.x - fromNode.x;
+      const dy = interf.y - fromNode.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const frac = Math.min(dist / totalDist, 1);
+
+      const cotaColetorAtPoint = edge.cotaColetorM + (edge.cotaColetorJ - edge.cotaColetorM) * frac;
+      const folga = cotaColetorAtPoint - interf.cotaInterferencia;
+      const conflito = Math.abs(folga) < minClearance;
+
+      conflicts.push({
+        edgeKey: edge.key || `${edge.idInicio}-${edge.idFim}`,
+        interferencia: interf.descricao,
+        conflito,
+        folga: Math.round(folga * 100) / 100,
+      });
+    }
+  }
+
+  return conflicts;
+}

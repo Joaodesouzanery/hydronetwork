@@ -1,8 +1,8 @@
 /**
  * LPS Module — Last Planner System
- * Abas: Dashboard, Lookahead, Semanal, PPC, Restrições
+ * Abas: Dashboard, Lookahead, Semanal, PPC, Restrições, Lean, Analytics
  */
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,8 +17,10 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
   BarChart3, Target, Calendar, ShieldAlert, TrendingUp, TrendingDown, Minus,
-  Plus, Trash2, Check, X, AlertTriangle, Save, Eye, ChevronRight, ChevronDown, Info, Circle, Tag
+  Plus, Trash2, Check, X, AlertTriangle, Save, Eye, ChevronRight, ChevronDown, Info, Circle, Tag,
+  Shield, LineChart as LineChartIcon,
 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend,
   ResponsiveContainer, ReferenceLine, Cell, PieChart, Pie, LineChart, Line,
@@ -34,6 +36,19 @@ import {
 } from "@/engine/lps";
 import { Trecho } from "@/engine/domain";
 import { PontoTopografico } from "@/engine/reader";
+
+const LeanConstraintsContent = lazy(() =>
+  import("@/components/lean-constraints/LeanConstraintsContent").then(m => ({ default: m.LeanConstraintsContent }))
+);
+const LeanDashboardContent = lazy(() =>
+  import("@/components/lean-constraints/LeanDashboardContent").then(m => ({ default: m.LeanDashboardContent }))
+);
+
+const LazyFallback = () => (
+  <div className="flex items-center justify-center py-12">
+    <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+  </div>
+);
 
 interface LPSModuleProps {
   pontos: PontoTopografico[];
@@ -56,12 +71,14 @@ export function LPSModule({ pontos, trechos }: LPSModuleProps) {
   return (
     <div className="space-y-4">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-5 w-full">
+        <TabsList className="grid grid-cols-7 w-full">
           <TabsTrigger value="dashboard" className="text-xs gap-1"><BarChart3 className="h-3 w-3" /> Dashboard</TabsTrigger>
           <TabsTrigger value="lookahead" className="text-xs gap-1"><Eye className="h-3 w-3" /> Lookahead</TabsTrigger>
           <TabsTrigger value="semanal" className="text-xs gap-1"><Calendar className="h-3 w-3" /> Semanal</TabsTrigger>
           <TabsTrigger value="ppc" className="text-xs gap-1"><Target className="h-3 w-3" /> PPC</TabsTrigger>
           <TabsTrigger value="restricoes" className="text-xs gap-1"><ShieldAlert className="h-3 w-3" /> Restrições</TabsTrigger>
+          <TabsTrigger value="lean" className="text-xs gap-1"><Shield className="h-3 w-3" /> Lean</TabsTrigger>
+          <TabsTrigger value="analytics" className="text-xs gap-1"><LineChartIcon className="h-3 w-3" /> Analytics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard">
@@ -78,6 +95,16 @@ export function LPSModule({ pontos, trechos }: LPSModuleProps) {
         </TabsContent>
         <TabsContent value="restricoes">
           <ConstraintsTab data={data} onSave={save} metrics={metrics} />
+        </TabsContent>
+        <TabsContent value="lean">
+          <Suspense fallback={<LazyFallback />}>
+            <LeanConstraintsContent />
+          </Suspense>
+        </TabsContent>
+        <TabsContent value="analytics">
+          <Suspense fallback={<LazyFallback />}>
+            <LeanDashboardContent />
+          </Suspense>
         </TabsContent>
       </Tabs>
     </div>
