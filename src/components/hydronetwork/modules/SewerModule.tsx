@@ -11,10 +11,11 @@ import { toast } from "sonner";
 import {
   Calculator, Waves, CheckCircle, XCircle, Download,
   AlertTriangle, Zap, Upload, Settings, Users,
-  Map, TableProperties, Activity,
+  Map as MapIcon, TableProperties, Activity,
 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
+import { classifyNetworkType } from "@/engine/geometry";
 import {
   dimensionSewerNetwork,
   accumulateSewerFlow,
@@ -149,7 +150,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
       const decl = comp > 0 ? (p0.cota - p1.cota) / comp : 0;
       demoTrechos.push({
         idInicio: p0.id, idFim: p1.id, comprimento: Math.round(comp * 10) / 10,
-        declividade: decl, tipoRede: "esgoto" as any, diametroMm: 150, material: "PVC",
+        declividade: decl, tipoRede: classifyNetworkType(decl), diametroMm: 150, material: "PVC",
         xInicio: p0.x, yInicio: p0.y, cotaInicio: p0.cota,
         xFim: p1.x, yFim: p1.y, cotaFim: p1.cota,
         tipoRedeManual: "esgoto",
@@ -265,7 +266,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     <div className="space-y-4">
       <Tabs defaultValue="mapa">
         <TabsList className="grid grid-cols-5 w-full max-w-2xl">
-          <TabsTrigger value="mapa"><Map className="h-3.5 w-3.5 mr-1" />Mapa</TabsTrigger>
+          <TabsTrigger value="mapa"><MapIcon className="h-3.5 w-3.5 mr-1" />Mapa</TabsTrigger>
           <TabsTrigger value="config"><Settings className="h-3.5 w-3.5 mr-1" />Configuração</TabsTrigger>
           <TabsTrigger value="rede"><TableProperties className="h-3.5 w-3.5 mr-1" />Rede</TabsTrigger>
           <TabsTrigger value="dimensionamento"><Calculator className="h-3.5 w-3.5 mr-1" />Dimensionamento</TabsTrigger>

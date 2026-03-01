@@ -10,12 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
-  Upload, Map, MapPin, Layers, FileText, Download, RefreshCw, Trash2,
+  Upload, Map as MapIcon, MapPin, Layers, FileText, Download, RefreshCw, Trash2,
 } from "lucide-react";
 import { UnifiedImportPanel } from "@/components/hydronetwork/UnifiedImportPanel";
 import { NodeMapWidget, NodeData, ConnectionData } from "@/components/hydronetwork/NodeMapWidget";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from "@/engine/domain";
+import { classifyNetworkType } from "@/engine/geometry";
 
 export interface GisMapTabProps {
   networkType: "esgoto" | "agua";
@@ -100,7 +101,7 @@ export function GisMapTab({
         idFim: c.to,
         comprimento: Math.round(comprimento * 10) / 10,
         declividade: Math.round(declividade * 1e6) / 1e6,
-        tipoRede: networkType === "esgoto" ? ("esgoto" as const) : ("agua" as const),
+        tipoRede: classifyNetworkType(declividade),
         diametroMm: DEFAULT_DIAMETRO_MM,
         material: DEFAULT_MATERIAL,
         xInicio: fromPt.x,
@@ -193,7 +194,7 @@ export function GisMapTab({
       {pontos.length === 0 && (
         <Card className="border-dashed">
           <CardContent className="py-8 text-center">
-            <Map className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+            <MapIcon className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
             <p className="text-sm text-muted-foreground">
               Nenhum dado carregado. Clique em <strong>"Importar Arquivo"</strong> para carregar
               um arquivo SHP, DXF, GeoJSON ou outro formato, ou use o mapa interativo para
