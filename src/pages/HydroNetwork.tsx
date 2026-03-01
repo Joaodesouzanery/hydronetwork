@@ -817,7 +817,7 @@ const HydroNetwork = () => {
     perfil: "Perfil Longitudinal", mapa: "Mapa Interativo", exportacao: "Exportacao GIS",
     lps: "LPS — Last Planner System",
     "qesg-qwater": "QEsg / QWater — Dimensionamento Hidráulico",
-    elevatoria: "Estação Elevatória — Dimensionamento e Orçamento",
+    elevatoria: "Orçamento de Elevatória",
   };
 
   return (

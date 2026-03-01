@@ -48,7 +48,7 @@ const hydroModules = [
   { title: "Perfil Longitudinal", url: "/hydronetwork/perfil", icon: Activity },
   { title: "Mapa Interativo", url: "/hydronetwork/mapa", icon: Map },
   { title: "Exportação GIS", url: "/hydronetwork/exportacao", icon: FileSpreadsheet },
-  { title: "Estação Elevatória", url: "/hydronetwork/elevatoria", icon: Activity },
+  { title: "Orçamento de Elevatória", url: "/hydronetwork/elevatoria", icon: Activity },
 ];
 const rdoItems = [
   { title: "RDO Hydro", url: "/hydronetwork/rdo", icon: ClipboardList },
