@@ -102,6 +102,24 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   const [stepStatus, setStepStatus] = useState<Record<string, "pending" | "done">>({});
   const markDone = (stepId: StepId) => setStepStatus(prev => ({ ...prev, [stepId]: "done" }));
 
+  // Step dependency validation
+  const handleStepChange = (stepId: StepId) => {
+    const hasData = activePontos.length > 0 || gisPontos.length > 0;
+    if (stepId !== "mapa" && stepId !== "s00" && !hasData) {
+      toast.warning("Importe dados no Mapa primeiro");
+    }
+    if (stepId === "s04" && sewerEdgeAttrs.length === 0 && sewerNodeAttrs.length === 0) {
+      toast.warning("Execute 'Verificar/Criar Campos' (S01) e 'Criar Nós' (S03) primeiro");
+    }
+    if (stepId === "s05" && stepStatus["s04"] !== "done" && sewerEdgeAttrs.length === 0) {
+      toast.warning("Execute 'Preencher Campos' (S04) primeiro");
+    }
+    if (stepId === "s06" && stepStatus["s05"] !== "done" && sewerEdgeAttrs.length === 0 && sewerTrechos.length === 0) {
+      toast.warning("Execute 'Calcular Vazão' (S05) primeiro");
+    }
+    setActiveStep(stepId);
+  };
+
   // Sync external data into GIS state on first load
   useEffect(() => {
     if (pontos && pontos.length > 0 && gisPontos.length === 0) setGisPontos(pontos);
@@ -203,6 +221,16 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   }, [sewerNodeAttrs, sewerEdgeAttrs, sewerResults, stepStatus,
       gisPontos, gisTrechos, manning, laminaMax, velMinEsg, velMaxEsg,
       tensaoMin, diamMinEsg, material, metodoVazao, vazaoEsg, qpcLitrosDia, k1, k2]);
+
+  // Auto-import from topography if no local data
+  useEffect(() => {
+    if (gisPontos.length > 0 || spatial.nodes.length > 0) return;
+    const topoNodes = getNodesByOrigin("topografia");
+    if (topoNodes.length > 0) {
+      spatial.importFromTopography();
+      toast.info("Rede importada da Topografia automaticamente");
+    }
+  }, []); // mount only
 
   // ── Derived ──
   const activePontos = spatial.legacyPontos.length > 0
@@ -315,11 +343,44 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
       if (nodeFlows.length > 0) inputs = accumulateSewerFlow(inputs, nodeFlows);
     }
 
+    // Ponta Seca: set minimum flow (1.5 L/s) on edges marked as ponta seca
+    if (pontaSecaEnabled && sewerEdgeAttrs.length > 0) {
+      const psMap = new Map(sewerEdgeAttrs.map(e => [e.key, e.pontaSeca]));
+      inputs = inputs.map(inp => {
+        const psVal = psMap.get(inp.id);
+        if (psVal && psVal > 0) {
+          return { ...inp, vazaoLps: SEWER_DEFAULTS.defaultVazaoLps };
+        }
+        return inp;
+      });
+    }
+
     const { resultados, resumo } = dimensionSewerNetwork(inputs, {
       manning, laminaMax, velMin: velMinEsg, velMax: velMaxEsg, tensaoMin, diamMinMm: diamMinEsg,
     });
     setSewerResults(resultados);
     setSewerResumo({ total: resumo.total, atendem: resumo.atendem });
+
+    // Propagate calculated diameters back to trechos
+    const resultMap = new Map(resultados.map(r => [r.id, r]));
+    const updatedTrechos = activeTrechos.map(t => {
+      const r = resultMap.get(`${t.idInicio}-${t.idFim}`);
+      return r ? { ...t, diametroMm: r.diametroMm } : t;
+    });
+    handleGisTrechosChange(updatedTrechos);
+
+    // Write results to Spatial Core edges
+    for (const r of resultados) {
+      const edge = spatial.edges.find(e => e.id === r.id);
+      if (edge) {
+        edge.properties.DN = r.diametroMm;
+        edge.properties.velocity = r.velocidadeMs;
+        edge.properties.compliance = r.atendeNorma;
+        edge.properties.tensaoTrativa = r.tensaoTrativa;
+      }
+    }
+    spatial.refresh();
+
     toast.success(`QEsg: ${resumo.atendem}/${resumo.total} atendem NBR 9649`);
     markDone("s06");
   }, [sewerEdgeAttrs, sewerNodeAttrs, sewerTrechos, activePontos, manning, laminaMax,
@@ -369,6 +430,24 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     }));
   }, [sewerEdgeAttrs, sewerTrechos, manning]);
 
+  // ── Result-colored connections for map ──
+  const resultColoredConnections = useMemo(() => {
+    if (sewerResults.length === 0) return undefined;
+    const resultMap = new Map(sewerResults.map(r => [r.id, r]));
+    return activeTrechos
+      .filter(t => (t.tipoRedeManual || "esgoto") === "esgoto" || (t.tipoRedeManual || "esgoto") === "outro")
+      .map(t => {
+        const key = `${t.idInicio}-${t.idFim}`;
+        const r = resultMap.get(key);
+        return {
+          from: t.idInicio,
+          to: t.idFim,
+          color: r ? (r.atendeNorma ? "#22c55e" : "#ef4444") : "#ef4444",
+          label: r ? `${key} DN${r.diametroMm} V=${r.velocidadeMs.toFixed(2)}` : key,
+        };
+      });
+  }, [sewerResults, activeTrechos]);
+
   // ── Stats ──
   const alertCount = sewerResults.filter(r => !r.atendeNorma).length;
   const compliance = sewerResumo
@@ -392,6 +471,8 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
               onPontosChange={handleGisPontosChange}
               onTrechosChange={handleGisTrechosChange}
               accentColor="#ef4444"
+              originModule="qesg"
+              resultConnections={resultColoredConnections}
             />
             <div className="flex gap-2 flex-wrap">
               <Button onClick={transferFromTopography} variant="outline" size="sm">
@@ -834,6 +915,23 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                   if (nodeFlows.length > 0) inputs = accumulateSewerFlow(inputs, nodeFlows);
                 }
 
+                // Ponta Seca: set minimum flow on edges marked as ponta seca
+                if (pontaSecaEnabled && sewerEdgeAttrs.length > 0) {
+                  const psMap = new Map(sewerEdgeAttrs.map(e => [e.key, e.pontaSeca]));
+                  let psCount = 0;
+                  inputs = inputs.map(inp => {
+                    const psVal = psMap.get(inp.id);
+                    if (psVal && psVal > 0) {
+                      psCount++;
+                      return { ...inp, vazaoLps: SEWER_DEFAULTS.defaultVazaoLps };
+                    }
+                    return inp;
+                  });
+                  if (psCount > 0) {
+                    toast.info(`${psCount} trecho(s) de ponta seca com vazão mínima (${SEWER_DEFAULTS.defaultVazaoLps} L/s)`);
+                  }
+                }
+
                 const msg = `Vazão calculada para ${inputs.length} trechos (${metodoVazao})`;
                 setStepMessage(prev => ({ ...prev, s05: msg }));
                 toast.success(msg);
@@ -1007,12 +1105,12 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     <div className="space-y-4">
       {/* Step toolbar */}
       <div className="flex flex-wrap gap-1 p-2 bg-muted rounded-lg items-center">
-        <Button variant={activeStep === "mapa" ? "default" : "ghost"} size="sm" onClick={() => setActiveStep("mapa")}>
+        <Button variant={activeStep === "mapa" ? "default" : "ghost"} size="sm" onClick={() => handleStepChange("mapa")}>
           <MapIcon className="h-3.5 w-3.5 mr-1" />Mapa
         </Button>
         {steps.map(step => (
           <Button key={step.id} variant={activeStep === step.id ? "default" : "ghost"} size="sm"
-            onClick={() => setActiveStep(step.id)}
+            onClick={() => handleStepChange(step.id)}
             className={stepStatus[step.id] === "done" ? "border-green-500 border" : ""}>
             <span className="font-mono text-xs mr-1">{step.num}</span>{step.label}
             {stepStatus[step.id] === "done" && <CheckCircle className="h-3 w-3 ml-1 text-green-500" />}

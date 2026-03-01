@@ -1394,7 +1394,16 @@ export async function importFile(
     }
     case "TIF": {
       const tifBuffer = await file.arrayBuffer();
-      const tifResult = await parseGeoTIFF(tifBuffer);
+      const tifResult = await parseGeoTIFF(tifBuffer, 15000, -9999, true);
+      // Store raw grid for elevation sampling (fillNodeElevations)
+      if (tifResult.grid) {
+        const { setRasterGrid } = await import("./rasterStore");
+        setRasterGrid(tifResult.grid, {
+          width: tifResult.width,
+          height: tifResult.height,
+          noDataValue: tifResult.noDataValue,
+        });
+      }
       const tifInternal = tifPointsToInternal(tifResult.points);
       parsed = {
         nodes: tifInternal.nodes.map(n => ({

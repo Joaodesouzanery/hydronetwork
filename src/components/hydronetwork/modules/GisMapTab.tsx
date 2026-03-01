@@ -10,10 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
-  Upload, Map as MapIcon, MapPin, Layers, FileText, Download, RefreshCw, Trash2,
+  Upload, Map as MapIcon, MapPin, Layers, FileText, Download, RefreshCw, Trash2, Mountain,
 } from "lucide-react";
 import { UnifiedImportPanel } from "@/components/hydronetwork/UnifiedImportPanel";
-import { NodeMapWidget, NodeData, ConnectionData } from "@/components/hydronetwork/NodeMapWidget";
+import { NodeMapWidget, NodeData, ConnectionData, OverlayPolyline } from "@/components/hydronetwork/NodeMapWidget";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from "@/engine/domain";
 import { classifyNetworkType } from "@/engine/geometry";
@@ -31,6 +31,8 @@ export interface GisMapTabProps {
   onTrechosChange: (trechos: Trecho[]) => void;
   accentColor?: string;
   originModule?: OriginModule;
+  /** Pre-colored connections from dimensioning results (overrides auto-generated connections) */
+  resultConnections?: ConnectionData[];
 }
 
 export function GisMapTab({
@@ -41,8 +43,70 @@ export function GisMapTab({
   onTrechosChange,
   accentColor = networkType === "esgoto" ? "#ef4444" : "#3b82f6",
   originModule,
+  resultConnections,
 }: GisMapTabProps) {
   const [mapMode, setMapMode] = useState<"view" | "import">("view");
+  const [contourOverlay, setContourOverlay] = useState<OverlayPolyline[]>([]);
+
+  // Handle map click for adding new nodes
+  const handleMapClick = useCallback((lat: number, lng: number) => {
+    const newId = `P${String(pontos.length + 1).padStart(3, "0")}`;
+    const newPoint: PontoTopografico = { id: newId, x: lng, y: lat, cota: 0 };
+    onPontosChange([...pontos, newPoint]);
+    if (originModule) {
+      const discipline: LayerDiscipline = networkType === "agua" ? "agua" : "esgoto";
+      const layer = createLayer({
+        name: `Nodes ${networkType}`,
+        discipline,
+        geometryType: "Point",
+        source: "manual",
+        originModule,
+      });
+      addNode({
+        id: newId, x: lng, y: lat, z: 0,
+        tipo: "generic", layerId: layer.id, origin_module: originModule,
+      });
+      bumpSpatialVersion();
+    }
+    toast.success(`Ponto ${newId} adicionado`);
+  }, [pontos, onPontosChange, originModule, networkType]);
+
+  // Handle node deletion
+  const handleNodesDelete = useCallback((nodeIds: string[]) => {
+    const updated = pontos.filter(p => !nodeIds.includes(p.id));
+    onPontosChange(updated);
+    // Also remove trechos connected to deleted nodes
+    const deletedSet = new Set(nodeIds);
+    const updatedTrechos = trechos.filter(t => !deletedSet.has(t.idInicio) && !deletedSet.has(t.idFim));
+    onTrechosChange(updatedTrechos);
+  }, [pontos, trechos, onPontosChange, onTrechosChange]);
+
+  // Generate contour lines from loaded raster
+  const generateContours = useCallback(async () => {
+    try {
+      const { getRasterGrid } = await import("@/engine/rasterStore");
+      const raster = getRasterGrid();
+      if (!raster) { toast.error("Importe um arquivo TIF/GeoTIFF primeiro"); return; }
+      const { extractContours } = await import("@/engine/contourExtractor");
+      const { grid, meta } = raster;
+      const result = extractContours(
+        grid.data, meta.width, meta.height,
+        grid.origin, grid.pixelSize,
+        5, meta.noDataValue,
+      );
+      const overlay: OverlayPolyline[] = result.contours.map((c: any) => ({
+        points: c.segments.flat().map((seg: any) => [seg[1], seg[0]] as [number, number]),
+        color: "#8B5CF6",
+        weight: 1,
+        opacity: 0.5,
+        label: `${c.elevation.toFixed(0)}m`,
+      }));
+      setContourOverlay(overlay);
+      toast.success(`${result.contours.length} curvas de nível geradas`);
+    } catch (err: any) {
+      toast.error(`Erro ao gerar contornos: ${err.message}`);
+    }
+  }, []);
 
   // Convert pontos to NodeData for map display
   const nodeData = useMemo<NodeData[]>(() =>
@@ -182,6 +246,12 @@ export function GisMapTab({
             <Upload className="h-4 w-4 mr-1" />
             {mapMode === "import" ? "Fechar Importação" : "Importar Arquivo"}
           </Button>
+          <Button variant={contourOverlay.length > 0 ? "secondary" : "outline"} size="sm" onClick={() => {
+            if (contourOverlay.length > 0) { setContourOverlay([]); toast.info("Contornos removidos"); }
+            else generateContours();
+          }}>
+            <Mountain className="h-4 w-4 mr-1" /> {contourOverlay.length > 0 ? "Limpar Contornos" : "Contornos"}
+          </Button>
           {pontos.length > 0 && (
             <Button variant="outline" size="sm" onClick={clearAll}>
               <Trash2 className="h-4 w-4 mr-1" /> Limpar
@@ -216,10 +286,13 @@ export function GisMapTab({
       {/* Interactive Map */}
       <NodeMapWidget
         nodes={nodeData}
-        connections={connectionData}
+        connections={resultConnections || connectionData}
         title={`Mapa — Rede de ${typeLabel}`}
         onNodeMove={handleNodeMove}
         onConnectionsChange={handleConnectionsChange}
+        onMapClick={handleMapClick}
+        onNodesDelete={handleNodesDelete}
+        overlayPolylines={contourOverlay}
         height={500}
         accentColor={accentColor}
         editable={true}

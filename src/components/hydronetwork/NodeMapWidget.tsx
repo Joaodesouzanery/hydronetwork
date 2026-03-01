@@ -34,6 +34,14 @@ export interface ConnectionData {
   vertices?: [number, number][];
 }
 
+export interface OverlayPolyline {
+  points: [number, number][];
+  color?: string;
+  weight?: number;
+  opacity?: number;
+  label?: string;
+}
+
 interface NodeMapWidgetProps {
   nodes: NodeData[];
   connections?: ConnectionData[];
@@ -44,6 +52,8 @@ interface NodeMapWidgetProps {
   onNodeDemandChange?: (nodeId: string, demanda: number) => void;
   onNodesDelete?: (nodeIds: string[]) => void;
   onConnectionsDelete?: (indices: number[]) => void;
+  onMapClick?: (lat: number, lng: number) => void;
+  overlayPolylines?: OverlayPolyline[];
   height?: number;
   accentColor?: string;
   editable?: boolean;
@@ -68,6 +78,8 @@ export const NodeMapWidget = ({
   onNodeDemandChange,
   onNodesDelete,
   onConnectionsDelete,
+  onMapClick,
+  overlayPolylines,
   height = 400,
   accentColor = "#3b82f6",
   editable = true,
@@ -77,6 +89,7 @@ export const NodeMapWidget = ({
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const markersRef = useRef<L.CircleMarker[]>([]);
   const linesRef = useRef<L.Polyline[]>([]);
+  const overlayRef = useRef<L.Polyline[]>([]);
   const [tileKey, setTileKey] = useState("osm");
   const [linkMode, setLinkMode] = useState(false);
   const [linkOrigin, setLinkOrigin] = useState<string | null>(null);
@@ -87,6 +100,7 @@ export const NodeMapWidget = ({
   const [deleteMode, setDeleteMode] = useState<"nodes" | "connections" | false>(false);
   const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
   const [selectedConnsForDelete, setSelectedConnsForDelete] = useState<Set<number>>(new Set());
+  const [addNodeMode, setAddNodeMode] = useState(false);
 
   useEffect(() => { setLocalConnections(connections); }, [connections]);
 
@@ -210,11 +224,26 @@ export const NodeMapWidget = ({
           setSelectedConnsForDelete(new Set());
           toast.info("Modo de exclusão desativado");
         }
+        if (addNodeMode) {
+          setAddNodeMode(false);
+          toast.info("Modo de adicionar nó desativado");
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [linkMode, deleteMode]);
+  }, [linkMode, deleteMode, addNodeMode]);
+
+  // Handle map click for addNodeMode
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !addNodeMode || !onMapClick) return;
+    const handleClick = (e: L.LeafletMouseEvent) => {
+      onMapClick(e.latlng.lat, e.latlng.lng);
+    };
+    map.on("click", handleClick);
+    return () => { map.off("click", handleClick); };
+  }, [addNodeMode, onMapClick]);
 
   // Track last data signature to only fitBounds on actual data changes
   const lastDataSigRef = useRef("");
@@ -318,6 +347,25 @@ export const NodeMapWidget = ({
       setTimeout(() => map.invalidateSize(), 500);
     }
   }, [nodes, localConnections, getCoords, accentColor, handleNodeClickInternal, handleConnClickInternal, selectedNode, linkMode, linkOrigin, deleteMode, selectedForDelete, selectedConnsForDelete]);
+
+  // Draw overlay polylines (contour lines, etc.)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    overlayRef.current.forEach(l => l.remove());
+    overlayRef.current = [];
+    if (!overlayPolylines || overlayPolylines.length === 0) return;
+    for (const poly of overlayPolylines) {
+      if (poly.points.length < 2) continue;
+      const line = L.polyline(poly.points, {
+        color: poly.color || "#8B5CF6",
+        weight: poly.weight || 1.5,
+        opacity: poly.opacity || 0.6,
+      }).addTo(map);
+      if (poly.label) line.bindTooltip(poly.label, { sticky: true });
+      overlayRef.current.push(line);
+    }
+  }, [overlayPolylines]);
 
   const handleUndo = () => {
     if (localConnections.length === 0) return;
@@ -433,6 +481,18 @@ export const NodeMapWidget = ({
           </Button>
           {editable && (
             <>
+              {onMapClick && (
+                <Button size="sm" variant={addNodeMode ? "default" : "outline"} onClick={() => {
+                  if (linkMode) { setLinkMode(false); setLinkOrigin(null); }
+                  if (deleteMode) { setDeleteMode(false); setSelectedForDelete(new Set()); setSelectedConnsForDelete(new Set()); }
+                  const newMode = !addNodeMode;
+                  setAddNodeMode(newMode);
+                  if (newMode) toast.info("Clique no mapa para adicionar nó. ESC para sair.");
+                  else toast.info("Modo de adicionar nó desativado.");
+                }} className={addNodeMode ? "bg-green-600 hover:bg-green-700 text-white" : ""}>
+                  <Plus className="h-3 w-3 mr-1" /> {addNodeMode ? "Adicionando..." : "Adicionar Nó"}
+                </Button>
+              )}
               <Button size="sm" variant={linkMode ? "default" : "outline"} onClick={toggleLinkMode}
                 className={linkMode ? "bg-orange-500 hover:bg-orange-600 text-white" : ""}>
                 <Link2 className="h-3 w-3 mr-1" /> {linkMode ? "Ligando..." : "Ligar Pontos"}
@@ -469,6 +529,19 @@ export const NodeMapWidget = ({
             </Select>
           </div>
         </div>
+
+        {/* Add node mode status */}
+        {addNodeMode && (
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200">
+            <Plus className="h-4 w-4 text-green-600" />
+            <span className="text-sm font-medium text-green-700 dark:text-green-400">
+              Clique no mapa para adicionar um nó. ESC para sair.
+            </span>
+            <Button size="sm" variant="ghost" className="h-6 text-xs ml-auto" onClick={() => setAddNodeMode(false)}>
+              <X className="h-3 w-3 mr-1" /> Sair
+            </Button>
+          </div>
+        )}
 
         {/* Link mode status */}
         {linkMode && (

@@ -9,6 +9,7 @@
  */
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PontoTopografico, parseTopographyCSV } from '@/engine/reader';
@@ -1070,12 +1071,18 @@ async function parseTIFContentAsync(buffer: ArrayBuffer, fileName: string): Prom
     const { setRasterGrid } = await import('@/engine/rasterStore');
     const tifResult = await parseGeoTIFF(buffer, 15000, -9999, true);
 
-    // Store raw grid for contour extraction
+    // Store raw grid for contour extraction and elevation sampling
     if (tifResult.grid) {
       setRasterGrid(tifResult.grid, {
         width: tifResult.width, height: tifResult.height,
         noDataValue: tifResult.noDataValue,
       });
+      // Add raster metadata to fields for display
+      fieldsSet.add(`${tifResult.width}×${tifResult.height} px`);
+      if (tifResult.grid.pixelSize) {
+        const res = Math.abs(tifResult.grid.pixelSize[0]);
+        fieldsSet.add(`${res.toFixed(2)} m/px`);
+      }
     }
 
     for (const pt of tifResult.points) {
@@ -1356,8 +1363,12 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
         const buffer = await item.file.arrayBuffer();
         result = await parseSHPContentAsync(buffer, item.file.name);
       } else if (format === 'TIF') {
+        toast.info(`Processando DEM: ${item.file.name} (${(item.file.size / 1024 / 1024).toFixed(1)} MB)...`);
         const buffer = await item.file.arrayBuffer();
         result = await parseTIFContentAsync(buffer, item.file.name);
+        // Show raster info summary
+        const rasterInfo = result.fields.filter(f => f.startsWith('EPSG:')).join(', ');
+        toast.success(`DEM carregado: ${result.points.length} pontos amostrados${rasterInfo ? ` | ${rasterInfo}` : ''}`);
       } else {
         return { ...item, status: 'erro', error: `Formato nao suportado: ${format}` };
       }

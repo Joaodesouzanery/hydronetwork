@@ -181,6 +181,16 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
       gisPontos, gisTrechos, formula, coefHW, velMinAgua, velMaxAgua,
       pressaoMin, pressaoMax, diamMinAgua, materialAgua, vazaoAgua]);
 
+  // Auto-import from topography if no local data
+  useEffect(() => {
+    if (gisPontos.length > 0 || spatial.nodes.length > 0) return;
+    const topoNodes = getNodesByOrigin("topografia");
+    if (topoNodes.length > 0) {
+      spatial.importFromTopography();
+      toast.info("Rede importada da Topografia automaticamente");
+    }
+  }, []); // mount only
+
   // ── Derived ──
   const activePontos = spatial.legacyPontos.length > 0
     ? spatial.legacyPontos
@@ -303,6 +313,26 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     setWaterResults(resultados);
     setWaterResumo({ total: resumo.total, atendem: resumo.atendem });
 
+    // Propagate calculated diameters back to trechos
+    const resultMap = new Map(resultados.map(r => [r.id, r]));
+    const updatedTrechos = activeTrechos.map(t => {
+      const r = resultMap.get(`${t.idInicio}-${t.idFim}`);
+      return r ? { ...t, diametroMm: r.diametroMm } : t;
+    });
+    handleGisTrechosChange(updatedTrechos);
+
+    // Write results to Spatial Core edges
+    for (const r of resultados) {
+      const edge = spatial.edges.find(e => e.id === r.id);
+      if (edge) {
+        edge.properties.DN = r.diametroMm;
+        edge.properties.velocity = r.velocidadeMs;
+        edge.properties.compliance = r.atendeNorma;
+        edge.properties.perdaCarga = r.perdaCargaM;
+      }
+    }
+    spatial.refresh();
+
     // Propagate pressure
     const nodeInputs: WaterNodeInput[] = waterNodeAttrs.length > 0
       ? waterNodeAttrs.map(n => ({ id: n.id, cota: n.cota, demanda: n.demanda }))
@@ -411,6 +441,85 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     });
   }, [pressureData, waterNodeAttrs, waterEdgeAttrs, waterTrechos]);
 
+  // ── Fill Fields (auto-fill attributes from geometry) ──
+  const fillWaterFields = useCallback(() => {
+    if (activePontos.length === 0) {
+      toast.error("Importe dados no Mapa primeiro.");
+      return;
+    }
+    // Create node attrs if they don't exist
+    if (waterNodeAttrs.length === 0) {
+      const nodes: WaterNodeAttributes[] = activePontos.map(p => ({
+        id: p.id, tipo: "junction", cota: p.cota, demanda: vazaoAgua,
+        pressao: 0, x: p.x, y: p.y, observacao: "",
+      }));
+      // First node defaults to reservoir
+      if (nodes.length > 0) nodes[0].tipo = "reservoir";
+      setWaterNodeAttrs(nodes);
+    }
+    // Create edge attrs if they don't exist
+    if (waterEdgeAttrs.length === 0 && waterTrechos.length > 0) {
+      const nodeMap = new Map(activePontos.map(p => [p.id, p]));
+      const edges: WaterEdgeAttributes[] = waterTrechos.map(t => {
+        const fromPt = nodeMap.get(t.idInicio);
+        const toPt = nodeMap.get(t.idFim);
+        return {
+          key: `${t.idInicio}-${t.idFim}`,
+          dcId: `T${t.idInicio}-${t.idFim}`,
+          idInicio: t.idInicio, idFim: t.idFim,
+          comprimento: t.comprimento,
+          diametro: t.diametroMm || diamMinAgua,
+          rugosidade: coefHW,
+          material: materialAgua,
+          status: "OPEN",
+          vazao: vazaoAgua,
+          observacao: "",
+        };
+      });
+      setWaterEdgeAttrs(edges);
+    }
+    toast.success("Campos preenchidos automaticamente");
+  }, [activePontos, waterTrechos, waterNodeAttrs.length, waterEdgeAttrs.length,
+      vazaoAgua, diamMinAgua, coefHW, materialAgua]);
+
+  // ── Generate EPANET INP model ──
+  const generateEpanetModel = useCallback(async () => {
+    if (waterNodeAttrs.length === 0 || waterEdgeAttrs.length === 0) {
+      toast.error("Preencha a tabela de Rede primeiro (nós e trechos).");
+      return;
+    }
+    try {
+      const { generateINPFromWater } = await import("@/engine/qwaterEpanetBridge");
+      const inp = generateINPFromWater(waterNodeAttrs, waterEdgeAttrs);
+      const blob = new Blob([inp], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url;
+      a.download = "qwater_model.inp"; a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Modelo EPANET (.inp) exportado");
+    } catch (err: any) {
+      toast.error(`Erro ao gerar modelo: ${err.message}`);
+    }
+  }, [waterNodeAttrs, waterEdgeAttrs]);
+
+  // ── Result-colored connections for map ──
+  const resultColoredConnections = useMemo(() => {
+    if (waterResults.length === 0) return undefined;
+    const resultMap = new Map(waterResults.map(r => [r.id, r]));
+    return activeTrechos
+      .filter(t => (t.tipoRedeManual || "agua") === "agua" || (t.tipoRedeManual || "esgoto") === "outro")
+      .map(t => {
+        const key = `${t.idInicio}-${t.idFim}`;
+        const r = resultMap.get(key);
+        return {
+          from: t.idInicio,
+          to: t.idFim,
+          color: r ? (r.atendeNorma ? "#22c55e" : "#ef4444") : "#3b82f6",
+          label: r ? `${key} DN${r.diametroMm} V=${r.velocidadeMs.toFixed(2)}` : key,
+        };
+      });
+  }, [waterResults, activeTrechos]);
+
   const fmt = (n: number, d = 1) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
   return (
@@ -450,6 +559,7 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
             onTrechosChange={handleGisTrechosChange}
             accentColor="#3b82f6"
             originModule="qwater"
+            resultConnections={resultColoredConnections}
           />
           <div className="flex gap-2 flex-wrap">
             <Button onClick={transferFromTopography} variant="outline" size="sm">
@@ -546,6 +656,17 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
 
         {/* ═══════ TAB 3: REDE ═══════ */}
         <TabsContent value="rede" className="space-y-4">
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={fillWaterFields} variant="outline" size="sm" disabled={activePontos.length === 0}>
+              <TableProperties className="h-4 w-4 mr-1" /> Preencher Campos
+            </Button>
+            {waterNodeAttrs.length > 0 && (
+              <Badge variant="outline" className="text-blue-600">{waterNodeAttrs.length} nós</Badge>
+            )}
+            {waterEdgeAttrs.length > 0 && (
+              <Badge variant="outline" className="text-blue-600">{waterEdgeAttrs.length} trechos</Badge>
+            )}
+          </div>
           <ElementTypeAssigner
             networkType="agua"
             pontos={activePontos}
@@ -614,6 +735,12 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                 </CardHeader>
                 <CardContent>
                   <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" variant="outline" onClick={fillWaterFields} disabled={activePontos.length === 0}>
+                      <TableProperties className="h-4 w-4 mr-1" /> Fill up Fields
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={generateEpanetModel} disabled={waterNodeAttrs.length === 0 || waterEdgeAttrs.length === 0}>
+                      <FileDown className="h-4 w-4 mr-1" /> Make Model
+                    </Button>
                     <Button size="sm" variant="outline" onClick={dimensionWater} disabled={!canDimension}>
                       <Droplets className="h-4 w-4 mr-1" /> Calc Flow
                     </Button>
@@ -622,6 +749,15 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                     </Button>
                     <Button size="sm" variant="outline" onClick={applyDiameters} disabled={waterResults.length === 0}>
                       <Zap className="h-4 w-4 mr-1" /> Economic Diameter
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => {
+                      if (resultColoredConnections) {
+                        toast.success("Mapa atualizado com cores de resultado");
+                      } else {
+                        toast.warning("Execute o dimensionamento primeiro para colorir o mapa");
+                      }
+                    }} disabled={waterResults.length === 0}>
+                      <MapIcon className="h-4 w-4 mr-1" /> Load Styles
                     </Button>
                     <Button size="sm" variant="outline" onClick={exportDxf} disabled={activePontos.length === 0}>
                       <FileDown className="h-4 w-4 mr-1" /> Export DXF

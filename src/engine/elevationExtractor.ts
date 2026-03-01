@@ -38,9 +38,19 @@ export function sampleElevation(x: number, y: number): number | null {
   const col = (x - origin[0]) / pixelSize[0];
   const row = (y - origin[1]) / pixelSize[1];
 
-  // Bounds check: need at least a 1-pixel margin for bilinear interpolation
-  if (col < 0 || col >= width - 1 || row < 0 || row >= height - 1) {
+  // Bounds check: outside raster entirely
+  if (col < 0 || col >= width || row < 0 || row >= height) {
     return null;
+  }
+
+  // Edge pixels: fall back to nearest-neighbor (no bilinear neighbors available)
+  if (col >= width - 1 || row >= height - 1) {
+    const nearCol = Math.min(Math.round(col), width - 1);
+    const nearRow = Math.min(Math.round(row), height - 1);
+    const val = data[nearRow * width + nearCol];
+    if (noDataValue !== undefined && val === noDataValue) return null;
+    if (isNaN(val)) return null;
+    return val;
   }
 
   // Integer pixel coordinates for the 4 surrounding cells
