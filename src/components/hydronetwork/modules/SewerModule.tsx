@@ -239,6 +239,18 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     onTrechosChange?.(t);
   };
 
+  // ── Derived (must be declared before any useCallback that references them) ──
+  const activePontos = spatial.legacyPontos.length > 0
+    ? spatial.legacyPontos
+    : gisPontos.length > 0
+      ? gisPontos
+      : (pontos || []);
+  const activeTrechos = spatial.legacyTrechos.length > 0
+    ? spatial.legacyTrechos
+    : gisTrechos.length > 0
+      ? gisTrechos
+      : (trechos || []);
+
   // ── Sync node/edge attrs → GIS + SpatialCore ──
   const syncNodeAttrsToGis = useCallback((attrs: SewerNodeAttributes[]) => {
     setSewerNodeAttrs(attrs);
@@ -387,17 +399,6 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     }
   }, []); // mount only
 
-  // ── Derived ──
-  const activePontos = spatial.legacyPontos.length > 0
-    ? spatial.legacyPontos
-    : gisPontos.length > 0
-      ? gisPontos
-      : (pontos || []);
-  const activeTrechos = spatial.legacyTrechos.length > 0
-    ? spatial.legacyTrechos
-    : gisTrechos.length > 0
-      ? gisTrechos
-      : (trechos || []);
   const sewerTrechos = useMemo(() =>
     activeTrechos.filter(t => {
       if (!t.tipoRedeManual) return true; // include unclassified trechos
