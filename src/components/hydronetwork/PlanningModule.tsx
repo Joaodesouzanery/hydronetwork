@@ -528,7 +528,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
         const totalMeters = segs.reduce((s, seg) => s + seg.meters, 0);
         const days: Record<number, { meters: number; isTest: boolean }> = {};
         segs.forEach(seg => { days[seg.day] = { meters: seg.meters, isTest: false }; });
-        const lastDay = Math.max(...segs.map(s => s.day));
+        const lastDay = segs.length > 0 ? segs.reduce((m, s) => s.day > m ? s.day : m, segs[0].day) : 0;
         if (lastDay + 1 <= totalDays) days[lastDay + 1] = { meters: 0, isTest: true };
         const displayName = getTrechoDisplayName(trechoId, idx);
         return { id: displayName, trechoId, meters: Math.round(totalMeters), days, totalDays };
@@ -590,7 +590,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
   const histStats = useMemo(() => {
     if (!scheduleResult) return { peakLabor: 0, avgDaily: 0, totalHH: 0, equipDays: 0 };
     const hist = scheduleResult.histogram;
-    const peakLabor = Math.max(...hist.map(h => h.labor));
+    const peakLabor = hist.length > 0 ? hist.reduce((m, h) => h.labor > m ? h.labor : m, 0) : 0;
     const avgDaily = hist.length > 0 ? hist.reduce((s, h) => s + h.labor, 0) / hist.length : 0;
     const totalHH = hist.reduce((s, h) => s + h.labor * horasTrabalho, 0);
     const equipDays = hist.reduce((s, h) => s + h.equipment, 0);

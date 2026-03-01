@@ -237,9 +237,15 @@ export function LongitudinalProfile({
     );
   }
 
-  // Calculate Y axis domain with some padding
-  const minY = Math.min(...activeData.map(p => Math.min(p.cotaColetor, p.cotaTerreno)));
-  const maxY = Math.max(...activeData.map(p => Math.max(p.cotaTerreno)));
+  // Calculate Y axis domain with some padding (safe for large arrays)
+  let minY = Infinity, maxY = -Infinity;
+  for (const p of activeData) {
+    const low = Math.min(p.cotaColetor, p.cotaTerreno);
+    if (low < minY) minY = low;
+    if (p.cotaTerreno > maxY) maxY = p.cotaTerreno;
+  }
+  if (!isFinite(minY)) minY = 0;
+  if (!isFinite(maxY)) maxY = 1;
   const yPadding = (maxY - minY) * 0.1 || 1;
 
   return (

@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -846,9 +847,11 @@ const HydroNetwork = () => {
                 }}>Verificar Plataforma</Button>
               </div>
             </div>
-            <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>}>
-              {renderModule()}
-            </Suspense>
+            <ErrorBoundary moduleName={moduleNames[activeModule] || activeModule} key={activeModule}>
+              <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>}>
+                {renderModule()}
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
       </div>

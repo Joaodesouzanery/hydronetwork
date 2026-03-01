@@ -455,8 +455,13 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       ? detectBatchCRS(pontos.map(p => ({ x: p.x, y: p.y })))
       : { type: "local" as const, baseLatLng: [-23.55, -46.63] as [number, number] };
 
-    const minElev = Math.min(...contourLines.map(c => c.elevation));
-    const maxElev = Math.max(...contourLines.map(c => c.elevation));
+    // Safe min/max that won't stack overflow on large arrays
+    let minElev = Infinity, maxElev = -Infinity;
+    for (const c of contourLines) {
+      if (c.elevation < minElev) minElev = c.elevation;
+      if (c.elevation > maxElev) maxElev = c.elevation;
+    }
+    if (!isFinite(minElev) || !isFinite(maxElev)) return;
     const range = maxElev - minElev || 1;
 
     for (const contour of contourLines) {

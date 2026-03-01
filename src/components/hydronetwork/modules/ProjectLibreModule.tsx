@@ -99,8 +99,8 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
   const ganttData = useMemo(() => {
     if (tasks.length === 0) return null;
     const allDates = tasks.map(t => ({ start: new Date(t.start), end: new Date(addDays(t.start, t.duration)) }));
-    const minDate = new Date(Math.min(...allDates.map(d => d.start.getTime())));
-    const maxDate = new Date(Math.max(...allDates.map(d => d.end.getTime())));
+    const minDate = new Date(allDates.reduce((m, d) => d.start.getTime() < m ? d.start.getTime() : m, allDates[0].start.getTime()));
+    const maxDate = new Date(allDates.reduce((m, d) => d.end.getTime() > m ? d.end.getTime() : m, allDates[0].end.getTime()));
     const totalDays = Math.max(1, diffDays(minDate.toISOString().split("T")[0], maxDate.toISOString().split("T")[0]));
     const columns: string[] = [];
     const colDate = new Date(minDate);
