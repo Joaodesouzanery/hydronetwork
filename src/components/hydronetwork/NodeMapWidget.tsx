@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { MapPin, Plus, Minus, Maximize, Layers, Link2, Trash2, Undo2, Save, Edit3, X, MousePointerClick } from "lucide-react";
-import { detectBatchCRS, getMapCoordinatesWithCRS, DetectedCRS } from "@/engine/hydraulics";
+import { detectBatchCRS, getMapCoordinatesWithCRS, setGlobalUtmZone, getGlobalUtmZone, DetectedCRS } from "@/engine/hydraulics";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -57,6 +57,8 @@ interface NodeMapWidgetProps {
   height?: number;
   accentColor?: string;
   editable?: boolean;
+  /** UTM zone version trigger for CRS re-detection (increment to force re-detect) */
+  utmZoneVersion?: number;
 }
 
 const TILE_LAYERS: Record<string, { url: string; attribution: string; name: string }> = {
@@ -83,6 +85,7 @@ export const NodeMapWidget = ({
   height = 400,
   accentColor = "#3b82f6",
   editable = true,
+  utmZoneVersion = 0,
 }: NodeMapWidgetProps) => {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -105,10 +108,11 @@ export const NodeMapWidget = ({
   useEffect(() => { setLocalConnections(connections); }, [connections]);
 
   // Batch CRS detection for consistent coordinate conversion
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const detectedCRS = useMemo((): DetectedCRS => {
     if (nodes.length === 0) return { type: "unknown" };
     return detectBatchCRS(nodes);
-  }, [nodes]);
+  }, [nodes, utmZoneVersion]);
 
   const getCoords = useCallback((x: number, y: number): [number, number] => {
     return getMapCoordinatesWithCRS(x, y, detectedCRS);
@@ -122,21 +126,18 @@ export const NodeMapWidget = ({
     tileLayerRef.current = tile;
     mapRef.current = map;
     
-    // Aggressive invalidateSize for dynamic containers/tabs
+    // invalidateSize for dynamic containers/tabs (reduced from 5 to 2 timeouts)
     const doInvalidate = () => {
       if (mapRef.current) {
         mapRef.current.invalidateSize();
       }
     };
-    setTimeout(doInvalidate, 100);
-    setTimeout(doInvalidate, 300);
-    setTimeout(doInvalidate, 600);
-    setTimeout(doInvalidate, 1000);
-    setTimeout(doInvalidate, 2000);
-    
+    setTimeout(doInvalidate, 150);
+    setTimeout(doInvalidate, 500);
+
     // ResizeObserver for container visibility changes
     const observer = new ResizeObserver(() => {
-      setTimeout(doInvalidate, 50);
+      requestAnimationFrame(doInvalidate);
     });
     observer.observe(containerRef.current);
     

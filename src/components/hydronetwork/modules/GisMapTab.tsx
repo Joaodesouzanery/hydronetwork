@@ -1,22 +1,26 @@
 /**
  * GisMapTab — Shared GIS map + import tab for Esgoto and Água modules.
  * Provides interactive Leaflet map with file import (SHP, DXF, GeoJSON, CSV, etc.),
- * drawing tools, CRS selection, and elevation extraction.
+ * drawing tools, CRS/DATUM/UTM selection, coordinate transform, and elevation extraction.
+ * Matches TopographyMap functionality for consistent UX across all map types.
  */
 import { useState, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
-  Upload, Map as MapIcon, MapPin, Layers, FileText, Download, RefreshCw, Trash2, Mountain,
+  Upload, Map as MapIcon, MapPin, Layers, FileText, Download, RefreshCw, Trash2, Mountain, Globe,
 } from "lucide-react";
 import { UnifiedImportPanel } from "@/components/hydronetwork/UnifiedImportPanel";
 import { NodeMapWidget, NodeData, ConnectionData, OverlayPolyline } from "@/components/hydronetwork/NodeMapWidget";
+import { CoordinateTransformDialog } from "@/components/hydronetwork/CoordinateTransformDialog";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from "@/engine/domain";
 import { classifyNetworkType } from "@/engine/geometry";
+import { setGlobalUtmZone, getGlobalUtmZone } from "@/engine/hydraulics";
 import {
   createLayer, addNode, addEdge,
   type OriginModule, type LayerDiscipline,
@@ -47,6 +51,30 @@ export function GisMapTab({
 }: GisMapTabProps) {
   const [mapMode, setMapMode] = useState<"view" | "import">("view");
   const [contourOverlay, setContourOverlay] = useState<OverlayPolyline[]>([]);
+  const [showTransformDialog, setShowTransformDialog] = useState(false);
+  const [utmZone, setUtmZone] = useState<string>(String(getGlobalUtmZone() || "auto"));
+  const [utmZoneVersion, setUtmZoneVersion] = useState(0);
+
+  // UTM zone change handler (matches TopographyMap)
+  const handleUtmZoneChange = useCallback((value: string) => {
+    setUtmZone(value);
+    if (value === "auto") {
+      setGlobalUtmZone(undefined);
+    } else {
+      setGlobalUtmZone(parseInt(value));
+    }
+    setUtmZoneVersion(v => v + 1);
+    if (pontos.length > 0) {
+      toast.success(`Fuso UTM alterado para ${value === "auto" ? "automático" : `zona ${value}`}`);
+    }
+  }, [pontos]);
+
+  // Handle transform dialog result
+  const handleTransformResult = useCallback((newPontos: PontoTopografico[], newTrechos: Trecho[]) => {
+    onPontosChange(newPontos);
+    onTrechosChange(newTrechos);
+    toast.success(`Coordenadas transformadas: ${newPontos.length} pontos e ${newTrechos.length} trechos atualizados.`);
+  }, [onPontosChange, onTrechosChange]);
 
   // Handle map click for adding new nodes
   const handleMapClick = useCallback((lat: number, lng: number) => {
@@ -138,9 +166,13 @@ export function GisMapTab({
       return;
     }
 
-    // Merge with existing data or replace
+    // Merge with existing data, tagging imported trechos with correct network type
     onPontosChange([...pontos, ...importedPontos]);
-    onTrechosChange([...trechos, ...importedTrechos]);
+    const taggedTrechos = importedTrechos.map(t => ({
+      ...t,
+      tipoRedeManual: t.tipoRedeManual || networkType,
+    }));
+    onTrechosChange([...trechos, ...taggedTrechos]);
 
     // Write to Spatial Core if originModule is specified
     if (originModule) {
@@ -201,6 +233,7 @@ export function GisMapTab({
         comprimento: Math.round(comprimento * 10) / 10,
         declividade: Math.round(declividade * 1e6) / 1e6,
         tipoRede: classifyNetworkType(declividade),
+        tipoRedeManual: networkType,
         diametroMm: DEFAULT_DIAMETRO_MM,
         material: DEFAULT_MATERIAL,
         xInicio: fromPt.x,
@@ -237,7 +270,7 @@ export function GisMapTab({
             {trechos.length} trechos
           </Badge>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <Button
             variant={mapMode === "import" ? "default" : "outline"}
             size="sm"
@@ -252,6 +285,23 @@ export function GisMapTab({
           }}>
             <Mountain className="h-4 w-4 mr-1" /> {contourOverlay.length > 0 ? "Limpar Contornos" : "Contornos"}
           </Button>
+          <Button size="sm" variant="outline" onClick={() => setShowTransformDialog(true)}>
+            <RefreshCw className="h-4 w-4 mr-1" /> Transformar CRS
+          </Button>
+          {/* UTM Zone selector — matches TopographyMap */}
+          <div className="flex items-center gap-1">
+            <Globe className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">UTM:</span>
+            <Select value={utmZone} onValueChange={handleUtmZoneChange}>
+              <SelectTrigger className="h-7 w-[80px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto (23)</SelectItem>
+                {Array.from({ length: 8 }, (_, i) => i + 18).map(z => (
+                  <SelectItem key={z} value={String(z)}>Zona {z}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {pontos.length > 0 && (
             <Button variant="outline" size="sm" onClick={clearAll}>
               <Trash2 className="h-4 w-4 mr-1" /> Limpar
@@ -283,6 +333,17 @@ export function GisMapTab({
         </Card>
       )}
 
+      {/* Coordinate Transform Dialog */}
+      {showTransformDialog && (
+        <CoordinateTransformDialog
+          open={showTransformDialog}
+          onOpenChange={setShowTransformDialog}
+          pontos={pontos}
+          trechos={trechos}
+          onTransform={handleTransformResult}
+        />
+      )}
+
       {/* Interactive Map */}
       <NodeMapWidget
         nodes={nodeData}
@@ -296,6 +357,7 @@ export function GisMapTab({
         height={500}
         accentColor={accentColor}
         editable={true}
+        utmZoneVersion={utmZoneVersion}
       />
 
       {/* Info */}

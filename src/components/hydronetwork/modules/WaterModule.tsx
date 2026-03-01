@@ -204,8 +204,8 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
       : (trechos || []);
   const waterTrechos = useMemo(() =>
     activeTrechos.filter(t => {
-      const tipo = t.tipoRedeManual || "esgoto";
-      return tipo === "agua" || tipo === "outro";
+      if (!t.tipoRedeManual) return true; // include unclassified trechos
+      return t.tipoRedeManual === "agua" || t.tipoRedeManual === "outro";
     }), [activeTrechos]);
 
   const handleMaterialChange = (mat: string) => {
@@ -223,10 +223,18 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     // If spatial import worked
     if (spatial.nodes.length > 0) {
       setGisPontos(spatial.legacyPontos);
-      setGisTrechos(spatial.legacyTrechos);
+      // Tag trechos with correct network type
+      setGisTrechos(spatial.legacyTrechos.map(t => ({
+        ...t,
+        tipoRedeManual: t.tipoRedeManual || "agua",
+      })));
     } else if (pontos && pontos.length > 0) {
       setGisPontos(pontos);
-      setGisTrechos(trechos || []);
+      // Tag trechos with correct network type
+      setGisTrechos((trechos || []).map(t => ({
+        ...t,
+        tipoRedeManual: t.tipoRedeManual || "agua",
+      })));
     }
     toast.success(`Dados transferidos da topografia`);
   };
@@ -382,7 +390,7 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   // ── Export DXF ──
   const exportDxf = useCallback(() => {
     const pts = activePontos;
-    const segs = activeTrechos.filter(t => (t.tipoRedeManual || "agua") === "agua");
+    const segs = activeTrechos.filter(t => !t.tipoRedeManual || t.tipoRedeManual === "agua");
     if (pts.length === 0) { toast.error("Sem dados para exportar"); return; }
     import("@/lib/dxfExporter").then(({ downloadDXF }) => {
       downloadDXF(pts, segs, "qwater_rede.dxf");
@@ -507,7 +515,7 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     if (waterResults.length === 0) return undefined;
     const resultMap = new Map(waterResults.map(r => [r.id, r]));
     return activeTrechos
-      .filter(t => (t.tipoRedeManual || "agua") === "agua" || (t.tipoRedeManual || "esgoto") === "outro")
+      .filter(t => !t.tipoRedeManual || t.tipoRedeManual === "agua" || t.tipoRedeManual === "outro")
       .map(t => {
         const key = `${t.idInicio}-${t.idFim}`;
         const r = resultMap.get(key);

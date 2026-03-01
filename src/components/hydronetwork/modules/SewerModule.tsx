@@ -245,8 +245,8 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
       : (trechos || []);
   const sewerTrechos = useMemo(() =>
     activeTrechos.filter(t => {
-      const tipo = t.tipoRedeManual || "esgoto";
-      return tipo === "esgoto" || tipo === "outro";
+      if (!t.tipoRedeManual) return true; // include unclassified trechos
+      return t.tipoRedeManual === "esgoto" || t.tipoRedeManual === "outro";
     }), [activeTrechos]);
 
   const handleMaterialChange = (mat: string) => {
@@ -265,10 +265,18 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     // If spatial import worked
     if (spatial.nodes.length > 0) {
       setGisPontos(spatial.legacyPontos);
-      setGisTrechos(spatial.legacyTrechos);
+      // Tag trechos with correct network type
+      setGisTrechos(spatial.legacyTrechos.map(t => ({
+        ...t,
+        tipoRedeManual: t.tipoRedeManual || "esgoto",
+      })));
     } else if (pontos && pontos.length > 0) {
       setGisPontos(pontos);
-      setGisTrechos(trechos || []);
+      // Tag trechos with correct network type
+      setGisTrechos((trechos || []).map(t => ({
+        ...t,
+        tipoRedeManual: t.tipoRedeManual || "esgoto",
+      })));
     }
     toast.success(`Dados transferidos da topografia`);
   };
@@ -435,7 +443,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
     if (sewerResults.length === 0) return undefined;
     const resultMap = new Map(sewerResults.map(r => [r.id, r]));
     return activeTrechos
-      .filter(t => (t.tipoRedeManual || "esgoto") === "esgoto" || (t.tipoRedeManual || "esgoto") === "outro")
+      .filter(t => !t.tipoRedeManual || t.tipoRedeManual === "esgoto" || t.tipoRedeManual === "outro")
       .map(t => {
         const key = `${t.idInicio}-${t.idFim}`;
         const r = resultMap.get(key);
