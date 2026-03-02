@@ -429,8 +429,8 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       polylinesRef.current.push(polyline);
     });
 
-    // Only fitBounds when actual data changes, not selection state
-    const dataSig = `${pontos.map(p => p.id).join(",")}|${trechos.length}`;
+    // Only fitBounds when the set of points changes (added/removed), not when connections change
+    const dataSig = pontos.map(p => p.id).join(",");
     if (bounds.length > 0 && dataSig !== lastDataSigRef.current) {
       lastDataSigRef.current = dataSig;
       try {

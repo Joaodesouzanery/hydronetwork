@@ -335,8 +335,8 @@ export const NodeMapWidget = ({
       linesRef.current.push(line);
     });
 
-    // Only fitBounds when actual data changes (not selection/mode changes)
-    const dataSig = `${nodes.map(n => n.id).join(",")}|${localConnections.length}`;
+    // Only fitBounds when the set of nodes changes (added/removed), not when connections change
+    const dataSig = nodes.map(n => n.id).join(",");
     if (bounds.length > 0 && dataSig !== lastDataSigRef.current) {
       lastDataSigRef.current = dataSig;
       try {

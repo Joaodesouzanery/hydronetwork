@@ -256,7 +256,7 @@ export function dimensionRecalque(input: RecalqueInput): RecalqueResult {
   const rendTotal = input.rendimentoBomba * input.rendimentoMotor;
   const potKW = (WATER_DENSITY * GRAVITY * qM3s * AMT) / (rendTotal * 1000);
   const potCV = potKW / 0.7355;
-  const potComercial = nextCommercialPower(potCV);
+  const potenciaComercial = nextCommercialPower(potCV);
 
   // NPSH calculation
   const patm = input.pressaoAtmosferica ?? 10.33;
@@ -521,7 +521,7 @@ export function dimensionBooster(input: BoosterInput): BoosterResult {
 
   const potKW = (WATER_DENSITY * GRAVITY * qM3s * boostHead) / (input.rendimento * 1000);
   const potCV = potKW / 0.7355;
-  const potComercial = nextCommercialPower(potCV / input.numBombas) ;
+  const potenciaComercial = nextCommercialPower(potCV / input.numBombas);
 
   if (V > 2.5) obs.push(`Velocidade alta: ${V.toFixed(2)} m/s (máx. 2.5 m/s)`);
   if (V < 0.5) obs.push(`Velocidade baixa: ${V.toFixed(2)} m/s (mín. 0.5 m/s)`);
