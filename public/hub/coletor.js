@@ -68,36 +68,39 @@ const CEIS_API = "https://api.portaldatransparencia.gov.br/api-de-dados/ceis";
 const CNEP_API = "https://api.portaldatransparencia.gov.br/api-de-dados/cnep";
 
 // CNPJs das empresas monitoradas (para consulta CEIS/CNEP)
+// NOTA: CNPJs marcados com [!] têm dígitos verificadores inválidos.
+// Precisam ser corrigidos com dados reais da Receita Federal (ReceitaWS ou Consulta CNPJ).
+// O coletor valida automaticamente e alerta sobre CNPJs inválidos.
 const CNPJS_MONITORADOS = [
-  "43.776.517/0001-80", // Sabesp
-  "16.454.085/0001-62", // Aegea
-  "19.406.798/0001-50", // BRK
-  "17.281.106/0001-03", // Copasa
-  "76.484.013/0001-45", // Sanepar
-  "07.628.820/0001-64", // Iguá
-  "07.040.108/0001-57", // Cagece
-  "17.262.213/0001-94", // Andrade Gutierrez
-  "33.412.792/0001-60", // Queiroz Galvão
-  "17.185.786/0001-61", // Barbosa Mello
-  "08.805.301/0001-29", // GS Inima
-  "13.504.675/0001-10", // Embasa
-  "33.352.394/0001-04", // CEDAE
-  "09.769.035/0001-64", // COMPESA
-  "12.294.708/0001-81", // CASAL
-  "13.018.171/0001-90", // DESO
-  "06.274.757/0001-50", // CAEMA
-  "04.945.341/0001-90", // COSANPA
-  "92.802.784/0001-90", // CORSAN
-  "82.508.433/0001-17", // CASAN
-  "00.082.024/0001-37", // CAESB
-  "08.343.492/0001-20", // MRV
-  "28.620.211/0001-79", // Novonor
-  "61.522.512/0001-02", // Mover
-  "14.310.577/0001-04", // OAS
-  "00.103.312/0001-37", // Engevix
-  "01.340.937/0001-79", // Galvão Engenharia
-  "61.088.894/0001-08", // Constran
-  "36.482.783/0001-73", // SANESUL
+  "43.776.517/0001-80", // Sabesp ✓
+  "16.454.085/0001-62", // Aegea [!] dígito verificador inválido
+  "19.406.798/0001-50", // BRK [!] dígito verificador inválido
+  "17.281.106/0001-03", // Copasa ✓
+  "76.484.013/0001-45", // Sanepar ✓
+  "07.628.820/0001-64", // Iguá [!] dígito verificador inválido
+  "07.040.108/0001-57", // Cagece ✓
+  "17.262.213/0001-94", // Andrade Gutierrez ✓
+  "33.412.792/0001-60", // Queiroz Galvão ✓
+  "17.185.786/0001-61", // Barbosa Mello ✓
+  "08.805.301/0001-29", // GS Inima [!] dígito verificador inválido
+  "13.504.675/0001-10", // Embasa ✓
+  "33.352.394/0001-04", // CEDAE ✓
+  "09.769.035/0001-64", // COMPESA ✓
+  "12.294.708/0001-81", // CASAL ✓
+  "13.018.171/0001-90", // DESO ✓
+  "06.274.757/0001-50", // CAEMA ✓
+  "04.945.341/0001-90", // COSANPA ✓
+  "92.802.784/0001-90", // CORSAN ✓
+  "82.508.433/0001-17", // CASAN ✓
+  "00.082.024/0001-37", // CAESB ✓
+  "08.343.492/0001-20", // MRV ✓
+  "28.620.211/0001-79", // Novonor [!] dígito verificador inválido
+  "61.522.512/0001-02", // Mover ✓
+  "14.310.577/0001-04", // OAS ✓
+  "00.103.312/0001-37", // Engevix [!] dígito verificador inválido (colide com CAESB!)
+  "01.340.937/0001-79", // Galvão Engenharia ✓
+  "61.088.894/0001-08", // Constran ✓
+  "36.482.783/0001-73", // SANESUL [!] dígito verificador inválido
 ];
 
 // ============================================================
@@ -187,6 +190,27 @@ const CAMINHO_ARTIGOS_JSON = path.join(__dirname, "artigos.json");
 const CAMINHO_ARTIGOS_TS = path.join(RAIZ_PROJETO, "src", "data", "artigos.ts");
 const CAMINHO_LICITACOES_JSON = path.join(__dirname, "licitacoes.json");
 const CAMINHO_LICITACOES_TS = path.join(RAIZ_PROJETO, "src", "data", "licitacoes.ts");
+
+// ============================================================
+// VALIDAÇÃO DE CNPJ
+// ============================================================
+/** Valida dígitos verificadores de um CNPJ (formato XX.XXX.XXX/XXXX-DD) */
+function validarCNPJ(cnpj) {
+  const nums = cnpj.replace(/\D/g, "");
+  if (nums.length !== 14) return false;
+  const pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  let soma = 0;
+  for (let i = 0; i < 12; i++) soma += parseInt(nums[i]) * pesos1[i];
+  let resto = soma % 11;
+  const d1 = resto < 2 ? 0 : 11 - resto;
+  if (parseInt(nums[12]) !== d1) return false;
+  soma = 0;
+  for (let i = 0; i < 13; i++) soma += parseInt(nums[i]) * pesos2[i];
+  resto = soma % 11;
+  const d2 = resto < 2 ? 0 : 11 - resto;
+  return parseInt(nums[13]) === d2;
+}
 
 // ============================================================
 // SEGURANÇA: escape de strings para geração de TS
@@ -551,6 +575,60 @@ async function buscarSancoesCEIS() {
 }
 
 /**
+ * Valida CNPJs monitorados e atualiza vinculos.json com sanções coletadas.
+ */
+function validarCNPJsEAtualizarVinculos(sancoes) {
+  console.log("\n  Validando CNPJs monitorados...");
+  const caminhoVinculos = path.join(__dirname, "vinculos.json");
+  let vinculos;
+  try {
+    vinculos = JSON.parse(fs.readFileSync(caminhoVinculos, "utf-8"));
+  } catch {
+    console.log("  [AVISO] vinculos.json não encontrado, pulando validação.");
+    return;
+  }
+
+  let cnpjsCorrigidos = 0;
+  let cnpjsInvalidos = 0;
+
+  // Validar CNPJs das empresas monitoradas
+  if (vinculos.empresas_monitoradas) {
+    vinculos.empresas_monitoradas.forEach((empresa) => {
+      const valido = validarCNPJ(empresa.cnpj);
+      if (valido && !empresa.cnpj_valido) {
+        empresa.cnpj_valido = true;
+        cnpjsCorrigidos++;
+      } else if (!valido) {
+        empresa.cnpj_valido = false;
+        cnpjsInvalidos++;
+      }
+    });
+  }
+
+  // Validar CNPJs monitorados do coletor
+  const cnpjsMonitoradosInvalidos = CNPJS_MONITORADOS.filter((c) => !validarCNPJ(c));
+  if (cnpjsMonitoradosInvalidos.length > 0) {
+    console.log(`  [ALERTA] ${cnpjsMonitoradosInvalidos.length} CNPJs monitorados com dígitos verificadores inválidos:`);
+    cnpjsMonitoradosInvalidos.forEach((c) => console.log(`    INVÁLIDO: ${c}`));
+  }
+
+  // Merge sanções no vinculos.json
+  if (sancoes && sancoes.length > 0) {
+    vinculos.sancoes_ativas = sancoes.filter((s) => s.ativa);
+    vinculos.sancoes_historico = sancoes.filter((s) => !s.ativa);
+    console.log(`  [OK] ${vinculos.sancoes_ativas.length} sanções ativas adicionadas ao vinculos.json`);
+  }
+
+  // Atualizar metadata
+  vinculos._meta.gerado_em = new Date().toISOString();
+  vinculos._meta.cnpjs_validos = (vinculos.empresas_monitoradas || []).filter((e) => e.cnpj_valido).length;
+  vinculos._meta.cnpjs_invalidos = (vinculos.empresas_monitoradas || []).filter((e) => !e.cnpj_valido).length;
+
+  fs.writeFileSync(caminhoVinculos, JSON.stringify(vinculos, null, 2), "utf-8");
+  console.log(`  [OK] vinculos.json atualizado (${cnpjsCorrigidos} corrigidos, ${cnpjsInvalidos} inválidos restantes)`);
+}
+
+/**
  * Busca notícias de Diários Oficiais e TCE via RSS.
  */
 async function buscarDiariosOficiaisETCE() {
@@ -820,11 +898,12 @@ async function main() {
     console.log("  [INFO] Mantendo dados embutidos existentes.");
   }
 
-  // ─── FASE 3: CEIS/CNEP (Sanções) ───
+  // ─── FASE 3: CEIS/CNEP (Sanções) + Validação de Vínculos ───
   console.log("\nFASE 3: Consultando sancoes CEIS/CNEP...\n");
 
+  let sancoesColetadas = [];
   try {
-    const sancoesColetadas = await buscarSancoesCEIS();
+    sancoesColetadas = await buscarSancoesCEIS();
     if (sancoesColetadas.length > 0) {
       salvarJSON(sancoesColetadas, CAMINHO_SANCOES_JSON);
     }
@@ -833,6 +912,10 @@ async function main() {
     console.log("  [INFO] A API pode exigir chave de acesso.");
     console.log("  [INFO] Cadastre-se em: https://portaldatransparencia.gov.br/api-de-dados/cadastrar");
   }
+
+  // Validar CNPJs e atualizar vinculos.json com sanções
+  console.log("\nFASE 3B: Validando CNPJs e atualizando vinculos.json...\n");
+  validarCNPJsEAtualizarVinculos(sancoesColetadas);
 
   // ─── FASE 4: Diários Oficiais + TCE ───
   console.log("\nFASE 4: Coletando Diarios Oficiais e TCE...\n");
@@ -864,7 +947,7 @@ async function main() {
   try {
     const distHub = path.join(RAIZ_PROJETO, "dist", "hub");
     if (fs.existsSync(distHub)) {
-      for (const arq of ["noticias.json", "licitacoes.json", "artigos.json", "meta.json", "sancoes.json", "diarios-tce.json"]) {
+      for (const arq of ["noticias.json", "licitacoes.json", "artigos.json", "meta.json", "sancoes.json", "diarios-tce.json", "vinculos.json"]) {
         const origem = path.join(__dirname, arq);
         const destino = path.join(distHub, arq);
         if (fs.existsSync(origem)) {
