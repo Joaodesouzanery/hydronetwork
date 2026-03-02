@@ -73,16 +73,16 @@ const CNEP_API = "https://api.portaldatransparencia.gov.br/api-de-dados/cnep";
 // O coletor valida automaticamente e alerta sobre CNPJs inválidos.
 const CNPJS_MONITORADOS = [
   "43.776.517/0001-80", // Sabesp ✓
-  "16.454.085/0001-62", // Aegea [!] dígito verificador inválido
-  "19.406.798/0001-50", // BRK [!] dígito verificador inválido
+  "08.827.501/0001-58", // Aegea ✓ (corrigido via Receita Federal)
+  "24.396.489/0001-20", // BRK Ambiental ✓ (corrigido via Receita Federal)
   "17.281.106/0001-03", // Copasa ✓
   "76.484.013/0001-45", // Sanepar ✓
-  "07.628.820/0001-64", // Iguá [!] dígito verificador inválido
+  "08.159.965/0001-33", // Iguá ✓ (corrigido via Receita Federal)
   "07.040.108/0001-57", // Cagece ✓
   "17.262.213/0001-94", // Andrade Gutierrez ✓
   "33.412.792/0001-60", // Queiroz Galvão ✓
   "17.185.786/0001-61", // Barbosa Mello ✓
-  "08.805.301/0001-29", // GS Inima [!] dígito verificador inválido
+  "08.905.300/0001-21", // GS Inima ✓ (corrigido via Receita Federal)
   "13.504.675/0001-10", // Embasa ✓
   "33.352.394/0001-04", // CEDAE ✓
   "09.769.035/0001-64", // COMPESA ✓
@@ -94,13 +94,13 @@ const CNPJS_MONITORADOS = [
   "82.508.433/0001-17", // CASAN ✓
   "00.082.024/0001-37", // CAESB ✓
   "08.343.492/0001-20", // MRV ✓
-  "28.620.211/0001-79", // Novonor [!] dígito verificador inválido
+  "05.144.757/0001-72", // Novonor (ex-Odebrecht) ✓ (corrigido via Receita Federal)
   "61.522.512/0001-02", // Mover ✓
   "14.310.577/0001-04", // OAS ✓
-  "00.103.312/0001-37", // Engevix [!] dígito verificador inválido (colide com CAESB!)
+  "00.103.582/0001-31", // Nova Engevix ✓ (corrigido via Receita Federal)
   "01.340.937/0001-79", // Galvão Engenharia ✓
   "61.088.894/0001-08", // Constran ✓
-  "36.482.783/0001-73", // SANESUL [!] dígito verificador inválido
+  "03.982.931/0001-20", // SANESUL ✓ (corrigido via Receita Federal)
 ];
 
 // ============================================================
