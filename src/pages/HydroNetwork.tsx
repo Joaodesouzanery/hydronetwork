@@ -29,6 +29,7 @@ import { TopographyMap } from "@/components/hydronetwork/TopographyMap";
 import { PerfilLongitudinal } from "@/components/hydronetwork/PerfilLongitudinal";
 import { RDOHydroModule } from "@/components/hydronetwork/RDOHydroModule";
 import { PlanningModule } from "@/components/hydronetwork/PlanningModule";
+import type { QuantRow, QuantityParams } from "@/components/hydronetwork/modules/QuantitiesModule";
 import { downloadDXF } from "@/lib/dxfExporter";
 // Lazy-loaded modules for code splitting — only loaded when navigated to
 const SewerModule = lazy(() => import("@/components/hydronetwork/modules/SewerModule").then(m => ({ default: m.SewerModule })));
@@ -70,12 +71,14 @@ const useHydroState = () => {
   const [material, setMaterial] = useState(DEFAULT_MATERIAL);
   const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null);
   const [rdos, setRdos] = useState<RDO[]>(loadRDOs());
+  const [quantityRows, setQuantityRows] = useState<QuantRow[]>([]);
+  const [quantityParams, setQuantityParams] = useState<QuantityParams | null>(null);
 
   return {
     pontos, setPontos, trechos, setTrechos, networkSummary, setNetworkSummary,
     costBase, setCostBase, budgetRows, setBudgetRows, budgetSummary, setBudgetSummary,
     diametroMm, setDiametroMm, material, setMaterial, scheduleResult, setScheduleResult,
-    rdos, setRdos,
+    rdos, setRdos, quantityRows, setQuantityRows, quantityParams, setQuantityParams,
   };
 };
 
@@ -89,7 +92,7 @@ const HydroNetwork = () => {
     pontos, setPontos, trechos, setTrechos, networkSummary, setNetworkSummary,
     costBase, setCostBase, budgetRows, setBudgetRows, budgetSummary, setBudgetSummary,
     diametroMm, setDiametroMm, material, setMaterial, scheduleResult, setScheduleResult,
-    rdos, setRdos,
+    rdos, setRdos, quantityRows, setQuantityRows, quantityParams, setQuantityParams,
   } = state;
 
   // ══════════════════════════════════════════════
@@ -270,7 +273,7 @@ const HydroNetwork = () => {
       case "drenagem":
         return <DrainageModule pontos={pontos} />;
       case "quantitativos":
-        return <QuantitiesModule trechos={trechos} pontos={pontos} />;
+        return <QuantitiesModule trechos={trechos} pontos={pontos} onQuantitiesCalculated={(rows, params) => { setQuantityRows(rows); setQuantityParams(params); }} />;
       case "orcamento":
         return <OrcamentoModule />;
       case "planejamento":
@@ -750,7 +753,7 @@ const HydroNetwork = () => {
 
   // â"€â"€ ORÃ‡AMENTO MODULE â"€â"€
   function OrcamentoModule() {
-    return <BudgetCostModule trechos={trechos} pontos={pontos} />;
+    return <BudgetCostModule trechos={trechos} pontos={pontos} quantityRows={quantityRows} quantityParams={quantityParams ?? undefined} />;
   }
 
   // ... keep existing code

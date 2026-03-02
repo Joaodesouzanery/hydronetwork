@@ -54,7 +54,7 @@ const SINAPI_COSTS = {
   botafora: { codigo: "97918", descricao: "Carga, transporte e descarga - bota-fora", unit: "m³", custo: 12.50 },
 } as const;
 
-interface QuantRow {
+export interface QuantRow {
   id: string;
   trecho: string;
   comp: number;
@@ -66,6 +66,10 @@ interface QuantRow {
   botafora: number;
   pavimento: number;
   escoramento: boolean;
+  // Intermediate volumes/areas for budget module
+  bercoVol: number;
+  envoltoriaVol: number;
+  escorArea: number;
   // Coordinates from topography
   xInicio: number;
   yInicio: number;
@@ -86,12 +90,18 @@ interface QuantRow {
   custoTotal: number;
 }
 
+export interface QuantityParams {
+  tipoPavimento: string;
+  tipoEscoramento: string;
+}
+
 interface QuantitiesModuleProps {
   trechos: Trecho[];
   pontos?: PontoTopografico[];
+  onQuantitiesCalculated?: (rows: QuantRow[], params: QuantityParams) => void;
 }
 
-export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => {
+export const QuantitiesModule = ({ trechos, pontos, onQuantitiesCalculated }: QuantitiesModuleProps) => {
   const navigate = useNavigate();
   const [tipoPavimento, setTipoPavimento] = useState("terra");
   const [larguraMinVala, setLarguraMinVala] = useState(0.6);
@@ -181,6 +191,7 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
         prof, larguraVala: lv,
         escavacao, reaterro, botafora, pavimento: areaPav,
         escoramento: needEscoramento,
+        bercoVol, envoltoriaVol, escorArea,
         xInicio: t.xInicio, yInicio: t.yInicio, cotaInicio: t.cotaInicio,
         xFim: t.xFim, yFim: t.yFim, cotaFim: t.cotaFim,
         custoEscavacao, custoEscoramento, custoTubo, custoBerco, custoEnvoltoria,
@@ -188,6 +199,7 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
       };
     });
     setRows(result);
+    onQuantitiesCalculated?.(result, { tipoPavimento, tipoEscoramento });
     toast.success(`Quantitativos SINAPI calculados para ${result.length} trechos`);
   };
 
@@ -437,7 +449,10 @@ export const QuantitiesModule = ({ trechos, pontos }: QuantitiesModuleProps) => 
                 }} className="flex-1">
                   <Download className="h-4 w-4 mr-1" /> Exportar Excel
                 </Button>
-                <Button onClick={() => navigate("/hydronetwork/orcamento")} className="flex-1">
+                <Button onClick={() => {
+                  onQuantitiesCalculated?.(rows, { tipoPavimento, tipoEscoramento });
+                  navigate("/hydronetwork/orcamento");
+                }} className="flex-1">
                   <DollarSign className="h-4 w-4 mr-1" /> Levar para Orçamento
                 </Button>
               </div>
