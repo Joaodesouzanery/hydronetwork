@@ -122,13 +122,29 @@ export function GisMapTab({
         grid.origin, grid.pixelSize,
         5, meta.noDataValue,
       );
-      const overlay: OverlayPolyline[] = result.contours.map((c: any) => ({
-        points: c.segments.flat().map((seg: any) => [seg[1], seg[0]] as [number, number]),
-        color: "#8B5CF6",
-        weight: 1,
-        opacity: 0.5,
-        label: `${c.elevation.toFixed(0)}m`,
-      }));
+      // Build overlay polylines — each contour level becomes one overlay line.
+      // We collect points sequentially from segments instead of using .flat()
+      // to avoid "Invalid Array Length" on very large datasets.
+      const overlay: OverlayPolyline[] = [];
+      for (const c of result.contours) {
+        const points: [number, number][] = [];
+        const maxPts = 50_000; // safety limit per contour level
+        for (let i = 0; i < c.segments.length && points.length < maxPts; i++) {
+          const seg = c.segments[i];
+          for (const pt of seg) {
+            points.push([pt[1], pt[0]] as [number, number]);
+          }
+        }
+        if (points.length > 0) {
+          overlay.push({
+            points,
+            color: "#8B5CF6",
+            weight: 1,
+            opacity: 0.5,
+            label: `${c.elevation.toFixed(0)}m`,
+          });
+        }
+      }
       setContourOverlay(overlay);
       toast.success(`${result.contours.length} curvas de nível geradas`);
     } catch (err: any) {

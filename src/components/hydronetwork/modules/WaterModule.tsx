@@ -506,6 +506,108 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   }, [activePontos, waterTrechos, waterNodeAttrs.length, waterEdgeAttrs.length,
       vazaoAgua, diamMinAgua, coefHW, materialAgua]);
 
+  // ── MDT Elevation Extraction ──
+  const [mdtProgress, setMdtProgress] = useState<number | null>(null);
+
+  const extractMdtElevations = useCallback(async () => {
+    const { getRasterGrid } = await import("@/engine/rasterStore");
+    const raster = getRasterGrid();
+    if (!raster) {
+      toast.error("Nenhum raster MDT carregado. Importe um arquivo TIF na aba Mapa.");
+      return;
+    }
+
+    const { sampleElevation, getRasterExtent } = await import("@/engine/elevationExtractor");
+    const nodes = waterNodeAttrs.length > 0
+      ? [...waterNodeAttrs]
+      : activePontos.map(p => ({
+          id: p.id, tipo: "junction" as const, cota: p.cota, demanda: vazaoAgua,
+          pressao: 0, x: p.x, y: p.y, observacao: "",
+        }));
+
+    if (nodes.length === 0) {
+      toast.error("Nenhum nó disponível. Importe dados no Mapa primeiro.");
+      return;
+    }
+
+    setMdtProgress(0);
+    let updated = 0;
+    let skipped = 0;
+
+    const updatedNodes = nodes.map((n, i) => {
+      const elevation = sampleElevation(n.x, n.y);
+      setMdtProgress(Math.round(((i + 1) / nodes.length) * 100));
+      if (elevation !== null) {
+        updated++;
+        return { ...n, cota: Math.round(elevation * 100) / 100 };
+      }
+      skipped++;
+      return n;
+    });
+
+    if (updated === 0 && skipped > 0) {
+      const extent = getRasterExtent();
+      let diagnostic = "Nenhum nó dentro do raster MDT.";
+      if (extent && nodes.length > 0) {
+        const sn = nodes[0];
+        diagnostic += ` Nó exemplo: X=${sn.x.toFixed(2)}, Y=${sn.y.toFixed(2)}.` +
+          ` Raster: X=[${extent.minX.toFixed(0)}..${extent.maxX.toFixed(0)}], Y=[${extent.minY.toFixed(0)}..${extent.maxY.toFixed(0)}].` +
+          ` Verifique se o CRS dos nós é compatível com o raster.`;
+      }
+      toast.error(diagnostic);
+      setMdtProgress(null);
+      return;
+    }
+
+    setWaterNodeAttrs(updatedNodes);
+
+    // Update GIS points
+    const newPontos = updatedNodes.map(n => ({
+      id: n.id, x: n.x, y: n.y, cota: n.cota,
+    }));
+    handleGisPontosChange(newPontos);
+
+    // Update edge cotas
+    if (waterEdgeAttrs.length > 0) {
+      const nodeMap = new Map(updatedNodes.map(n => [n.id, n]));
+      const updatedEdges = waterEdgeAttrs.map(e => {
+        const fromNode = nodeMap.get(e.idInicio);
+        const toNode = nodeMap.get(e.idFim);
+        return {
+          ...e,
+          cotaMontante: fromNode?.cota ?? e.cotaMontante,
+          cotaJusante: toNode?.cota ?? e.cotaJusante,
+        };
+      });
+      setWaterEdgeAttrs(updatedEdges);
+    }
+
+    // Also update trechos
+    if (waterTrechos.length > 0) {
+      const nodeMap = new Map(updatedNodes.map(n => [n.id, n]));
+      const updatedTrechos = activeTrechos.map(t => {
+        const fromNode = nodeMap.get(t.idInicio);
+        const toNode = nodeMap.get(t.idFim);
+        return {
+          ...t,
+          cotaInicio: fromNode?.cota ?? t.cotaInicio,
+          cotaFim: toNode?.cota ?? t.cotaFim,
+        };
+      });
+      handleGisTrechosChange(updatedTrechos);
+    }
+
+    // Update SpatialCore
+    const { fillNodeElevations, fillEdgeElevations } = await import("@/engine/elevationExtractor");
+    const spatialResult = fillNodeElevations();
+    if (spatialResult.updated > 0) fillEdgeElevations();
+    spatial.refresh();
+
+    toast.success(`MDT: ${updated} nós atualizados, ${skipped} fora do raster`);
+    setMdtProgress(null);
+  }, [waterNodeAttrs, activePontos, waterEdgeAttrs, waterTrechos, activeTrechos,
+      vazaoAgua, handleGisPontosChange, handleGisTrechosChange, spatial]);
+
   // ── Generate EPANET INP model ──
   const generateEpanetModel = useCallback(async () => {
     if (waterNodeAttrs.length === 0 || waterEdgeAttrs.length === 0) {
@@ -788,6 +890,12 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
             <Button onClick={fillWaterFields} variant="outline" size="sm" disabled={activePontos.length === 0}>
               <TableProperties className="h-4 w-4 mr-1" /> Preencher Campos
             </Button>
+            <Button onClick={extractMdtElevations} variant="outline" size="sm" disabled={activePontos.length === 0}>
+              <Mountain className="h-4 w-4 mr-1" /> Cota TN (MDT)
+            </Button>
+            {mdtProgress !== null && (
+              <Badge variant="secondary" className="text-blue-600">MDT: {mdtProgress}%</Badge>
+            )}
             {waterNodeAttrs.length > 0 && (
               <Badge variant="outline" className="text-blue-600">{waterNodeAttrs.length} nós</Badge>
             )}
@@ -865,6 +973,9 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                   <div className="flex gap-2 flex-wrap">
                     <Button size="sm" variant="outline" onClick={fillWaterFields} disabled={activePontos.length === 0}>
                       <TableProperties className="h-4 w-4 mr-1" /> Fill up Fields
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={extractMdtElevations} disabled={activePontos.length === 0}>
+                      <Mountain className="h-4 w-4 mr-1" /> Cota TN (MDT)
                     </Button>
                     <Button size="sm" variant="outline" onClick={generateEpanetModel} disabled={waterNodeAttrs.length === 0 || waterEdgeAttrs.length === 0}>
                       <FileDown className="h-4 w-4 mr-1" /> Make Model

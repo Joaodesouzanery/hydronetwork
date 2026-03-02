@@ -220,25 +220,33 @@ async function parseSHPContentAsync(buffer: ArrayBuffer, fileName: string): Prom
           break;
         }
         case 'Polygon': {
+          // Polygons are area features (parcels, zones), NOT network segments.
+          // Import centroid as a point for reference only.
           if (feature.geometry.coordinates?.[0]?.length >= 2) {
             const ring = feature.geometry.coordinates[0];
-            edges.push({
-              id: `SHP_E${edges.length}`,
-              type: 'Polygon', coordinates: ring.map((c: number[]) => [c[0], c[1], c[2] || 0]),
-              isClosed: true, layer, sourceFile: fileName,
-              properties: { ...props, geometryType: 'Polygon', length: calculateEdgeLength(ring) },
+            let cx = 0, cy = 0;
+            for (const c of ring) { cx += c[0]; cy += c[1]; }
+            cx /= ring.length; cy /= ring.length;
+            points.push({
+              id: `SHP_P${points.length}`, x: cx, y: cy, z: props.cota || props.COTA || props.Z || 0,
+              layer, sourceFile: fileName,
+              properties: { ...props, geometryType: 'Polygon' },
             });
           }
           break;
         }
         case 'MultiPolygon': {
+          // MultiPolygons are area features, NOT network segments.
           for (const poly of feature.geometry.coordinates) {
             if (poly[0]?.length >= 2) {
-              edges.push({
-                id: `SHP_E${edges.length}`,
-                type: 'Polygon', coordinates: poly[0].map((c: number[]) => [c[0], c[1], c[2] || 0]),
-                isClosed: true, layer, sourceFile: fileName,
-                properties: { ...props, geometryType: 'MultiPolygon', length: calculateEdgeLength(poly[0]) },
+              const ring = poly[0];
+              let cx = 0, cy = 0;
+              for (const c of ring) { cx += c[0]; cy += c[1]; }
+              cx /= ring.length; cy /= ring.length;
+              points.push({
+                id: `SHP_P${points.length}`, x: cx, y: cy, z: props.cota || props.COTA || props.Z || 0,
+                layer, sourceFile: fileName,
+                properties: { ...props, geometryType: 'MultiPolygon' },
               });
             }
           }

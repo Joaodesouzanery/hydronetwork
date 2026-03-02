@@ -99,6 +99,8 @@ function edgePoint(
  * @param pixelSize - [dx, dy] (dy usually negative)
  * @param interval - Contour interval in meters
  * @param noDataValue - Values <= this are excluded
+ * @param maxSegmentsPerLevel - Safety limit to prevent "Invalid Array Length" errors (default 500000)
+ * @param maxLevels - Maximum number of contour levels to generate (default 200)
  */
 export function extractContours(
   data: ArrayLike<number>,
@@ -108,6 +110,8 @@ export function extractContours(
   pixelSize: [number, number],
   interval: number = 5,
   noDataValue: number = -9999,
+  maxSegmentsPerLevel: number = 500_000,
+  maxLevels: number = 200,
 ): ContourExtractionResult {
   // 1. Compute stats
   let min = Infinity, max = -Infinity, sum = 0, validCells = 0;
@@ -122,27 +126,62 @@ export function extractContours(
   const mean = validCells > 0 ? sum / validCells : 0;
   if (validCells === 0) return { contours: [], stats: { min: 0, max: 0, mean: 0, validCells: 0 } };
 
-  // 2. Generate threshold levels
-  const startLevel = Math.ceil(min / interval) * interval;
-  const endLevel = Math.floor(max / interval) * interval;
+  // 2. Generate threshold levels with safety limit
+  let effectiveInterval = interval;
+  const elevRange = max - min;
+  const rawLevelCount = Math.floor(elevRange / effectiveInterval) + 1;
+
+  // If too many levels, increase the interval automatically
+  if (rawLevelCount > maxLevels) {
+    effectiveInterval = elevRange / maxLevels;
+    // Round up to a nice number (1, 2, 5, 10, 20, 50, ...)
+    const magnitude = Math.pow(10, Math.floor(Math.log10(effectiveInterval)));
+    const normalized = effectiveInterval / magnitude;
+    if (normalized <= 1) effectiveInterval = magnitude;
+    else if (normalized <= 2) effectiveInterval = 2 * magnitude;
+    else if (normalized <= 5) effectiveInterval = 5 * magnitude;
+    else effectiveInterval = 10 * magnitude;
+  }
+
+  const startLevel = Math.ceil(min / effectiveInterval) * effectiveInterval;
+  const endLevel = Math.floor(max / effectiveInterval) * effectiveInterval;
   const levels: number[] = [];
-  for (let l = startLevel; l <= endLevel; l += interval) levels.push(l);
+  for (let l = startLevel; l <= endLevel && levels.length < maxLevels; l += effectiveInterval) {
+    levels.push(l);
+  }
+
+  // 3. For very large rasters, subsample to reduce segment count
+  let stepRow = 1;
+  let stepCol = 1;
+  const cellCount = (width - 1) * (height - 1);
+  const MAX_CELLS = 2_000_000; // Limit processing to ~2M cells
+  if (cellCount > MAX_CELLS) {
+    const step = Math.ceil(Math.sqrt(cellCount / MAX_CELLS));
+    stepRow = step;
+    stepCol = step;
+  }
 
   const [dx, dy] = pixelSize;
   const [ox, oy] = origin;
+  // Adjust pixel size for subsampled grid
+  const sDx = dx * stepCol;
+  const sDy = dy * stepRow;
 
-  // 3. Marching squares for each level
+  // 4. Marching squares for each level
   const contours: ContourLine[] = [];
 
   for (const threshold of levels) {
     const segments: [number, number][][] = [];
+    let segmentLimitReached = false;
 
-    for (let row = 0; row < height - 1; row++) {
-      for (let col = 0; col < width - 1; col++) {
+    for (let row = 0; row < height - stepRow && !segmentLimitReached; row += stepRow) {
+      for (let col = 0; col < width - stepCol && !segmentLimitReached; col += stepCol) {
         const tl = data[row * width + col];
-        const tr = data[row * width + col + 1];
-        const br = data[(row + 1) * width + col + 1];
-        const bl = data[(row + 1) * width + col];
+        const trCol = Math.min(col + stepCol, width - 1);
+        const brRow = Math.min(row + stepRow, height - 1);
+        const tr = data[row * width + trCol];
+        const br = data[brRow * width + trCol];
+        const bl = data[brRow * width + col];
 
         // Skip cells with nodata
         if (tl <= noDataValue || tr <= noDataValue || br <= noDataValue || bl <= noDataValue) continue;
@@ -158,11 +197,20 @@ export function extractContours(
         const edges = EDGE_TABLE[caseIndex];
         if (edges.length === 0) continue;
 
+        // Use grid-relative positions for subsampled cells
+        const cellCol = col / stepCol;
+        const cellRow = row / stepRow;
+
         // Generate segments (2 edges per segment)
         for (let e = 0; e < edges.length; e += 2) {
-          const p1 = edgePoint(col, row, bl, br, tr, tl, threshold, edges[e], ox, oy, dx, dy);
-          const p2 = edgePoint(col, row, bl, br, tr, tl, threshold, edges[e + 1], ox, oy, dx, dy);
+          const p1 = edgePoint(cellCol, cellRow, bl, br, tr, tl, threshold, edges[e], ox, oy, sDx, sDy);
+          const p2 = edgePoint(cellCol, cellRow, bl, br, tr, tl, threshold, edges[e + 1], ox, oy, sDx, sDy);
           segments.push([p1, p2]);
+
+          if (segments.length >= maxSegmentsPerLevel) {
+            segmentLimitReached = true;
+            break;
+          }
         }
       }
     }

@@ -1466,8 +1466,8 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
           }
 
           // Also update SpatialCore
-          const { updated: spatialUpdated } = fillNodeElevations();
-          if (spatialUpdated > 0) fillEdgeElevations();
+          const spatialResult = fillNodeElevations();
+          if (spatialResult.updated > 0) fillEdgeElevations();
           spatial.refresh();
 
           // Update GIS points
@@ -1478,10 +1478,25 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
 
           setMdtProgress(100);
 
-          const msg = `MDT: ${nodesUpdated} nós atualizados, ${nodesSkipped} fora do raster, ${edgesUpdated} trechos CTM/CTJ atualizados`;
-          setStepMessage(prev => ({ ...prev, s04: msg }));
-          toast.success(msg);
-          markDone("s04");
+          if (nodesUpdated === 0 && nodesSkipped > 0) {
+            // All nodes fell outside the raster — likely CRS mismatch
+            const { getRasterExtent } = await import("@/engine/elevationExtractor");
+            const extent = getRasterExtent();
+            let diagnostic = "Nenhum nó dentro do raster MDT.";
+            if (extent && allNodes.length > 0) {
+              const sn = allNodes[0];
+              diagnostic += ` Nó exemplo: X=${sn.x.toFixed(2)}, Y=${sn.y.toFixed(2)}.` +
+                ` Raster: X=[${extent.minX.toFixed(0)}..${extent.maxX.toFixed(0)}], Y=[${extent.minY.toFixed(0)}..${extent.maxY.toFixed(0)}].` +
+                ` Verifique se o CRS dos nós é compatível com o raster (ex: ambos em UTM ou ambos em lat/lng).`;
+            }
+            setStepMessage(prev => ({ ...prev, s04: diagnostic }));
+            toast.error(diagnostic);
+          } else {
+            const msg = `MDT: ${nodesUpdated} nós atualizados, ${nodesSkipped} fora do raster, ${edgesUpdated} trechos CTM/CTJ atualizados`;
+            setStepMessage(prev => ({ ...prev, s04: msg }));
+            toast.success(msg);
+            markDone("s04");
+          }
 
           // Clear progress after 2s
           setTimeout(() => setMdtProgress(null), 2000);
