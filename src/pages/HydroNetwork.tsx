@@ -49,6 +49,8 @@ const RDOPlanningModule = lazy(() => import("@/components/hydronetwork/modules/R
 const LPSModule = lazy(() => import("@/components/hydronetwork/modules/LPSModule").then(m => ({ default: m.LPSModule })));
 const QEsgWaterModule = lazy(() => import("@/components/hydronetwork/modules/QEsgWaterModule").then(m => ({ default: m.QEsgWaterModule })));
 const ElevatorStationModule = lazy(() => import("@/components/hydronetwork/modules/ElevatorStationModule").then(m => ({ default: m.ElevatorStationModule })));
+const RecalqueModule = lazy(() => import("@/components/hydronetwork/modules/RecalqueModule").then(m => ({ default: m.RecalqueModule })));
+const TransientModule = lazy(() => import("@/components/hydronetwork/modules/TransientModule").then(m => ({ default: m.TransientModule })));
 import { QEsgWaterPanel } from "@/components/hydronetwork/panels/QEsgWaterPanel";
 import { getRasterGrid } from "@/engine/rasterStore";
 import { extractContours, type ContourExtractionResult } from "@/engine/contourExtractor";
@@ -304,6 +306,10 @@ const HydroNetwork = () => {
         return <QEsgWaterModule pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />;
       case "elevatoria":
         return <ElevatorStationModule />;
+      case "recalque":
+        return <RecalqueModule />;
+      case "transientes":
+        return <TransientModule />;
       case "perfil":
         return <PerfilLongitudinal pontos={pontos} trechos={trechos} />;
       case "mapa":
@@ -822,6 +828,8 @@ const HydroNetwork = () => {
     lps: "LPS — Last Planner System",
     "qesg-qwater": "QEsg / QWater — Dimensionamento Hidráulico",
     elevatoria: "Orçamento de Elevatória",
+    recalque: "Recalque / Booster — Linhas de Recalque",
+    transientes: "Transientes Hidráulicos — Golpe de Aríete",
   };
 
   return (

@@ -692,11 +692,31 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
               <Upload className="h-4 w-4 mr-1" /> Transferir da Topografia
             </Button>
             <Button onClick={async () => {
-              const { fillNodeElevations, fillEdgeElevations } = await import("@/engine/elevationExtractor");
+              const { fillNodeElevations, fillEdgeElevations, sampleElevation } = await import("@/engine/elevationExtractor");
               const { updated, noRaster } = fillNodeElevations();
               if (noRaster) { toast.error("Importe um arquivo TIF/GeoTIFF primeiro"); return; }
               fillEdgeElevations();
               spatial.refresh();
+              // BUG FIX: Also update gisPontos and gisTrechos with MDT elevations
+              if (activePontos.length > 0) {
+                const updatedPontos = activePontos.map(p => {
+                  const elev = sampleElevation(p.x, p.y);
+                  return elev !== null ? { ...p, cota: Math.round(elev * 100) / 100 } : p;
+                });
+                handleGisPontosChange(updatedPontos);
+              }
+              if (activeTrechos.length > 0) {
+                const ptMap = new Map(activePontos.map(p => {
+                  const elev = sampleElevation(p.x, p.y);
+                  return [p.id, elev !== null ? Math.round(elev * 100) / 100 : p.cota];
+                }));
+                const updatedTrechos = activeTrechos.map(t => ({
+                  ...t,
+                  cotaInicio: ptMap.get(t.idInicio) ?? t.cotaInicio,
+                  cotaFim: ptMap.get(t.idFim) ?? t.cotaFim,
+                }));
+                handleGisTrechosChange(updatedTrechos);
+              }
               toast.success(`${updated} cotas preenchidas do MDT`);
             }} variant="outline" size="sm">
               <Mountain className="h-4 w-4 mr-1" /> Preencher Cota (MDT)
@@ -814,25 +834,86 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                   <Upload className="h-3.5 w-3.5 mr-1" /> Importar TIF (MDT)
                 </Button>
                 <Button variant="outline" size="sm" onClick={async () => {
-                  const { fillNodeElevations, fillEdgeElevations } = await import("@/engine/elevationExtractor");
+                  const { fillNodeElevations, fillEdgeElevations, sampleElevation } = await import("@/engine/elevationExtractor");
                   const { getRasterGrid } = await import("@/engine/rasterStore");
                   if (!getRasterGrid()) {
                     toast.error("Importe um arquivo TIF (MDT) primeiro");
                     return;
                   }
+                  // Update SpatialCore nodes
                   const { updated, skipped } = fillNodeElevations();
                   if (updated > 0) fillEdgeElevations();
                   spatial.refresh();
-                  // Update node attrs with new cotas
+
+                  // BUG FIX: Sync MDT elevations back to waterNodeAttrs AND waterEdgeAttrs
+                  const { getSpatialProject } = await import("@/core/spatial");
+                  const project = getSpatialProject();
+
                   if (waterNodeAttrs.length > 0) {
-                    const { getSpatialProject } = await import("@/core/spatial");
-                    const project = getSpatialProject();
+                    // Update existing node attrs with spatial data
                     const updatedNodes = waterNodeAttrs.map(n => {
                       const spatialNode = project.nodes.get(n.id);
-                      return spatialNode ? { ...n, cota: spatialNode.z ?? n.cota } : n;
+                      if (spatialNode && spatialNode.z !== undefined) {
+                        return { ...n, cota: Math.round(spatialNode.z * 100) / 100 };
+                      }
+                      // Fallback: direct sample from raster
+                      const elev = sampleElevation(n.x, n.y);
+                      return elev !== null ? { ...n, cota: Math.round(elev * 100) / 100 } : n;
                     });
                     setWaterNodeAttrs(updatedNodes);
+                  } else if (activePontos.length > 0) {
+                    // BUG FIX: When no waterNodeAttrs exist yet, update activePontos
+                    const updatedPontos = activePontos.map(p => {
+                      const spatialNode = project.nodes.get(p.id);
+                      if (spatialNode && spatialNode.z !== undefined) {
+                        return { ...p, cota: Math.round(spatialNode.z * 100) / 100 };
+                      }
+                      const elev = sampleElevation(p.x, p.y);
+                      return elev !== null ? { ...p, cota: Math.round(elev * 100) / 100 } : p;
+                    });
+                    handleGisPontosChange(updatedPontos);
                   }
+
+                  // BUG FIX: Also update edge CTM/CTJ from node elevations
+                  if (waterEdgeAttrs.length > 0) {
+                    const nodeMap = waterNodeAttrs.length > 0
+                      ? new Map(waterNodeAttrs.map(n => [n.id, n.cota]))
+                      : new Map(activePontos.map(p => [p.id, p.cota]));
+                    const updatedEdges = waterEdgeAttrs.map(e => {
+                      const cotaM = nodeMap.get(e.idInicio);
+                      const cotaJ = nodeMap.get(e.idFim);
+                      return {
+                        ...e,
+                        cotaTerrenoM: cotaM ?? e.cotaTerrenoM,
+                        cotaTerrenoJ: cotaJ ?? e.cotaTerrenoJ,
+                      };
+                    });
+                    setWaterEdgeAttrs(updatedEdges);
+                  }
+
+                  // Update trechos CTM/CTJ too
+                  if (activeTrechos.length > 0) {
+                    const nodeMap = new Map<string, number>();
+                    for (const n of (waterNodeAttrs.length > 0 ? waterNodeAttrs : [])) {
+                      const sn = project.nodes.get(n.id);
+                      if (sn?.z) nodeMap.set(n.id, sn.z);
+                    }
+                    for (const p of activePontos) {
+                      if (!nodeMap.has(p.id)) {
+                        const elev = sampleElevation(p.x, p.y);
+                        if (elev !== null) nodeMap.set(p.id, elev);
+                      }
+                    }
+                    if (nodeMap.size > 0) {
+                      const updatedTrechos = activeTrechos.map(t => ({
+                        ...t,
+                        cotaInicio: nodeMap.get(t.idInicio) ?? t.cotaInicio,
+                        cotaFim: nodeMap.get(t.idFim) ?? t.cotaFim,
+                      }));
+                      handleGisTrechosChange(updatedTrechos);
+                    }
+                  }
+
                   toast.success(`${updated} cotas atualizadas via MDT${skipped > 0 ? ` (${skipped} fora do raster)` : ""}`);
                 }}>
                   <Mountain className="h-3.5 w-3.5 mr-1" /> Preencher Cotas (MDT)

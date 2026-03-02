@@ -1068,6 +1068,16 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
           }));
           handleGisTrechosChange(updatedTrechos);
 
+          // BUG FIX: Also update gisPontos with renamed IDs so MDT and
+          // subsequent steps can match nodes correctly
+          if (nodeIdMap.size > 0) {
+            const updatedPontos = activePontos.map(p => ({
+              ...p,
+              id: nodeIdMap.get(p.id) ?? p.id,
+            }));
+            handleGisPontosChange(updatedPontos);
+          }
+
           const msg = `Rede numerada: ${result.edges.length} trechos, ${nodes.length} nós (PV-001...PV-${String(nodes.length).padStart(3, "0")})`;
           setStepMessage(prev => ({ ...prev, s02: msg }));
           toast.success(msg);
@@ -1885,14 +1895,40 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
           const nodes: SewerNetworkNode[] = sewerNodeAttrs.length > 0
             ? sewerNodeAttrs.map(n => ({ id: n.id, x: n.x, y: n.y, cotaTerreno: n.cotaTerreno, cotaFundo: n.cotaFundo }))
             : activePontos.map(p => ({ id: p.id, x: p.x, y: p.y, cotaTerreno: p.cota, cotaFundo: p.cota - 1.5 }));
-          const edges: SewerNetworkEdge[] = sewerEdgeAttrs.length > 0
-            ? sewerEdgeAttrs.map(e => ({
-                key: e.key, dcId: e.dcId, idInicio: e.idInicio, idFim: e.idFim,
-                comprimento: e.comprimento, cotaTerrenoM: e.cotaTerrenoM, cotaTerrenoJ: e.cotaTerrenoJ,
-                cotaColetorM: e.cotaColetorM, cotaColetorJ: e.cotaColetorJ,
-                manning: e.manning, diametro: e.diametro, declividade: e.declividade,
-              }))
-            : [];
+          // BUG FIX: Build edges from sewerEdgeAttrs or fall back to sewerTrechos + results
+          let edges: SewerNetworkEdge[];
+          if (sewerEdgeAttrs.length > 0) {
+            edges = sewerEdgeAttrs.map(e => ({
+              key: e.key, dcId: e.dcId, idInicio: e.idInicio, idFim: e.idFim,
+              comprimento: e.comprimento, cotaTerrenoM: e.cotaTerrenoM, cotaTerrenoJ: e.cotaTerrenoJ,
+              cotaColetorM: e.cotaColetorM, cotaColetorJ: e.cotaColetorJ,
+              manning: e.manning, diametro: e.diametro, declividade: e.declividade,
+            }));
+          } else if (sewerTrechos.length > 0 && sewerResults.length > 0) {
+            const resultMap = new Map(sewerResults.map(r => [r.id, r]));
+            edges = sewerTrechos.map(t => {
+              const key = `${t.idInicio}-${t.idFim}`;
+              const r = resultMap.get(key);
+              const dn = r?.diametroMm ?? t.diametroMm ?? 150;
+              const dnM = dn / 1000;
+              return {
+                key,
+                dcId: t.nomeTrecho || key,
+                idInicio: t.idInicio,
+                idFim: t.idFim,
+                comprimento: t.comprimento,
+                cotaTerrenoM: t.cotaInicio,
+                cotaTerrenoJ: t.cotaFim,
+                cotaColetorM: t.cotaInicio - 1.5,
+                cotaColetorJ: t.cotaFim - (1.5 + t.comprimento * (t.declividade || 0.005)),
+                manning,
+                diametro: dn,
+                declividade: t.declividade,
+              };
+            });
+          } else {
+            edges = [];
+          }
           if (edges.length === 0 || sewerResults.length === 0) {
             toast.error("Execute o dimensionamento (07) primeiro.");
             return;
