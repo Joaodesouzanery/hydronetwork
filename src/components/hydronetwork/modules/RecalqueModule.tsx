@@ -202,7 +202,7 @@ export const RecalqueModule = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Waves className="h-6 w-6 text-orange-600" /> Recalque / Booster
+            <Waves className="h-6 w-6 text-primary" /> Recalque / Booster
           </CardTitle>
           <CardDescription>
             Dimensionamento de linhas de recalque (esgoto/água) e estações booster.
@@ -225,7 +225,7 @@ export const RecalqueModule = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Mountain className="h-4 w-4 text-orange-600" /> Dados Geométricos
+                  <Mountain className="h-4 w-4 text-primary" /> Dados Geométricos
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -277,7 +277,7 @@ export const RecalqueModule = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-orange-600" /> Vazão e Bombeamento
+                  <Activity className="h-4 w-4 text-primary" /> Vazão e Bombeamento
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -320,7 +320,7 @@ export const RecalqueModule = () => {
             </Card>
           </div>
 
-          <Button onClick={runDimensioning} className="w-full">
+          <Button onClick={runDimensioning} className="w-full bg-[#A5CE00] text-[#0A2456] hover:bg-[#8FB800]">
             <Calculator className="h-4 w-4 mr-2" /> Dimensionar Recalque
           </Button>
 
@@ -341,7 +341,7 @@ export const RecalqueModule = () => {
                   <p className="text-xs">{result.potenciaKW} kW ({result.potenciaCV.toFixed(1)} CV calc.)</p>
                 </CardContent>
               </Card>
-              <Card className={result.transiente.riscoCavitacao ? "border-red-500" : ""}>
+              <Card className={result.transiente.riscoCavitacao ? "border-[#EF4444]" : ""}>
                 <CardContent className="pt-4 space-y-1">
                   <p className="text-xs text-muted-foreground">Golpe de Aríete</p>
                   <p className="text-2xl font-bold">{result.transiente.golpeArieteAllievi} m</p>
@@ -362,7 +362,7 @@ export const RecalqueModule = () => {
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <Zap className="h-4 w-4 text-orange-600" /> Estação Booster
+                <Zap className="h-4 w-4 text-primary" /> Estação Booster
               </CardTitle>
               <CardDescription>
                 Dimensionamento de estação de reforço de pressão na rede de distribuição
@@ -383,7 +383,7 @@ export const RecalqueModule = () => {
                 <div><Label className="text-xs">Rendimento</Label><Input type="number" step="0.05" value={boosterRendimento} onChange={e => setBoosterRendimento(Number(e.target.value))} /></div>
               </div>
 
-              <Button onClick={runBooster}>
+              <Button onClick={runBooster} className="bg-[#A5CE00] text-[#0A2456] hover:bg-[#8FB800]">
                 <Calculator className="h-4 w-4 mr-2" /> Dimensionar Booster
               </Button>
 
@@ -394,7 +394,7 @@ export const RecalqueModule = () => {
                     <div><strong>Potência:</strong> {boosterResult.potenciaComercial} CV</div>
                     <div><strong>V:</strong> {boosterResult.velocidade} m/s</div>
                   </div>
-                  <Badge className={boosterResult.atendeNorma ? "bg-green-500" : "bg-red-500"}>
+                  <Badge className={boosterResult.atendeNorma ? "bg-[rgba(165,206,0,0.1)] text-[#A5CE00]" : "bg-[rgba(239,68,68,0.1)] text-[#EF4444]"}>
                     {boosterResult.atendeNorma ? "Atende" : "Não atende"}
                   </Badge>
                   {boosterResult.observacoes.map((o, i) => (
@@ -420,7 +420,7 @@ export const RecalqueModule = () => {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
-                    <BarChart3 className="h-4 w-4 text-orange-600" /> Resumo do Dimensionamento
+                    <BarChart3 className="h-4 w-4 text-primary" /> Resumo do Dimensionamento
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -453,10 +453,10 @@ export const RecalqueModule = () => {
               </Card>
 
               {/* Transient Summary */}
-              <Card className={result.transiente.riscoCavitacao ? "border-red-500/50 bg-red-50 dark:bg-red-950/10" : ""}>
+              <Card className={result.transiente.riscoCavitacao ? "border-[#EF4444]/50 bg-[rgba(239,68,68,0.05)]" : ""}>
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Waves className="h-4 w-4 text-orange-600" /> Transientes Hidráulicos (Análise Rápida)
+                    <Waves className="h-4 w-4 text-primary" /> Transientes Hidráulicos (Análise Rápida)
                   </CardTitle>
                   <CardDescription>
                     Golpe de aríete — Joukowsky e Allievi | NBR 12215 / NBR 12214
@@ -483,11 +483,11 @@ export const RecalqueModule = () => {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div className={`text-center p-2 rounded ${result.transiente.pressaoMaxima > result.alturaManometricaTotal * 1.5 ? "bg-red-100 dark:bg-red-950/20" : "bg-green-100 dark:bg-green-950/20"}`}>
+                    <div className={`text-center p-2 rounded ${result.transiente.pressaoMaxima > result.alturaManometricaTotal * 1.5 ? "bg-[rgba(239,68,68,0.1)]" : "bg-[rgba(165,206,0,0.1)]"}`}>
                       <p className="text-xs">Pressão Máxima</p>
                       <p className="text-lg font-bold">{result.transiente.pressaoMaxima} mca</p>
                     </div>
-                    <div className={`text-center p-2 rounded ${result.transiente.riscoCavitacao ? "bg-red-100 dark:bg-red-950/20" : "bg-green-100 dark:bg-green-950/20"}`}>
+                    <div className={`text-center p-2 rounded ${result.transiente.riscoCavitacao ? "bg-[rgba(239,68,68,0.1)]" : "bg-[rgba(165,206,0,0.1)]"}`}>
                       <p className="text-xs">Pressão Mínima</p>
                       <p className="text-lg font-bold">{result.transiente.pressaoMinima} mca</p>
                     </div>
@@ -496,7 +496,7 @@ export const RecalqueModule = () => {
                   {result.transiente.recomendacoes.length > 0 && (
                     <div className="space-y-1">
                       {result.transiente.recomendacoes.map((rec, i) => (
-                        <div key={i} className="flex items-start gap-2 text-xs text-orange-700 dark:text-orange-400">
+                        <div key={i} className="flex items-start gap-2 text-xs text-warning">
                           <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
                           {rec}
                         </div>
@@ -524,7 +524,7 @@ export const RecalqueModule = () => {
                         <YAxis label={{ value: "H (m)", angle: -90, position: "insideLeft" }} />
                         <RechartsTooltip />
                         <Legend />
-                        <Line type="monotone" dataKey="hSistema" stroke="#f97316" name="Sistema" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="hSistema" stroke="#10367D" name="Sistema" strokeWidth={2} dot={false} />
                         <Line type="monotone" dataKey="hBomba" stroke="#3b82f6" name="Bomba" strokeWidth={2} dot={false} />
                       </LineChart>
                     </ResponsiveContainer>
@@ -534,10 +534,10 @@ export const RecalqueModule = () => {
 
               {/* Observations */}
               {result.observacoes.length > 0 && (
-                <Card className="border-yellow-500/30 bg-yellow-500/5">
+                <Card className="border-warning/30 bg-warning/5">
                   <CardContent className="py-3 space-y-1">
                     {result.observacoes.map((o, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs text-yellow-700">
+                      <div key={i} className="flex items-start gap-2 text-xs text-warning">
                         <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
                         {o}
                       </div>

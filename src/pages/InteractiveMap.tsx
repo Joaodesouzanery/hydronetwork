@@ -107,10 +107,10 @@ async function clearTileCache(): Promise<void> {
 // Annotation marker colors based on type
 function getAnnotationColor(tipo: string): string {
   switch (tipo) {
-    case "ponto": return "#3b82f6";
-    case "area": return "#22c55e";
-    case "setor": return "#f59e0b";
-    case "inspecao": return "#ef4444";
+    case "ponto": return "#3B82F6";
+    case "area": return "#A5CE00";
+    case "setor": return "#F59E0B";
+    case "inspecao": return "#EF4444";
     default: return "#6366f1";
   }
 }
@@ -701,7 +701,7 @@ export default function InteractiveMap() {
     if (!showConstraintLayer || mapConstraints.length === 0) return;
 
     const constraintMarkers: L.CircleMarker[] = [];
-    const statusColors: Record<string, string> = { ativa: '#f59e0b', critica: '#ef4444', resolvida: '#22c55e' };
+    const statusColors: Record<string, string> = { ativa: '#F59E0B', critica: '#EF4444', resolvida: '#A5CE00' };
 
     mapConstraints.forEach((c: any) => {
       if (c.latitude == null || c.longitude == null) return;

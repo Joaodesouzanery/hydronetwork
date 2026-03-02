@@ -94,10 +94,10 @@ export const RDOProgressMap = ({ pontos, trechos, rdos }: RDOProgressMapProps) =
         if (statusFilter === "nao_iniciado" && seg.status !== "Não Iniciado") return;
       }
 
-      let color = "#ef4444";
+      let color = "#EF4444";
       let weight = 2;
-      if (seg.status === "Concluído") { color = "#22c55e"; weight = 6; }
-      else if (seg.status === "Em Execução") { color = "#f59e0b"; weight = 4; }
+      if (seg.status === "Concluído") { color = "#A5CE00"; weight = 6; }
+      else if (seg.status === "Em Execução") { color = "#3B82F6"; weight = 4; }
 
       const polyline = L.polyline([coordsInicio, coordsFim], {
         color,

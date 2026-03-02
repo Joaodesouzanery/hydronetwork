@@ -14,7 +14,6 @@ import {
   SidebarHeader, useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
-import { Logo } from "@/components/shared/Logo";
 
 const dashboardItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
@@ -77,13 +76,15 @@ export function AppSidebar() {
 
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
     isActive
-      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
+      ? "sidebar-item-active bg-[rgba(165,206,0,0.08)] text-[#A5CE00] font-medium border-l-[3px] border-l-[#A5CE00] pl-3"
+      : "text-[#94A3B8] hover:bg-[rgba(255,255,255,0.05)] hover:text-[#F8FAFC] transition-colors duration-200";
 
   const renderSection = (label: string, items: typeof dashboardItems, defaultOpen = true) => (
     <Collapsible defaultOpen={defaultOpen} className="group/collapsible">
       <SidebarGroup>
-        <SidebarGroupLabel className="text-sm font-medium">{label}</SidebarGroupLabel>
+        <SidebarGroupLabel className="uppercase text-[11px] tracking-[1.5px] font-semibold text-[#64748B] px-4">
+          {label}
+        </SidebarGroupLabel>
         <CollapsibleContent>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -91,8 +92,8 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink to={item.url} end className={getNavCls}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                      <item.icon className="h-5 w-5 flex-shrink-0" />
+                      <span className="text-sm">{item.title}</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -105,11 +106,29 @@ export function AppSidebar() {
   );
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="p-4 border-b border-sidebar-border">
-        <Logo size="md" />
+    <Sidebar
+      collapsible="icon"
+      className="border-r-0"
+      style={{
+        background: "linear-gradient(180deg, #0A2456 0%, #10367D 100%)",
+      }}
+    >
+      <SidebarHeader className="p-4 border-b border-[#1E3A6E]">
+        <div className="flex items-center gap-2.5">
+          <img
+            src="/favicon.svg"
+            alt="ConstruData"
+            className="h-10 w-10 flex-shrink-0"
+            style={{ filter: "brightness(0) invert(1)" }}
+          />
+          {open && (
+            <span className="text-lg font-bold text-white tracking-tight">
+              ConstruData
+            </span>
+          )}
+        </div>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="overflow-y-auto">
         {renderSection("Menu Principal", dashboardItems)}
         {renderSection("Monitoramento", monitoringItems)}
         {renderSection("HydroNetwork", hydroModules)}
@@ -117,13 +136,13 @@ export function AppSidebar() {
         {renderSection("Sistema", settingsItems, false)}
 
         {/* Support footer */}
-        <div className="mt-auto p-3 border-t border-sidebar-border">
+        <div className="mt-auto p-3 border-t border-[#1E3A6E]">
           <div className="flex items-center gap-2 justify-center">
-            <a href="mailto:construdata.contato@gmail.com" className="p-2 rounded-lg hover:bg-sidebar-accent transition-colors" title="Email">
-              <Mail className="w-4 h-4 text-muted-foreground" />
+            <a href="mailto:construdata.contato@gmail.com" className="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors" title="Email">
+              <Mail className="w-4 h-4 text-[#94A3B8]" />
             </a>
-            <a href="https://www.linkedin.com/company/construdatasoftware" target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-sidebar-accent transition-colors" title="LinkedIn">
-              <Linkedin className="w-4 h-4 text-muted-foreground" />
+            <a href="https://www.linkedin.com/company/construdatasoftware" target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors" title="LinkedIn">
+              <Linkedin className="w-4 h-4 text-[#94A3B8]" />
             </a>
           </div>
         </div>

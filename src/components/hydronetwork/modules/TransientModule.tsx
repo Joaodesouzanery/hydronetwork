@@ -213,7 +213,7 @@ export const TransientModule = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Waves className="h-6 w-6 text-red-600" /> Transientes Hidráulicos (Golpe de Aríete)
+            <Waves className="h-6 w-6 text-primary" /> Transientes Hidráulicos (Golpe de Aríete)
           </CardTitle>
           <CardDescription>
             Simulação por Método das Características (MOC) | Joukowsky ΔH = a·ΔV/g |
@@ -227,13 +227,13 @@ export const TransientModule = () => {
         <Card>
           <CardContent className="pt-3 text-center">
             <p className="text-[10px] text-muted-foreground">Celeridade (a)</p>
-            <p className="text-xl font-bold text-red-600">{waveSpeed.toFixed(0)} m/s</p>
+            <p className="text-xl font-bold text-primary">{waveSpeed.toFixed(0)} m/s</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-3 text-center">
             <p className="text-[10px] text-muted-foreground">Joukowsky (ΔH)</p>
-            <p className="text-xl font-bold text-red-600">{joukowsky.toFixed(1)} m</p>
+            <p className="text-xl font-bold text-primary">{joukowsky.toFixed(1)} m</p>
           </CardContent>
         </Card>
         <Card>
@@ -310,12 +310,12 @@ export const TransientModule = () => {
             </Card>
           </div>
 
-          <Button onClick={runQuickAnalysis} className="w-full">
+          <Button onClick={runQuickAnalysis} className="w-full bg-[#A5CE00] text-[#0A2456] hover:bg-[#8FB800]">
             <Zap className="h-4 w-4 mr-2" /> Análise Rápida (Joukowsky / Allievi)
           </Button>
 
           {quickResult && (
-            <Card className={quickResult.cavitationRisk ? "border-red-500/50 bg-red-50 dark:bg-red-950/10" : ""}>
+            <Card className={quickResult.cavitationRisk ? "border-[#EF4444]/50 bg-[rgba(239,68,68,0.05)]" : ""}>
               <CardContent className="pt-4 space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="text-center p-2 bg-muted rounded">
@@ -337,11 +337,11 @@ export const TransientModule = () => {
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
-                  <div className={`text-center p-2 rounded ${quickResult.maxPressure > steadyPressure * 2 ? "bg-red-100" : "bg-green-100"}`}>
+                  <div className={`text-center p-2 rounded ${quickResult.maxPressure > steadyPressure * 2 ? "bg-[rgba(239,68,68,0.1)]" : "bg-[rgba(165,206,0,0.1)]"}`}>
                     <p className="text-xs">P Máxima</p>
                     <p className="text-lg font-bold">{quickResult.maxPressure} mca</p>
                   </div>
-                  <div className={`text-center p-2 rounded ${quickResult.cavitationRisk ? "bg-red-100" : "bg-green-100"}`}>
+                  <div className={`text-center p-2 rounded ${quickResult.cavitationRisk ? "bg-[rgba(239,68,68,0.1)]" : "bg-[rgba(165,206,0,0.1)]"}`}>
                     <p className="text-xs">P Mínima</p>
                     <p className="text-lg font-bold">{quickResult.minPressure} mca</p>
                   </div>
@@ -352,7 +352,7 @@ export const TransientModule = () => {
                 </div>
 
                 <div className="flex gap-2 flex-wrap">
-                  <Badge className={quickResult.closureType === "fast" ? "bg-red-500" : "bg-green-500"}>
+                  <Badge className={quickResult.closureType === "fast" ? "bg-[rgba(239,68,68,0.1)] text-[#EF4444]" : "bg-[rgba(165,206,0,0.1)] text-[#A5CE00]"}>
                     Fechamento {quickResult.closureType === "fast" ? "RÁPIDO" : "LENTO"}
                   </Badge>
                   {quickResult.cavitationRisk && <Badge variant="destructive">CAVITAÇÃO</Badge>}
@@ -362,7 +362,7 @@ export const TransientModule = () => {
                   <div className="space-y-1 border-t pt-2">
                     <p className="text-xs font-semibold">Recomendações:</p>
                     {quickResult.recommendations.map((r, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs text-orange-700">
+                      <div key={i} className="flex items-start gap-2 text-xs text-warning">
                         <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
                         {r}
                       </div>
@@ -430,7 +430,7 @@ export const TransientModule = () => {
             </Card>
           </div>
 
-          <Button onClick={runMOC} className="w-full">
+          <Button onClick={runMOC} className="w-full bg-[#A5CE00] text-[#0A2456] hover:bg-[#8FB800]">
             <Play className="h-4 w-4 mr-2" /> Executar Simulação MOC
           </Button>
 
@@ -439,13 +439,13 @@ export const TransientModule = () => {
               <Card>
                 <CardContent className="pt-3 text-center">
                   <p className="text-[10px] text-muted-foreground">P Máxima</p>
-                  <p className="text-lg font-bold text-red-600">{mocResult.maxPressure} mca</p>
+                  <p className="text-lg font-bold text-primary">{mocResult.maxPressure} mca</p>
                 </CardContent>
               </Card>
-              <Card className={mocResult.minPressure < 0 ? "border-red-500" : ""}>
+              <Card className={mocResult.minPressure < 0 ? "border-[#EF4444]" : ""}>
                 <CardContent className="pt-3 text-center">
                   <p className="text-[10px] text-muted-foreground">P Mínima</p>
-                  <p className="text-lg font-bold text-blue-600">{mocResult.minPressure} mca</p>
+                  <p className="text-lg font-bold text-info">{mocResult.minPressure} mca</p>
                 </CardContent>
               </Card>
               <Card>
@@ -491,10 +491,10 @@ export const TransientModule = () => {
                         <YAxis label={{ value: "Cota (m)", angle: -90, position: "insideLeft" }} />
                         <RechartsTooltip />
                         <Legend />
-                        <Area type="monotone" dataKey="maxHead" fill="#fee2e2" stroke="#ef4444" name="Máx. Piezométrica" strokeWidth={2} />
-                        <Area type="monotone" dataKey="minHead" fill="#dbeafe" stroke="#3b82f6" name="Mín. Piezométrica" strokeWidth={2} />
-                        <Line type="monotone" dataKey="steadyHead" stroke="#22c55e" name="Regime Permanente" strokeWidth={2} dot={false} />
-                        <Line type="monotone" dataKey="terreno" stroke="#854d0e" name="Terreno" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+                        <Area type="monotone" dataKey="maxHead" fill="rgba(16,54,125,0.1)" stroke="#10367D" name="Máx. Piezométrica" strokeWidth={2} />
+                        <Area type="monotone" dataKey="minHead" fill="rgba(59,130,246,0.1)" stroke="#3b82f6" name="Mín. Piezométrica" strokeWidth={2} />
+                        <Line type="monotone" dataKey="steadyHead" stroke="#A5CE00" name="Regime Permanente" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="terreno" stroke="#0A2456" name="Terreno" strokeWidth={2} dot={false} strokeDasharray="5 5" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </CardContent>
@@ -520,7 +520,7 @@ export const TransientModule = () => {
                             key={nodeId}
                             type="monotone"
                             dataKey={nodeId}
-                            stroke={i === 0 ? "#ef4444" : "#3b82f6"}
+                            stroke={i === 0 ? "#10367D" : "#3b82f6"}
                             name={nodeId}
                             strokeWidth={2}
                             dot={false}
@@ -545,7 +545,7 @@ export const TransientModule = () => {
                         <XAxis dataKey="tempo" label={{ value: "Tempo (s)", position: "insideBottom", offset: -5 }} />
                         <YAxis label={{ value: "Q (L/s)", angle: -90, position: "insideLeft" }} />
                         <RechartsTooltip />
-                        <Line type="monotone" dataKey="vazao" stroke="#f97316" name="Vazão" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="vazao" stroke="#F59E0B" name="Vazão" strokeWidth={2} dot={false} />
                         <ReferenceLine y={0} stroke="#000" strokeDasharray="3 3" />
                       </LineChart>
                     </ResponsiveContainer>
@@ -579,14 +579,14 @@ export const TransientModule = () => {
                             <TableCell className="font-mono text-xs">{e.nodeId}</TableCell>
                             <TableCell>{e.elevation}</TableCell>
                             <TableCell>{e.steadyHead}</TableCell>
-                            <TableCell className="text-red-600 font-semibold">{e.maxHead}</TableCell>
-                            <TableCell className="text-blue-600 font-semibold">{e.minHead}</TableCell>
+                            <TableCell className="text-primary font-semibold">{e.maxHead}</TableCell>
+                            <TableCell className="text-info font-semibold">{e.minHead}</TableCell>
                             <TableCell>{e.maxPressure}</TableCell>
                             <TableCell>{e.minPressure}</TableCell>
                             <TableCell>
                               {e.minPressure < 0
                                 ? <Badge variant="destructive">Cavitação</Badge>
-                                : <Badge className="bg-green-500">OK</Badge>}
+                                : <Badge className="bg-[rgba(165,206,0,0.1)] text-[#A5CE00]">OK</Badge>}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -598,10 +598,10 @@ export const TransientModule = () => {
 
               {/* Warnings */}
               {mocResult.warnings.length > 0 && (
-                <Card className="border-yellow-500/30">
+                <Card className="border-warning/30">
                   <CardContent className="py-3 space-y-1">
                     {mocResult.warnings.map((w, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs text-yellow-700">
+                      <div key={i} className="flex items-start gap-2 text-xs text-warning">
                         <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
                         {w}
                       </div>

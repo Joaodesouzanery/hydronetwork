@@ -834,16 +834,16 @@ const HydroNetwork = () => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+      <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <main className="flex-1 p-4 md:p-6 overflow-auto">
           <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
-                <h1 className="text-3xl font-bold flex items-center gap-2">
-                  <Droplets className="h-8 w-8 text-blue-600" /> HydroNetwork
+                <h1 className="text-2xl font-bold flex items-center gap-2 text-primary">
+                  <Droplets className="h-7 w-7 text-primary" /> HydroNetwork
                 </h1>
-                <p className="text-muted-foreground mt-1">{moduleNames[activeModule] || "Plataforma de Saneamento"}</p>
+                <p className="text-muted-foreground mt-1 text-sm">{moduleNames[activeModule] || "Plataforma de Saneamento"}</p>
               </div>
               <div className="flex gap-2 items-center">
                 <ProjectSelector
@@ -859,7 +859,7 @@ const HydroNetwork = () => {
               </div>
             </div>
             <ErrorBoundary moduleName={moduleNames[activeModule] || activeModule} key={activeModule}>
-              <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>}>
+              <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
                 {renderModule()}
               </Suspense>
             </ErrorBoundary>

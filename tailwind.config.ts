@@ -22,10 +22,13 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          light: "#1A4A9E",
+          dark: "#0A2456",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
           foreground: "hsl(var(--secondary-foreground))",
+          dark: "#D4D4D4",
         },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
@@ -38,6 +41,8 @@ export default {
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
+          hover: "#8FB800",
+          dark: "#7A9E00",
         },
         popover: {
           DEFAULT: "hsl(var(--popover))",
@@ -57,6 +62,10 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        surface: {
+          DEFAULT: "#F5F5F5",
+          dark: "#0E1B3D",
+        },
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
@@ -69,8 +78,28 @@ export default {
           DEFAULT: "hsl(var(--info))",
           foreground: "hsl(var(--info-foreground))",
         },
+        error: {
+          DEFAULT: "#EF4444",
+          foreground: "#FFFFFF",
+        },
         "gradient-start": "hsl(var(--gradient-start))",
         "gradient-end": "hsl(var(--gradient-end))",
+        // ConstruData brand tokens
+        cd: {
+          primary: "#10367D",
+          "primary-light": "#1A4A9E",
+          "primary-dark": "#0A2456",
+          secondary: "#EBEBEB",
+          "secondary-dark": "#D4D4D4",
+          accent: "#A5CE00",
+          "accent-hover": "#8FB800",
+          "accent-dark": "#7A9E00",
+          surface: "#F5F5F5",
+          "surface-dark": "#0E1B3D",
+        },
+      },
+      fontFamily: {
+        sans: ["Inter", "system-ui", "sans-serif"],
       },
       borderRadius: {
         lg: "var(--radius)",
