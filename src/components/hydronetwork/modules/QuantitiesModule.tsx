@@ -14,6 +14,15 @@ import { PontoTopografico } from "@/engine/reader";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 
+// Minimum pipe slope for self-cleaning velocity (NBR 9649 / NBR 12207)
+const getMinSlope = (dn: number): number => {
+  if (dn <= 150) return 0.005;    // 0.5%
+  if (dn <= 200) return 0.0033;   // 0.33%
+  if (dn <= 250) return 0.0025;   // 0.25%
+  if (dn <= 300) return 0.002;    // 0.20%
+  return 0.0015;                   // 0.15% (DN400+)
+};
+
 // SINAPI reference cost table (Ref: SINAPI 12/2024 - Desonerado - SP)
 const SINAPI_COSTS = {
   escavacao: {
@@ -60,6 +69,8 @@ export interface QuantRow {
   comp: number;
   dn: number;
   prof: number;
+  profInicio: number;
+  profFim: number;
   larguraVala: number;
   escavacao: number;
   reaterro: number;
@@ -155,10 +166,23 @@ export const QuantitiesModule = ({ trechos, pontos, onQuantitiesCalculated }: Qu
       const dnM = t.diametroMm / 1000;
       const lv = Math.max(larguraMinVala, dnM + 2 * folgaLateral);
 
-      // Profundidade real: recobrimento mínimo + diâmetro do tubo
-      // Usa cotas da topografia quando disponíveis
-      const profReal = recobrimentoMin + dnM;
-      const prof = Math.max(profReal, baseProfundidadeMin);
+      // --- Profundidade baseada nas cotas topográficas ---
+      // iTerreno = (cotaInicio - cotaFim) / comprimento (positivo = descida)
+      const iTerreno = t.declividade;
+      const iMin = getMinSlope(t.diametroMm);
+      // Pipe slope: at least iMin for self-cleaning (gravity sections)
+      const isGravity = t.tipoRede === "Esgoto por Gravidade";
+      const iTubo = isGravity ? Math.max(iTerreno, iMin) : iTerreno;
+
+      // Depth at start (montante): minimum cover + pipe diameter
+      const profInicioRaw = recobrimentoMin + dnM;
+      // Depth at end (jusante): additional depth when pipe slope > terrain slope
+      const profFimRaw = profInicioRaw + (iTubo - iTerreno) * t.comprimento;
+
+      const profInicio = Math.max(profInicioRaw, baseProfundidadeMin);
+      const profFim = Math.max(profFimRaw, baseProfundidadeMin);
+      // Average depth (trapezoidal) for volume calculation
+      const prof = (profInicio + profFim) / 2;
 
       const escavacao = t.comprimento * lv * prof;
       const volTubo = t.comprimento * Math.PI * (dnM / 2) ** 2;
@@ -188,7 +212,7 @@ export const QuantitiesModule = ({ trechos, pontos, onQuantitiesCalculated }: Qu
         id: `T${String(idx + 1).padStart(2, "0")}`,
         trecho: t.nomeTrecho || `${t.idInicio}→${t.idFim}`,
         comp: t.comprimento, dn: t.diametroMm,
-        prof, larguraVala: lv,
+        prof, profInicio, profFim, larguraVala: lv,
         escavacao, reaterro, botafora, pavimento: areaPav,
         escoramento: needEscoramento,
         bercoVol, envoltoriaVol, escorArea,
@@ -328,7 +352,9 @@ export const QuantitiesModule = ({ trechos, pontos, onQuantitiesCalculated }: Qu
                           <TableHead>Cota Fim</TableHead>
                           <TableHead>Comp (m)</TableHead>
                           <TableHead>DN (mm)</TableHead>
-                          <TableHead>Prof. (m)</TableHead>
+                          <TableHead>Prof. Ini. (m)</TableHead>
+                          <TableHead>Prof. Fim (m)</TableHead>
+                          <TableHead>Prof. Méd. (m)</TableHead>
                           <TableHead>Largura</TableHead>
                           <TableHead>Escav. (m³)</TableHead>
                           <TableHead>Reaterro (m³)</TableHead>
@@ -347,6 +373,8 @@ export const QuantitiesModule = ({ trechos, pontos, onQuantitiesCalculated }: Qu
                             <TableCell>{fmt(r.cotaFim, 2)}</TableCell>
                             <TableCell>{fmt(r.comp, 1)}</TableCell>
                             <TableCell>{r.dn}</TableCell>
+                            <TableCell>{fmt(r.profInicio, 2)}</TableCell>
+                            <TableCell>{fmt(r.profFim, 2)}</TableCell>
                             <TableCell>{fmt(r.prof, 2)}</TableCell>
                             <TableCell>{fmt(r.larguraVala, 2)}</TableCell>
                             <TableCell>{fmt(r.escavacao, 2)}</TableCell>
@@ -436,7 +464,8 @@ export const QuantitiesModule = ({ trechos, pontos, onQuantitiesCalculated }: Qu
                     ID: r.id, Trecho: r.trecho,
                     "X Início": r.xInicio, "Y Início": r.yInicio, "Cota Início": r.cotaInicio,
                     "X Fim": r.xFim, "Y Fim": r.yFim, "Cota Fim": r.cotaFim,
-                    "Comp (m)": r.comp, "DN (mm)": r.dn, "Prof (m)": r.prof,
+                    "Comp (m)": r.comp, "DN (mm)": r.dn,
+                    "Prof Início (m)": r.profInicio, "Prof Fim (m)": r.profFim, "Prof Média (m)": r.prof,
                     "Largura Vala (m)": r.larguraVala, "Escavação (m³)": r.escavacao, "Reaterro (m³)": r.reaterro,
                     "Bota-fora (m³)": r.botafora, "Pavimento (m²)": r.pavimento, Escoramento: r.escoramento ? "Sim" : "Não",
                     "Custo Escav.": r.custoEscavacao, "Custo Escor.": r.custoEscoramento, "Custo Tubo": r.custoTubo,
