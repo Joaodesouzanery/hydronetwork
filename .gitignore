@@ -26,3 +26,6 @@ dist-share
 
 # Supabase
 supabase/.temp/
+
+# External skills/tools
+skills/
