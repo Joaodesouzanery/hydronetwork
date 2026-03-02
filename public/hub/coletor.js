@@ -48,7 +48,7 @@ const FONTES_RSS = [
   { url: "https://saneamentobasico.com.br/feed/", nome: "Saneamento Básico", categorias: ["Saneamento", "Engenharia"] },
   { url: "https://tratamentodeagua.com.br/feed/", nome: "Tratamento de Água", categorias: ["Saneamento", "Eng. Ambiental"] },
   { url: "https://abes-dn.org.br/feed/", nome: "ABES", categorias: ["Saneamento", "Normas Técnicas"] },
-  { url: "https://trfratabrasil.org.br/feed/", nome: "Trata Brasil", categorias: ["Saneamento", "Indicadores"] },
+  { url: "https://tratabrasil.org.br/feed/", nome: "Trata Brasil", categorias: ["Saneamento", "Indicadores"] },
   // --- Meio Ambiente & Sustentabilidade ---
   { url: "https://canalmeioambiente.com.br/feed/", nome: "Canal Meio Ambiente", categorias: ["Eng. Ambiental", "Sustentabilidade"] },
   { url: "https://oeco.org.br/feed/", nome: "O Eco", categorias: ["Eng. Ambiental", "Recursos Hídricos"] },
@@ -179,12 +179,14 @@ function categorizarLicitacao(titulo) {
 }
 
 // Caminhos de saída
-const CAMINHO_NOTICIAS_JSON = path.join(__dirname, "public", "noticias.json");
-const CAMINHO_NOTICIAS_TS = path.join(__dirname, "src", "data", "noticias.ts");
-const CAMINHO_ARTIGOS_JSON = path.join(__dirname, "public", "artigos.json");
-const CAMINHO_ARTIGOS_TS = path.join(__dirname, "src", "data", "artigos.ts");
-const CAMINHO_LICITACOES_JSON = path.join(__dirname, "public", "licitacoes.json");
-const CAMINHO_LICITACOES_TS = path.join(__dirname, "src", "data", "licitacoes.ts");
+// __dirname = public/hub/, raiz do projeto = ../../
+const RAIZ_PROJETO = path.resolve(__dirname, "..", "..");
+const CAMINHO_NOTICIAS_JSON = path.join(__dirname, "noticias.json");
+const CAMINHO_NOTICIAS_TS = path.join(RAIZ_PROJETO, "src", "data", "noticias.ts");
+const CAMINHO_ARTIGOS_JSON = path.join(__dirname, "artigos.json");
+const CAMINHO_ARTIGOS_TS = path.join(RAIZ_PROJETO, "src", "data", "artigos.ts");
+const CAMINHO_LICITACOES_JSON = path.join(__dirname, "licitacoes.json");
+const CAMINHO_LICITACOES_TS = path.join(RAIZ_PROJETO, "src", "data", "licitacoes.ts");
 
 // ============================================================
 // SEGURANÇA: escape de strings para geração de TS
@@ -561,7 +563,7 @@ async function buscarDiariosOficiaisETCE() {
 }
 
 // Caminho de saída para sanções
-const CAMINHO_SANCOES_JSON = path.join(__dirname, "public", "sancoes.json");
+const CAMINHO_SANCOES_JSON = path.join(__dirname, "sancoes.json");
 
 // ============================================================
 // 7. UTILIDADES
@@ -586,13 +588,51 @@ function ordenarPorData(lista, campo = "data_publicacao") {
 }
 
 // ============================================================
-// 8. SALVAR EM JSON
+// 8. SALVAR EM JSON (com metadados de frescor)
 // ============================================================
 function salvarJSON(dados, caminho) {
   const diretorio = path.dirname(caminho);
   if (!fs.existsSync(diretorio)) fs.mkdirSync(diretorio, { recursive: true });
   fs.writeFileSync(caminho, JSON.stringify(dados, null, 2), "utf-8");
+  const total = Array.isArray(dados) ? dados.length : (dados.noticias || dados.licitacoes || []).length;
+  console.log(`  [OK] ${total} itens -> ${path.basename(caminho)}`);
+}
+
+/** Salva JSON com envelope de metadados indicando frescor e fonte */
+function salvarJSONComMeta(dados, caminho, tipo, fontesUsadas) {
+  const diretorio = path.dirname(caminho);
+  if (!fs.existsSync(diretorio)) fs.mkdirSync(diretorio, { recursive: true });
+  const envelope = {
+    _meta: {
+      fonte_dados: "coletado",
+      aviso: "Dados coletados automaticamente via RSS e APIs públicas pelo coletor.js",
+      gerado_em: new Date().toISOString(),
+      total: dados.length,
+      fontes_reais_configuradas: fontesUsadas || [],
+    },
+  };
+  envelope[tipo] = dados.map((item) => ({ ...item, verificado: true }));
+  fs.writeFileSync(caminho, JSON.stringify(envelope, null, 2), "utf-8");
   console.log(`  [OK] ${dados.length} itens -> ${path.basename(caminho)}`);
+}
+
+/** Gera meta.json com timestamps de frescor para o Hub */
+function salvarMetaJSON() {
+  const meta = {
+    ultima_coleta: new Date().toISOString(),
+    versao_coletor: "3.0",
+    fontes: {
+      rss: FONTES_RSS.map((f) => f.nome),
+      pncp: "API PNCP v1",
+      ceis_cnep: "Portal da Transparência",
+      diarios: DIARIOS_OFICIAIS_RSS.map((f) => f.nome),
+      tce: TCE_FONTES.map((f) => f.nome),
+    },
+    status: "ok",
+  };
+  const caminho = path.join(__dirname, "meta.json");
+  fs.writeFileSync(caminho, JSON.stringify(meta, null, 2), "utf-8");
+  console.log(`  [OK] meta.json atualizado`);
 }
 
 // ============================================================
@@ -736,7 +776,7 @@ async function main() {
     const noticiasOrdenadas = ordenarPorData(noticias).slice(0, 50);
 
     console.log("\n  Salvando noticias...");
-    salvarJSON(noticiasOrdenadas, CAMINHO_NOTICIAS_JSON);
+    salvarJSONComMeta(noticiasOrdenadas, CAMINHO_NOTICIAS_JSON, "noticias", FONTES_RSS.map((f) => `${f.nome} (RSS)`));
     salvarNoticiasTS(noticiasOrdenadas, CAMINHO_NOTICIAS_TS);
 
     // --- Artigos (com descrição, categorias, imagem) ---
@@ -773,7 +813,7 @@ async function main() {
     const licitacoesOrdenadas = ordenarPorData(licitacoesUnicas, "data_abertura").slice(0, 100);
 
     console.log("\n  Salvando licitacoes...");
-    salvarJSON(licitacoesOrdenadas, CAMINHO_LICITACOES_JSON);
+    salvarJSONComMeta(licitacoesOrdenadas, CAMINHO_LICITACOES_JSON, "licitacoes", ["API PNCP (pncp.gov.br)"]);
     salvarLicitacoesTS(licitacoesOrdenadas, CAMINHO_LICITACOES_TS);
   } else {
     console.log("  [AVISO] Nenhuma licitacao coletada do PNCP.");
@@ -810,11 +850,31 @@ async function main() {
       const extraOrdenadas = ordenarPorData(noticiasExtra).slice(0, 30);
 
       // Salvar como arquivo separado
-      const caminhoExtras = path.join(__dirname, "public", "diarios-tce.json");
+      const caminhoExtras = path.join(__dirname, "diarios-tce.json");
       salvarJSON(extraOrdenadas, caminhoExtras);
     }
   } catch (err) {
     console.log(`  [AVISO] Diarios/TCE: ${err.message}`);
+  }
+
+  // ─── GERAR META.JSON ───
+  salvarMetaJSON();
+
+  // ─── COPIAR PARA DIST ───
+  try {
+    const distHub = path.join(RAIZ_PROJETO, "dist", "hub");
+    if (fs.existsSync(distHub)) {
+      for (const arq of ["noticias.json", "licitacoes.json", "artigos.json", "meta.json", "sancoes.json", "diarios-tce.json"]) {
+        const origem = path.join(__dirname, arq);
+        const destino = path.join(distHub, arq);
+        if (fs.existsSync(origem)) {
+          fs.copyFileSync(origem, destino);
+          console.log(`  [SYNC] ${arq} -> dist/hub/`);
+        }
+      }
+    }
+  } catch (err) {
+    console.log(`  [AVISO] Sync dist/hub: ${err.message}`);
   }
 
   // ─── RESUMO ───
@@ -828,6 +888,7 @@ async function main() {
   console.log("    - CEIS/CNEP: Sancoes do Portal da Transparencia");
   console.log("    - DOU: Diarios Oficiais (Secoes 1 e 3)");
   console.log("    - TCU: Noticias do Tribunal de Contas da Uniao");
+  console.log("  meta.json gerado com timestamps de frescor.");
   console.log("  Agora rode 'npm run build' para gerar o bundle.");
   console.log("==================================================");
 }
