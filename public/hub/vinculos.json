@@ -1,7 +1,7 @@
 {
   "_meta": {
     "aviso": "Dados do Grafo de Vínculos — empresas do setor de saneamento e infraestrutura. CNPJs marcados como verificado=true passaram na validação de dígitos verificadores. CNPJs com verificado=false têm dígitos verificadores INVÁLIDOS e precisam ser corrigidos com dados reais da Receita Federal.",
-    "gerado_em": "2026-03-02T00:00:00.000Z",
+    "gerado_em": "2026-03-02T04:00:27.964Z",
     "total_empresas": 29,
     "cnpjs_validos": 29,
     "cnpjs_invalidos": 0,
@@ -9,35 +9,242 @@
     "nota": "Este arquivo é a fonte de verdade para o Grafo de Vínculos. O bundle compilado (index-BHbm8DCN.js) contém dados embutidos que NÃO são atualizados automaticamente. Ao recompilar o Hub, importe este arquivo."
   },
   "empresas_monitoradas": [
-    { "nome": "SABESP", "cnpj": "43.776.517/0001-80", "cnpj_valido": true, "setor": "Saneamento", "uf": "SP", "tipo": "Economia Mista", "b3": "SBSP3" },
-    { "nome": "Aegea Saneamento", "cnpj": "08.827.501/0001-58", "cnpj_valido": true, "setor": "Saneamento", "uf": "SP", "tipo": "Privada" },
-    { "nome": "BRK Ambiental", "cnpj": "24.396.489/0001-20", "cnpj_valido": true, "setor": "Saneamento", "uf": "SP", "tipo": "Privada" },
-    { "nome": "Copasa", "cnpj": "17.281.106/0001-03", "cnpj_valido": true, "setor": "Saneamento", "uf": "MG", "tipo": "Economia Mista", "b3": "CSMG3" },
-    { "nome": "Sanepar", "cnpj": "76.484.013/0001-45", "cnpj_valido": true, "setor": "Saneamento", "uf": "PR", "tipo": "Economia Mista", "b3": "SAPR11" },
-    { "nome": "Iguá Saneamento", "cnpj": "08.159.965/0001-33", "cnpj_valido": true, "setor": "Saneamento", "uf": "SP", "tipo": "Privada" },
-    { "nome": "Cagece", "cnpj": "07.040.108/0001-57", "cnpj_valido": true, "setor": "Saneamento", "uf": "CE", "tipo": "Economia Mista" },
-    { "nome": "Andrade Gutierrez", "cnpj": "17.262.213/0001-94", "cnpj_valido": true, "setor": "Engenharia", "uf": "MG", "tipo": "Privada" },
-    { "nome": "Queiroz Galvão", "cnpj": "33.412.792/0001-60", "cnpj_valido": true, "setor": "Engenharia", "uf": "PE", "tipo": "Privada" },
-    { "nome": "Barbosa Mello", "cnpj": "17.185.786/0001-61", "cnpj_valido": true, "setor": "Engenharia", "uf": "MG", "tipo": "Privada" },
-    { "nome": "GS Inima", "cnpj": "08.905.300/0001-21", "cnpj_valido": true, "setor": "Saneamento", "uf": "SP", "tipo": "Privada" },
-    { "nome": "Embasa", "cnpj": "13.504.675/0001-10", "cnpj_valido": true, "setor": "Saneamento", "uf": "BA", "tipo": "Estatal" },
-    { "nome": "CEDAE", "cnpj": "33.352.394/0001-04", "cnpj_valido": true, "setor": "Saneamento", "uf": "RJ", "tipo": "Economia Mista" },
-    { "nome": "COMPESA", "cnpj": "09.769.035/0001-64", "cnpj_valido": true, "setor": "Saneamento", "uf": "PE", "tipo": "Economia Mista" },
-    { "nome": "CASAL", "cnpj": "12.294.708/0001-81", "cnpj_valido": true, "setor": "Saneamento", "uf": "AL", "tipo": "Estatal" },
-    { "nome": "DESO", "cnpj": "13.018.171/0001-90", "cnpj_valido": true, "setor": "Saneamento", "uf": "SE", "tipo": "Estatal" },
-    { "nome": "CAEMA", "cnpj": "06.274.757/0001-50", "cnpj_valido": true, "setor": "Saneamento", "uf": "MA", "tipo": "Estatal" },
-    { "nome": "COSANPA", "cnpj": "04.945.341/0001-90", "cnpj_valido": true, "setor": "Saneamento", "uf": "PA", "tipo": "Estatal" },
-    { "nome": "CORSAN", "cnpj": "92.802.784/0001-90", "cnpj_valido": true, "setor": "Saneamento", "uf": "RS", "tipo": "Privatizada (Aegea)" },
-    { "nome": "CASAN", "cnpj": "82.508.433/0001-17", "cnpj_valido": true, "setor": "Saneamento", "uf": "SC", "tipo": "Economia Mista" },
-    { "nome": "CAESB", "cnpj": "00.082.024/0001-37", "cnpj_valido": true, "setor": "Saneamento", "uf": "DF", "tipo": "Estatal" },
-    { "nome": "MRV Engenharia", "cnpj": "08.343.492/0001-20", "cnpj_valido": true, "setor": "Construção Civil", "uf": "MG", "tipo": "Privada", "b3": "MRVE3" },
-    { "nome": "Novonor (ex-Odebrecht)", "cnpj": "05.144.757/0001-72", "cnpj_valido": true, "setor": "Engenharia", "uf": "BA", "tipo": "Em recuperação judicial" },
-    { "nome": "Mover (ex-Camargo Corrêa)", "cnpj": "61.522.512/0001-02", "cnpj_valido": true, "setor": "Engenharia", "uf": "SP", "tipo": "Privada" },
-    { "nome": "OAS", "cnpj": "14.310.577/0001-04", "cnpj_valido": true, "setor": "Engenharia", "uf": "BA", "tipo": "Em recuperação judicial" },
-    { "nome": "Nova Engevix", "cnpj": "00.103.582/0001-31", "cnpj_valido": true, "setor": "Engenharia", "uf": "SC", "tipo": "Privada" },
-    { "nome": "Constran", "cnpj": "61.088.894/0001-08", "cnpj_valido": true, "setor": "Engenharia", "uf": "SP", "tipo": "Privada" },
-    { "nome": "SANESUL", "cnpj": "03.982.931/0001-20", "cnpj_valido": true, "setor": "Saneamento", "uf": "MS", "tipo": "Estatal" },
-    { "nome": "Galvão Engenharia", "cnpj": "01.340.937/0001-79", "cnpj_valido": true, "setor": "Engenharia", "uf": "SP", "tipo": "Privada" }
+    {
+      "nome": "SABESP",
+      "cnpj": "43.776.517/0001-80",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "SP",
+      "tipo": "Economia Mista",
+      "b3": "SBSP3"
+    },
+    {
+      "nome": "Aegea Saneamento",
+      "cnpj": "08.827.501/0001-58",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "SP",
+      "tipo": "Privada"
+    },
+    {
+      "nome": "BRK Ambiental",
+      "cnpj": "24.396.489/0001-20",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "SP",
+      "tipo": "Privada"
+    },
+    {
+      "nome": "Copasa",
+      "cnpj": "17.281.106/0001-03",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "MG",
+      "tipo": "Economia Mista",
+      "b3": "CSMG3"
+    },
+    {
+      "nome": "Sanepar",
+      "cnpj": "76.484.013/0001-45",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "PR",
+      "tipo": "Economia Mista",
+      "b3": "SAPR11"
+    },
+    {
+      "nome": "Iguá Saneamento",
+      "cnpj": "08.159.965/0001-33",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "SP",
+      "tipo": "Privada"
+    },
+    {
+      "nome": "Cagece",
+      "cnpj": "07.040.108/0001-57",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "CE",
+      "tipo": "Economia Mista"
+    },
+    {
+      "nome": "Andrade Gutierrez",
+      "cnpj": "17.262.213/0001-94",
+      "cnpj_valido": true,
+      "setor": "Engenharia",
+      "uf": "MG",
+      "tipo": "Privada"
+    },
+    {
+      "nome": "Queiroz Galvão",
+      "cnpj": "33.412.792/0001-60",
+      "cnpj_valido": true,
+      "setor": "Engenharia",
+      "uf": "PE",
+      "tipo": "Privada"
+    },
+    {
+      "nome": "Barbosa Mello",
+      "cnpj": "17.185.786/0001-61",
+      "cnpj_valido": true,
+      "setor": "Engenharia",
+      "uf": "MG",
+      "tipo": "Privada"
+    },
+    {
+      "nome": "GS Inima",
+      "cnpj": "08.905.300/0001-21",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "SP",
+      "tipo": "Privada"
+    },
+    {
+      "nome": "Embasa",
+      "cnpj": "13.504.675/0001-10",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "BA",
+      "tipo": "Estatal"
+    },
+    {
+      "nome": "CEDAE",
+      "cnpj": "33.352.394/0001-04",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "RJ",
+      "tipo": "Economia Mista"
+    },
+    {
+      "nome": "COMPESA",
+      "cnpj": "09.769.035/0001-64",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "PE",
+      "tipo": "Economia Mista"
+    },
+    {
+      "nome": "CASAL",
+      "cnpj": "12.294.708/0001-81",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "AL",
+      "tipo": "Estatal"
+    },
+    {
+      "nome": "DESO",
+      "cnpj": "13.018.171/0001-90",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "SE",
+      "tipo": "Estatal"
+    },
+    {
+      "nome": "CAEMA",
+      "cnpj": "06.274.757/0001-50",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "MA",
+      "tipo": "Estatal"
+    },
+    {
+      "nome": "COSANPA",
+      "cnpj": "04.945.341/0001-90",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "PA",
+      "tipo": "Estatal"
+    },
+    {
+      "nome": "CORSAN",
+      "cnpj": "92.802.784/0001-90",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "RS",
+      "tipo": "Privatizada (Aegea)"
+    },
+    {
+      "nome": "CASAN",
+      "cnpj": "82.508.433/0001-17",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "SC",
+      "tipo": "Economia Mista"
+    },
+    {
+      "nome": "CAESB",
+      "cnpj": "00.082.024/0001-37",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "DF",
+      "tipo": "Estatal"
+    },
+    {
+      "nome": "MRV Engenharia",
+      "cnpj": "08.343.492/0001-20",
+      "cnpj_valido": true,
+      "setor": "Construção Civil",
+      "uf": "MG",
+      "tipo": "Privada",
+      "b3": "MRVE3"
+    },
+    {
+      "nome": "Novonor (ex-Odebrecht)",
+      "cnpj": "05.144.757/0001-72",
+      "cnpj_valido": true,
+      "setor": "Engenharia",
+      "uf": "BA",
+      "tipo": "Em recuperação judicial"
+    },
+    {
+      "nome": "Mover (ex-Camargo Corrêa)",
+      "cnpj": "61.522.512/0001-02",
+      "cnpj_valido": true,
+      "setor": "Engenharia",
+      "uf": "SP",
+      "tipo": "Privada"
+    },
+    {
+      "nome": "OAS",
+      "cnpj": "14.310.577/0001-04",
+      "cnpj_valido": true,
+      "setor": "Engenharia",
+      "uf": "BA",
+      "tipo": "Em recuperação judicial"
+    },
+    {
+      "nome": "Nova Engevix",
+      "cnpj": "00.103.582/0001-31",
+      "cnpj_valido": true,
+      "setor": "Engenharia",
+      "uf": "SC",
+      "tipo": "Privada"
+    },
+    {
+      "nome": "Constran",
+      "cnpj": "61.088.894/0001-08",
+      "cnpj_valido": true,
+      "setor": "Engenharia",
+      "uf": "SP",
+      "tipo": "Privada"
+    },
+    {
+      "nome": "SANESUL",
+      "cnpj": "03.982.931/0001-20",
+      "cnpj_valido": true,
+      "setor": "Saneamento",
+      "uf": "MS",
+      "tipo": "Estatal"
+    },
+    {
+      "nome": "Galvão Engenharia",
+      "cnpj": "01.340.937/0001-79",
+      "cnpj_valido": true,
+      "setor": "Engenharia",
+      "uf": "SP",
+      "tipo": "Privada"
+    }
   ],
   "vinculos_verificados": [
     {
