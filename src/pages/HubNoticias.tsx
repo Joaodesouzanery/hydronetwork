@@ -4,6 +4,7 @@ import Sidebar from "@/components/ui/sidebar-with-submenu";
 import {
   Newspaper, FileText, Link2, ExternalLink, Calendar,
   MapPin, DollarSign, AlertTriangle, RefreshCw, ArrowLeft,
+  Construction,
 } from "lucide-react";
 
 interface Noticia {
@@ -108,28 +109,28 @@ export default function HubNoticias() {
       {/* Main content area - offset for sidebar */}
       <main className="sm:ml-72 min-h-screen">
         {/* Top bar */}
-        <div className="sticky top-0 z-30 border-b border-[#1E3A6E] px-6 py-3 flex items-center justify-between"
+        <div className="sticky top-0 z-30 border-b border-[#1E3A6E] px-3 sm:px-6 py-3 flex items-center justify-between gap-2"
           style={{ background: "rgba(14, 27, 61, 0.95)", backdropFilter: "blur(8px)" }}>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <NavLink
               to="/dashboard"
-              className="p-2 hover:bg-[#FF6B2C]/10 rounded transition-colors text-[#64748B] hover:text-[#FF6B2C]"
+              className="p-2 hover:bg-[#FF6B2C]/10 rounded transition-colors text-[#64748B] hover:text-[#FF6B2C] flex-shrink-0"
               title="Voltar ao Dashboard"
             >
               <ArrowLeft className="w-5 h-5" />
             </NavLink>
-            <div>
-              <h1 className="text-lg font-bold font-mono text-white tracking-tight">
-                Hub de Notícias
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold font-mono text-white tracking-tight truncate">
+                Hub de Noticias
               </h1>
-              <p className="text-xs font-mono text-[#64748B]">
-                Inteligência para engenharia e saneamento
+              <p className="text-[10px] sm:text-xs font-mono text-[#64748B] hidden sm:block">
+                Inteligencia para engenharia e saneamento
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             {meta && (
-              <span className={`text-xs font-mono px-2 py-1 ${
+              <span className={`text-[10px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 hidden sm:inline-flex items-center ${
                 meta.fonte_dados === "placeholder"
                   ? "text-[#F59E0B] bg-[#F59E0B]/10"
                   : "text-[#22C55E] bg-[#22C55E]/10"
@@ -153,8 +154,26 @@ export default function HubNoticias() {
           </div>
         </div>
 
+        {/* Development Banner */}
+        <div className="mx-3 sm:mx-6 mt-4">
+          <div
+            className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 border border-[#F59E0B]/30"
+            style={{ background: "rgba(245, 158, 11, 0.08)" }}
+          >
+            <Construction className="w-4 h-4 sm:w-5 sm:h-5 text-[#F59E0B] flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm font-mono font-semibold text-[#F59E0B]">
+                Modulo em Desenvolvimento
+              </p>
+              <p className="text-[10px] sm:text-xs font-mono text-[#F59E0B]/70 mt-0.5 leading-relaxed">
+                Este hub esta sendo construido. Dados e funcionalidades podem mudar a qualquer momento.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Content */}
-        <div className="p-6">
+        <div className="p-3 sm:p-6">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
