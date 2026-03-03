@@ -26,7 +26,7 @@ const navigationItems = [
   { title: "MÓDULOS", href: "#modulos" },
   { title: "COMO FUNCIONA", href: "#fluxo" },
   { title: "DIFERENCIAIS", href: "#diferenciais" },
-  { title: "PREÇOS", href: "#pricing" },
+  { title: "AGENDAR", href: "#agendar" },
   { title: "FAQ", href: "#faq" },
 ];
 
@@ -584,14 +584,15 @@ const Hero = () => {
           </div>
         </section>
 
-        {/* ═══════════ PRICING ═══════════ */}
-        <section id="pricing" className="py-16 sm:py-24 border-t border-border">
+        {/* ═══════════ AGENDAR DEMO ═══════════ */}
+        <section id="agendar" className="py-16 sm:py-24 border-t border-border">
           <div className="container mx-auto px-4">
             <h2 className="text-center text-2xl sm:text-3xl md:text-4xl font-mono font-bold mb-4">
-              Plano Profissional
+              Conheça a Plataforma
             </h2>
-            <p className="text-center text-muted-foreground font-mono mb-8 sm:mb-12 text-sm sm:text-base">
-              Acesso completo a todos os 30+ módulos da plataforma
+            <p className="text-center text-muted-foreground font-mono mb-8 sm:mb-12 text-sm sm:text-base max-w-2xl mx-auto">
+              Agende uma apresentação personalizada e veja como o ConstruData pode
+              transformar seus projetos de saneamento
             </p>
 
             <motion.div
@@ -599,44 +600,35 @@ const Hero = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6, type: "spring", stiffness: 100, damping: 15 }}
-              className="max-w-md mx-auto"
+              className="max-w-lg mx-auto"
             >
               <div className="bg-background border-2 border-[#FF6B2C] relative">
-                {/* Best value badge */}
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <span className="bg-[#FF6B2C] text-white text-[10px] sm:text-xs font-mono font-bold px-3 sm:px-4 py-1">
-                    ACESSO COMPLETO
+                    DEMONSTRAÇÃO GRATUITA
                   </span>
                 </div>
 
-                <div className="p-6 sm:p-8 pt-8 sm:pt-10 text-center space-y-4 sm:space-y-6">
-                  <div>
-                    <h3 className="text-base sm:text-lg font-mono font-bold mb-1">ConstruData PRO</h3>
-                    <p className="text-xs sm:text-sm text-muted-foreground font-mono">Tudo que você precisa</p>
+                <div className="p-6 sm:p-8 pt-8 sm:pt-10 space-y-5 sm:space-y-6">
+                  <div className="text-center">
+                    <h3 className="text-base sm:text-lg font-mono font-bold mb-1">Apresentação Personalizada</h3>
+                    <p className="text-xs sm:text-sm text-muted-foreground font-mono">
+                      30 minutos para conhecer todos os módulos da plataforma
+                    </p>
                   </div>
 
-                  <div className="flex items-baseline justify-center gap-1">
-                    <span className="text-xs sm:text-sm font-mono text-muted-foreground">R$</span>
-                    <span className="text-4xl sm:text-5xl font-mono font-bold">797</span>
-                    <span className="text-xs sm:text-sm font-mono text-muted-foreground">/mês</span>
-                  </div>
-
-                  <div className="border-t border-border pt-4 sm:pt-6 space-y-2 sm:space-y-3 text-left">
+                  <div className="space-y-2 sm:space-y-3 text-left">
                     {[
-                      "30+ módulos integrados",
-                      "Dimensionamento automático (Esgoto, Água, Drenagem)",
-                      "Simulação EPANET PRO (WebAssembly)",
-                      "Orçamento SINAPI/SICRO automático",
-                      "Planejamento Gantt + Curva S + EVM",
-                      "RDO Digital com fotos e GPS",
-                      "Exportação QGIS, SHP, GeoJSON, DXF, PDF",
-                      "Mapa interativo georreferenciado",
-                      "Revisão por Pares com checklist ABNT",
-                      "Suporte prioritário",
-                    ].map((feature) => (
-                      <div key={feature} className="flex items-start gap-2">
+                      "Demonstração ao vivo dos 30+ módulos",
+                      "Tire todas as suas dúvidas com nossa equipe",
+                      "Veja como importar seus próprios dados",
+                      "Conheça o fluxo completo: Topografia → Dimensionamento → Orçamento → Planejamento",
+                      "Entenda a integração EPANET, QGIS e RDO Digital",
+                      "Planos e condições sob medida para sua empresa",
+                    ].map((item) => (
+                      <div key={item} className="flex items-start gap-2">
                         <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[#FF6B2C] mt-0.5 flex-shrink-0" />
-                        <span className="text-xs sm:text-sm font-mono">{feature}</span>
+                        <span className="text-xs sm:text-sm font-mono">{item}</span>
                       </div>
                     ))}
                   </div>
@@ -651,13 +643,13 @@ const Hero = () => {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      COMEÇAR AGORA
+                      AGENDAR DEMONSTRAÇÃO GRATUITA
                       <ArrowRight className="ml-1 w-4 h-4" />
                     </a>
                   </Button>
 
-                  <p className="text-[10px] sm:text-xs text-muted-foreground font-mono">
-                    Cancele quando quiser. Sem fidelidade.
+                  <p className="text-[10px] sm:text-xs text-muted-foreground font-mono text-center">
+                    Sem compromisso. Escolha o melhor horário no Calendly.
                   </p>
                 </div>
               </div>
@@ -798,7 +790,7 @@ const Hero = () => {
           </div>
           <div className="mt-6 sm:mt-8 pt-6 sm:pt-8 border-t border-border text-center">
             <p className="text-[10px] sm:text-xs text-muted-foreground font-mono">
-              © 2025 ConstruData. Todos os direitos reservados.
+              © 2026 ConstruData — construdata.software — Todos os direitos reservados.
             </p>
           </div>
         </div>

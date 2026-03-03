@@ -5,7 +5,7 @@ import {
   Plus, History, Image, AlertCircle, Archive, HeadphonesIcon, Settings,
   BarChart3, ClipboardCheck, Activity, DollarSign, Building2, Bell, Clock,
   BookOpen, Smile, Mail, Linkedin, FileCheck2, GraduationCap, HelpCircle,
-  ChevronDown, EyeOff, Eye, Compass, PlayCircle
+  ChevronDown, EyeOff, Eye, Compass
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -36,7 +36,6 @@ const sections: SidebarSection[] = [
     key: "guide",
     label: "Guia da Plataforma",
     items: [
-      { title: "Início Rápido", url: "/onboarding", icon: PlayCircle },
       { title: "Tutoriais por Módulo", url: "/tutorials", icon: GraduationCap },
       { title: "Explorar Módulos", url: "/modules", icon: Compass },
       { title: "Central de Ajuda", url: "/help-center", icon: HelpCircle },
@@ -77,6 +76,8 @@ const sections: SidebarSection[] = [
       { title: "Orçamento de Elevatória", url: "/hydronetwork/elevatoria", icon: Activity },
       { title: "Recalque / Booster", url: "/hydronetwork/recalque", icon: Activity },
       { title: "Transientes Hidráulicos", url: "/hydronetwork/transientes", icon: Activity },
+      { title: "CAESB / SABESP", url: "/hydronetwork/caesb", icon: Shield },
+      { title: "CAESB Pré-Projeto", url: "/hydronetwork/caesb-preprojeto", icon: ClipboardCheck },
     ],
   },
   {
