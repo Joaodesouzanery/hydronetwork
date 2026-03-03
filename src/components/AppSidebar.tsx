@@ -76,13 +76,13 @@ export function AppSidebar() {
 
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
     isActive
-      ? "sidebar-item-active bg-[rgba(165,206,0,0.08)] text-[#A5CE00] font-medium border-l-[3px] border-l-[#A5CE00] pl-3"
+      ? "sidebar-item-active bg-[rgba(255,107,44,0.08)] text-[#FF6B2C] font-medium border-l-[3px] border-l-[#FF6B2C] pl-3"
       : "text-[#94A3B8] hover:bg-[rgba(255,255,255,0.05)] hover:text-[#F8FAFC] transition-colors duration-200";
 
   const renderSection = (label: string, items: typeof dashboardItems, defaultOpen = true) => (
     <Collapsible defaultOpen={defaultOpen} className="group/collapsible">
       <SidebarGroup>
-        <SidebarGroupLabel className="uppercase text-[11px] tracking-[1.5px] font-semibold text-[#64748B] px-4">
+        <SidebarGroupLabel className="uppercase text-[11px] tracking-[1.5px] font-semibold text-[#666666] px-4">
           {label}
         </SidebarGroupLabel>
         <CollapsibleContent>
@@ -110,16 +110,15 @@ export function AppSidebar() {
       collapsible="icon"
       className="border-r-0"
       style={{
-        background: "linear-gradient(180deg, #0A2456 0%, #10367D 100%)",
+        background: "linear-gradient(180deg, #111111 0%, #1A1A1A 100%)",
       }}
     >
-      <SidebarHeader className="p-4 border-b border-[#1E3A6E]">
+      <SidebarHeader className="p-4 border-b border-[#2A2A2A]">
         <div className="flex items-center gap-2.5">
           <img
             src="/favicon.svg"
             alt="ConstruData"
             className="h-10 w-10 flex-shrink-0"
-            style={{ filter: "brightness(0) invert(1)" }}
           />
           {open && (
             <span className="text-lg font-bold text-white tracking-tight">
@@ -136,7 +135,7 @@ export function AppSidebar() {
         {renderSection("Sistema", settingsItems, false)}
 
         {/* Support footer */}
-        <div className="mt-auto p-3 border-t border-[#1E3A6E]">
+        <div className="mt-auto p-3 border-t border-[#2A2A2A]">
           <div className="flex items-center gap-2 justify-center">
             <a href="mailto:construdata.contato@gmail.com" className="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors" title="Email">
               <Mail className="w-4 h-4 text-[#94A3B8]" />

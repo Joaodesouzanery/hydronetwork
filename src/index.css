@@ -61,45 +61,45 @@
     --muted: 0 0% 92%;
     --muted-foreground: 215 16% 47%; /* #64748B text-secondary light */
 
-    --accent: 73 100% 40%;           /* #A5CE00 verde-limão */
-    --accent-foreground: 220 72% 19%; /* #0A2456 texto escuro sobre accent */
+    --accent: 18 100% 59%;            /* #FF6B2C laranja */
+    --accent-foreground: 0 0% 100%;   /* branco sobre accent */
 
     --destructive: 0 84% 60%;        /* #EF4444 */
     --destructive-foreground: 0 0% 100%;
 
     --border: 0 0% 83%;              /* #D4D4D4 */
     --input: 0 0% 83%;
-    --ring: 220 78% 28%;
+    --ring: 18 100% 59%;
 
     --radius: 0.75rem;
 
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, #10367D 0%, #1A4A9E 100%);
-    --gradient-secondary: linear-gradient(135deg, #A5CE00 0%, #8FB800 100%);
+    --gradient-secondary: linear-gradient(135deg, #FF6B2C 0%, #E55A1F 100%);
     --gradient-hero: linear-gradient(135deg, #0A2456 0%, #10367D 50%, #1A4A9E 100%);
     --gradient-start: 220 78% 28%;
-    --gradient-end: 73 100% 40%;
+    --gradient-end: 18 100% 59%;
     --shadow-primary: 0 10px 40px -10px rgba(16, 54, 125, 0.3);
     --shadow-card: 0 2px 8px -2px rgba(16, 54, 125, 0.08);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
     /* Semantic status colors */
-    --success: 73 100% 40%;          /* #A5CE00 mesmo accent */
-    --success-foreground: 220 72% 19%;
+    --success: 142 71% 45%;          /* #22C55E green */
+    --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;           /* #F59E0B */
     --warning-foreground: 0 0% 100%;
     --info: 217 91% 60%;             /* #3B82F6 */
     --info-foreground: 0 0% 100%;
 
     /* Sidebar — light mode */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 215 16% 47%;
-    --sidebar-primary: 220 78% 28%;
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 0 0% 58%;
+    --sidebar-primary: 18 100% 59%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 95%;
-    --sidebar-accent-foreground: 220 44% 15%;
-    --sidebar-border: 0 0% 90%;
-    --sidebar-ring: 73 100% 40%;
+    --sidebar-accent: 18 100% 59% / 0.08;
+    --sidebar-accent-foreground: 18 100% 59%;
+    --sidebar-border: 0 0% 17%;
+    --sidebar-ring: 18 100% 59%;
   }
 
   /* ── DARK MODE (dashboard/app interno — padrão) ── */
@@ -122,36 +122,36 @@
     --muted: 224 38% 18%;
     --muted-foreground: 215 20% 65%; /* #94A3B8 text-secondary dark */
 
-    --accent: 73 100% 40%;           /* #A5CE00 */
-    --accent-foreground: 220 72% 19%;
+    --accent: 18 100% 59%;           /* #FF6B2C */
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 63% 31%;
     --destructive-foreground: 213 31% 97%;
 
     --border: 220 51% 27%;           /* #1E3A6E */
     --input: 220 51% 27%;
-    --ring: 73 100% 40%;
+    --ring: 18 100% 59%;
 
     /* Semantic status colors (dark) */
-    --success: 73 100% 40%;
-    --success-foreground: 220 72% 19%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
     --info: 217 91% 60%;
     --info-foreground: 0 0% 100%;
 
     --gradient-start: 220 78% 28%;
-    --gradient-end: 73 100% 40%;
+    --gradient-end: 18 100% 59%;
 
-    /* Sidebar — dark mode (azul profundo) */
-    --sidebar-background: 222 70% 10%;  /* #0A2456 gradient start */
-    --sidebar-foreground: 215 20% 65%;  /* #94A3B8 */
-    --sidebar-primary: 73 100% 40%;     /* #A5CE00 active */
-    --sidebar-primary-foreground: 220 72% 19%;
-    --sidebar-accent: 73 100% 40% / 0.08; /* accent translúcido */
-    --sidebar-accent-foreground: 73 100% 40%;
-    --sidebar-border: 220 51% 27%;
-    --sidebar-ring: 73 100% 40%;
+    /* Sidebar — dark mode (near black) */
+    --sidebar-background: 0 0% 7%;      /* #111111 */
+    --sidebar-foreground: 0 0% 58%;     /* #949494 */
+    --sidebar-primary: 18 100% 59%;     /* #FF6B2C active */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 18 100% 59% / 0.08; /* accent translúcido */
+    --sidebar-accent-foreground: 18 100% 59%;
+    --sidebar-border: 0 0% 17%;         /* #2A2A2A */
+    --sidebar-ring: 18 100% 59%;
   }
 }
 
@@ -257,10 +257,10 @@
 
   /* ═══ ConstruData Button Styles ═══ */
   .btn-cta {
-    @apply bg-[#A5CE00] text-[#0A2456] font-semibold rounded-lg transition-all duration-200;
+    @apply bg-[#FF6B2C] text-white font-semibold rounded-lg transition-all duration-200;
   }
   .btn-cta:hover {
-    @apply bg-[#8FB800];
+    @apply bg-[#E55A1F];
   }
 
   .btn-secondary-outline {
@@ -280,8 +280,8 @@
 
   /* ═══ ConstruData Status Badges ═══ */
   .badge-success {
-    background: rgba(165, 206, 0, 0.1);
-    @apply text-[#A5CE00];
+    background: rgba(34, 197, 94, 0.1);
+    @apply text-[#22C55E];
   }
   .badge-info {
     background: rgba(59, 130, 246, 0.1);
@@ -318,8 +318,8 @@
 
   /* ═══ Sidebar active item ═══ */
   .sidebar-item-active {
-    border-left: 3px solid #A5CE00;
-    background: rgba(165, 206, 0, 0.08);
+    border-left: 3px solid #FF6B2C;
+    background: rgba(255, 107, 44, 0.08);
   }
 
   /* ═══ Section labels ═══ */

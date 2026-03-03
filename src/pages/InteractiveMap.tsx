@@ -108,7 +108,7 @@ async function clearTileCache(): Promise<void> {
 function getAnnotationColor(tipo: string): string {
   switch (tipo) {
     case "ponto": return "#3B82F6";
-    case "area": return "#A5CE00";
+    case "area": return "#22C55E";
     case "setor": return "#F59E0B";
     case "inspecao": return "#EF4444";
     default: return "#6366f1";
@@ -701,7 +701,7 @@ export default function InteractiveMap() {
     if (!showConstraintLayer || mapConstraints.length === 0) return;
 
     const constraintMarkers: L.CircleMarker[] = [];
-    const statusColors: Record<string, string> = { ativa: '#F59E0B', critica: '#EF4444', resolvida: '#A5CE00' };
+    const statusColors: Record<string, string> = { ativa: '#F59E0B', critica: '#EF4444', resolvida: '#22C55E' };
 
     mapConstraints.forEach((c: any) => {
       if (c.latitude == null || c.longitude == null) return;

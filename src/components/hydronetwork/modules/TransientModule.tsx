@@ -310,7 +310,7 @@ export const TransientModule = () => {
             </Card>
           </div>
 
-          <Button onClick={runQuickAnalysis} className="w-full bg-[#A5CE00] text-[#0A2456] hover:bg-[#8FB800]">
+          <Button onClick={runQuickAnalysis} className="w-full bg-[#FF6B2C] text-white hover:bg-[#E55A1F]">
             <Zap className="h-4 w-4 mr-2" /> Análise Rápida (Joukowsky / Allievi)
           </Button>
 
@@ -352,7 +352,7 @@ export const TransientModule = () => {
                 </div>
 
                 <div className="flex gap-2 flex-wrap">
-                  <Badge className={quickResult.closureType === "fast" ? "bg-[rgba(239,68,68,0.1)] text-[#EF4444]" : "bg-[rgba(165,206,0,0.1)] text-[#A5CE00]"}>
+                  <Badge className={quickResult.closureType === "fast" ? "bg-[rgba(239,68,68,0.1)] text-[#EF4444]" : "bg-[rgba(165,206,0,0.1)] text-[#FF6B2C]"}>
                     Fechamento {quickResult.closureType === "fast" ? "RÁPIDO" : "LENTO"}
                   </Badge>
                   {quickResult.cavitationRisk && <Badge variant="destructive">CAVITAÇÃO</Badge>}
@@ -430,7 +430,7 @@ export const TransientModule = () => {
             </Card>
           </div>
 
-          <Button onClick={runMOC} className="w-full bg-[#A5CE00] text-[#0A2456] hover:bg-[#8FB800]">
+          <Button onClick={runMOC} className="w-full bg-[#FF6B2C] text-white hover:bg-[#E55A1F]">
             <Play className="h-4 w-4 mr-2" /> Executar Simulação MOC
           </Button>
 
@@ -493,7 +493,7 @@ export const TransientModule = () => {
                         <Legend />
                         <Area type="monotone" dataKey="maxHead" fill="rgba(16,54,125,0.1)" stroke="#10367D" name="Máx. Piezométrica" strokeWidth={2} />
                         <Area type="monotone" dataKey="minHead" fill="rgba(59,130,246,0.1)" stroke="#3b82f6" name="Mín. Piezométrica" strokeWidth={2} />
-                        <Line type="monotone" dataKey="steadyHead" stroke="#A5CE00" name="Regime Permanente" strokeWidth={2} dot={false} />
+                        <Line type="monotone" dataKey="steadyHead" stroke="#FF6B2C" name="Regime Permanente" strokeWidth={2} dot={false} />
                         <Line type="monotone" dataKey="terreno" stroke="#0A2456" name="Terreno" strokeWidth={2} dot={false} strokeDasharray="5 5" />
                       </AreaChart>
                     </ResponsiveContainer>
@@ -586,7 +586,7 @@ export const TransientModule = () => {
                             <TableCell>
                               {e.minPressure < 0
                                 ? <Badge variant="destructive">Cavitação</Badge>
-                                : <Badge className="bg-[rgba(165,206,0,0.1)] text-[#A5CE00]">OK</Badge>}
+                                : <Badge className="bg-[rgba(165,206,0,0.1)] text-[#FF6B2C]">OK</Badge>}
                             </TableCell>
                           </TableRow>
                         ))}

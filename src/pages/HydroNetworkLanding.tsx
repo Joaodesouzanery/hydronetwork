@@ -15,10 +15,10 @@ const CostMapSVG = () => (
     <rect x="100" y="50" width="600" height="350" rx="8" fill="#0E1B3D" stroke="#1E3A6E" strokeWidth="1" />
     <line x1="100" y1="200" x2="700" y2="200" stroke="#1E3A6E" strokeWidth="1" strokeDasharray="5,5" />
     <line x1="400" y1="50" x2="400" y2="400" stroke="#1E3A6E" strokeWidth="1" strokeDasharray="5,5" />
-    <line x1="180" y1="120" x2="320" y2="120" stroke="#A5CE00" strokeWidth="6" strokeLinecap="round" />
-    <text x="230" y="110" fill="#A5CE00" fontSize="11" fontWeight="bold">R$ 12.450</text>
-    <line x1="320" y1="120" x2="320" y2="250" stroke="#A5CE00" strokeWidth="6" strokeLinecap="round" />
-    <text x="330" y="190" fill="#A5CE00" fontSize="11" fontWeight="bold">R$ 18.200</text>
+    <line x1="180" y1="120" x2="320" y2="120" stroke="#FF6B2C" strokeWidth="6" strokeLinecap="round" />
+    <text x="230" y="110" fill="#FF6B2C" fontSize="11" fontWeight="bold">R$ 12.450</text>
+    <line x1="320" y1="120" x2="320" y2="250" stroke="#FF6B2C" strokeWidth="6" strokeLinecap="round" />
+    <text x="330" y="190" fill="#FF6B2C" fontSize="11" fontWeight="bold">R$ 18.200</text>
     <line x1="320" y1="250" x2="500" y2="250" stroke="#F59E0B" strokeWidth="6" strokeLinecap="round" />
     <text x="380" y="240" fill="#F59E0B" fontSize="11" fontWeight="bold">R$ 45.890</text>
     <line x1="500" y1="120" x2="500" y2="250" stroke="#F59E0B" strokeWidth="6" strokeLinecap="round" />
@@ -34,11 +34,11 @@ const CostMapSVG = () => (
     ))}
     <rect x="550" y="60" width="140" height="90" rx="6" fill="#0A2456" stroke="#1E3A6E" strokeWidth="1" />
     <text x="570" y="80" fill="#94A3B8" fontSize="10" fontWeight="bold">CUSTO POR TRECHO</text>
-    <circle cx={570} cy={95} r="5" fill="#A5CE00" /><text x="582" y="99" fill="#94A3B8" fontSize="9">&lt; R$ 20k</text>
+    <circle cx={570} cy={95} r="5" fill="#FF6B2C" /><text x="582" y="99" fill="#94A3B8" fontSize="9">&lt; R$ 20k</text>
     <circle cx={570} cy={115} r="5" fill="#F59E0B" /><text x="582" y="119" fill="#94A3B8" fontSize="9">R$ 20k - 50k</text>
     <circle cx={570} cy={135} r="5" fill="#EF4444" /><text x="582" y="139" fill="#94A3B8" fontSize="9">&gt; R$ 50k</text>
-    <rect x="140" y="370" width="300" height="50" rx="6" fill="#A5CE00" fillOpacity="0.12" stroke="#A5CE00" strokeWidth="1.5" />
-    <text x="160" y="392" fill="#A5CE00" fontSize="14" fontWeight="bold">CUSTO TOTAL PREVISTO: R$ 291.850</text>
+    <rect x="140" y="370" width="300" height="50" rx="6" fill="#FF6B2C" fillOpacity="0.12" stroke="#FF6B2C" strokeWidth="1.5" />
+    <text x="160" y="392" fill="#FF6B2C" fontSize="14" fontWeight="bold">CUSTO TOTAL PREVISTO: R$ 291.850</text>
     <text x="160" y="410" fill="#94A3B8" fontSize="10">7 trechos · 1.247m de rede</text>
   </svg>
 );
@@ -106,7 +106,7 @@ const HydroNetworkLanding = () => {
           <div className="flex items-center gap-2">
             <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
             <span className="text-lg font-bold" style={{ color: "#10367D" }}>
-              ConstruData <span style={{ color: "#A5CE00" }}>HydroNetwork</span>
+              ConstruData <span style={{ color: "#FF6B2C" }}>HydroNetwork</span>
             </span>
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm">
@@ -114,11 +114,11 @@ const HydroNetworkLanding = () => {
             <a href="#screenshots" className="hover:text-[#10367D] transition-colors" style={{ color: "#64748B" }}>Plataforma</a>
             <a href="#modulos" className="hover:text-[#10367D] transition-colors" style={{ color: "#64748B" }}>Módulos</a>
             <a href="#normas" className="hover:text-[#10367D] transition-colors" style={{ color: "#64748B" }}>Normas</a>
-            <a href="/hub/index.html" target="_blank" rel="noopener noreferrer" className="hover:text-[#A5CE00] transition-colors flex items-center gap-1" style={{ color: "#A5CE00" }}>
+            <a href="/hub/index.html" target="_blank" rel="noopener noreferrer" className="hover:text-[#FF6B2C] transition-colors flex items-center gap-1" style={{ color: "#FF6B2C" }}>
               <Newspaper className="h-3.5 w-3.5" /> Hub
             </a>
           </nav>
-          <Button onClick={() => navigate("/hydronetwork")} className="font-semibold text-sm" style={{ background: "#A5CE00", color: "#0A2456" }}>
+          <Button onClick={() => navigate("/hydronetwork")} className="font-semibold text-sm" style={{ background: "#FF6B2C", color: "#FFFFFF" }}>
             ACESSAR PLATAFORMA
           </Button>
         </div>
@@ -127,16 +127,16 @@ const HydroNetworkLanding = () => {
       {/* Hero */}
       <section className="relative min-h-screen flex items-center justify-center pt-16" style={{ background: "linear-gradient(135deg, #0A2456 0%, #10367D 50%, #1A4A9E 100%)" }}>
         <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(circle at 25% 50%, #1A4A9E 0%, transparent 50%), radial-gradient(circle at 75% 50%, #A5CE00 0%, transparent 50%)" }} />
+          <div className="absolute inset-0" style={{ backgroundImage: "radial-gradient(circle at 25% 50%, #1A4A9E 0%, transparent 50%), radial-gradient(circle at 75% 50%, #FF6B2C 0%, transparent 50%)" }} />
         </div>
         <div className="relative max-w-6xl mx-auto px-4 text-center space-y-8">
-          <Badge className="text-sm px-4 py-1" style={{ background: "rgba(165,206,0,0.15)", color: "#A5CE00", border: "1px solid rgba(165,206,0,0.3)" }}>
+          <Badge className="text-sm px-4 py-1" style={{ background: "rgba(255,107,44,0.15)", color: "#FF6B2C", border: "1px solid rgba(255,107,44,0.3)" }}>
             PLATAFORMA COMPLETA DE ENGENHARIA DE SANEAMENTO
           </Badge>
           <h1 className="text-5xl md:text-7xl font-bold text-white">
             CONSTRUDATA
             <br />
-            <span style={{ color: "#A5CE00", fontSize: "0.7em" }}>HYDRONETWORK</span>
+            <span style={{ color: "#FF6B2C", fontSize: "0.7em" }}>HYDRONETWORK</span>
           </h1>
           <p className="text-lg md:text-xl max-w-4xl mx-auto" style={{ color: "#94A3B8" }}>
             Do levantamento topográfico ao Relatório Diário de Obra — em uma única plataforma.
@@ -145,15 +145,15 @@ const HydroNetworkLanding = () => {
             Tudo no navegador, sem instalar nada.
           </p>
           <div className="flex gap-4 justify-center flex-wrap">
-            <Button size="lg" onClick={() => navigate("/hydronetwork")} className="font-bold text-lg px-8" style={{ background: "#A5CE00", color: "#0A2456" }}>
+            <Button size="lg" onClick={() => navigate("/hydronetwork")} className="font-bold text-lg px-8" style={{ background: "#FF6B2C", color: "#FFFFFF" }}>
               Acesso Gratuito — Plano DEMO <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
             <Button size="lg" variant="outline" onClick={() => document.getElementById("modulos")?.scrollIntoView({ behavior: "smooth" })}
-              className="font-bold text-lg px-8" style={{ borderColor: "#A5CE00", color: "#A5CE00" }}>
+              className="font-bold text-lg px-8" style={{ borderColor: "#FF6B2C", color: "#FF6B2C" }}>
               Ver Módulos
             </Button>
             <Button size="lg" variant="outline" onClick={() => window.open('/hub/index.html', '_blank')}
-              className="font-bold text-lg px-8" style={{ borderColor: "#1A4A9E", color: "#A5CE00" }}>
+              className="font-bold text-lg px-8" style={{ borderColor: "#1A4A9E", color: "#FF6B2C" }}>
               <Newspaper className="mr-2 h-5 w-5" /> Hub de Notícias
             </Button>
           </div>
@@ -167,14 +167,14 @@ const HydroNetworkLanding = () => {
               { v: "100%", l: "Online" },
             ].map((f, i) => (
               <div key={i} className="rounded-lg p-4 text-center" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}>
-                <div className="text-3xl font-bold" style={{ color: "#A5CE00" }}>{f.v}</div>
+                <div className="text-3xl font-bold" style={{ color: "#FF6B2C" }}>{f.v}</div>
                 <div className="text-xs mt-1" style={{ color: "#94A3B8" }}>{f.l}</div>
               </div>
             ))}
           </div>
 
           <a href="#screenshots" className="inline-block mt-8 animate-bounce">
-            <ChevronDown className="h-8 w-8" style={{ color: "#A5CE00" }} />
+            <ChevronDown className="h-8 w-8" style={{ color: "#FF6B2C" }} />
           </a>
         </div>
       </section>
@@ -208,7 +208,7 @@ const HydroNetworkLanding = () => {
             ))}
           </div>
           <div className="text-center">
-            <Button size="lg" onClick={() => navigate("/hydronetwork")} className="font-bold" style={{ background: "#A5CE00", color: "#0A2456" }}>
+            <Button size="lg" onClick={() => navigate("/hydronetwork")} className="font-bold" style={{ background: "#FF6B2C", color: "#FFFFFF" }}>
               Acessar Plataforma <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </div>
@@ -219,7 +219,7 @@ const HydroNetworkLanding = () => {
       <section id="custos" data-animate className={`py-24 px-4 transition-all duration-700 ${isVisible("custos") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`} style={{ background: "#0A2456" }}>
         <div className="max-w-6xl mx-auto space-y-12">
           <div className="text-center space-y-4">
-            <Badge style={{ background: "rgba(165,206,0,0.15)", color: "#A5CE00", border: "1px solid rgba(165,206,0,0.3)" }}>Controle Financeiro Total</Badge>
+            <Badge style={{ background: "rgba(255,107,44,0.15)", color: "#FF6B2C", border: "1px solid rgba(255,107,44,0.3)" }}>Controle Financeiro Total</Badge>
             <h2 className="text-4xl md:text-5xl font-bold text-white">Previsão de Custos por Trecho no Mapa</h2>
             <p className="text-lg max-w-2xl mx-auto" style={{ color: "#94A3B8" }}>Saiba exatamente quanto cada metro de rede vai custar antes de iniciar.</p>
           </div>
@@ -233,7 +233,7 @@ const HydroNetworkLanding = () => {
             ].map((f, i) => (
               <Card key={i} className="border-0 hover:scale-105 transition-transform" style={{ background: "#0E1B3D", border: "1px solid #1E3A6E" }}>
                 <CardContent className="pt-6 space-y-3">
-                  <f.icon className="h-8 w-8" style={{ color: "#A5CE00" }} />
+                  <f.icon className="h-8 w-8" style={{ color: "#FF6B2C" }} />
                   <h3 className="text-lg font-bold text-white">{f.title}</h3>
                   <p className="text-sm" style={{ color: "#94A3B8" }}>{f.desc}</p>
                 </CardContent>
@@ -254,7 +254,7 @@ const HydroNetworkLanding = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {workflow.map((step, i) => (
               <div key={i} className="rounded-xl p-6 text-center space-y-2 hover:scale-105 transition-transform" style={{ background: "#FFFFFF", border: "1px solid #EBEBEB" }}>
-                <div className="text-2xl font-bold" style={{ color: "#A5CE00" }}>{step.step}</div>
+                <div className="text-2xl font-bold" style={{ color: "#FF6B2C" }}>{step.step}</div>
                 <h3 className="text-sm font-bold" style={{ color: "#10367D" }}>{step.label}</h3>
                 <p className="text-xs" style={{ color: "#64748B" }}>{step.desc}</p>
               </div>
@@ -272,8 +272,8 @@ const HydroNetworkLanding = () => {
           </div>
           <div className="flex flex-wrap justify-center gap-3">
             {normas.map((n, i) => (
-              <div key={i} className="rounded-lg px-4 py-2 text-center" style={{ background: "rgba(165,206,0,0.1)", border: "1px solid rgba(165,206,0,0.25)", borderRadius: 8 }}>
-                <span className="font-bold text-sm" style={{ color: "#A5CE00" }}>{n.code}</span>
+              <div key={i} className="rounded-lg px-4 py-2 text-center" style={{ background: "rgba(255,107,44,0.1)", border: "1px solid rgba(255,107,44,0.25)", borderRadius: 8 }}>
+                <span className="font-bold text-sm" style={{ color: "#FF6B2C" }}>{n.code}</span>
                 <span className="text-xs ml-2" style={{ color: "#94A3B8" }}>— {n.desc}</span>
               </div>
             ))}
@@ -320,7 +320,7 @@ const HydroNetworkLanding = () => {
             ].map((card, i) => (
               <Card key={i} className="border-0 hover:scale-105 transition-transform" style={{ background: "#0E1B3D", border: "1px solid #1E3A6E" }}>
                 <CardContent className="pt-6 space-y-3 text-center">
-                  <card.icon className="h-10 w-10 mx-auto" style={{ color: "#A5CE00" }} />
+                  <card.icon className="h-10 w-10 mx-auto" style={{ color: "#FF6B2C" }} />
                   <h3 className="text-lg font-bold text-white">{card.title}</h3>
                   <p className="text-sm" style={{ color: "#94A3B8" }}>{card.desc}</p>
                 </CardContent>
@@ -356,10 +356,10 @@ const HydroNetworkLanding = () => {
             Importe seus dados e veja os resultados em segundos
           </h2>
           <div className="flex gap-4 justify-center flex-wrap">
-            <Button size="lg" onClick={() => navigate("/hydronetwork")} className="font-bold text-lg px-8" style={{ background: "#A5CE00", color: "#0A2456" }}>
+            <Button size="lg" onClick={() => navigate("/hydronetwork")} className="font-bold text-lg px-8" style={{ background: "#FF6B2C", color: "#FFFFFF" }}>
               Acessar Plataforma Gratuitamente <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate("/hydronetwork")} style={{ borderColor: "#A5CE00", color: "#A5CE00" }}>
+            <Button size="lg" variant="outline" onClick={() => navigate("/hydronetwork")} style={{ borderColor: "#FF6B2C", color: "#FF6B2C" }}>
               Carregar Projeto Exemplo
             </Button>
           </div>
@@ -374,7 +374,7 @@ const HydroNetworkLanding = () => {
         <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-5 gap-8 text-sm" style={{ color: "#94A3B8" }}>
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <img src="/favicon.svg" alt="ConstruData" className="h-6 w-6" style={{ filter: "brightness(0) invert(1)" }} />
+              <img src="/favicon.svg" alt="ConstruData" className="h-6 w-6" />
               <span className="font-bold text-white text-sm">HYDRONETWORK</span>
             </div>
             <p className="text-xs">Plataforma de engenharia de saneamento</p>

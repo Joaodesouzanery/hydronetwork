@@ -320,7 +320,7 @@ export const RecalqueModule = () => {
             </Card>
           </div>
 
-          <Button onClick={runDimensioning} className="w-full bg-[#A5CE00] text-[#0A2456] hover:bg-[#8FB800]">
+          <Button onClick={runDimensioning} className="w-full bg-[#FF6B2C] text-white hover:bg-[#E55A1F]">
             <Calculator className="h-4 w-4 mr-2" /> Dimensionar Recalque
           </Button>
 
@@ -383,7 +383,7 @@ export const RecalqueModule = () => {
                 <div><Label className="text-xs">Rendimento</Label><Input type="number" step="0.05" value={boosterRendimento} onChange={e => setBoosterRendimento(Number(e.target.value))} /></div>
               </div>
 
-              <Button onClick={runBooster} className="bg-[#A5CE00] text-[#0A2456] hover:bg-[#8FB800]">
+              <Button onClick={runBooster} className="bg-[#FF6B2C] text-white hover:bg-[#E55A1F]">
                 <Calculator className="h-4 w-4 mr-2" /> Dimensionar Booster
               </Button>
 
@@ -394,7 +394,7 @@ export const RecalqueModule = () => {
                     <div><strong>Potência:</strong> {boosterResult.potenciaComercial} CV</div>
                     <div><strong>V:</strong> {boosterResult.velocidade} m/s</div>
                   </div>
-                  <Badge className={boosterResult.atendeNorma ? "bg-[rgba(165,206,0,0.1)] text-[#A5CE00]" : "bg-[rgba(239,68,68,0.1)] text-[#EF4444]"}>
+                  <Badge className={boosterResult.atendeNorma ? "bg-[rgba(165,206,0,0.1)] text-[#FF6B2C]" : "bg-[rgba(239,68,68,0.1)] text-[#EF4444]"}>
                     {boosterResult.atendeNorma ? "Atende" : "Não atende"}
                   </Badge>
                   {boosterResult.observacoes.map((o, i) => (

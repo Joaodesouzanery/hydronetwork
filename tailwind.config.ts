@@ -41,8 +41,8 @@ export default {
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
-          hover: "#8FB800",
-          dark: "#7A9E00",
+          hover: "#E55A1F",
+          dark: "#CC4A15",
         },
         popover: {
           DEFAULT: "hsl(var(--popover))",
@@ -91,9 +91,9 @@ export default {
           "primary-dark": "#0A2456",
           secondary: "#EBEBEB",
           "secondary-dark": "#D4D4D4",
-          accent: "#A5CE00",
-          "accent-hover": "#8FB800",
-          "accent-dark": "#7A9E00",
+          accent: "#FF6B2C",
+          "accent-hover": "#E55A1F",
+          "accent-dark": "#CC4A15",
           surface: "#F5F5F5",
           "surface-dark": "#0E1B3D",
         },

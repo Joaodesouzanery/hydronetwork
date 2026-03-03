@@ -30,7 +30,7 @@
     <ellipse cx="12" cy="36" rx="5" ry="3.5" fill="#1A4A9E"/>
     <ellipse cx="40" cy="36" rx="5" ry="3.5" fill="#1A4A9E"/>
     <!-- Ruler -->
-    <rect x="8" y="32" width="36" height="6" rx="1.5" fill="#A5CE00"/>
+    <rect x="8" y="32" width="36" height="6" rx="1.5" fill="#FF6B2C"/>
     <line x1="13" y1="32" x2="13" y2="35.5" stroke="white" stroke-width="0.8"/>
     <line x1="18" y1="32" x2="18" y2="34.5" stroke="white" stroke-width="0.5"/>
     <line x1="23" y1="32" x2="23" y2="35.5" stroke="white" stroke-width="0.8"/>
