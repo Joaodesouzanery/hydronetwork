@@ -4,7 +4,7 @@ import {
   Calendar, Beaker, Waves, Layers, FileText, Map, Shield, ClipboardList,
   Plus, History, Image, AlertCircle, Archive, HeadphonesIcon, Settings,
   BarChart3, ClipboardCheck, Activity, DollarSign, Building2, Bell, Clock,
-  BookOpen, Smile, Mail, Linkedin, FileCheck2, GraduationCap,
+  BookOpen, Smile, Mail, Linkedin, FileCheck2, GraduationCap, Newspaper,
   ChevronDown, EyeOff, Eye
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -30,6 +30,7 @@ const sections: SidebarSection[] = [
       { title: "Dashboard", url: "/dashboard", icon: Home },
       { title: "Dashboard Personalizado", url: "/custom-dashboard", icon: Palette },
       { title: "Projetos", url: "/projects", icon: Building2 },
+      { title: "Hub de Notícias", url: "/hub-noticias", icon: Newspaper },
     ],
   },
   {
