@@ -5,7 +5,7 @@ import {
   Plus, History, Image, AlertCircle, Archive, HeadphonesIcon, Settings,
   BarChart3, ClipboardCheck, Activity, DollarSign, Building2, Bell, Clock,
   BookOpen, Smile, Mail, Linkedin, FileCheck2, GraduationCap, HelpCircle,
-  ChevronDown, EyeOff, Eye, Compass
+  ChevronDown, EyeOff, Eye, Compass, Edit3
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -60,6 +60,7 @@ const sections: SidebarSection[] = [
       { title: "Água", url: "/hydronetwork/agua", icon: Droplets },
       { title: "Drenagem", url: "/hydronetwork/drenagem", icon: CloudRain },
       { title: "Quantitativos", url: "/hydronetwork/quantitativos", icon: FileSpreadsheet },
+      { title: "Edição por Trecho", url: "/hydronetwork/edicao-trecho", icon: Edit3 },
       { title: "Orçamento", url: "/hydronetwork/orcamento", icon: Calculator },
       { title: "BDI", url: "/hydronetwork/bdi", icon: DollarSign },
       { title: "Planejamento", url: "/hydronetwork/planejamento", icon: Calendar },

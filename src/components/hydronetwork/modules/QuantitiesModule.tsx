@@ -23,44 +23,44 @@ const getMinSlope = (dn: number): number => {
   return 0.0015;                   // 0.15% (DN400+)
 };
 
-// SINAPI reference cost table (Ref: SINAPI 12/2024 - Desonerado - SP)
+// SINAPI reference cost table (Ref: SINAPI 01/2026 - Desonerado - SP — ajustado INCC +8%)
 const SINAPI_COSTS = {
   escavacao: {
-    "0-1.5": { codigo: "96995", descricao: "Escavação mecanizada 1ª cat. até 1,5m", unit: "m³", custo: 28.50 },
-    "1.5-3": { codigo: "96996", descricao: "Escavação mecanizada 1ª cat. 1,5-3m", unit: "m³", custo: 35.20 },
-    "3-4.5": { codigo: "96997", descricao: "Escavação mecanizada 1ª cat. 3-4,5m", unit: "m³", custo: 42.80 },
-    "rocha": { codigo: "96999", descricao: "Escavação 3ª cat. (rocha)", unit: "m³", custo: 125.50 },
+    "0-1.5": { codigo: "96995", descricao: "Escavação mecanizada 1ª cat. até 1,5m", unit: "m³", custo: 30.78 },
+    "1.5-3": { codigo: "96996", descricao: "Escavação mecanizada 1ª cat. 1,5-3m", unit: "m³", custo: 38.02 },
+    "3-4.5": { codigo: "96997", descricao: "Escavação mecanizada 1ª cat. 3-4,5m", unit: "m³", custo: 46.22 },
+    "rocha": { codigo: "96999", descricao: "Escavação 3ª cat. (rocha)", unit: "m³", custo: 135.54 },
   },
   escoramento: {
-    madeira: { codigo: "95241", descricao: "Escoramento contínuo madeira", unit: "m²", custo: 45.80 },
-    metalico: { codigo: "95242", descricao: "Escoramento metálico", unit: "m²", custo: 38.50 },
-    estaca: { codigo: "95243", descricao: "Estaca-prancha", unit: "m²", custo: 85.20 },
+    madeira: { codigo: "95241", descricao: "Escoramento contínuo madeira", unit: "m²", custo: 49.46 },
+    metalico: { codigo: "95242", descricao: "Escoramento metálico", unit: "m²", custo: 41.58 },
+    estaca: { codigo: "95243", descricao: "Estaca-prancha", unit: "m²", custo: 92.02 },
   },
   tubulacao: {
-    150: { codigo: "89356", descricao: "Tubo PVC DN150 implantado", unit: "m", custo: 125.50 },
-    200: { codigo: "89357", descricao: "Tubo PVC DN200 implantado", unit: "m", custo: 185.30 },
-    250: { codigo: "89358", descricao: "Tubo PVC DN250 implantado", unit: "m", custo: 265.80 },
-    300: { codigo: "89359", descricao: "Tubo PVC DN300 implantado", unit: "m", custo: 355.20 },
-    400: { codigo: "89361", descricao: "Tubo PVC DN400 implantado", unit: "m", custo: 485.60 },
+    150: { codigo: "89356", descricao: "Tubo PVC DN150 implantado", unit: "m", custo: 135.54 },
+    200: { codigo: "89357", descricao: "Tubo PVC DN200 implantado", unit: "m", custo: 200.12 },
+    250: { codigo: "89358", descricao: "Tubo PVC DN250 implantado", unit: "m", custo: 287.06 },
+    300: { codigo: "89359", descricao: "Tubo PVC DN300 implantado", unit: "m", custo: 383.62 },
+    400: { codigo: "89361", descricao: "Tubo PVC DN400 implantado", unit: "m", custo: 524.45 },
   },
   reaterro: {
-    compactado: { codigo: "97914", descricao: "Reaterro compactado", unit: "m³", custo: 18.50 },
-    berco: { codigo: "97905", descricao: "Berço de areia", unit: "m³", custo: 95.30 },
-    envoltoria: { codigo: "97906", descricao: "Envoltória com areia", unit: "m³", custo: 85.50 },
+    compactado: { codigo: "97914", descricao: "Reaterro compactado", unit: "m³", custo: 19.98 },
+    berco: { codigo: "97905", descricao: "Berço de areia", unit: "m³", custo: 102.92 },
+    envoltoria: { codigo: "97906", descricao: "Envoltória com areia", unit: "m³", custo: 92.34 },
   },
   pavimentacao: {
-    subbase: { codigo: "95995", descricao: "Sub-base BGS", unit: "m³", custo: 125.30 },
-    base: { codigo: "95996", descricao: "Base brita graduada", unit: "m³", custo: 145.80 },
-    cbuq: { codigo: "95998", descricao: "CBUQ 5cm (asfalto)", unit: "m²", custo: 28.50 },
-    concreto: { codigo: "96001", descricao: "Pavimento concreto", unit: "m²", custo: 85.00 },
-    bloquete: { codigo: "96003", descricao: "Bloquete intertravado", unit: "m²", custo: 55.00 },
+    subbase: { codigo: "95995", descricao: "Sub-base BGS", unit: "m³", custo: 135.32 },
+    base: { codigo: "95996", descricao: "Base brita graduada", unit: "m³", custo: 157.46 },
+    cbuq: { codigo: "95998", descricao: "CBUQ 5cm (asfalto)", unit: "m²", custo: 30.78 },
+    concreto: { codigo: "96001", descricao: "Pavimento concreto", unit: "m²", custo: 91.80 },
+    bloquete: { codigo: "96003", descricao: "Bloquete intertravado", unit: "m²", custo: 59.40 },
   },
   pv: {
-    "0-1.5": { codigo: "89709", descricao: "PV concreto até 1,5m", unit: "un", custo: 2850.00 },
-    "1.5-2.5": { codigo: "89710", descricao: "PV concreto 1,5-2,5m", unit: "un", custo: 4250.00 },
-    "2.5-4": { codigo: "89711", descricao: "PV concreto 2,5-4,0m", unit: "un", custo: 6850.00 },
+    "0-1.5": { codigo: "89709", descricao: "PV concreto até 1,5m", unit: "un", custo: 3078.00 },
+    "1.5-2.5": { codigo: "89710", descricao: "PV concreto 1,5-2,5m", unit: "un", custo: 4590.00 },
+    "2.5-4": { codigo: "89711", descricao: "PV concreto 2,5-4,0m", unit: "un", custo: 7398.00 },
   },
-  botafora: { codigo: "97918", descricao: "Carga, transporte e descarga - bota-fora", unit: "m³", custo: 12.50 },
+  botafora: { codigo: "97918", descricao: "Carga, transporte e descarga - bota-fora", unit: "m³", custo: 13.50 },
 } as const;
 
 export interface QuantRow {

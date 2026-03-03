@@ -53,6 +53,7 @@ const RecalqueModule = lazy(() => import("@/components/hydronetwork/modules/Reca
 const TransientModule = lazy(() => import("@/components/hydronetwork/modules/TransientModule").then(m => ({ default: m.TransientModule })));
 const CAESBModule = lazy(() => import("@/components/hydronetwork/modules/CAESBModule").then(m => ({ default: m.CAESBModule })));
 const CAESBPreProjectModule = lazy(() => import("@/components/hydronetwork/modules/CAESBPreProjectModule").then(m => ({ default: m.CAESBPreProjectModule })));
+const TrechoEditModule = lazy(() => import("@/components/hydronetwork/modules/TrechoEditModule").then(m => ({ default: m.TrechoEditModule })));
 import { QEsgWaterPanel } from "@/components/hydronetwork/panels/QEsgWaterPanel";
 import { getRasterGrid } from "@/engine/rasterStore";
 import { extractContours, type ContourExtractionResult } from "@/engine/contourExtractor";
@@ -316,6 +317,8 @@ const HydroNetwork = () => {
         return <CAESBModule />;
       case "caesb-preprojeto":
         return <CAESBPreProjectModule />;
+      case "edicao-trecho":
+        return <TrechoEditModule trechos={trechos} pontos={pontos} quantityRows={quantityRows} quantityParams={quantityParams ?? undefined} onTrechosChange={setTrechos} />;
       case "perfil":
         return <PerfilLongitudinal pontos={pontos} trechos={trechos} />;
       case "mapa":
@@ -836,6 +839,7 @@ const HydroNetwork = () => {
     elevatoria: "Orçamento de Elevatória",
     recalque: "Recalque / Booster — Linhas de Recalque",
     transientes: "Transientes Hidráulicos — Golpe de Aríete",
+    "edicao-trecho": "Edição por Trecho",
   };
 
   return (
