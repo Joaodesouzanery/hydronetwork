@@ -25,6 +25,7 @@ const navigationItems = [
   { title: "MÓDULOS", href: "#modulos" },
   { title: "COMO FUNCIONA", href: "#fluxo" },
   { title: "DIFERENCIAIS", href: "#diferenciais" },
+  { title: "PREÇOS", href: "#pricing" },
   { title: "FAQ", href: "#faq" },
 ];
 
@@ -481,6 +482,87 @@ const Hero = () => {
                 </tbody>
               </table>
             </div>
+          </div>
+        </section>
+
+        {/* ═══════════ PRICING ═══════════ */}
+        <section id="pricing" className="py-24 border-t border-border">
+          <div className="container mx-auto px-4">
+            <h2 className="text-center text-3xl md:text-4xl font-mono font-bold mb-4">
+              Plano Profissional
+            </h2>
+            <p className="text-center text-muted-foreground font-mono mb-12">
+              Acesso completo a todos os 30+ módulos da plataforma
+            </p>
+
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, type: "spring", stiffness: 100, damping: 15 }}
+              className="max-w-md mx-auto"
+            >
+              <div className="bg-background border-2 border-[#FF6B2C] relative">
+                {/* Best value badge */}
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <span className="bg-[#FF6B2C] text-white text-xs font-mono font-bold px-4 py-1">
+                    ACESSO COMPLETO
+                  </span>
+                </div>
+
+                <div className="p-8 pt-10 text-center space-y-6">
+                  <div>
+                    <h3 className="text-lg font-mono font-bold mb-1">ConstruData PRO</h3>
+                    <p className="text-sm text-muted-foreground font-mono">Tudo que você precisa</p>
+                  </div>
+
+                  <div className="flex items-baseline justify-center gap-1">
+                    <span className="text-sm font-mono text-muted-foreground">R$</span>
+                    <span className="text-5xl font-mono font-bold">797</span>
+                    <span className="text-sm font-mono text-muted-foreground">/mês</span>
+                  </div>
+
+                  <div className="border-t border-border pt-6 space-y-3 text-left">
+                    {[
+                      "30+ módulos integrados",
+                      "Dimensionamento automático (Esgoto, Água, Drenagem)",
+                      "Simulação EPANET PRO (WebAssembly)",
+                      "Orçamento SINAPI/SICRO automático",
+                      "Planejamento Gantt + Curva S + EVM",
+                      "RDO Digital com fotos e GPS",
+                      "Exportação QGIS, SHP, GeoJSON, DXF, PDF",
+                      "Mapa interativo georreferenciado",
+                      "Revisão por Pares com checklist ABNT",
+                      "Suporte prioritário",
+                    ].map((feature) => (
+                      <div key={feature} className="flex items-start gap-2">
+                        <Check className="h-4 w-4 text-[#FF6B2C] mt-0.5 flex-shrink-0" />
+                        <span className="text-sm font-mono">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <Button
+                    size="lg"
+                    className="w-full rounded-none bg-[#FF6B2C] hover:bg-[#FF6B2C]/90 font-mono text-white"
+                    asChild
+                  >
+                    <a
+                      href="https://calendly.com/joaodsouzanery/apresentacao-personalrh"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      COMEÇAR AGORA
+                      <ArrowRight className="ml-1 w-4 h-4" />
+                    </a>
+                  </Button>
+
+                  <p className="text-xs text-muted-foreground font-mono">
+                    Cancele quando quiser. Sem fidelidade.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
           </div>
         </section>
 
