@@ -115,7 +115,7 @@ const Settings = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <Building2 className="w-12 h-12 mx-auto text-primary animate-pulse mb-4" />
           <p className="text-muted-foreground">Carregando...</p>
@@ -126,7 +126,7 @@ const Settings = () => {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         
         <div className="flex-1 flex flex-col">
@@ -137,7 +137,7 @@ const Settings = () => {
                 <SidebarTrigger />
                 <div className="flex items-center gap-2 text-primary">
                   <Building2 className="w-8 h-8" />
-                  <span className="text-2xl font-bold">ConstruData</span>
+                  <span className="text-2xl font-bold font-mono">CONSTRUDATA</span>
                 </div>
               </div>
               <div className="flex items-center gap-4">
@@ -154,7 +154,7 @@ const Settings = () => {
           {/* Main Content */}
           <main className="container mx-auto px-4 py-8 flex-1">
             <div className="mb-8">
-              <h1 className="text-3xl font-bold mb-2">Configurações</h1>
+              <h1 className="text-3xl font-bold font-mono mb-2">Configurações</h1>
               <p className="text-muted-foreground">
                 Gerencie suas preferências e informações da conta
               </p>
@@ -255,8 +255,8 @@ const Settings = () => {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Export */}
-                  <div className="flex items-start gap-4 p-4 rounded-lg border bg-muted/30">
-                    <div className="p-2 rounded-lg bg-primary/10">
+                  <div className="flex items-start gap-4 p-4 rounded-none border bg-muted/30">
+                    <div className="p-2 rounded-none bg-primary/10">
                       <Download className="w-5 h-5 text-primary" />
                     </div>
                     <div className="flex-1 space-y-2">
@@ -293,8 +293,8 @@ const Settings = () => {
                   <Separator />
 
                   {/* Import */}
-                  <div className="flex items-start gap-4 p-4 rounded-lg border bg-muted/30">
-                    <div className="p-2 rounded-lg bg-secondary/10">
+                  <div className="flex items-start gap-4 p-4 rounded-none border bg-muted/30">
+                    <div className="p-2 rounded-none bg-secondary/10">
                       <Upload className="w-5 h-5 text-secondary" />
                     </div>
                     <div className="flex-1 space-y-2">
@@ -333,7 +333,7 @@ const Settings = () => {
                         </Button>
                       </div>
                       {importPreview && (
-                        <div className="mt-2 p-3 rounded-md border bg-card text-sm space-y-1">
+                        <div className="mt-2 p-3 rounded-none border bg-card text-sm space-y-1">
                           <div className="flex items-center gap-2 text-success">
                             <CheckCircle2 className="w-4 h-4" />
                             <span className="font-medium">Importado com sucesso</span>
@@ -352,7 +352,7 @@ const Settings = () => {
                   </div>
 
                   {/* Warning */}
-                  <div className="flex items-start gap-2 p-3 rounded-md bg-warning/10 border border-warning/20">
+                  <div className="flex items-start gap-2 p-3 rounded-none bg-warning/10 border border-warning/20">
                     <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
                     <p className="text-sm text-muted-foreground">
                       Recomendamos exportar regularmente como backup. Os dados ficam salvos no navegador (localStorage) e no Supabase, mas um backup em arquivo garante que nada se perca.

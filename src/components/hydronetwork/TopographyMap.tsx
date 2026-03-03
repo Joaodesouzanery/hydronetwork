@@ -702,7 +702,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
         {/* Add node mode status bar */}
         {addNodeMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200">
+          <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/20 border border-green-200">
             <Crosshair className="h-4 w-4 text-green-600" />
             <span className="text-sm font-medium text-green-700 dark:text-green-400">
               Clique no mapa para adicionar um novo ponto topográfico
@@ -715,7 +715,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
         {/* Draw mode status bar */}
         {drawMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200">
+          <div className="flex items-center gap-2 p-2 bg-orange-50 dark:bg-orange-950/20 border border-orange-200">
             <Link2 className="h-4 w-4 text-orange-600" />
             <span className="text-sm font-medium text-orange-700 dark:text-orange-400">
               {drawOrigin
@@ -735,7 +735,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
         {/* Delete mode status bar */}
         {deleteMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200">
+          <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-950/20 border border-red-200">
             <MousePointerClick className="h-4 w-4 text-red-600" />
             <span className="text-sm font-medium text-red-700 dark:text-red-400">
               {deleteMode === "nodes"
@@ -759,7 +759,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
         {/* Bulk move status bar */}
         {bulkMoveMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200">
+          <div className="flex items-center gap-2 p-2 bg-purple-50 dark:bg-purple-950/20 border border-purple-200">
             <Move className="h-4 w-4 text-purple-600" />
             <span className="text-sm font-medium text-purple-700 dark:text-purple-400">
               {bulkMoveStart
@@ -780,7 +780,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         {/* Structure mode bar */}
         {structureMode && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200">
+            <div className="flex items-center gap-2 p-2 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200">
               <Layers className="h-4 w-4 text-indigo-600" />
               <span className="text-sm font-medium text-indigo-700 dark:text-indigo-400">
                 Modo Estrutura: Clique em trechos para editar. Ctrl+Clique para selecionar multiplos.
@@ -813,7 +813,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
             {/* Batch operations panel */}
             {showBatchPanel && (
-              <div className="p-3 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/20 border border-indigo-200 space-y-3">
+              <div className="p-3 bg-indigo-50/80 dark:bg-indigo-950/20 border border-indigo-200 space-y-3">
                 <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-400">
                   Edicao em Lote ({batchSelectedTrechos.size} trechos selecionados)
                 </p>
@@ -873,7 +873,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
             {selectedTrechoIdx !== null && selectedTrechoIdx < trechos.length && (() => {
               const t = trechos[selectedTrechoIdx];
               return (
-                <div className="grid grid-cols-6 gap-2 p-2 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/10 border border-indigo-100">
+                <div className="grid grid-cols-6 gap-2 p-2 bg-indigo-50/50 dark:bg-indigo-950/10 border border-indigo-100">
                   <div>
                     <Label className="text-xs">Trecho</Label>
                     <p className="text-sm font-mono font-semibold">{t.idInicio} &rarr; {t.idFim}</p>
@@ -930,7 +930,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         {/* Map */}
         <div
           ref={mapContainerRef}
-          className="w-full rounded-lg border border-border overflow-hidden"
+          className="w-full border border-border overflow-hidden"
           style={{ height: 450, position: "relative", zIndex: 0 }}
         />
 
@@ -939,7 +939,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           const pt = pontos.find(p => p.id === selectedPoint);
           if (!pt) return null;
           return (
-            <div className="flex items-center gap-3 p-2 bg-muted/50 rounded-lg text-sm">
+            <div className="flex items-center gap-3 p-2 bg-muted/50 text-sm">
               <MapPin className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium">{pt.id}</span>
               <span className="text-muted-foreground">X: {pt.x.toFixed(3)}</span>
@@ -954,7 +954,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
         {/* Connections list with individual delete */}
         {trechos.length > 0 && (
-          <div className="max-h-32 overflow-auto border border-border rounded-lg p-2">
+          <div className="max-h-32 overflow-auto border border-border p-2">
             <p className="text-xs font-medium mb-1">Trechos ({trechos.length})</p>
             <div className="space-y-1">
               {trechos.map((t, i) => (
@@ -980,13 +980,13 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
         {/* Legend */}
         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500" /> Início</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500" /> Fim</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-blue-500" /> Intermediário</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500" /> Selecionado</div>
-          {drawMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-orange-500" /> Origem (ligação)</div>}
-          {deleteMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-600" /> Selecionado p/ exclusão</div>}
-          {bulkMoveMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-purple-600" /> Mover em massa</div>}
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500" /> Início</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-500" /> Fim</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-500" /> Intermediário</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-500" /> Selecionado</div>
+          {drawMode && <div className="flex items-center gap-1"><div className="w-3 h-3 bg-orange-500" /> Origem (ligação)</div>}
+          {deleteMode && <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-600" /> Selecionado p/ exclusão</div>}
+          {bulkMoveMode && <div className="flex items-center gap-1"><div className="w-3 h-3 bg-purple-600" /> Mover em massa</div>}
           {structureMode ? (
             <>
               <div className="flex items-center gap-1"><div className="w-4 h-1 bg-blue-400 rounded" /> Agua</div>

@@ -446,8 +446,8 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                     <span className="text-sm font-medium">{sys.icon} {sys.label}</span>
                     <span className="text-sm font-bold">{fmt(sys.data.percent)}%</span>
                   </div>
-                  <div className="w-full h-3 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(sys.data.percent, 100)}%`, backgroundColor: sys.color }} />
+                  <div className="w-full h-3 bg-muted overflow-hidden">
+                    <div className="h-full transition-all" style={{ width: `${Math.min(sys.data.percent, 100)}%`, backgroundColor: sys.color }} />
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">{sys.data.executed} / {sys.data.planned} m</div>
                 </div>
@@ -476,8 +476,8 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                         <span className="text-sm font-medium">{s.name}</span>
                         <Badge variant="outline">{s.qty.toLocaleString("pt-BR")} {s.unit}</Badge>
                       </div>
-                      <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-                        <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${barWidth}%` }} />
+                      <div className="w-full h-2 bg-muted overflow-hidden">
+                        <div className="h-full bg-blue-500 transition-all" style={{ width: `${barWidth}%` }} />
                       </div>
                       {s.planned > 0 && (
                         <div className="text-xs text-muted-foreground">
@@ -605,8 +605,8 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                         <TableCell>{seg.executed.toFixed(2)}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${Math.min(isManualDone ? 100 : pct, 100)}%`, backgroundColor: effectiveStatus === "Concluido" ? "#22c55e" : pct > 0 ? "#f59e0b" : "#ef4444" }} />
+                            <div className="w-24 h-2 bg-muted overflow-hidden">
+                              <div className="h-full" style={{ width: `${Math.min(isManualDone ? 100 : pct, 100)}%`, backgroundColor: effectiveStatus === "Concluido" ? "#22c55e" : pct > 0 ? "#f59e0b" : "#ef4444" }} />
                             </div>
                             <span className="text-xs">{isManualDone ? "100,0" : fmt(pct)}%</span>
                           </div>

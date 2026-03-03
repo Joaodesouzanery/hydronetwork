@@ -236,7 +236,7 @@ const ApprovalControl = () => {
           <div className="flex items-center gap-3">
             <SidebarTrigger />
             <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
+              <h1 className="text-2xl font-bold font-mono flex items-center gap-2">
                 <ClipboardCheck className="h-6 w-6 text-primary" />
                 Controle de Aprovação de Projetos
               </h1>

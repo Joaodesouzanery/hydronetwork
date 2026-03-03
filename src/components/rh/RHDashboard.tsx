@@ -190,7 +190,7 @@ export const RHDashboard = () => {
               {validacoes.slice(0, 5).map((v) => (
                 <div 
                   key={v.id} 
-                  className={`p-3 rounded-lg border ${
+                  className={`p-3 border ${
                     v.nivel === 'bloqueio' 
                       ? 'bg-red-50 border-red-200' 
                       : 'bg-yellow-50 border-yellow-200'

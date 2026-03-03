@@ -167,15 +167,15 @@ export const OpenProjectModule = ({ pontos = [], trechos = [] }: OpenProjectModu
             <div><Label>Gerente</Label><Input value={manager} onChange={e => setManager(e.target.value)} placeholder="Eng. João Silva" /></div>
             <div><Label>Data de Início</Label><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
             <div className="grid grid-cols-3 gap-2 pt-2">
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
+              <div className="bg-muted/50 p-3 text-center">
                 <div className="text-xl font-bold text-blue-600">{tasks.length}</div>
                 <div className="text-xs text-muted-foreground">Tarefas</div>
               </div>
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
+              <div className="bg-muted/50 p-3 text-center">
                 <div className="text-xl font-bold text-green-600">{resources.length}</div>
                 <div className="text-xs text-muted-foreground">Recursos</div>
               </div>
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
+              <div className="bg-muted/50 p-3 text-center">
                 <div className="text-xl font-bold text-orange-600">{totalDuration}d</div>
                 <div className="text-xs text-muted-foreground">Duração</div>
               </div>

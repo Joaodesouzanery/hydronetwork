@@ -34,7 +34,7 @@ const Planning = () => {
             <div className="flex items-center gap-3 mb-2">
               <SidebarTrigger />
               <div>
-                <h1 className="text-xl font-bold flex items-center gap-2">
+                <h1 className="text-xl font-bold font-mono flex items-center gap-2">
                   <Construction className="h-5 w-5" />
                   Planejamento
                 </h1>

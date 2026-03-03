@@ -82,7 +82,7 @@ export function AppSidebar() {
   const renderSection = (label: string, items: typeof dashboardItems, defaultOpen = true) => (
     <Collapsible defaultOpen={defaultOpen} className="group/collapsible">
       <SidebarGroup>
-        <SidebarGroupLabel className="uppercase text-[11px] tracking-[1.5px] font-semibold text-[#666666] px-4">
+        <SidebarGroupLabel className="uppercase text-[11px] tracking-[1.5px] font-semibold font-mono text-[#666666] px-4">
           {label}
         </SidebarGroupLabel>
         <CollapsibleContent>
@@ -93,7 +93,7 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild>
                     <NavLink to={item.url} end className={getNavCls}>
                       <item.icon className="h-5 w-5 flex-shrink-0" />
-                      <span className="text-sm">{item.title}</span>
+                      <span className="text-sm font-mono">{item.title}</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -121,8 +121,8 @@ export function AppSidebar() {
             className="h-10 w-10 flex-shrink-0"
           />
           {open && (
-            <span className="text-lg font-bold text-white tracking-tight">
-              ConstruData
+            <span className="text-lg font-bold font-mono text-white tracking-tight">
+              CONSTRUDATA
             </span>
           )}
         </div>
@@ -137,10 +137,10 @@ export function AppSidebar() {
         {/* Support footer */}
         <div className="mt-auto p-3 border-t border-[#2A2A2A]">
           <div className="flex items-center gap-2 justify-center">
-            <a href="mailto:construdata.contato@gmail.com" className="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors" title="Email">
+            <a href="mailto:construdata.contato@gmail.com" className="p-2 hover:bg-[rgba(255,255,255,0.05)] transition-colors" title="Email">
               <Mail className="w-4 h-4 text-[#94A3B8]" />
             </a>
-            <a href="https://www.linkedin.com/company/construdatasoftware" target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] transition-colors" title="LinkedIn">
+            <a href="https://www.linkedin.com/company/construdatasoftware" target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-[rgba(255,255,255,0.05)] transition-colors" title="LinkedIn">
               <Linkedin className="w-4 h-4 text-[#94A3B8]" />
             </a>
           </div>

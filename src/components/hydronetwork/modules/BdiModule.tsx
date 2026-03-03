@@ -460,11 +460,11 @@ export const BdiModule = () => {
                     </TableBody>
                   </Table>
                 </div>
-                <div className="mt-3 flex justify-between items-center bg-muted/50 rounded-lg p-3">
+                <div className="mt-3 flex justify-between items-center bg-muted/50 p-3">
                   <span className="text-sm font-medium">Subtotal Mão de Obra/Mês</span>
                   <span className="text-lg font-bold text-blue-600">{fmtBRL(custoMaoObraMes)}</span>
                 </div>
-                <div className="mt-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 rounded-lg p-3">
+                <div className="mt-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 p-3">
                   <p className="text-xs text-yellow-800 dark:text-yellow-200"><Info className="h-3 w-3 inline mr-1" />
                     Os encargos sociais incluem: INSS, FGTS, 13º salário, férias, aviso prévio, multa FGTS, etc. O valor padrão de 73,33% é referência para obras de construção civil (desonerado).</p>
                 </div>
@@ -508,7 +508,7 @@ export const BdiModule = () => {
                     </TableBody>
                   </Table>
                 </div>
-                <div className="mt-3 flex justify-between items-center bg-muted/50 rounded-lg p-3">
+                <div className="mt-3 flex justify-between items-center bg-muted/50 p-3">
                   <span className="text-sm font-medium">Subtotal Equipamentos/Mês</span>
                   <span className="text-lg font-bold text-purple-600">{fmtBRL(custoEquipamentosMes)}</span>
                 </div>
@@ -525,7 +525,7 @@ export const BdiModule = () => {
                   <Label>Usar Orçamento da Plataforma</Label>
                 </div>
                 {usarOrcamento ? (
-                  <div className="bg-muted/50 rounded-lg p-3">
+                  <div className="bg-muted/50 p-3">
                     <p className="text-sm text-muted-foreground">Integração com módulo de Orçamento — em desenvolvimento</p>
                   </div>
                 ) : (

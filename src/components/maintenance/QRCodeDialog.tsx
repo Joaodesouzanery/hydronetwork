@@ -141,7 +141,7 @@ export const QRCodeDialog = ({ open, onOpenChange, qrCode }: QRCodeDialogProps) 
 
         <div className="flex flex-col items-center space-y-4 py-4">
           {qrCodeDataUrl ? (
-            <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
+            <div className="bg-white p-4 border-2 border-gray-200">
               <img 
                 src={qrCodeDataUrl} 
                 alt="QR Code" 
@@ -149,7 +149,7 @@ export const QRCodeDialog = ({ open, onOpenChange, qrCode }: QRCodeDialogProps) 
               />
             </div>
           ) : (
-            <div className="w-[300px] h-[300px] flex items-center justify-center bg-gray-100 rounded-lg">
+            <div className="w-[300px] h-[300px] flex items-center justify-center bg-gray-100">
               <p className="text-muted-foreground">Gerando QR Code...</p>
             </div>
           )}

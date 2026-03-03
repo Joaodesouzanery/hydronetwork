@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -71,7 +71,7 @@
     --input: 0 0% 83%;
     --ring: 18 100% 59%;
 
-    --radius: 0.75rem;
+    --radius: 0;
 
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, #10367D 0%, #1A4A9E 100%);
@@ -162,13 +162,13 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
     font-variant-numeric: tabular-nums;
   }
 
   /* Typography hierarchy */
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   }
 
   .bg-grid-pattern {
@@ -257,14 +257,14 @@
 
   /* ═══ ConstruData Button Styles ═══ */
   .btn-cta {
-    @apply bg-[#FF6B2C] text-white font-semibold rounded-lg transition-all duration-200;
+    @apply bg-[#FF6B2C] text-white font-semibold font-mono rounded-none transition-all duration-200;
   }
   .btn-cta:hover {
     @apply bg-[#E55A1F];
   }
 
   .btn-secondary-outline {
-    @apply bg-transparent border border-[#10367D] text-[#10367D] rounded-lg transition-all duration-200;
+    @apply bg-transparent border border-[#10367D] text-[#10367D] font-mono rounded-none transition-all duration-200;
   }
   .btn-secondary-outline:hover {
     background: rgba(16, 54, 125, 0.05);
@@ -272,7 +272,7 @@
 
   .btn-destructive {
     background: rgba(239, 68, 68, 0.1);
-    @apply text-[#EF4444] rounded-lg transition-all duration-200;
+    @apply text-[#EF4444] font-mono rounded-none transition-all duration-200;
   }
   .btn-destructive:hover {
     background: rgba(239, 68, 68, 0.2);
@@ -309,11 +309,11 @@
 
   /* Card hover effects */
   .card-interactive {
-    @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-1 cursor-pointer;
+    @apply transition-all duration-200 hover:border-[#FF6B2C]/50 cursor-pointer;
   }
 
   .card-interactive:active {
-    @apply scale-[0.98] shadow-md;
+    @apply scale-[0.98];
   }
 
   /* ═══ Sidebar active item ═══ */
@@ -324,7 +324,7 @@
 
   /* ═══ Section labels ═══ */
   .section-label {
-    @apply uppercase text-[11px] tracking-[1.5px] font-semibold;
+    @apply uppercase text-[11px] tracking-[1.5px] font-semibold font-mono;
     color: #64748B;
   }
 
@@ -354,7 +354,7 @@
   }
 
   .mobile-card {
-    @apply p-4 sm:p-5 md:p-6 rounded-lg sm:rounded-xl;
+    @apply p-4 sm:p-5 md:p-6;
   }
 
   .mobile-button {

@@ -369,7 +369,7 @@ const HydroNetwork = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {pontos.length > 0 && (
-              <div className="border border-border rounded-lg p-4 bg-card">
+              <div className="border border-border rounded-none p-4 bg-card">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Badge variant="default" className="bg-green-600">{pontos.length} pontos</Badge>
@@ -402,7 +402,7 @@ const HydroNetwork = () => {
                       { label: "Elevatoria", value: networkSummary.trechosElevatoria, color: "text-orange-600" },
                       { label: "Decliv. Media", value: `${(networkSummary.declividadeMedia * 100).toFixed(2)}%`, color: "text-purple-600" },
                     ].map((item, i) => (
-                      <div key={i} className="bg-muted/50 rounded-lg p-2 text-center">
+                      <div key={i} className="bg-muted/50 rounded-none p-2 text-center">
                         <div className={`text-sm font-bold ${item.color}`}>{item.value}</div>
                         <div className="text-[10px] text-muted-foreground">{item.label}</div>
                       </div>
@@ -505,7 +505,7 @@ const HydroNetwork = () => {
                 {getAllLayers().map(layer => (
                   <div key={layer.id} className="flex items-center justify-between py-1 px-2 rounded hover:bg-muted/50 text-xs">
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: layer.color }} />
+                      <div className="w-3 h-3" style={{ backgroundColor: layer.color }} />
                       <span className="font-medium">{layer.name}</span>
                       <Badge variant="outline" className="text-[10px]">{layer.discipline}</Badge>
                       <Badge variant="outline" className="text-[10px]">{layer.geometryType}</Badge>
@@ -840,7 +840,7 @@ const HydroNetwork = () => {
           <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
-                <h1 className="text-2xl font-bold flex items-center gap-2 text-primary">
+                <h1 className="text-2xl font-bold font-mono flex items-center gap-2 text-primary">
                   <Droplets className="h-7 w-7 text-primary" /> HydroNetwork
                 </h1>
                 <p className="text-muted-foreground mt-1 text-sm">{moduleNames[activeModule] || "Plataforma de Saneamento"}</p>
@@ -859,7 +859,7 @@ const HydroNetwork = () => {
               </div>
             </div>
             <ErrorBoundary moduleName={moduleNames[activeModule] || activeModule} key={activeModule}>
-              <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
+              <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-b-2 border-primary" /></div>}>
                 {renderModule()}
               </Suspense>
             </ErrorBoundary>

@@ -38,7 +38,7 @@ const Prices = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Preços</h1>
+              <h1 className="text-3xl font-bold font-mono text-foreground">Preços</h1>
               <p className="text-muted-foreground">Gerencie os preços de materiais e serviços</p>
             </div>
           </div>

@@ -146,7 +146,7 @@ const Materials = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Precificação de Materiais e Serviços</h1>
+              <h1 className="text-3xl font-bold font-mono text-foreground">Precificação de Materiais e Serviços</h1>
               <p className="text-muted-foreground">Gerencie seu catálogo de materiais e serviços</p>
             </div>
           </div>

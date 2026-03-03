@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 const CostMapSVG = () => (
-  <svg viewBox="0 0 800 450" className="w-full rounded-xl border shadow-2xl" style={{ background: "#0E1B3D", borderColor: "#1E3A6E" }}>
+  <svg viewBox="0 0 800 450" className="w-full border-2" style={{ background: "#0E1B3D", borderColor: "#1E3A6E" }}>
     <rect x="100" y="50" width="600" height="350" rx="8" fill="#0E1B3D" stroke="#1E3A6E" strokeWidth="1" />
     <line x1="100" y1="200" x2="700" y2="200" stroke="#1E3A6E" strokeWidth="1" strokeDasharray="5,5" />
     <line x1="400" y1="50" x2="400" y2="400" stroke="#1E3A6E" strokeWidth="1" strokeDasharray="5,5" />
@@ -105,8 +105,8 @@ const HydroNetworkLanding = () => {
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
-            <span className="text-lg font-bold" style={{ color: "#10367D" }}>
-              ConstruData <span style={{ color: "#FF6B2C" }}>HydroNetwork</span>
+            <span className="text-lg font-bold font-mono" style={{ color: "#10367D" }}>
+              CONSTRUDATA <span style={{ color: "#FF6B2C" }}>HydroNetwork</span>
             </span>
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm">
@@ -133,7 +133,7 @@ const HydroNetworkLanding = () => {
           <Badge className="text-sm px-4 py-1" style={{ background: "rgba(255,107,44,0.15)", color: "#FF6B2C", border: "1px solid rgba(255,107,44,0.3)" }}>
             PLATAFORMA COMPLETA DE ENGENHARIA DE SANEAMENTO
           </Badge>
-          <h1 className="text-5xl md:text-7xl font-bold text-white">
+          <h1 className="text-5xl md:text-7xl font-bold font-mono text-white">
             CONSTRUDATA
             <br />
             <span style={{ color: "#FF6B2C", fontSize: "0.7em" }}>HYDRONETWORK</span>
@@ -166,7 +166,7 @@ const HydroNetworkLanding = () => {
               { v: "3", l: "Motores de Cálculo" },
               { v: "100%", l: "Online" },
             ].map((f, i) => (
-              <div key={i} className="rounded-lg p-4 text-center" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}>
+              <div key={i} className="rounded-none p-4 text-center" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}>
                 <div className="text-3xl font-bold" style={{ color: "#FF6B2C" }}>{f.v}</div>
                 <div className="text-xs mt-1" style={{ color: "#94A3B8" }}>{f.l}</div>
               </div>
@@ -183,7 +183,7 @@ const HydroNetworkLanding = () => {
       <section id="screenshots" data-animate className={`py-24 px-4 transition-all duration-700 ${isVisible("screenshots") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`} style={{ background: "#F5F5F5" }}>
         <div className="max-w-6xl mx-auto space-y-12">
           <div className="text-center space-y-4">
-            <h2 className="text-4xl font-bold" style={{ color: "#10367D" }}>Veja a plataforma em ação</h2>
+            <h2 className="text-4xl font-bold font-mono" style={{ color: "#10367D" }}>Veja a plataforma em ação</h2>
             <p style={{ color: "#64748B" }}>Ferramentas profissionais direto no navegador</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -220,7 +220,7 @@ const HydroNetworkLanding = () => {
         <div className="max-w-6xl mx-auto space-y-12">
           <div className="text-center space-y-4">
             <Badge style={{ background: "rgba(255,107,44,0.15)", color: "#FF6B2C", border: "1px solid rgba(255,107,44,0.3)" }}>Controle Financeiro Total</Badge>
-            <h2 className="text-4xl md:text-5xl font-bold text-white">Previsão de Custos por Trecho no Mapa</h2>
+            <h2 className="text-4xl md:text-5xl font-bold font-mono text-white">Previsão de Custos por Trecho no Mapa</h2>
             <p className="text-lg max-w-2xl mx-auto" style={{ color: "#94A3B8" }}>Saiba exatamente quanto cada metro de rede vai custar antes de iniciar.</p>
           </div>
           <CostMapSVG />
@@ -248,12 +248,12 @@ const HydroNetworkLanding = () => {
         style={{ background: "#F5F5F5" }}>
         <div className="max-w-6xl mx-auto space-y-12">
           <div className="text-center space-y-4">
-            <h2 className="text-4xl font-bold" style={{ color: "#10367D" }}>Fluxo Completo em 8 Etapas</h2>
+            <h2 className="text-4xl font-bold font-mono" style={{ color: "#10367D" }}>Fluxo Completo em 8 Etapas</h2>
             <p style={{ color: "#64748B" }}>Do projeto à entrega, tudo integrado</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {workflow.map((step, i) => (
-              <div key={i} className="rounded-xl p-6 text-center space-y-2 hover:scale-105 transition-transform" style={{ background: "#FFFFFF", border: "1px solid #EBEBEB" }}>
+              <div key={i} className="rounded-none p-6 text-center space-y-2 hover:scale-105 transition-transform" style={{ background: "#FFFFFF", border: "1px solid #EBEBEB" }}>
                 <div className="text-2xl font-bold" style={{ color: "#FF6B2C" }}>{step.step}</div>
                 <h3 className="text-sm font-bold" style={{ color: "#10367D" }}>{step.label}</h3>
                 <p className="text-xs" style={{ color: "#64748B" }}>{step.desc}</p>
@@ -267,12 +267,12 @@ const HydroNetworkLanding = () => {
       <section id="normas" data-animate className={`py-24 px-4 transition-all duration-700 ${isVisible("normas") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`} style={{ background: "#0A2456" }}>
         <div className="max-w-6xl mx-auto space-y-8">
           <div className="text-center space-y-4">
-            <h2 className="text-4xl font-bold text-white">Conforme Normas Brasileiras</h2>
+            <h2 className="text-4xl font-bold font-mono text-white">Conforme Normas Brasileiras</h2>
             <p style={{ color: "#94A3B8" }}>Cálculos validados conforme as principais normas de saneamento</p>
           </div>
           <div className="flex flex-wrap justify-center gap-3">
             {normas.map((n, i) => (
-              <div key={i} className="rounded-lg px-4 py-2 text-center" style={{ background: "rgba(255,107,44,0.1)", border: "1px solid rgba(255,107,44,0.25)", borderRadius: 8 }}>
+              <div key={i} className="rounded-none px-4 py-2 text-center" style={{ background: "rgba(255,107,44,0.1)", border: "1px solid rgba(255,107,44,0.25)", borderRadius: 8 }}>
                 <span className="font-bold text-sm" style={{ color: "#FF6B2C" }}>{n.code}</span>
                 <span className="text-xs ml-2" style={{ color: "#94A3B8" }}>— {n.desc}</span>
               </div>
@@ -286,7 +286,7 @@ const HydroNetworkLanding = () => {
         style={{ background: "#F5F5F5" }}>
         <div className="max-w-6xl mx-auto space-y-12">
           <div className="text-center space-y-4">
-            <h2 className="text-4xl font-bold" style={{ color: "#10367D" }}>17 Módulos Integrados</h2>
+            <h2 className="text-4xl font-bold font-mono" style={{ color: "#10367D" }}>17 Módulos Integrados</h2>
             <p style={{ color: "#64748B" }}>Tudo que você precisa em uma única plataforma</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -310,7 +310,7 @@ const HydroNetworkLanding = () => {
       <section data-animate id="social" className={`py-24 px-4 transition-all duration-700 ${isVisible("social") ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`} style={{ background: "#0A2456" }}>
         <div className="max-w-6xl mx-auto space-y-12">
           <div className="text-center space-y-4">
-            <h2 className="text-4xl font-bold text-white">Projetado por engenheiros, para engenheiros</h2>
+            <h2 className="text-4xl font-bold font-mono text-white">Projetado por engenheiros, para engenheiros</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
@@ -335,16 +335,16 @@ const HydroNetworkLanding = () => {
         style={{ background: "#F5F5F5" }}>
         <div className="max-w-5xl mx-auto text-center space-y-6">
           <p className="text-sm" style={{ color: "#64748B" }}>Conheça também nossa plataforma de gestão de obras</p>
-          <h2 className="text-2xl font-bold" style={{ color: "#10367D" }}>ConstruData Obras</h2>
+          <h2 className="text-2xl font-bold font-mono" style={{ color: "#10367D" }}>CONSTRUDATA Obras</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {["Produção", "Equipes", "Materiais", "RDO"].map((m, i) => (
-              <div key={i} className="rounded-lg p-4 text-center text-sm" style={{ background: "#FFFFFF", border: "1px solid #EBEBEB" }}>
+              <div key={i} className="rounded-none p-4 text-center text-sm" style={{ background: "#FFFFFF", border: "1px solid #EBEBEB" }}>
                 <span className="font-medium" style={{ color: "#10367D" }}>{m}</span>
               </div>
             ))}
           </div>
           <Button variant="outline" size="sm" onClick={() => navigate("/")} style={{ borderColor: "#10367D", color: "#10367D" }}>
-            Ver ConstruData Obras <ArrowRight className="ml-1 h-4 w-4" />
+            Ver CONSTRUDATA Obras <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
         </div>
       </section>
@@ -352,7 +352,7 @@ const HydroNetworkLanding = () => {
       {/* CTA Final */}
       <section className="py-24 px-4 text-center" style={{ background: "linear-gradient(135deg, #0A2456 0%, #10367D 100%)" }}>
         <div className="max-w-2xl mx-auto space-y-6">
-          <h2 className="text-4xl font-bold text-white">
+          <h2 className="text-4xl font-bold font-mono text-white">
             Importe seus dados e veja os resultados em segundos
           </h2>
           <div className="flex gap-4 justify-center flex-wrap">
@@ -397,7 +397,7 @@ const HydroNetworkLanding = () => {
           </div>
         </div>
         <div className="max-w-6xl mx-auto mt-8 pt-8 text-center text-xs" style={{ borderTop: "1px solid #1E3A6E", color: "#64748B" }}>
-          © 2025 ConstruData HydroNetwork. Todos os direitos reservados.
+          © 2025 CONSTRUDATA HydroNetwork. Todos os direitos reservados.
         </div>
       </footer>
     </div>

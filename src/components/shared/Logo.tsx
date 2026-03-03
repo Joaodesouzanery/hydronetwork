@@ -30,8 +30,8 @@ export function Logo({ size = "md", showText = true, variant = "auto", className
         className={sizeClasses[size]}
       />
       {showText && (
-        <span className={`${textClasses[size]} font-bold ${isDark ? "text-white" : "text-[#10367D]"}`}>
-          ConstruData
+        <span className={`${textClasses[size]} font-bold font-mono ${isDark ? "text-white" : "text-foreground"}`}>
+          CONSTRUDATA
         </span>
       )}
     </div>

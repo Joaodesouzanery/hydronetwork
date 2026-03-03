@@ -54,7 +54,7 @@ export function SearchableSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between font-normal", className)}
+          className={cn("w-full justify-between font-normal font-mono", className)}
           disabled={disabled}
         >
           <span className="truncate">
@@ -88,7 +88,7 @@ export function SearchableSelect({
                   <div className="flex flex-col">
                     <span>{option.label}</span>
                     {option.sublabel && (
-                      <span className="text-xs text-muted-foreground">{option.sublabel}</span>
+                      <span className="text-xs text-muted-foreground font-mono">{option.sublabel}</span>
                     )}
                   </div>
                 </CommandItem>

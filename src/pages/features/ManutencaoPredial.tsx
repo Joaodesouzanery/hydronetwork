@@ -47,7 +47,7 @@ const ManutencaoPredial = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-500/5">
+    <div className="min-h-screen bg-background">
       <div className="container px-4 py-12 mx-auto max-w-6xl">
         <Button
           variant="ghost"
@@ -61,10 +61,10 @@ const ManutencaoPredial = () => {
         <div className="space-y-12">
           {/* Hero Section */}
           <div className="text-center space-y-6">
-            <div className="w-20 h-20 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-500 mx-auto">
+            <div className="w-20 h-20 bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-500 mx-auto">
               <Wrench className="w-10 h-10" />
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold">Manutenção Predial</h1>
+            <h1 className="text-4xl md:text-5xl font-bold font-mono">Manutenção Predial</h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
               Gerencie ativos, solicitações de manutenção e equipe técnica com QR Codes inteligentes e histórico completo.
             </p>
@@ -75,22 +75,22 @@ const ManutencaoPredial = () => {
             {features.map((feature, index) => (
               <div 
                 key={index}
-                className="p-6 rounded-xl border bg-card hover:shadow-lg transition-all duration-300 hover:border-purple-500/30"
+                className="p-6 rounded-none border bg-card hover:border-foreground/20 transition-all duration-300 hover:border-purple-500/30"
               >
-                <div className="w-12 h-12 rounded-lg bg-purple-500/10 text-purple-500 flex items-center justify-center mb-4">
+                <div className="w-12 h-12 rounded-none bg-purple-500/10 text-purple-500 flex items-center justify-center mb-4">
                   {feature.icon}
                 </div>
-                <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+                <h3 className="text-lg font-semibold font-mono mb-2">{feature.title}</h3>
                 <p className="text-muted-foreground text-sm">{feature.description}</p>
               </div>
             ))}
           </div>
 
           {/* QR Code Demo */}
-          <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-xl border border-purple-500/20 p-8 md:p-12">
+          <div className="bg-muted/50 rounded-none border border-purple-500/20 p-8 md:p-12">
             <div className="grid md:grid-cols-2 gap-8 items-center">
               <div>
-                <h2 className="text-2xl font-bold mb-4">Como funciona o QR Code?</h2>
+                <h2 className="text-2xl font-bold font-mono mb-4">Como funciona o QR Code?</h2>
                 <div className="space-y-4 text-muted-foreground">
                   <p><strong className="text-foreground">1. Gere o QR Code:</strong> Cada ativo (elevador, portão, bomba) recebe um código único.</p>
                   <p><strong className="text-foreground">2. Cole no local:</strong> Imprima e fixe o QR Code próximo ao equipamento.</p>
@@ -99,7 +99,7 @@ const ManutencaoPredial = () => {
                 </div>
               </div>
               <div className="flex justify-center">
-                <div className="w-48 h-48 bg-white rounded-xl flex items-center justify-center shadow-lg">
+                <div className="w-48 h-48 bg-white rounded-none flex items-center justify-center border-2">
                   <QrCode className="w-32 h-32 text-purple-500" />
                 </div>
               </div>
@@ -107,8 +107,8 @@ const ManutencaoPredial = () => {
           </div>
 
           {/* Benefits Section */}
-          <div className="bg-card rounded-xl border p-8 md:p-12">
-            <h2 className="text-2xl font-bold mb-8 text-center">Benefícios da Manutenção Digital</h2>
+          <div className="bg-card rounded-none border p-8 md:p-12">
+            <h2 className="text-2xl font-bold font-mono mb-8 text-center">Benefícios da Manutenção Digital</h2>
             <div className="grid md:grid-cols-2 gap-4">
               {benefits.map((benefit, index) => (
                 <div key={index} className="flex items-start gap-3">

@@ -328,7 +328,7 @@ export const ElevatorStationModule = () => {
 
               <Card>
                 <CardContent className="pt-4">
-                  <div className="border rounded-lg overflow-auto max-h-96">
+                  <div className="border overflow-auto max-h-96">
                     <Table>
                       <TableHeader>
                         <TableRow>

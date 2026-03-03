@@ -199,7 +199,7 @@ export function LeanConstraintsContent() {
       </div>
 
       {usingLocalStorage && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 text-sm text-blue-700">
+        <div className="bg-blue-50 border border-blue-200 px-4 py-2.5 text-sm text-blue-700">
           Dados salvos localmente no navegador.
         </div>
       )}

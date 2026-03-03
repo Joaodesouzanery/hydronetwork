@@ -374,7 +374,7 @@ export function ExportProjectDialog({
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border rounded-lg p-3">
+              <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border p-3">
                 {exportSections.map((section) => {
                   const Icon = section.icon;
                   const count = timeline.filter(item => item.type === section.id).length;

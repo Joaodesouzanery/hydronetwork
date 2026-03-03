@@ -182,7 +182,7 @@ export const RDOProgressMap = ({ pontos, trechos, rdos }: RDOProgressMapProps) =
       <CardContent className="space-y-3">
         <div
           ref={mapContainerRef}
-          className="w-full rounded-lg border border-border overflow-hidden"
+          className="w-full border border-border overflow-hidden"
           style={{ height: 400 }}
         />
         <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">

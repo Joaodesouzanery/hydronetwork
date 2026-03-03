@@ -68,7 +68,7 @@ const MaterialsDashboard = () => {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Dashboard de Materiais</h1>
+            <h1 className="text-3xl font-bold font-mono text-foreground">Dashboard de Materiais</h1>
             <p className="text-muted-foreground">Visão geral do seu estoque</p>
           </div>
         </div>

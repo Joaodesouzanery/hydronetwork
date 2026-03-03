@@ -155,7 +155,7 @@ export const SwmmModule = ({ pontos, trechos }: SwmmModuleProps) => {
                 </Select></div>
               <div><Label>Duração (min)</Label><Input type="number" value={duration} onChange={e => setDuration(Number(e.target.value))} /></div>
             </div>
-            <div className="bg-muted/50 rounded-lg p-3 text-center">
+            <div className="bg-muted/50 p-3 text-center">
               <p className="text-xs text-muted-foreground">Intensidade (IDF)</p>
               <p className="text-lg font-bold text-green-600">{intensity.toFixed(1)} mm/h</p>
             </div>
@@ -196,7 +196,7 @@ export const SwmmModule = ({ pontos, trechos }: SwmmModuleProps) => {
             <h4 className="font-semibold text-sm text-blue-600 mb-2">Sub-bacias de Contribuição</h4>
             <div className="space-y-2">
               {subBacias.map((sb, idx) => (
-                <div key={idx} className="flex items-center gap-2 bg-muted/30 rounded-lg p-2">
+                <div key={idx} className="flex items-center gap-2 bg-muted/30 p-2">
                   <Input className="w-20" value={sb.id} onChange={e => updateSubBacia(idx, "id", e.target.value)} placeholder="ID" />
                   <Input className="flex-1" type="number" step="0.1" value={sb.area} onChange={e => updateSubBacia(idx, "area", Number(e.target.value))} placeholder="Área (ha)" />
                   <Input className="w-24" type="number" step="0.1" value={sb.coefC} onChange={e => updateSubBacia(idx, "coefC", Number(e.target.value))} placeholder="C" />
@@ -211,7 +211,7 @@ export const SwmmModule = ({ pontos, trechos }: SwmmModuleProps) => {
             <h4 className="font-semibold text-sm text-blue-600 mb-2">Bacias de Detenção</h4>
             <div className="space-y-2">
               {baciasDetencao.map((bd, idx) => (
-                <div key={idx} className="flex items-center gap-2 bg-muted/30 rounded-lg p-2">
+                <div key={idx} className="flex items-center gap-2 bg-muted/30 p-2">
                   <Input className="w-20" value={bd.id} readOnly />
                   <Input className="flex-1" type="number" value={bd.volume} onChange={e => { const u = [...baciasDetencao]; u[idx].volume = Number(e.target.value); setBaciasDetencao(u); }} placeholder="Volume (m³)" />
                   <Input className="w-24" type="number" value={bd.area} onChange={e => { const u = [...baciasDetencao]; u[idx].area = Number(e.target.value); setBaciasDetencao(u); }} placeholder="Área (m²)" />
@@ -226,7 +226,7 @@ export const SwmmModule = ({ pontos, trechos }: SwmmModuleProps) => {
             <h4 className="font-semibold text-sm text-red-600 mb-2">Exutórios</h4>
             <div className="space-y-2">
               {exutorios.map((ex, idx) => (
-                <div key={idx} className="flex items-center gap-2 bg-muted/30 rounded-lg p-2">
+                <div key={idx} className="flex items-center gap-2 bg-muted/30 p-2">
                   <Input className="w-20" value={ex.id} readOnly />
                   <Input className="flex-1" type="number" value={ex.cota} onChange={e => { const u = [...exutorios]; u[idx].cota = Number(e.target.value); setExutorios(u); }} placeholder="Cota (m)" />
                   <Select value={ex.tipo} onValueChange={v => { const u = [...exutorios]; u[idx].tipo = v; setExutorios(u); }}>
@@ -290,7 +290,7 @@ export const SwmmModule = ({ pontos, trechos }: SwmmModuleProps) => {
                     { value: `${summary.vazaoMax.toFixed(1)} L/s`, label: "Vazão Máxima", color: "text-orange-600" },
                     { value: summary.alertas, label: "Alertas", color: "text-yellow-600" },
                   ].map((s, i) => (
-                    <div key={i} className="bg-muted/50 border rounded-lg p-3 text-center">
+                    <div key={i} className="bg-muted/50 border p-3 text-center">
                       <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
                       <div className="text-xs text-muted-foreground">{s.label}</div>
                     </div>

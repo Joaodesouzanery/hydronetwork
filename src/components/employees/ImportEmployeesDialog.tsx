@@ -149,7 +149,7 @@ export const ImportEmployeesDialog = ({ open, onOpenChange, projectId, onSuccess
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="files">Selecione os Arquivos</Label>
-                <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                <div className="border-2 border-dashed p-8 text-center">
                   <input
                     id="files"
                     type="file"
@@ -173,7 +173,7 @@ export const ImportEmployeesDialog = ({ open, onOpenChange, projectId, onSuccess
               {files.length > 0 && (
                 <div className="space-y-2">
                   <Label>Arquivos Selecionados:</Label>
-                  <div className="border rounded-lg p-4 space-y-2">
+                  <div className="border p-4 space-y-2">
                     {files.map((file, idx) => (
                       <div key={idx} className="flex items-center gap-2 text-sm">
                         {file.name.endsWith('.csv') ? (
@@ -206,7 +206,7 @@ export const ImportEmployeesDialog = ({ open, onOpenChange, projectId, onSuccess
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <h4 className="font-semibold">Formato CSV Esperado:</h4>
-                <div className="bg-muted p-4 rounded-lg font-mono text-xs overflow-x-auto">
+                <div className="bg-muted p-4 font-mono text-xs overflow-x-auto">
                   <div>nome,funcao,setor,telefone,email,empresa,status</div>
                   <div>João Silva,Pedreiro,Construção Civil,(11) 99999-9999,joao@email.com,Construtora ABC,active</div>
                   <div>Maria Santos,Eletricista,Elétrica,(11) 88888-8888,maria@email.com,Elétrica XYZ,active</div>
@@ -215,7 +215,7 @@ export const ImportEmployeesDialog = ({ open, onOpenChange, projectId, onSuccess
 
               <div className="space-y-2">
                 <h4 className="font-semibold">Formato JSON Esperado:</h4>
-                <div className="bg-muted p-4 rounded-lg font-mono text-xs overflow-x-auto">
+                <div className="bg-muted p-4 font-mono text-xs overflow-x-auto">
                   <pre>{`[
   {
     "nome": "João Silva",

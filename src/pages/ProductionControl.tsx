@@ -278,7 +278,7 @@ const ProductionControl = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <Building2 className="w-12 h-12 mx-auto text-primary animate-pulse mb-4" />
           <p className="text-muted-foreground">Carregando...</p>
@@ -288,16 +288,16 @@ const ProductionControl = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+    <div className="min-h-screen bg-background">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
             <Button variant="ghost" onClick={() => navigate('/dashboard')}>
               <Building2 className="w-6 h-6 mr-2" />
-              <span className="font-bold">ConstruData</span>
+              <span className="font-bold font-mono">CONSTRUDATA</span>
             </Button>
-            <h1 className="text-xl font-semibold">Controle de Produção</h1>
+            <h1 className="text-xl font-semibold font-mono">Controle de Produção</h1>
             </div>
             <div className="flex gap-2">
               <PageTutorialButton pageKey="production-control" />
@@ -356,7 +356,7 @@ const ProductionControl = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div className="space-y-2 md:col-span-2">
                 <Label className="text-sm font-medium">Serviços</Label>
-                <div className="border rounded-md p-2 max-h-32 overflow-y-auto space-y-2">
+                <div className="border rounded-none p-2 max-h-32 overflow-y-auto space-y-2">
                   <label className="flex items-center space-x-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -437,7 +437,7 @@ const ProductionControl = () => {
                     Novo
                   </Button>
                 </div>
-                <div className="border rounded-md p-2 max-h-32 overflow-y-auto space-y-2">
+                <div className="border rounded-none p-2 max-h-32 overflow-y-auto space-y-2">
                   <label className="flex items-center space-x-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -560,7 +560,7 @@ const ProductionControl = () => {
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <AlertCircle className="w-16 h-16 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Nenhum dado encontrado</h3>
+                  <h3 className="text-lg font-semibold font-mono mb-2">Nenhum dado encontrado</h3>
                   <p className="text-muted-foreground mb-4">
                     Não há dados de produção para o período selecionado
                   </p>

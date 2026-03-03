@@ -118,7 +118,7 @@ export function ConstraintMapLayer({ constraints, onCreateAtLocation }: Constrai
   if (geoConstraints.length === 0 && !onCreateAtLocation) {
     return (
       <div className="w-full h-[500px] rounded-md border flex flex-col items-center justify-center gap-3 text-muted-foreground bg-muted/30">
-        <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+        <div className="h-16 w-16 bg-muted flex items-center justify-center">
           <MapPin className="h-8 w-8 text-muted-foreground/50" />
         </div>
         <p className="font-medium text-foreground">Nenhuma restrição geolocalizada</p>
@@ -134,13 +134,13 @@ export function ConstraintMapLayer({ constraints, onCreateAtLocation }: Constrai
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-red-500" /> Críticas ({geoConstraints.filter(c => c.status === 'critica').length})
+            <span className="w-3 h-3 bg-red-500" /> Críticas ({geoConstraints.filter(c => c.status === 'critica').length})
           </div>
           <div className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-amber-500" /> Ativas ({geoConstraints.filter(c => c.status === 'ativa').length})
+            <span className="w-3 h-3 bg-amber-500" /> Ativas ({geoConstraints.filter(c => c.status === 'ativa').length})
           </div>
           <div className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-green-500" /> Resolvidas ({geoConstraints.filter(c => c.status === 'resolvida').length})
+            <span className="w-3 h-3 bg-green-500" /> Resolvidas ({geoConstraints.filter(c => c.status === 'resolvida').length})
           </div>
         </div>
         {onCreateAtLocation && (

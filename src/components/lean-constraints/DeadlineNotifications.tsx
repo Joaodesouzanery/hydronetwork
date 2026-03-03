@@ -21,7 +21,7 @@ export function DeadlineNotifications({ constraints, onGoToConstraint }: Deadlin
   return (
     <div className="space-y-2">
       {overdue.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+        <div className="bg-red-50 border border-red-200 p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-red-800">
               <AlertCircle className="h-5 w-5 animate-pulse" />
@@ -73,7 +73,7 @@ export function DeadlineNotifications({ constraints, onGoToConstraint }: Deadlin
       )}
 
       {nearDeadline.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+        <div className="bg-amber-50 border border-amber-200 p-3">
           <div className="flex items-center gap-2 text-amber-800">
             <AlertTriangle className="h-5 w-5" />
             <span className="font-medium">

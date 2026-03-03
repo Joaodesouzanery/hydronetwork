@@ -364,7 +364,7 @@ export const CRMReports = () => {
                 {activitiesByType.map((entry, index) => (
                   <div key={index} className="flex items-center gap-2 text-sm">
                     <div 
-                      className="w-3 h-3 rounded-full shrink-0" 
+                      className="w-3 h-3 shrink-0" 
                       style={{ backgroundColor: entry.color }} 
                     />
                     <span className="whitespace-nowrap">{entry.name}: {entry.value}</span>
@@ -405,7 +405,7 @@ export const CRMReports = () => {
                 {activitiesStatus.map((entry, index) => (
                   <div key={index} className="flex items-center gap-2 text-sm">
                     <div 
-                      className="w-3 h-3 rounded-full shrink-0" 
+                      className="w-3 h-3 shrink-0" 
                       style={{ backgroundColor: entry.color }} 
                     />
                     <span className="whitespace-nowrap">{entry.name}: {entry.value}</span>

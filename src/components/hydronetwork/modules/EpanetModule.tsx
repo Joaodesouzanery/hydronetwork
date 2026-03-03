@@ -134,7 +134,7 @@ export const EpanetModule = ({ pontos, trechos }: EpanetModuleProps) => {
               { icon: <Mountain className="h-7 w-7 inline-block text-yellow-600" />, value: stats.reservatorios, label: "RESERVATÓRIOS", color: "text-yellow-600" },
               { icon: <Zap className="h-7 w-7 inline-block text-purple-600" />, value: stats.bombas, label: "BOMBAS", color: "text-purple-600" },
             ].map((s, i) => (
-              <div key={i} className="bg-muted/50 border rounded-xl p-4 text-center">
+              <div key={i} className="bg-muted/50 border p-4 text-center">
                 <div className="text-3xl">{s.icon}</div>
                 <div className={`text-3xl font-bold ${s.color}`}>{s.value}</div>
                 <div className="text-xs font-semibold text-muted-foreground">{s.label}</div>
@@ -215,15 +215,15 @@ export const EpanetModule = ({ pontos, trechos }: EpanetModuleProps) => {
             <TabsContent value="summary" className="py-4">
               {simulated && summary ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-muted/50 border rounded-xl p-4 text-center">
+                  <div className="bg-muted/50 border p-4 text-center">
                     <div className="text-2xl font-bold text-blue-600">{summary.demandaTotal.toFixed(1)}</div>
                     <div className="text-xs font-semibold text-muted-foreground">DEMANDA TOTAL (L/S)</div>
                   </div>
-                  <div className="bg-muted/50 border rounded-xl p-4 text-center">
+                  <div className="bg-muted/50 border p-4 text-center">
                     <div className="text-2xl font-bold text-green-600">{summary.pressaoMin.toFixed(1)}</div>
                     <div className="text-xs font-semibold text-muted-foreground">PRESSÃO MÍN (MCA)</div>
                   </div>
-                  <div className="bg-muted/50 border rounded-xl p-4 text-center">
+                  <div className="bg-muted/50 border p-4 text-center">
                     <div className="text-2xl font-bold text-yellow-600">{summary.velMax.toFixed(2)}</div>
                     <div className="text-xs font-semibold text-muted-foreground">VELOCIDADE MÁX (M/S)</div>
                   </div>

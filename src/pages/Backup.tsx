@@ -98,7 +98,7 @@ export default function Backup() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
+              <h1 className="text-3xl font-bold font-mono flex items-center gap-2">
                 <Database className="h-8 w-8" />
                 Gerenciamento de Backups
               </h1>

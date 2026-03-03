@@ -388,7 +388,7 @@ export const RecalqueModule = () => {
               </Button>
 
               {boosterResult && (
-                <div className="border rounded-lg p-3 space-y-2">
+                <div className="border p-3 space-y-2">
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div><strong>Boost:</strong> {boosterResult.alturaBoost} m</div>
                     <div><strong>Potência:</strong> {boosterResult.potenciaComercial} CV</div>
@@ -409,7 +409,7 @@ export const RecalqueModule = () => {
         {/* ═══════ TAB: RESULTADOS ═══════ */}
         <TabsContent value="resultados" className="space-y-4">
           {!result && (
-            <div className="flex items-center gap-2 p-4 bg-muted rounded-lg text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 p-4 bg-muted text-sm text-muted-foreground">
               <AlertTriangle className="h-4 w-4" /> Execute o dimensionamento primeiro.
             </div>
           )}
@@ -424,7 +424,7 @@ export const RecalqueModule = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="border rounded-lg overflow-auto">
+                  <div className="border overflow-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>

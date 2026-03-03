@@ -62,7 +62,7 @@ const Budgets = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Orçamentos</h1>
+            <h1 className="text-3xl font-bold font-mono text-foreground">Orçamentos</h1>
             <p className="text-muted-foreground">Gerencie seus orçamentos e propostas</p>
           </div>
         </div>

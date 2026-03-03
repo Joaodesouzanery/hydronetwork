@@ -33,7 +33,7 @@ export function FileUploadZone({ label, accept, file, onFileChange, preview, err
     const headers = previewRows.length > 0 ? Object.keys(previewRows[0]) : [];
 
     return (
-      <div className="border border-border rounded-lg p-4 bg-card">
+      <div className="border border-border p-4 bg-card">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-green-500" />
@@ -74,7 +74,7 @@ export function FileUploadZone({ label, accept, file, onFileChange, preview, err
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
-        className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+        className={`border-2 border-dashed p-8 text-center cursor-pointer transition-colors ${
           dragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
         }`}
         onClick={() => document.getElementById(`file-${label}`)?.click()}

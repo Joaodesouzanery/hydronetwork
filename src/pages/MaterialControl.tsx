@@ -121,7 +121,7 @@ export default function MaterialControl() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+    <div className="min-h-screen bg-background">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
@@ -130,9 +130,9 @@ export default function MaterialControl() {
             </Button>
             <Button variant="ghost" onClick={() => navigate('/dashboard')}>
               <Building2 className="w-6 h-6 mr-2" />
-              <span className="font-bold">ConstruData</span>
+              <span className="font-bold font-mono">CONSTRUDATA</span>
             </Button>
-            <h1 className="text-xl font-semibold">Controle de Material</h1>
+            <h1 className="text-xl font-semibold font-mono">Controle de Material</h1>
           </div>
         </div>
       </header>
@@ -140,7 +140,7 @@ export default function MaterialControl() {
       <main className="container mx-auto p-6 space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h2 className="text-2xl font-bold">Registre e monitore o consumo de materiais</h2>
+            <h2 className="text-2xl font-bold font-mono">Registre e monitore o consumo de materiais</h2>
             <p className="text-muted-foreground">Acompanhe o uso de materiais</p>
           </div>
           <div className="flex gap-2">

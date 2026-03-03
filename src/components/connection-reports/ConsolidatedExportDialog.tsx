@@ -247,7 +247,7 @@ export function ConsolidatedExportDialog({
           <div className="space-y-3">
             <Label>Informações a Incluir</Label>
             
-            <div className="space-y-3 border rounded-lg p-4">
+            <div className="space-y-3 border p-4">
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="teamSummary"

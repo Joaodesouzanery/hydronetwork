@@ -733,7 +733,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">Carregue os dados da própria plataforma ou importe de arquivo externo.</p>
-            <div className="border-2 border-primary/20 rounded-lg p-4 bg-primary/5">
+            <div className="border-2 border-primary/20 p-4 bg-primary/5">
               <h4 className="font-semibold text-sm mb-1">Usar Dados da Plataforma</h4>
               <p className="text-xs text-muted-foreground mb-3">Importa automaticamente os trechos e quantitativos já calculados nas outras abas.</p>
               <Button variant="outline" className="w-full" onClick={handleLoadPlatformData}>
@@ -1087,7 +1087,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
               </Table>
             </div>
             {showAddServiceForm ? (
-              <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
+              <div className="border p-3 space-y-2 bg-muted/30">
                 <p className="text-sm font-semibold">Novo Serviço</p>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -1182,7 +1182,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
                   { label: "Término", value: scheduleResult.endDate.toLocaleDateString("pt-BR"), color: "text-purple-600" },
                   { label: "Custo Total", value: fmtCurrency(totalCost), color: "text-orange-600" },
                 ].map((c, i) => (
-                  <div key={i} className="bg-muted/50 rounded-lg p-3 text-center">
+                  <div key={i} className="bg-muted/50 p-3 text-center">
                     <div className={`text-lg font-bold ${c.color}`}>{c.value}</div>
                     <div className="text-xs text-muted-foreground">{c.label}</div>
                   </div>
@@ -1387,7 +1387,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
                     { label: "Total HH", value: fmt(histStats.totalHH, 0), color: "text-green-600" },
                     { label: "Equip. x Dias", value: histStats.equipDays, color: "text-purple-600" },
                   ].map((s, i) => (
-                    <div key={i} className="bg-muted/50 rounded-lg p-3 text-center">
+                    <div key={i} className="bg-muted/50 p-3 text-center">
                       <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
                       <div className="text-xs text-muted-foreground">{s.label}</div>
                     </div>

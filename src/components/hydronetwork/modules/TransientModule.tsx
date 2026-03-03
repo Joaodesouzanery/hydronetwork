@@ -469,7 +469,7 @@ export const TransientModule = () => {
         {/* ═══════ TAB: RESULTADOS ═══════ */}
         <TabsContent value="resultados" className="space-y-4">
           {!mocResult && (
-            <div className="flex items-center gap-2 p-4 bg-muted rounded-lg text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 p-4 bg-muted text-sm text-muted-foreground">
               <AlertTriangle className="h-4 w-4" /> Execute a simulação MOC primeiro.
             </div>
           )}
@@ -559,7 +559,7 @@ export const TransientModule = () => {
                   <CardTitle className="text-base">Envoltória — Pressões nos Nós</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="border rounded-lg overflow-auto max-h-60">
+                  <div className="border overflow-auto max-h-60">
                     <Table>
                       <TableHeader>
                         <TableRow>

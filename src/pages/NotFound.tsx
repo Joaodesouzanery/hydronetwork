@@ -9,12 +9,12 @@ const NotFound = () => {
   }, [location.pathname]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100">
+    <div className="flex min-h-screen items-center justify-center bg-background font-mono">
       <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">404</h1>
-        <p className="mb-4 text-xl text-gray-600">Oops! Page not found</p>
-        <a href="/" className="text-blue-500 underline hover:text-blue-700">
-          Return to Home
+        <h1 className="mb-4 text-6xl font-bold font-mono text-[#FF6B2C]">404</h1>
+        <p className="mb-6 text-lg text-muted-foreground font-mono">Página não encontrada</p>
+        <a href="/" className="text-sm font-mono border border-border px-6 py-3 hover:bg-[#FF6B2C]/5 transition-colors">
+          VOLTAR AO INÍCIO
         </a>
       </div>
     </div>

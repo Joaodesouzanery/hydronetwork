@@ -274,12 +274,12 @@ const Auth = () => {
   // Reset password form (after clicking email link)
   if (showResetPassword) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-3 sm:p-4">
-        <Card className="w-full max-w-md shadow-card">
+      <div className="min-h-screen flex items-center justify-center bg-background p-3 sm:p-4 font-mono">
+        <Card className="w-full max-w-md border border-border">
           <CardHeader className="space-y-3 sm:space-y-4">
-            <div className="flex items-center justify-center gap-2 text-primary">
-              <Building2 className="w-7 h-7 sm:w-8 sm:h-8" />
-              <span className="text-xl sm:text-2xl font-bold">ConstruData</span>
+            <div className="flex items-center justify-center gap-2">
+              <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
+              <span className="text-xl sm:text-2xl font-bold font-mono">CONSTRUDATA</span>
             </div>
             <div className="text-center">
               <CardTitle className="text-lg sm:text-xl">Redefinir Senha</CardTitle>
@@ -339,12 +339,12 @@ const Auth = () => {
   // Forgot password form
   if (showForgotPassword) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-3 sm:p-4">
-        <Card className="w-full max-w-md shadow-card">
+      <div className="min-h-screen flex items-center justify-center bg-background p-3 sm:p-4 font-mono">
+        <Card className="w-full max-w-md border border-border">
           <CardHeader className="space-y-3 sm:space-y-4">
-            <div className="flex items-center justify-center gap-2 text-primary">
-              <Building2 className="w-7 h-7 sm:w-8 sm:h-8" />
-              <span className="text-xl sm:text-2xl font-bold">ConstruData</span>
+            <div className="flex items-center justify-center gap-2">
+              <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
+              <span className="text-xl sm:text-2xl font-bold font-mono">CONSTRUDATA</span>
             </div>
             <div className="text-center">
               <CardTitle className="text-lg sm:text-xl">Esqueci minha senha</CardTitle>
@@ -387,18 +387,18 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-3 sm:p-4">
-      <Card className="w-full max-w-md shadow-card">
+    <div className="min-h-screen flex items-center justify-center bg-background p-3 sm:p-4 font-mono">
+      <Card className="w-full max-w-md border border-border">
         <CardHeader className="space-y-3 sm:space-y-4">
-          <div className="flex items-center justify-center gap-2 text-primary">
-            <Building2 className="w-7 h-7 sm:w-8 sm:h-8" />
-            <span className="text-xl sm:text-2xl font-bold">ConstruData</span>
+          <div className="flex items-center justify-center gap-2">
+            <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
+            <span className="text-xl sm:text-2xl font-bold font-mono">CONSTRUDATA</span>
           </div>
           <div className="text-center">
-            <CardTitle className="text-lg sm:text-xl">
+            <CardTitle className="text-lg sm:text-xl font-mono">
               {activeTab === "login" ? "Bem-vindo de volta" : "Comece seu Teste Grátis"}
             </CardTitle>
-            <CardDescription className="text-sm">
+            <CardDescription className="text-sm font-mono">
               {activeTab === "login" ? "Faça login para continuar" : "30 dias de acesso completo"}
             </CardDescription>
           </div>
@@ -529,7 +529,7 @@ const Auth = () => {
                   />
                 </div>
 
-                <div className="bg-muted/50 rounded-lg p-3 space-y-1.5">
+                <div className="bg-muted/50 p-3 space-y-1.5 border border-border">
                   {benefits.map((benefit, i) => (
                     <div key={i} className="flex items-center gap-2 text-sm">
                       <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />

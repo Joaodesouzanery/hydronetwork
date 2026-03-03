@@ -1098,7 +1098,7 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
               )}
 
               {waterResults.length > 0 && (
-                <div className="border rounded-lg overflow-auto max-h-80">
+                <div className="border overflow-auto max-h-80">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1147,7 +1147,7 @@ export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
               )}
 
               {!canDimension && (
-                <div className="flex items-center gap-2 p-3 bg-muted rounded-lg text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 p-3 bg-muted text-sm text-muted-foreground">
                   <AlertTriangle className="h-4 w-4" /> Importe dados no "Mapa" ou preencha a "Rede".
                 </div>
               )}

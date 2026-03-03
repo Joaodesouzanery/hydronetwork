@@ -91,9 +91,9 @@ export const RDODashboardView = ({ metrics, rdoCount }: RDODashboardViewProps) =
                   <span className="font-semibold">{sys.label}</span>
                   <span className="ml-auto text-sm font-bold">{fmt(data.percent)}%</span>
                 </div>
-                <div className="w-full h-3 rounded-full bg-muted overflow-hidden">
+                <div className="w-full h-3 bg-muted overflow-hidden">
                   <div
-                    className="h-full rounded-full transition-all"
+                    className="h-full transition-all"
                     style={{ width: `${Math.min(data.percent, 100)}%`, backgroundColor: sys.color }}
                   />
                 </div>

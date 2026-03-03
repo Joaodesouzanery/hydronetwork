@@ -1249,7 +1249,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                 </div>
 
                 {sewerNodeAttrs.length > 0 && (
-                  <div className="border rounded-lg overflow-auto max-h-48">
+                  <div className="border overflow-auto max-h-48">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1547,7 +1547,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
 
               {/* Direct TIF import + manual fallback */}
               {!getRasterGrid() && (
-                <div className="border border-amber-500/30 bg-amber-50 dark:bg-amber-950/10 rounded-lg p-3 space-y-2">
+                <div className="border border-amber-500/30 bg-amber-50 dark:bg-amber-950/10 p-3 space-y-2">
                   <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
                     Nenhum MDT carregado. Opções:
                   </p>
@@ -1810,7 +1810,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                 )}
 
                 {sewerResults.length > 0 && (
-                  <div className="border rounded-lg overflow-auto max-h-80">
+                  <div className="border overflow-auto max-h-80">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1863,7 +1863,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                 )}
 
                 {!canDimension && (
-                  <div className="flex items-center gap-2 p-3 bg-muted rounded-lg text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 p-3 bg-muted text-sm text-muted-foreground">
                     <AlertTriangle className="h-4 w-4" /> Importe dados no "Mapa" ou preencha a "Rede".
                   </div>
                 )}
@@ -1959,7 +1959,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
               </Button>
 
               {minCoverAlerts.length > 0 && (
-                <div className="border rounded-lg overflow-auto max-h-60">
+                <div className="border overflow-auto max-h-60">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -2071,7 +2071,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
               </div>
 
               {diameterSummary.length > 0 && (
-                <div className="border rounded-lg overflow-auto">
+                <div className="border overflow-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -2244,7 +2244,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
               </div>
 
               {sewerEdgeAttrs.length > 0 && (
-                <div className="border rounded-lg overflow-auto max-h-60">
+                <div className="border overflow-auto max-h-60">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -2674,7 +2674,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   return (
     <div className="space-y-4">
       {/* Primary toolbar — Sequential steps 00-08 */}
-      <div className="flex flex-wrap gap-1 p-2 bg-muted rounded-lg items-center">
+      <div className="flex flex-wrap gap-1 p-2 bg-muted items-center">
         <Button variant={activeStep === "mapa" ? "default" : "ghost"} size="sm" onClick={() => handleStepChange("mapa")}>
           <MapIcon className="h-3.5 w-3.5 mr-1" />Mapa
         </Button>
@@ -2704,7 +2704,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
       </div>
 
       {/* Secondary toolbar — Utilities (matches QEsg plugin menu) */}
-      <div className="flex flex-wrap gap-1 p-1.5 bg-muted/50 rounded-lg items-center border">
+      <div className="flex flex-wrap gap-1 p-1.5 bg-muted/50 items-center border">
         {secondaryItems.map(item => (
           <Button key={item.id} variant={activeStep === item.id ? "default" : "ghost"} size="sm"
             onClick={() => handleStepChange(item.id)}

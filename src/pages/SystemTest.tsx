@@ -88,7 +88,7 @@ export default function SystemTest() {
         {step === 1 && (
           <Card className="animate-fade-in">
             <CardHeader className="text-center space-y-4">
-              <CardTitle className="text-3xl font-bold">
+              <CardTitle className="text-3xl font-bold font-mono">
                 Economize tempo, reduza custos e ganhe controle total da sua obra — tudo em um único sistema.
               </CardTitle>
               <p className="text-lg text-muted-foreground">
@@ -100,11 +100,11 @@ export default function SystemTest() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <h3 className="text-xl font-semibold mb-4">Como podemos ajudar sua empresa hoje?</h3>
+                <h3 className="text-xl font-semibold font-mono mb-4">Como podemos ajudar sua empresa hoje?</h3>
                 <p className="text-sm text-muted-foreground mb-4">Selecione todas as funcionalidades que interessam:</p>
                 <div className="grid gap-3">
                   {functionalities.map((func) => (
-                    <div key={func.id} className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-accent transition-colors cursor-pointer">
+                    <div key={func.id} className="flex items-center space-x-3 p-4 border rounded-none hover:bg-accent transition-colors cursor-pointer">
                       <Checkbox
                         id={func.id}
                         checked={formData.functionalities.includes(func.id)}
@@ -133,7 +133,7 @@ export default function SystemTest() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
-                <h3 className="text-lg font-semibold mb-4">Quantos funcionários ou colaboradores sua empresa possui?</h3>
+                <h3 className="text-lg font-semibold font-mono mb-4">Quantos funcionários ou colaboradores sua empresa possui?</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {employeeSizes.map((size) => (
                     <Button
@@ -149,7 +149,7 @@ export default function SystemTest() {
               </div>
 
               <div>
-                <h3 className="text-lg font-semibold mb-4">Quantas obras vocês executam por ano?</h3>
+                <h3 className="text-lg font-semibold font-mono mb-4">Quantas obras vocês executam por ano?</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {projectsPerYear.map((projects) => (
                     <Button
@@ -289,7 +289,7 @@ export default function SystemTest() {
                   height="700"
                   frameBorder="0"
                   title="Agendar Demonstração"
-                  className="rounded-lg"
+                  className="rounded-none"
                 />
               </div>
               <div className="flex justify-center mt-4">

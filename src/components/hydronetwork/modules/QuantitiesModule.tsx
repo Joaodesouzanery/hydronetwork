@@ -401,13 +401,13 @@ export const QuantitiesModule = ({ trechos, pontos, onQuantitiesCalculated }: Qu
                       { label: "Tubulação", value: rows.reduce((s, r) => s + r.custoTubo, 0) },
                       { label: "Pavimentação", value: rows.reduce((s, r) => s + r.custoPavimento, 0) },
                     ].map((item, i) => (
-                      <div key={i} className="bg-muted/50 rounded-lg p-3 text-center">
+                      <div key={i} className="bg-muted/50 p-3 text-center">
                         <div className="text-sm font-bold">{fmtC(item.value)}</div>
                         <div className="text-xs text-muted-foreground">{item.label}</div>
                       </div>
                     ))}
                   </div>
-                  <div className="bg-primary/10 rounded-lg p-4 text-center">
+                  <div className="bg-primary/10 p-4 text-center">
                     <div className="text-2xl font-bold text-primary">{fmtC(totals.totalCusto)}</div>
                     <div className="text-xs text-muted-foreground">Custo Total (SINAPI) | {fmtC(totals.totalComp > 0 ? totals.totalCusto / totals.totalComp : 0)}/m</div>
                   </div>

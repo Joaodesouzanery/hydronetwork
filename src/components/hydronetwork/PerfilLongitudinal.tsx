@@ -246,7 +246,7 @@ export const PerfilLongitudinal = ({ pontos, trechos }: PerfilLongitudinalProps)
           </div>
 
           {/* SVG Profile */}
-          <div className="overflow-x-auto border border-border rounded-lg bg-white dark:bg-card">
+          <div className="overflow-x-auto border border-border bg-white dark:bg-card">
             <svg ref={svgRef} viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full" style={{ minWidth: 700, minHeight: 350 }}>
               {/* Grid lines */}
               {yTicks.map(v => (

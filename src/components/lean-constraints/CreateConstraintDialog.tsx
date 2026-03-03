@@ -148,7 +148,7 @@ export function CreateConstraintDialog({
         </DialogHeader>
 
         {errors.project && (
-          <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700 flex items-center gap-2">
+          <div className="bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
             {errors.project}
           </div>

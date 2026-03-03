@@ -55,7 +55,7 @@ export function ConsumptionSummary({ consumption }: ConsumptionSummaryProps) {
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {consumptionData.map((item) => (
-            <div key={item.type} className="flex items-center gap-4 p-4 border rounded-lg">
+            <div key={item.type} className="flex items-center gap-4 p-4 border">
               <item.icon className={`h-10 w-10 ${item.color}`} />
               <div>
                 <p className="text-sm text-muted-foreground">{item.type}</p>

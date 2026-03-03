@@ -295,11 +295,11 @@ const SatisfactionSurvey = () => {
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="max-w-lg w-full text-center">
           <CardContent className="pt-8 pb-8 space-y-6">
-            <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+            <div className="mx-auto w-16 h-16 bg-green-100 flex items-center justify-center">
               <Check className="h-8 w-8 text-green-600" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-foreground mb-2">Obrigado! <CheckCircle2 className="h-6 w-6 inline-block ml-1 text-green-600" /></h2>
+              <h2 className="text-2xl font-bold font-mono text-foreground mb-2">Obrigado! <CheckCircle2 className="h-6 w-6 inline-block ml-1 text-green-600" /></h2>
               <p className="text-muted-foreground">
                 Sua resposta melhora o ConstruData.
               </p>
@@ -786,7 +786,7 @@ const SatisfactionSurvey = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 p-4 md:p-8">
+    <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <Button variant="ghost" onClick={() => navigate("/dashboard")}>
@@ -801,7 +801,7 @@ const SatisfactionSurvey = () => {
 
         <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Pesquisa de Satisfação – ConstruData</CardTitle>
+            <CardTitle className="text-2xl font-mono">Pesquisa de Satisfação – CONSTRUDATA</CardTitle>
             <CardDescription>
               Tempo estimado: 3–5 minutos
             </CardDescription>

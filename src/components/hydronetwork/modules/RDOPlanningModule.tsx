@@ -319,21 +319,21 @@ export const RDOPlanningModule = ({ pontos, trechos, rdos, scheduleResult }: RDO
             <CardHeader><CardTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5" /> Análise de Atrasos</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-lg bg-muted/50 text-center">
+                <div className="p-4 bg-muted/50 text-center">
                   <div className="text-sm text-muted-foreground">Produtividade Necessária</div>
                   <div className="text-2xl font-bold text-blue-600">
                     {plannedDays > 0 ? fmt(totalPlanned / plannedDays, 1) : "N/A"} m/dia
                   </div>
                   <div className="text-xs text-muted-foreground">Para cumprir o prazo</div>
                 </div>
-                <div className="p-4 rounded-lg bg-muted/50 text-center">
+                <div className="p-4 bg-muted/50 text-center">
                   <div className="text-sm text-muted-foreground">Produtividade Real</div>
                   <div className={`text-2xl font-bold ${avgDailyProduction >= (totalPlanned / (plannedDays || 1)) ? "text-green-600" : "text-red-600"}`}>
                     {fmt(avgDailyProduction, 1)} m/dia
                   </div>
                   <div className="text-xs text-muted-foreground">Média dos RDOs</div>
                 </div>
-                <div className="p-4 rounded-lg bg-muted/50 text-center">
+                <div className="p-4 bg-muted/50 text-center">
                   <div className="text-sm text-muted-foreground">Restante</div>
                   <div className="text-2xl font-bold text-orange-600">{fmt(totalPlanned - totalExecuted, 1)} m</div>
                   <div className="text-xs text-muted-foreground">A executar</div>

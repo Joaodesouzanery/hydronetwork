@@ -182,7 +182,7 @@ const RDOPhotos = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <Building2 className="w-12 h-12 mx-auto text-primary animate-pulse mb-4" />
           <p className="text-muted-foreground">Carregando...</p>
@@ -192,15 +192,15 @@ const RDOPhotos = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+    <div className="min-h-screen bg-background">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" onClick={() => navigate('/dashboard')}>
               <Building2 className="w-6 h-6 mr-2" />
-              <span className="font-bold">ConstruData</span>
+              <span className="font-bold font-mono">CONSTRUDATA</span>
             </Button>
-            <h1 className="text-xl font-semibold">Fotos de Validação dos RDOs</h1>
+            <h1 className="text-xl font-semibold font-mono">Fotos de Validação dos RDOs</h1>
           </div>
         </div>
       </header>
@@ -235,7 +235,7 @@ const RDOPhotos = () => {
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Image className="w-16 h-16 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Nenhuma foto encontrada</h3>
+              <h3 className="text-lg font-semibold font-mono mb-2">Nenhuma foto encontrada</h3>
               <p className="text-muted-foreground text-center">
                 Adicione fotos de validação aos seus RDOs para visualizá-las aqui
               </p>
@@ -265,7 +265,7 @@ const RDOPhotos = () => {
                     {photos.map((photo) => (
                       <div key={photo.id} className="relative group">
                         <div 
-                          className="aspect-square rounded-lg overflow-hidden bg-muted cursor-pointer hover:opacity-90 transition-opacity"
+                          className="aspect-square rounded-none overflow-hidden bg-muted cursor-pointer hover:opacity-90 transition-opacity"
                           onClick={() => setSelectedPhoto(photo)}
                         >
                           <img
@@ -311,7 +311,7 @@ const RDOPhotos = () => {
               <img
                 src={selectedPhoto.photo_url}
                 alt="Preview"
-                className="w-full h-auto rounded-lg"
+                className="w-full h-auto rounded-none"
               />
             </div>
             <AlertDialogFooter>

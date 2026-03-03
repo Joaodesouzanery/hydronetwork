@@ -97,14 +97,14 @@ const ModulesCatalog = () => {
       </nav>
 
       {/* Header */}
-      <section className="pt-28 pb-16 bg-gradient-to-br from-secondary/10 to-background">
+      <section className="pt-28 pb-16 bg-background">
         <div className="container mx-auto px-4 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/15 border border-secondary/25 text-sm font-bold text-secondary mb-6">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-secondary/15 border border-secondary/25 text-sm font-bold text-secondary mb-6">
             <Building2 className="w-4 h-4" />
             Plataforma Separada
           </div>
-          <h1 className="text-4xl md:text-5xl font-black mb-4">
-            ConstruData — <span className="text-secondary">Obras</span>
+          <h1 className="text-4xl md:text-5xl font-black font-mono mb-4">
+            CONSTRUDATA — <span className="text-secondary">Obras</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-6">
             {totalModules} módulos de gestão operacional para obras civis. 
@@ -127,8 +127,8 @@ const ModulesCatalog = () => {
           {modules.map((cat, ci) => (
             <div key={ci}>
               <div className="flex items-center gap-3 mb-6">
-                <div className={`w-1.5 h-8 rounded-full bg-gradient-to-b ${cat.color}`} />
-                <h2 className="text-2xl font-black">{cat.category}</h2>
+                <div className={`w-1.5 h-8 bg-gradient-to-b ${cat.color}`} />
+                <h2 className="text-2xl font-black font-mono">{cat.category}</h2>
                 <span className="text-sm text-muted-foreground">({cat.items.length} módulos)</span>
               </div>
 
@@ -137,10 +137,10 @@ const ModulesCatalog = () => {
                   <div
                     key={i}
                     onClick={() => navigate(m.route)}
-                    className="p-5 rounded-xl border border-border bg-card hover:shadow-lg hover:border-secondary/30 transition-all cursor-pointer group"
+                    className="p-5 border border-border bg-card hover:border-foreground/20 hover:border-secondary/30 transition-all cursor-pointer group"
                   >
                     <div className="flex items-start gap-4">
-                      <div className={`w-11 h-11 rounded-lg bg-gradient-to-br ${cat.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
+                      <div className={`w-11 h-11 rounded-none bg-gradient-to-br ${cat.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
                         <m.icon className="w-5 h-5 text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -160,16 +160,16 @@ const ModulesCatalog = () => {
       </section>
 
       {/* CTA */}
-      <section className="py-20 bg-gradient-to-br from-secondary via-secondary/90 to-secondary text-secondary-foreground">
+      <section className="py-20 bg-secondary text-secondary-foreground">
         <div className="container mx-auto px-4 text-center space-y-6">
-          <h2 className="text-3xl md:text-4xl font-black">
+          <h2 className="text-3xl md:text-4xl font-black font-mono">
             {totalModules} módulos. Uma plataforma. Sem limite de usuários.
           </h2>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" className="bg-white text-secondary hover:bg-white/90 text-lg px-8 py-6 rounded-xl" onClick={() => navigate('/auth?tab=signup')}>
+            <Button size="lg" className="bg-white text-secondary hover:bg-white/90 text-lg px-8 py-6" onClick={() => navigate('/auth?tab=signup')}>
               Começar Teste Grátis <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
-            <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10 text-lg px-8 py-6 rounded-xl bg-transparent" asChild>
+            <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10 text-lg px-8 py-6 bg-transparent" asChild>
               <a href="https://calendly.com/joaodsouzanery/apresentacao-personalrh" target="_blank" rel="noopener noreferrer">
                 Agendar Demonstração
               </a>
@@ -180,7 +180,7 @@ const ModulesCatalog = () => {
 
       {/* Footer */}
       <footer className="py-8 border-t border-border text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} ConstruData. Todos os direitos reservados.
+        © {new Date().getFullYear()} CONSTRUDATA. Todos os direitos reservados.
       </footer>
     </div>
   );

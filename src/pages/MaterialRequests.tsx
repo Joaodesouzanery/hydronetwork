@@ -162,15 +162,15 @@ export default function MaterialRequests() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+    <div className="min-h-screen bg-background">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center gap-3 sm:gap-4">
             <Button variant="ghost" onClick={() => navigate('/dashboard')} className="p-2">
               <Building2 className="w-5 h-5 sm:w-6 sm:h-6 mr-1 sm:mr-2" />
-              <span className="font-bold text-sm sm:text-base">ConstruData</span>
+              <span className="font-bold font-mono text-sm sm:text-base">CONSTRUDATA</span>
             </Button>
-            <h1 className="text-base sm:text-xl font-semibold">Pedidos de Material</h1>
+            <h1 className="text-base sm:text-xl font-semibold font-mono">Pedidos de Material</h1>
           </div>
         </div>
       </header>
@@ -182,7 +182,7 @@ export default function MaterialRequests() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h2 className="text-xl sm:text-2xl font-bold">Gerencie as solicitações de materiais</h2>
+              <h2 className="text-xl sm:text-2xl font-bold font-mono">Gerencie as solicitações de materiais</h2>
               <p className="text-sm text-muted-foreground">Acompanhe e aprove pedidos</p>
             </div>
           </div>
@@ -245,13 +245,13 @@ export default function MaterialRequests() {
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-center space-y-2">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                <div className="animate-spin h-8 w-8 border-b-2 border-primary mx-auto"></div>
                 <p className="text-sm text-muted-foreground">Carregando pedidos...</p>
               </div>
             </div>
           ) : filteredRequests.length === 0 ? (
             <div className="text-center py-12 space-y-3">
-              <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+              <div className="mx-auto w-12 h-12 bg-muted flex items-center justify-center">
                 <Search className="w-6 h-6 text-muted-foreground" />
               </div>
               <div>

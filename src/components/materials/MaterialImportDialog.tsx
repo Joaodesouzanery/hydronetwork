@@ -1605,7 +1605,7 @@ export const MaterialImportDialog = ({ open, onOpenChange }: MaterialImportDialo
             {currentPending.isExactDuplicate && currentPending.hasPriceChange ? (
               /* UI para duplicata com preço diferente */
               <>
-                <div className="p-4 border rounded-lg bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800">
+                <div className="p-4 border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
                     <div>
@@ -1618,7 +1618,7 @@ export const MaterialImportDialog = ({ open, onOpenChange }: MaterialImportDialo
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 border rounded-lg bg-muted/50">
+                  <div className="p-4 border bg-muted/50">
                     <p className="text-sm text-muted-foreground mb-2">Preço atual na base:</p>
                     <div className="space-y-2">
                       <div className="flex justify-between">
@@ -1642,7 +1642,7 @@ export const MaterialImportDialog = ({ open, onOpenChange }: MaterialImportDialo
                     </div>
                   </div>
 
-                  <div className="p-4 border rounded-lg bg-primary/5 border-primary/30">
+                  <div className="p-4 border bg-primary/5 border-primary/30">
                     <p className="text-sm text-muted-foreground mb-2">Novo preço (da planilha):</p>
                     <div className="space-y-2">
                       <div className="flex justify-between">
@@ -1685,7 +1685,7 @@ export const MaterialImportDialog = ({ open, onOpenChange }: MaterialImportDialo
             ) : (
               /* UI para material similar (não exato) */
               <>
-                <div className="p-4 border rounded-lg bg-muted/50">
+                <div className="p-4 border bg-muted/50">
                   <p className="text-sm text-muted-foreground mb-1">Material na planilha:</p>
                   <p className="font-medium">{currentPending.name}</p>
                   <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
@@ -1707,7 +1707,7 @@ export const MaterialImportDialog = ({ open, onOpenChange }: MaterialImportDialo
                   <span className="text-muted-foreground">↓</span>
                 </div>
 
-                <div className="p-4 border rounded-lg border-primary/50 bg-primary/5">
+                <div className="p-4 border border-primary/50 bg-primary/5">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-sm text-muted-foreground">Material possivelmente igual encontrado:</p>
                     <div className="flex gap-2">
@@ -1777,7 +1777,7 @@ export const MaterialImportDialog = ({ open, onOpenChange }: MaterialImportDialo
 
                 {/* Formulário de edição de keywords */}
                 {isEditingKeywords && (
-                  <div className="p-4 border rounded-lg bg-muted/50 space-y-3">
+                  <div className="p-4 border bg-muted/50 space-y-3">
                     <div className="flex items-center gap-2">
                       <Tag className="h-4 w-4 text-primary" />
                       <Label className="font-medium">Editar Palavras-chave</Label>
@@ -1872,7 +1872,7 @@ export const MaterialImportDialog = ({ open, onOpenChange }: MaterialImportDialo
           </div>
         ) : (
           <div className="space-y-4">
-             <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+             <div className="flex items-center justify-between p-4 bg-muted">
                <div className="space-y-1">
                  <p className="text-sm font-medium">
                    {newMaterialsCount} novos materiais para adicionar
@@ -1923,7 +1923,7 @@ export const MaterialImportDialog = ({ open, onOpenChange }: MaterialImportDialo
               )}
              </div>
 
-            <div className="border rounded-lg overflow-hidden max-h-[400px] overflow-y-auto">
+            <div className="border overflow-hidden max-h-[400px] overflow-y-auto">
               <Table>
                 <TableHeader>
                   <TableRow>

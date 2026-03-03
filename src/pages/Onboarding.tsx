@@ -141,18 +141,18 @@ const Onboarding = () => {
   ];
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-lg">
         <div className="text-center mb-6">
           <div className="flex items-center justify-center gap-2 text-primary mb-3">
             <Building2 className="w-8 h-8" />
-            <span className="text-2xl font-bold">ConstruData</span>
+            <span className="text-2xl font-bold font-mono">CONSTRUDATA</span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold">Comece seu Teste Grátis</h1>
+          <h1 className="text-xl sm:text-2xl font-bold font-mono">Comece seu Teste Grátis</h1>
           <p className="text-muted-foreground text-sm mt-1">30 dias de acesso completo</p>
         </div>
 
-        <Card className="shadow-xl">
+        <Card className="border border-border">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
               <span>Etapa {step} de 2</span>
@@ -160,9 +160,9 @@ const Onboarding = () => {
                 {step === 1 ? "Sua Empresa" : "Finalizar"}
               </span>
             </div>
-            <div className="w-full bg-muted rounded-full h-2">
-              <div 
-                className="bg-primary h-2 rounded-full transition-all duration-300"
+            <div className="w-full bg-muted h-2">
+              <div
+                className="bg-[#FF6B2C] h-2 transition-all duration-300"
                 style={{ width: step === 1 ? "50%" : "100%" }}
               />
             </div>
@@ -281,7 +281,7 @@ const Onboarding = () => {
                     />
                   </div>
 
-                  <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                  <div className="bg-muted/50 rounded-none p-4 space-y-2">
                     <p className="font-semibold text-sm">O que você terá acesso:</p>
                     {benefits.map((benefit, i) => (
                       <div key={i} className="flex items-center gap-2 text-sm">

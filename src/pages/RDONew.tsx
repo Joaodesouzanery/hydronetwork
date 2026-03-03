@@ -785,15 +785,15 @@ const RDONew = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+    <div className="min-h-screen bg-background">
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" onClick={() => navigate('/dashboard')}>
               <Building2 className="w-6 h-6 mr-2" />
-              <span className="font-bold">ConstruData</span>
+              <span className="font-bold font-mono">CONSTRUDATA</span>
             </Button>
-            <h1 className="text-xl font-semibold">Relatório Diário de Obra (RDO)</h1>
+            <h1 className="text-xl font-semibold font-mono">Relatório Diário de Obra (RDO)</h1>
           </div>
         </div>
       </header>
@@ -824,7 +824,7 @@ const RDONew = () => {
               
               {/* Quadros Selecionáveis Numerados */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Informações do RDO</h3>
+                <h3 className="text-lg font-semibold font-mono">Informações do RDO</h3>
                 
                 {/* Quadro 0: Projeto */}
                 <Card className="border-2 border-primary/20">
@@ -862,7 +862,7 @@ const RDONew = () => {
                         className="pl-8"
                       />
                     </div>
-                    <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-2">
+                    <div className="border rounded-none p-2 max-h-40 overflow-y-auto space-y-2">
                       {serviceFronts.length === 0 ? (
                         <p className="text-sm text-muted-foreground">Nenhuma frente disponível</p>
                       ) : (
@@ -918,7 +918,7 @@ const RDONew = () => {
                         className="pl-8"
                       />
                     </div>
-                    <div className="border rounded-md p-2 max-h-40 overflow-y-auto space-y-2">
+                    <div className="border rounded-none p-2 max-h-40 overflow-y-auto space-y-2">
                       {constructionSites.length === 0 ? (
                         <p className="text-sm text-muted-foreground">Nenhum local disponível</p>
                       ) : (
@@ -1266,7 +1266,7 @@ const RDONew = () => {
                           <img
                             src={URL.createObjectURL(photo)}
                             alt={`Foto ${index + 1}`}
-                            className="w-full h-24 object-cover rounded-md"
+                            className="w-full h-24 object-cover rounded-none"
                           />
                           <Button
                             type="button"
@@ -1404,25 +1404,25 @@ const RDONew = () => {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2" />
+                <div className="w-1.5 h-1.5 bg-primary mt-2" />
                 <p className="text-sm text-muted-foreground">
                   Registre o RDO diariamente para melhor controle
                 </p>
               </div>
               <div className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2" />
+                <div className="w-1.5 h-1.5 bg-primary mt-2" />
                 <p className="text-sm text-muted-foreground">
                   As fotos ajudam na validação da localização
                 </p>
               </div>
               <div className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2" />
+                <div className="w-1.5 h-1.5 bg-primary mt-2" />
                 <p className="text-sm text-muted-foreground">
                   Dados climáticos são salvos automaticamente
                 </p>
               </div>
               <div className="flex items-start gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2" />
+                <div className="w-1.5 h-1.5 bg-primary mt-2" />
                 <p className="text-sm text-muted-foreground">
                   Descreva detalhadamente as atividades realizadas
                 </p>

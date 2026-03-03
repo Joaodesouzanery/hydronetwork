@@ -658,7 +658,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
               { icon: <Wrench className="h-5 w-5 inline-block text-orange-600" />, value: valves.length, label: "Válvulas", color: "text-orange-600" },
               { icon: <Ruler className="h-5 w-5 inline-block text-indigo-600" />, value: `${totalExtension.toFixed(0)}m`, label: "Extensão", color: "text-indigo-600" },
             ].map((s, i) => (
-              <div key={i} className="bg-white dark:bg-card border rounded-xl p-2 text-center">
+              <div key={i} className="bg-white dark:bg-card border p-2 text-center">
                 <div className="text-lg">{s.icon}</div>
                 <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
                 <div className="text-[9px] font-medium text-muted-foreground uppercase">{s.label}</div>
@@ -967,7 +967,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
                 {selectedPattern === "Industrial" && "Consumo constante durante operação (6-18h)"}
               </p>
               {importedPatterns.length > 0 && (
-                <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
                   <p className="text-xs font-medium text-blue-700 dark:text-blue-400">{importedPatterns.length} padrão(ões) importado(s) do arquivo INP</p>
                 </div>
               )}
@@ -981,7 +981,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
               <CardContent>
                 <div className="space-y-3">
                   {importedCurves.map(crv => (
-                    <div key={crv.id} className="p-3 bg-muted/50 rounded-lg">
+                    <div key={crv.id} className="p-3 bg-muted/50">
                       <div className="flex items-center gap-2 mb-2">
                         <Badge variant="secondary" className="text-[10px]">{crv.type}</Badge>
                         <span className="text-xs font-medium">{crv.id}</span>
@@ -1015,7 +1015,7 @@ export const EpanetProModule = ({ pontos: topoPontos = [], trechos: topoTrechos 
                   { label: "Nós com Erro", value: results.summary.nodeErrors, color: results.summary.nodeErrors > 0 ? "text-red-600" : "text-green-600" },
                   { label: "Tubos com Erro", value: results.summary.linkErrors, color: results.summary.linkErrors > 0 ? "text-yellow-600" : "text-green-600" },
                 ].map((s, i) => (
-                  <div key={i} className="bg-muted/50 border rounded-xl p-3 text-center">
+                  <div key={i} className="bg-muted/50 border p-3 text-center">
                     <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
                     <div className="text-[10px] font-medium text-muted-foreground uppercase">{s.label}</div>
                   </div>

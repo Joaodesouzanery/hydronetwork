@@ -185,7 +185,7 @@ const Approvals = () => {
           <AppSidebar />
           <main className="flex-1 p-6">
             <div className="flex items-center justify-center h-full">
-              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+              <div className="animate-spin h-32 w-32 border-b-2 border-primary"></div>
             </div>
           </main>
         </div>
@@ -200,7 +200,7 @@ const Approvals = () => {
         <main className="flex-1 p-6 overflow-auto">
           <div className="max-w-7xl mx-auto space-y-6">
             <div>
-              <h1 className="text-3xl font-bold text-foreground mb-2">Central de Aprovações</h1>
+              <h1 className="text-3xl font-bold font-mono text-foreground mb-2">Central de Aprovações</h1>
               <p className="text-muted-foreground">
                 Gerencie solicitações de colaboradores que requerem aprovação de 2 administradores
               </p>

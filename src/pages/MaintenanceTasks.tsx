@@ -102,7 +102,7 @@ const MaintenanceTasks = () => {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold">Painel de Tarefas</h1>
+              <h1 className="text-3xl font-bold font-mono">Painel de Tarefas</h1>
               <p className="text-muted-foreground">
                 Gerencie manutenções preventivas e corretivas
               </p>

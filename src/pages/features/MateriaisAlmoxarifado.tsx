@@ -47,7 +47,7 @@ const MateriaisAlmoxarifado = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/5">
+    <div className="min-h-screen bg-background">
       <div className="container px-4 py-12 mx-auto max-w-6xl">
         <Button
           variant="ghost"
@@ -61,10 +61,10 @@ const MateriaisAlmoxarifado = () => {
         <div className="space-y-12">
           {/* Hero Section */}
           <div className="text-center space-y-6">
-            <div className="w-20 h-20 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-500 mx-auto">
+            <div className="w-20 h-20 bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-500 mx-auto">
               <Package className="w-10 h-10" />
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold">Materiais & Almoxarifado</h1>
+            <h1 className="text-4xl md:text-5xl font-bold font-mono">Materiais & Almoxarifado</h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
               Controle total de estoque, movimentações e consumo de materiais. Elimine desperdícios e nunca mais pare a obra por falta de material.
             </p>
@@ -75,20 +75,20 @@ const MateriaisAlmoxarifado = () => {
             {features.map((feature, index) => (
               <div 
                 key={index}
-                className="p-6 rounded-xl border bg-card hover:shadow-lg transition-all duration-300 hover:border-orange-500/30"
+                className="p-6 rounded-none border bg-card hover:border-foreground/20 transition-all duration-300 hover:border-orange-500/30"
               >
-                <div className="w-12 h-12 rounded-lg bg-orange-500/10 text-orange-500 flex items-center justify-center mb-4">
+                <div className="w-12 h-12 rounded-none bg-orange-500/10 text-orange-500 flex items-center justify-center mb-4">
                   {feature.icon}
                 </div>
-                <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+                <h3 className="text-lg font-semibold font-mono mb-2">{feature.title}</h3>
                 <p className="text-muted-foreground text-sm">{feature.description}</p>
               </div>
             ))}
           </div>
 
           {/* Benefits Section */}
-          <div className="bg-card rounded-xl border p-8 md:p-12">
-            <h2 className="text-2xl font-bold mb-8 text-center">Por que controlar o almoxarifado?</h2>
+          <div className="bg-card rounded-none border p-8 md:p-12">
+            <h2 className="text-2xl font-bold font-mono mb-8 text-center">Por que controlar o almoxarifado?</h2>
             <div className="grid md:grid-cols-2 gap-4">
               {benefits.map((benefit, index) => (
                 <div key={index} className="flex items-start gap-3">
@@ -101,7 +101,7 @@ const MateriaisAlmoxarifado = () => {
 
           {/* Process */}
           <div className="space-y-8">
-            <h2 className="text-2xl font-bold text-center">Fluxo de Trabalho</h2>
+            <h2 className="text-2xl font-bold font-mono text-center">Fluxo de Trabalho</h2>
             <div className="grid md:grid-cols-4 gap-6">
               {[
                 { step: "1", title: "Cadastre Materiais", desc: "Defina itens, unidades e estoque mínimo" },
@@ -110,7 +110,7 @@ const MateriaisAlmoxarifado = () => {
                 { step: "4", title: "Receba Alertas", desc: "Seja notificado sobre estoque baixo" }
               ].map((item, index) => (
                 <div key={index} className="text-center space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-orange-500 text-white flex items-center justify-center text-xl font-bold mx-auto">
+                  <div className="w-12 h-12 bg-orange-500 text-white flex items-center justify-center text-xl font-bold mx-auto">
                     {item.step}
                   </div>
                   <h3 className="font-semibold">{item.title}</h3>

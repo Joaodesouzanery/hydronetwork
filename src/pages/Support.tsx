@@ -416,7 +416,7 @@ const Support = () => {
         <div className="flex-1">
           <div className="flex items-center gap-2 border-b px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
             <SidebarTrigger />
-            <h1 className="text-xl font-semibold">Suporte & Documentação</h1>
+            <h1 className="text-xl font-semibold font-mono">Suporte & Documentação</h1>
           </div>
 
           <main className="flex-1 p-6">
@@ -480,7 +480,7 @@ const Support = () => {
                       <AccordionItem key={i} value={`module-${i}`}>
                         <AccordionTrigger className="text-left hover:no-underline">
                           <div className="flex items-center gap-3">
-                            <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${mod.color} flex items-center justify-center flex-shrink-0`}>
+                            <div className={`w-9 h-9 rounded-none bg-gradient-to-br ${mod.color} flex items-center justify-center flex-shrink-0`}>
                               <mod.icon className="w-4.5 h-4.5 text-white" />
                             </div>
                             <span className="font-bold text-sm">{mod.title}</span>
@@ -509,7 +509,7 @@ const Support = () => {
                               <h4 className="font-semibold text-sm mb-2">Benefícios</h4>
                               <div className="flex flex-wrap gap-2">
                                 {mod.benefits.map((b, j) => (
-                                  <span key={j} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-xs font-medium text-primary">
+                                  <span key={j} className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary/10 text-xs font-medium text-primary">
                                     <Check className="w-3 h-3" /> {b}
                                   </span>
                                 ))}

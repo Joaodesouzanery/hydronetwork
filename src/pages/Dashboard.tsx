@@ -260,17 +260,17 @@ const Dashboard = () => {
 
         <div className="flex-1 flex flex-col">
           {/* Header */}
-          <header className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-10">
+          <header className="border-b border-border bg-background/90 backdrop-blur-md sticky top-0 z-10">
             <div className="container mx-auto px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <SidebarTrigger />
                 <div className="flex items-center gap-2">
                   <img src="/favicon.svg" alt="ConstruData" className="w-8 h-8" />
-                  <span className="text-xl font-bold text-primary">ConstruData</span>
+                  <span className="text-xl font-bold font-mono">CONSTRUDATA</span>
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <span className="text-sm text-muted-foreground hidden sm:inline">
+                <span className="text-sm font-mono text-muted-foreground hidden sm:inline">
                   {user?.user_metadata?.name || user?.email}
                 </span>
                 <Button variant="ghost" size="icon" onClick={() => navigate('/settings')}>
@@ -289,8 +289,8 @@ const Dashboard = () => {
         <SurveyNotification />
 
         <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2">Bem-vindo ao ConstruData</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold font-mono mb-2">Bem-vindo ao CONSTRUDATA</h1>
+          <p className="text-sm sm:text-base text-muted-foreground font-mono">
             Gerencie suas obras com eficiência e precisão
           </p>
         </div>
@@ -310,8 +310,8 @@ const Dashboard = () => {
             {/* Dashboard 360º Section */}
             <div id="dashboard-360" className="space-y-3 sm:space-y-4 scroll-mt-20">
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="h-6 sm:h-8 w-1 bg-gradient-to-b from-gradient-start to-gradient-end rounded-full" />
-                <h2 className="text-lg sm:text-xl md:text-2xl font-bold">Dashboard 360º</h2>
+                <div className="h-6 sm:h-8 w-1 bg-gradient-to-b from-gradient-start to-gradient-end" />
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold font-mono">Dashboard 360º</h2>
               </div>
               <p className="text-xs sm:text-sm text-muted-foreground ml-4 sm:ml-7">
                 Visão completa dos seus projetos em tempo real
@@ -358,9 +358,9 @@ const Dashboard = () => {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-          <Card className="hover:shadow-card transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/projects')}>
+          <Card className="hover:border-foreground/30 transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/projects')}>
             <CardHeader className="p-3 sm:p-4 md:p-6">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-primary flex items-center justify-center text-primary-foreground mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
                 <Building2 className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </div>
               <CardTitle className="text-sm sm:text-base md:text-lg">Projetos</CardTitle>
@@ -370,9 +370,9 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card className="hover:shadow-card transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/rdo-new')}>
+          <Card className="hover:border-foreground/30 transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/rdo-new')}>
             <CardHeader className="p-3 sm:p-4 md:p-6">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center text-accent-foreground mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-accent flex items-center justify-center text-accent-foreground mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
                 <Plus className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </div>
               <CardTitle className="text-sm sm:text-base md:text-lg">Novo RDO</CardTitle>
@@ -382,9 +382,9 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card className="hover:shadow-card transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/rdo-history')}>
+          <Card className="hover:border-foreground/30 transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/rdo-history')}>
             <CardHeader className="p-3 sm:p-4 md:p-6">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-400 flex items-center justify-center text-white mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-purple-500 flex items-center justify-center text-white mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
                 <History className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </div>
               <CardTitle className="text-sm sm:text-base md:text-lg">Histórico RDO</CardTitle>
@@ -394,9 +394,9 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card className="hover:shadow-card transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/rdo-photos')}>
+          <Card className="hover:border-foreground/30 transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/rdo-photos')}>
             <CardHeader className="p-3 sm:p-4 md:p-6">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br from-pink-500 to-pink-400 flex items-center justify-center text-white mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-pink-500 flex items-center justify-center text-white mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
                 <Image className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </div>
               <CardTitle className="text-sm sm:text-base md:text-lg">Fotos</CardTitle>
@@ -406,9 +406,9 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card className="hover:shadow-card transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/production-control')}>
+          <Card className="hover:border-foreground/30 transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/production-control')}>
             <CardHeader className="p-3 sm:p-4 md:p-6">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br from-secondary to-secondary/70 flex items-center justify-center text-secondary-foreground mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-secondary flex items-center justify-center text-secondary-foreground mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
                 <Target className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </div>
               <CardTitle className="text-sm sm:text-base md:text-lg">Produção</CardTitle>
@@ -418,9 +418,9 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card className="hover:shadow-card transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/dashboard-360')}>
+          <Card className="hover:border-foreground/30 transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/dashboard-360')}>
             <CardHeader className="p-3 sm:p-4 md:p-6">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-400 flex items-center justify-center text-white mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-cyan-500 flex items-center justify-center text-white mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
                 <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </div>
               <CardTitle className="text-sm sm:text-base md:text-lg">360º</CardTitle>
@@ -692,7 +692,7 @@ const Dashboard = () => {
                   const Icon = activity.icon;
                   return (
                     <div key={index} className="flex items-start gap-3 pb-3 border-b last:border-0">
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <div className="w-8 h-8 bg-primary/10 flex items-center justify-center flex-shrink-0">
                         <Icon className="w-4 h-4 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">

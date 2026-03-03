@@ -400,7 +400,7 @@ export const BudgetCostModule = ({ trechos, pontos, quantityRows, quantityParams
                 </div>
               </div>
               {baseCustos === "custom" && (
-                <div className="border-2 border-dashed border-border rounded-lg p-4 text-center">
+                <div className="border-2 border-dashed border-border p-4 text-center">
                   <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground mb-2">Carregue sua base de custos (CSV ou Excel)</p>
                   <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleCustomUpload} />

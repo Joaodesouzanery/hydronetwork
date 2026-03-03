@@ -322,7 +322,7 @@ export const QEsgConfigDialog = ({
                 </Button>
               </div>
             </div>
-            <div className="border rounded-lg overflow-auto max-h-60">
+            <div className="border overflow-auto max-h-60">
               <Table>
                 <TableHeader>
                   <TableRow>

@@ -119,7 +119,7 @@ const ProjectDelays = () => {
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Header */}
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
+              <h1 className="text-3xl font-bold font-mono flex items-center gap-2">
                 <Clock className="h-8 w-8 text-red-600" /> Atrasos de Projeto
               </h1>
               <p className="text-muted-foreground mt-1">Monitore desvios entre progresso esperado e real de cada obra</p>
