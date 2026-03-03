@@ -194,7 +194,7 @@ const AssetsCatalog = () => {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold">Catálogo de Ativos</h1>
+              <h1 className="text-3xl font-bold font-mono">Catálogo de Ativos</h1>
               <p className="text-muted-foreground">
                 Gerencie locais e equipamentos
               </p>
@@ -278,7 +278,7 @@ const AssetsCatalog = () => {
           </Select>
         </div>
 
-        <div className="border rounded-lg">
+        <div className="border rounded-none">
           <Table>
             <TableHeader>
               <TableRow>

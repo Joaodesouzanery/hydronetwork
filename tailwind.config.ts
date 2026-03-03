@@ -22,10 +22,13 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          light: "#1A4A9E",
+          dark: "#0A2456",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
           foreground: "hsl(var(--secondary-foreground))",
+          dark: "#D4D4D4",
         },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
@@ -38,6 +41,8 @@ export default {
         accent: {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
+          hover: "#E55A1F",
+          dark: "#CC4A15",
         },
         popover: {
           DEFAULT: "hsl(var(--popover))",
@@ -57,8 +62,45 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        surface: {
+          DEFAULT: "#F5F5F5",
+          dark: "#0E1B3D",
+        },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
+        error: {
+          DEFAULT: "#EF4444",
+          foreground: "#FFFFFF",
+        },
         "gradient-start": "hsl(var(--gradient-start))",
         "gradient-end": "hsl(var(--gradient-end))",
+        // ConstruData brand tokens
+        cd: {
+          primary: "#10367D",
+          "primary-light": "#1A4A9E",
+          "primary-dark": "#0A2456",
+          secondary: "#EBEBEB",
+          "secondary-dark": "#D4D4D4",
+          accent: "#FF6B2C",
+          "accent-hover": "#E55A1F",
+          "accent-dark": "#CC4A15",
+          surface: "#F5F5F5",
+          "surface-dark": "#0E1B3D",
+        },
+      },
+      fontFamily: {
+        sans: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "SF Mono", "Menlo", "Consolas", "Liberation Mono", "monospace"],
+        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "SF Mono", "Menlo", "Consolas", "Liberation Mono", "monospace"],
       },
       borderRadius: {
         lg: "var(--radius)",

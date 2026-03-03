@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Upload, Download, Trash2, Calendar, FileText, RefreshCw, Save, Package } from "lucide-react";
+import { Plus, Upload, Download, Trash2, Calendar, FileText, RefreshCw, Save, Package, BarChart3 } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
 import { loadSharedPlanning, saveSharedPlanning, SharedPlanningData, SharedTask, SharedResource } from "@/engine/sharedPlanningStore";
@@ -99,8 +99,8 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
   const ganttData = useMemo(() => {
     if (tasks.length === 0) return null;
     const allDates = tasks.map(t => ({ start: new Date(t.start), end: new Date(addDays(t.start, t.duration)) }));
-    const minDate = new Date(Math.min(...allDates.map(d => d.start.getTime())));
-    const maxDate = new Date(Math.max(...allDates.map(d => d.end.getTime())));
+    const minDate = new Date(allDates.reduce((m, d) => d.start.getTime() < m ? d.start.getTime() : m, allDates[0].start.getTime()));
+    const maxDate = new Date(allDates.reduce((m, d) => d.end.getTime() > m ? d.end.getTime() : m, allDates[0].end.getTime()));
     const totalDays = Math.max(1, diffDays(minDate.toISOString().split("T")[0], maxDate.toISOString().split("T")[0]));
     const columns: string[] = [];
     const colDate = new Date(minDate);
@@ -129,7 +129,7 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
         <CardContent className="pt-3 pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="text-sm">
-              <span className="font-medium">🔄 Dados compartilhados com Planning/OpenProject</span>
+              <span className="font-medium"><RefreshCw className="h-4 w-4 inline-block mr-1" /> Dados compartilhados com Planning/OpenProject</span>
               {lastSyncSource && <span className="text-muted-foreground ml-2">(última edição: {lastSyncSource})</span>}
             </div>
             <div className="flex gap-2">
@@ -148,11 +148,11 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div><Label>Data de Início</Label><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
-            <div className="bg-muted/50 rounded-lg p-3 text-center">
+            <div className="bg-muted/50 p-3 text-center">
               <div className="text-xl font-bold text-blue-600">{tasks.length}</div>
               <div className="text-xs text-muted-foreground">Tarefas</div>
             </div>
-            <div className="bg-muted/50 rounded-lg p-3 text-center">
+            <div className="bg-muted/50 p-3 text-center">
               <div className="text-xl font-bold text-orange-600">{totalDuration}d</div>
               <div className="text-xs text-muted-foreground">Duração</div>
             </div>
@@ -169,7 +169,7 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle>📅 Gráfico de Gantt</CardTitle>
+            <CardTitle><Calendar className="h-4 w-4 inline-block mr-1" /> Gráfico de Gantt</CardTitle>
             <Select value={ganttView} onValueChange={setGanttView}>
               <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -242,8 +242,8 @@ export const ProjectLibreModule = ({ pontos = [], trechos = [] }: ProjectLibreMo
                 </div>
               </div>
               <div className="flex gap-4 text-sm text-muted-foreground">
-                <span>📊 {tasks.length} tarefas</span>
-                <span>📅 {totalDuration} dias totais</span>
+                <span><BarChart3 className="h-4 w-4 inline-block mr-1" />{tasks.length} tarefas</span>
+                <span><Calendar className="h-4 w-4 inline-block mr-1" />{totalDuration} dias totais</span>
               </div>
             </div>
           )}

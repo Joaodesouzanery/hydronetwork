@@ -492,7 +492,7 @@ export const CRMPipeline = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div 
-                          className="w-3 h-3 rounded-full" 
+                          className="w-3 h-3" 
                           style={{ backgroundColor: stage.color }}
                         />
                         <CardTitle className="text-sm font-medium">
@@ -513,7 +513,7 @@ export const CRMPipeline = () => {
                         key={deal.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e, deal.id)}
-                        className="p-3 bg-background border rounded-lg cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
+                        className="p-3 bg-background border cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
                         onClick={() => openEdit(deal)}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -662,7 +662,7 @@ export const CRMPipeline = () => {
                       <SelectItem key={stage.id} value={stage.id}>
                         <div className="flex items-center gap-2">
                           <div 
-                            className="w-2 h-2 rounded-full" 
+                            className="w-2 h-2" 
                             style={{ backgroundColor: stage.color }}
                           />
                           {stage.name}

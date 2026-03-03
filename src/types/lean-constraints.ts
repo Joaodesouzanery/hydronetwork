@@ -34,6 +34,7 @@ export interface LpsConstraint {
   origem: 'manual' | 'rdo_justificativa' | 'planejamento';
   justification_id: string | null;
   daily_report_id: string | null;
+  parent_constraint_id: string | null;
   notas: string | null;
   created_at: string;
   updated_at: string;
@@ -41,6 +42,8 @@ export interface LpsConstraint {
   employees?: { id: string; name: string };
   projects?: { id: string; name: string };
   lps_five_whys?: LpsFiveWhys[];
+  parent_constraint?: { id: string; descricao: string } | null;
+  child_constraints?: { id: string; descricao: string; status: ConstraintStatus }[];
 }
 
 export interface LpsWeeklyCommitment {
@@ -131,3 +134,50 @@ export const COMMITMENT_STATUS_LABELS: Record<CommitmentStatus, string> = {
   nao_cumprido: 'Não Cumprido',
   parcial: 'Parcial',
 };
+
+export type DeadlineStatus = 'overdue' | 'critical' | 'warning' | 'ok' | 'no_deadline' | 'resolved';
+
+export interface ConstraintAuditEntry {
+  id: string;
+  constraint_id: string;
+  action: 'created' | 'updated' | 'resolved' | 'deleted' | 'status_changed';
+  field?: string | null;
+  old_value?: string | null;
+  new_value?: string | null;
+  user_name: string;
+  created_at: string;
+}
+
+export interface CorrectiveAction {
+  id: string;
+  constraint_id: string;
+  constraint_descricao: string;
+  constraint_status: ConstraintStatus;
+  acao_corretiva: string;
+  causa_raiz: string;
+  responsavel_acao: string | null;
+  prazo_acao: string | null;
+  status_acao: string;
+}
+
+export interface WeeklyReport {
+  weekStart: string;
+  weekEnd: string;
+  totalAtivas: number;
+  totalCriticas: number;
+  novasSemana: number;
+  resolvidasSemana: number;
+  vencidas: number;
+  ppc: number;
+  ppcAdjusted: number;
+  topConstraintTypes: { tipo: ConstraintType; count: number }[];
+  topAreas: { areaName: string; total: number }[];
+}
+
+export const PERIOD_PRESETS = [
+  { label: 'Últimos 7 dias', days: 7 },
+  { label: 'Últimos 15 dias', days: 15 },
+  { label: 'Últimos 30 dias', days: 30 },
+  { label: 'Últimos 90 dias', days: 90 },
+  { label: 'Tudo', days: 0 },
+] as const;

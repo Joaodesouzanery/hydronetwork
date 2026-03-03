@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { MapPin, Plus, Minus, Maximize, Layers, Link2, Trash2, Undo2, Save, Edit3, X, MousePointerClick } from "lucide-react";
-import { detectBatchCRS, getMapCoordinatesWithCRS, DetectedCRS } from "@/engine/hydraulics";
+import { detectBatchCRS, getMapCoordinatesWithCRS, setGlobalUtmZone, getGlobalUtmZone, DetectedCRS } from "@/engine/hydraulics";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -34,6 +34,14 @@ export interface ConnectionData {
   vertices?: [number, number][];
 }
 
+export interface OverlayPolyline {
+  points: [number, number][];
+  color?: string;
+  weight?: number;
+  opacity?: number;
+  label?: string;
+}
+
 interface NodeMapWidgetProps {
   nodes: NodeData[];
   connections?: ConnectionData[];
@@ -44,9 +52,13 @@ interface NodeMapWidgetProps {
   onNodeDemandChange?: (nodeId: string, demanda: number) => void;
   onNodesDelete?: (nodeIds: string[]) => void;
   onConnectionsDelete?: (indices: number[]) => void;
+  onMapClick?: (lat: number, lng: number) => void;
+  overlayPolylines?: OverlayPolyline[];
   height?: number;
   accentColor?: string;
   editable?: boolean;
+  /** UTM zone version trigger for CRS re-detection (increment to force re-detect) */
+  utmZoneVersion?: number;
 }
 
 const TILE_LAYERS: Record<string, { url: string; attribution: string; name: string }> = {
@@ -68,15 +80,19 @@ export const NodeMapWidget = ({
   onNodeDemandChange,
   onNodesDelete,
   onConnectionsDelete,
+  onMapClick,
+  overlayPolylines,
   height = 400,
   accentColor = "#3b82f6",
   editable = true,
+  utmZoneVersion = 0,
 }: NodeMapWidgetProps) => {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const markersRef = useRef<L.CircleMarker[]>([]);
   const linesRef = useRef<L.Polyline[]>([]);
+  const overlayRef = useRef<L.Polyline[]>([]);
   const [tileKey, setTileKey] = useState("osm");
   const [linkMode, setLinkMode] = useState(false);
   const [linkOrigin, setLinkOrigin] = useState<string | null>(null);
@@ -87,14 +103,16 @@ export const NodeMapWidget = ({
   const [deleteMode, setDeleteMode] = useState<"nodes" | "connections" | false>(false);
   const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
   const [selectedConnsForDelete, setSelectedConnsForDelete] = useState<Set<number>>(new Set());
+  const [addNodeMode, setAddNodeMode] = useState(false);
 
   useEffect(() => { setLocalConnections(connections); }, [connections]);
 
   // Batch CRS detection for consistent coordinate conversion
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const detectedCRS = useMemo((): DetectedCRS => {
     if (nodes.length === 0) return { type: "unknown" };
     return detectBatchCRS(nodes);
-  }, [nodes]);
+  }, [nodes, utmZoneVersion]);
 
   const getCoords = useCallback((x: number, y: number): [number, number] => {
     return getMapCoordinatesWithCRS(x, y, detectedCRS);
@@ -108,21 +126,18 @@ export const NodeMapWidget = ({
     tileLayerRef.current = tile;
     mapRef.current = map;
     
-    // Aggressive invalidateSize for dynamic containers/tabs
+    // invalidateSize for dynamic containers/tabs (reduced from 5 to 2 timeouts)
     const doInvalidate = () => {
       if (mapRef.current) {
         mapRef.current.invalidateSize();
       }
     };
-    setTimeout(doInvalidate, 100);
-    setTimeout(doInvalidate, 300);
-    setTimeout(doInvalidate, 600);
-    setTimeout(doInvalidate, 1000);
-    setTimeout(doInvalidate, 2000);
-    
+    setTimeout(doInvalidate, 150);
+    setTimeout(doInvalidate, 500);
+
     // ResizeObserver for container visibility changes
     const observer = new ResizeObserver(() => {
-      setTimeout(doInvalidate, 50);
+      requestAnimationFrame(doInvalidate);
     });
     observer.observe(containerRef.current);
     
@@ -210,11 +225,26 @@ export const NodeMapWidget = ({
           setSelectedConnsForDelete(new Set());
           toast.info("Modo de exclusão desativado");
         }
+        if (addNodeMode) {
+          setAddNodeMode(false);
+          toast.info("Modo de adicionar nó desativado");
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [linkMode, deleteMode]);
+  }, [linkMode, deleteMode, addNodeMode]);
+
+  // Handle map click for addNodeMode
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !addNodeMode || !onMapClick) return;
+    const handleClick = (e: L.LeafletMouseEvent) => {
+      onMapClick(e.latlng.lat, e.latlng.lng);
+    };
+    map.on("click", handleClick);
+    return () => { map.off("click", handleClick); };
+  }, [addNodeMode, onMapClick]);
 
   // Track last data signature to only fitBounds on actual data changes
   const lastDataSigRef = useRef("");
@@ -305,8 +335,8 @@ export const NodeMapWidget = ({
       linesRef.current.push(line);
     });
 
-    // Only fitBounds when actual data changes (not selection/mode changes)
-    const dataSig = `${nodes.map(n => n.id).join(",")}|${localConnections.length}`;
+    // Only fitBounds when the set of nodes changes (added/removed), not when connections change
+    const dataSig = nodes.map(n => n.id).join(",");
     if (bounds.length > 0 && dataSig !== lastDataSigRef.current) {
       lastDataSigRef.current = dataSig;
       try {
@@ -318,6 +348,25 @@ export const NodeMapWidget = ({
       setTimeout(() => map.invalidateSize(), 500);
     }
   }, [nodes, localConnections, getCoords, accentColor, handleNodeClickInternal, handleConnClickInternal, selectedNode, linkMode, linkOrigin, deleteMode, selectedForDelete, selectedConnsForDelete]);
+
+  // Draw overlay polylines (contour lines, etc.)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    overlayRef.current.forEach(l => l.remove());
+    overlayRef.current = [];
+    if (!overlayPolylines || overlayPolylines.length === 0) return;
+    for (const poly of overlayPolylines) {
+      if (poly.points.length < 2) continue;
+      const line = L.polyline(poly.points, {
+        color: poly.color || "#8B5CF6",
+        weight: poly.weight || 1.5,
+        opacity: poly.opacity || 0.6,
+      }).addTo(map);
+      if (poly.label) line.bindTooltip(poly.label, { sticky: true });
+      overlayRef.current.push(line);
+    }
+  }, [overlayPolylines]);
 
   const handleUndo = () => {
     if (localConnections.length === 0) return;
@@ -433,6 +482,18 @@ export const NodeMapWidget = ({
           </Button>
           {editable && (
             <>
+              {onMapClick && (
+                <Button size="sm" variant={addNodeMode ? "default" : "outline"} onClick={() => {
+                  if (linkMode) { setLinkMode(false); setLinkOrigin(null); }
+                  if (deleteMode) { setDeleteMode(false); setSelectedForDelete(new Set()); setSelectedConnsForDelete(new Set()); }
+                  const newMode = !addNodeMode;
+                  setAddNodeMode(newMode);
+                  if (newMode) toast.info("Clique no mapa para adicionar nó. ESC para sair.");
+                  else toast.info("Modo de adicionar nó desativado.");
+                }} className={addNodeMode ? "bg-green-600 hover:bg-green-700 text-white" : ""}>
+                  <Plus className="h-3 w-3 mr-1" /> {addNodeMode ? "Adicionando..." : "Adicionar Nó"}
+                </Button>
+              )}
               <Button size="sm" variant={linkMode ? "default" : "outline"} onClick={toggleLinkMode}
                 className={linkMode ? "bg-orange-500 hover:bg-orange-600 text-white" : ""}>
                 <Link2 className="h-3 w-3 mr-1" /> {linkMode ? "Ligando..." : "Ligar Pontos"}
@@ -470,9 +531,22 @@ export const NodeMapWidget = ({
           </div>
         </div>
 
+        {/* Add node mode status */}
+        {addNodeMode && (
+          <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/20 border border-green-200">
+            <Plus className="h-4 w-4 text-green-600" />
+            <span className="text-sm font-medium text-green-700 dark:text-green-400">
+              Clique no mapa para adicionar um nó. ESC para sair.
+            </span>
+            <Button size="sm" variant="ghost" className="h-6 text-xs ml-auto" onClick={() => setAddNodeMode(false)}>
+              <X className="h-3 w-3 mr-1" /> Sair
+            </Button>
+          </div>
+        )}
+
         {/* Link mode status */}
         {linkMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200">
+          <div className="flex items-center gap-2 p-2 bg-orange-50 dark:bg-orange-950/20 border border-orange-200">
             <Link2 className="h-4 w-4 text-orange-600" />
             <span className="text-sm font-medium text-orange-700 dark:text-orange-400">
               {linkOrigin ? `Origem: ${linkOrigin} — clique no destino (encadeamento automático)` : "Clique no ponto de origem"}
@@ -490,7 +564,7 @@ export const NodeMapWidget = ({
 
         {/* Delete mode status */}
         {deleteMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200">
+          <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-950/20 border border-red-200">
             <MousePointerClick className="h-4 w-4 text-red-600" />
             <span className="text-sm font-medium text-red-700 dark:text-red-400">
               {deleteMode === "nodes"
@@ -514,7 +588,7 @@ export const NodeMapWidget = ({
         )}
 
         {/* Map - always render the container */}
-        <div ref={containerRef} className="w-full rounded-lg border border-border overflow-hidden" style={{ height }} />
+        <div ref={containerRef} className="w-full border border-border overflow-hidden" style={{ height }} />
 
         {nodes.length === 0 && (
           <div className="text-center text-sm text-muted-foreground py-2">
@@ -524,7 +598,7 @@ export const NodeMapWidget = ({
 
         {/* Selected node editor */}
         {editable && selectedNode && onNodeDemandChange && !linkMode && !deleteMode && (
-          <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
+          <div className="flex items-center gap-2 p-2 bg-muted/50">
             <Edit3 className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">{selectedNode}</span>
             <Label className="text-xs">Demanda (L/s):</Label>
@@ -538,7 +612,7 @@ export const NodeMapWidget = ({
 
         {/* Connections list - editable */}
         {editable && localConnections.length > 0 && (
-          <div className="max-h-32 overflow-auto border border-border rounded-lg p-2">
+          <div className="max-h-32 overflow-auto border border-border p-2">
             <p className="text-xs font-medium mb-1">Conexões ({localConnections.length})</p>
             <div className="space-y-1">
               {localConnections.map((c, i) => (
@@ -555,12 +629,12 @@ export const NodeMapWidget = ({
 
         {/* Legend */}
         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500" /> Início</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500" /> Fim</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: accentColor }} /> Intermediário</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500" /> Selecionado</div>
-          {linkMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-orange-500" /> Origem (ligação)</div>}
-          {deleteMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-600" /> Selecionado p/ exclusão</div>}
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500" /> Início</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-500" /> Fim</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3" style={{ backgroundColor: accentColor }} /> Intermediário</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-500" /> Selecionado</div>
+          {linkMode && <div className="flex items-center gap-1"><div className="w-3 h-3 bg-orange-500" /> Origem (ligação)</div>}
+          {deleteMode && <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-600" /> Selecionado p/ exclusão</div>}
         </div>
       </CardContent>
     </Card>

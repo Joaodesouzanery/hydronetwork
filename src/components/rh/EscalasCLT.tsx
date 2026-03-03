@@ -279,7 +279,7 @@ export const EscalasCLT = () => {
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/50 dark:to-blue-900/30 border-blue-200 dark:border-blue-800">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-blue-500/10">
+              <div className="p-2 bg-blue-500/10">
                 <Clock className="h-5 w-5 text-blue-600" />
               </div>
               <div>
@@ -292,7 +292,7 @@ export const EscalasCLT = () => {
         <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/50 dark:to-amber-900/30 border-amber-200 dark:border-amber-800">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-amber-500/10">
+              <div className="p-2 bg-amber-500/10">
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
               </div>
               <div>
@@ -305,7 +305,7 @@ export const EscalasCLT = () => {
         <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/50 dark:to-green-900/30 border-green-200 dark:border-green-800">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-500/10">
+              <div className="p-2 bg-green-500/10">
                 <Download className="h-5 w-5 text-green-600" />
               </div>
               <div>
@@ -318,7 +318,7 @@ export const EscalasCLT = () => {
         <Card className={`bg-gradient-to-br ${alertasCount > 0 ? 'from-red-50 to-red-100 dark:from-red-950/50 dark:to-red-900/30 border-red-200 dark:border-red-800' : 'from-gray-50 to-gray-100 dark:from-gray-950/50 dark:to-gray-900/30 border-gray-200 dark:border-gray-800'}`}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-full ${alertasCount > 0 ? 'bg-red-500/10' : 'bg-gray-500/10'}`}>
+              <div className={`p-2 ${alertasCount > 0 ? 'bg-red-500/10' : 'bg-gray-500/10'}`}>
                 <AlertTriangle className={`h-5 w-5 ${alertasCount > 0 ? 'text-red-600' : 'text-gray-600'}`} />
               </div>
               <div>

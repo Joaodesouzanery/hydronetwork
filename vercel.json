@@ -1,0 +1,6 @@
+{
+  "buildCommand": "node public/hub/coletor.js || true && vite build",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

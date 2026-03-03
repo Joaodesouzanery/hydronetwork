@@ -153,7 +153,7 @@ export function SimilarMaterialApprovalDialog({
         {!showNewMaterialForm ? (
           <>
             <div className="space-y-4 py-4">
-              <div className="p-4 border rounded-lg bg-muted/50">
+              <div className="p-4 border bg-muted/50">
                 <p className="text-sm text-muted-foreground mb-1">Descrição na planilha:</p>
                 <p className="font-medium">{description}</p>
                 {(pending.unit || pending.quantity) && (
@@ -168,7 +168,7 @@ export function SimilarMaterialApprovalDialog({
                 <span className="text-muted-foreground">↓</span>
               </div>
 
-              <div className="p-4 border rounded-lg border-primary/50 bg-primary/5">
+              <div className="p-4 border border-primary/50 bg-primary/5">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm text-muted-foreground">Material encontrado:</p>
                   <Badge 

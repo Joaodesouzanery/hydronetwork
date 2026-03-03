@@ -603,7 +603,7 @@ export const EditRDODialog = ({ rdo, open, onOpenChange, onSuccess }: EditRDODia
                   visibleServices.map((service, index) => {
                     const actualIndex = executedServices.findIndex(s => s === service);
                     return (
-                      <div key={actualIndex} className="flex flex-col gap-3 p-3 bg-muted/50 rounded-lg">
+                      <div key={actualIndex} className="flex flex-col gap-3 p-3 bg-muted/50">
                         <div className="flex gap-2 items-end">
                           <div className="flex-1 space-y-1">
                             <Label className="text-xs">Serviço</Label>

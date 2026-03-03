@@ -125,8 +125,8 @@ const RDO = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+    <div className="min-h-screen bg-background">
+      <header className="border-b bg-card/50 sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
@@ -134,9 +134,9 @@ const RDO = () => {
             </Button>
             <Button variant="ghost" onClick={() => navigate('/dashboard')}>
               <Building2 className="w-6 h-6 mr-2" />
-              <span className="font-bold">ConstruData</span>
+              <span className="font-bold font-mono">CONSTRUDATA</span>
             </Button>
-            <h1 className="text-xl font-semibold">Relatório Diário de Obra (RDO)</h1>
+            <h1 className="text-xl font-semibold font-mono">Relatório Diário de Obra (RDO)</h1>
           </div>
         </div>
       </header>
@@ -283,7 +283,7 @@ const RDO = () => {
                   </div>
                 ) : weather ? (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-secondary/20 rounded-lg">
+                    <div className="flex items-center justify-between p-3 bg-secondary/20 rounded-none">
                       <div className="flex items-center gap-2">
                         <Thermometer className="w-5 h-5 text-orange-500" />
                         <span className="text-sm font-medium">Temperatura</span>
@@ -291,7 +291,7 @@ const RDO = () => {
                       <span className="text-lg font-bold">{weather.temperature}°C</span>
                     </div>
 
-                    <div className="flex items-center justify-between p-3 bg-secondary/20 rounded-lg">
+                    <div className="flex items-center justify-between p-3 bg-secondary/20 rounded-none">
                       <div className="flex items-center gap-2">
                         <Droplets className="w-5 h-5 text-blue-500" />
                         <span className="text-sm font-medium">Umidade</span>
@@ -299,7 +299,7 @@ const RDO = () => {
                       <span className="text-lg font-bold">{weather.humidity}%</span>
                     </div>
 
-                    <div className="flex items-center justify-between p-3 bg-secondary/20 rounded-lg">
+                    <div className="flex items-center justify-between p-3 bg-secondary/20 rounded-none">
                       <div className="flex items-center gap-2">
                         <Wind className="w-5 h-5 text-cyan-500" />
                         <span className="text-sm font-medium">Vento</span>
@@ -307,7 +307,7 @@ const RDO = () => {
                       <span className="text-lg font-bold">{weather.windSpeed} km/h</span>
                     </div>
 
-                    <div className="flex items-center justify-between p-3 bg-secondary/20 rounded-lg">
+                    <div className="flex items-center justify-between p-3 bg-secondary/20 rounded-none">
                       <div className="flex items-center gap-2">
                         <Cloud className="w-5 h-5 text-gray-500" />
                         <span className="text-sm font-medium">Previsão de Chuva</span>

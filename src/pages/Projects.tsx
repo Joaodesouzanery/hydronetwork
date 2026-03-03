@@ -320,8 +320,8 @@ const Projects = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+    <div className="min-h-screen bg-background">
+      <header className="border-b bg-card/50 sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -330,9 +330,9 @@ const Projects = () => {
               </Button>
               <Button variant="ghost" onClick={() => navigate('/dashboard')}>
                 <Building2 className="w-6 h-6 mr-2" />
-                <span className="font-bold">ConstruData</span>
+                <span className="font-bold font-mono">CONSTRUDATA</span>
               </Button>
-              <h1 className="text-xl font-semibold">Gerenciar Projetos</h1>
+              <h1 className="text-xl font-semibold font-mono">Gerenciar Projetos</h1>
             </div>
             <div className="flex gap-2">
               <PageTutorialButton pageKey="projects" />
@@ -378,7 +378,7 @@ const Projects = () => {
                       Início: {new Date(project.start_date).toLocaleDateString('pt-BR')}
                     </CardDescription>
                   </div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
+                  <span className={`px-2 py-1 text-xs font-medium ${getStatusColor(project.status)}`}>
                     {getStatusLabel(project.status)}
                   </span>
                 </div>
@@ -432,7 +432,7 @@ const Projects = () => {
             <Card className="col-span-full">
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Building2 className="w-16 h-16 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Nenhum projeto cadastrado</h3>
+                <h3 className="text-lg font-semibold font-mono mb-2">Nenhum projeto cadastrado</h3>
                 <p className="text-muted-foreground mb-4">Crie seu primeiro projeto para começar</p>
                 <Button onClick={() => setShowDialog(true)}>
                   <Plus className="w-4 h-4 mr-2" />
@@ -537,7 +537,7 @@ const Projects = () => {
                 {serviceFronts.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {serviceFronts.map((front, index) => (
-                      <div key={index} className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-1 rounded-md text-sm">
+                      <div key={index} className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-1 rounded-none text-sm">
                         <span>{front}</span>
                         <button
                           type="button"
@@ -574,7 +574,7 @@ const Projects = () => {
                 {constructionSites.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {constructionSites.map((site, index) => (
-                      <div key={index} className="flex items-center gap-1 bg-secondary/10 text-secondary px-2 py-1 rounded-md text-sm">
+                      <div key={index} className="flex items-center gap-1 bg-secondary/10 text-secondary px-2 py-1 rounded-none text-sm">
                         <span>{site}</span>
                         <button
                           type="button"

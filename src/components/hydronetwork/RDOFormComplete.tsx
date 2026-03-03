@@ -6,12 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, MapPin } from "lucide-react";
+import { Plus, Trash2, MapPin, Filter, Sun, Cloud, CloudRain, CloudLightning, CloudSun, ClipboardList, Users, Truck, Wrench, Ruler, Droplets, FileText } from "lucide-react";
 import {
   RDO, ExecutedService, SegmentProgress, ServiceUnit, RDOStatus, SystemType,
   generateId, saveRDOs, validateRDO,
 } from "@/engine/rdo";
-import { useState } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 
 type ClimaCond = "bom" | "nublado" | "chuva" | "impraticavel";
 
@@ -55,11 +55,11 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
     occurrences: "",
   });
 
-  const climaOptions: { value: ClimaCond; label: string }[] = [
-    { value: "bom", label: "☀️ Bom" },
-    { value: "nublado", label: "☁️ Nublado" },
-    { value: "chuva", label: "🌧️ Chuva" },
-    { value: "impraticavel", label: "⛈️ Impraticável" },
+  const climaOptions: { value: ClimaCond; label: ReactNode }[] = [
+    { value: "bom", label: <><Sun className="h-3 w-3 inline-block mr-1" /> Bom</> },
+    { value: "nublado", label: <><Cloud className="h-3 w-3 inline-block mr-1" /> Nublado</> },
+    { value: "chuva", label: <><CloudRain className="h-3 w-3 inline-block mr-1" /> Chuva</> },
+    { value: "impraticavel", label: <><CloudLightning className="h-3 w-3 inline-block mr-1" /> Impraticável</> },
   ];
 
   const addService = () => {
@@ -125,7 +125,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
     <div className="space-y-4">
       {/* 1. Informações Gerais */}
       <Card>
-        <CardHeader><CardTitle>📋 1. Informações Gerais</CardTitle></CardHeader>
+        <CardHeader><CardTitle><ClipboardList className="h-4 w-4 inline-block mr-1" /> 1. Informações Gerais</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <Label>Data do Relatório</Label>
@@ -144,7 +144,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
 
       {/* 2. Condições Climáticas */}
       <Card>
-        <CardHeader><CardTitle>🌤️ 2. Condições Climáticas</CardTitle></CardHeader>
+        <CardHeader><CardTitle><CloudSun className="h-4 w-4 inline-block mr-1" /> 2. Condições Climáticas</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[
             { label: "Manhã", key: "climaManha" as const },
@@ -172,7 +172,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
 
       {/* 3. Efetivo */}
       <Card>
-        <CardHeader><CardTitle>👷 3. Mão de Obra</CardTitle></CardHeader>
+        <CardHeader><CardTitle><Users className="h-4 w-4 inline-block mr-1" /> 3. Mão de Obra</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
@@ -196,13 +196,32 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
 
       {/* 4. Equipamentos */}
       <Card>
-        <CardHeader><CardTitle>🚜 4. Equipamentos</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle><Truck className="h-4 w-4 inline-block mr-1" /> 4. Equipamentos</CardTitle>
+          <Button size="sm" variant="outline" onClick={() => {
+            setForm(p => ({
+              ...p,
+              equipamentos: [...p.equipamentos, { nome: "", quantidade: 1, horas: 8 }],
+            }));
+          }}>
+            <Plus className="h-4 w-4 mr-1" /> Adicionar Equipamento
+          </Button>
+        </CardHeader>
         <CardContent>
           <div className="space-y-2">
             {form.equipamentos.map((eq, idx) => (
-              <div key={idx} className="grid grid-cols-3 gap-3 items-end">
+              <div key={idx} className="grid grid-cols-4 gap-3 items-end">
                 <div>
-                  <Label className="text-xs">{eq.nome}</Label>
+                  <Label className="text-xs">Equipamento</Label>
+                  <Input
+                    value={eq.nome}
+                    onChange={e => {
+                      const eqs = [...form.equipamentos];
+                      eqs[idx] = { ...eqs[idx], nome: e.target.value };
+                      setForm(p => ({ ...p, equipamentos: eqs }));
+                    }}
+                    placeholder="Nome do equipamento"
+                  />
                 </div>
                 <div>
                   <Label className="text-xs">Quantidade</Label>
@@ -222,16 +241,32 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
                       setForm(p => ({ ...p, equipamentos: eqs }));
                     }} />
                 </div>
+                <div>
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => {
+                    setForm(p => ({ ...p, equipamentos: p.equipamentos.filter((_, i) => i !== idx) }));
+                  }}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
+          {form.equipamentos.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Nenhum equipamento. Clique em "Adicionar Equipamento" acima.
+            </p>
+          )}
+          <Badge variant="outline" className="mt-3">
+            Total: {form.equipamentos.reduce((s, eq) => s + eq.quantidade, 0)} equipamentos,{" "}
+            {form.equipamentos.reduce((s, eq) => s + eq.quantidade * eq.horas, 0)} horas-máquina
+          </Badge>
         </CardContent>
       </Card>
 
       {/* 5. Serviços Executados */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>🔧 5. Serviços Executados</CardTitle>
+          <CardTitle><Wrench className="h-4 w-4 inline-block mr-1" /> 5. Serviços Executados</CardTitle>
           <Button size="sm" variant="outline" onClick={addService}><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -277,15 +312,15 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
       {/* 6. Avanço por Trecho */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>📏 6. Avanço por Trecho</CardTitle>
+          <CardTitle><Ruler className="h-4 w-4 inline-block mr-1" /> 6. Avanço por Trecho</CardTitle>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={addSegment}><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
             {trechos.length > 0 && form.segments.length === 0 && (
               <Button size="sm" variant="secondary" onClick={() => {
-                const segs: SegmentProgress[] = trechos.map(t => ({
+                const segs: SegmentProgress[] = trechos.map((t, i) => ({
                   id: generateId(),
-                  segmentName: `${t.idInicio}-${t.idFim}`,
-                  system: "esgoto" as SystemType,
+                  segmentName: t.nomeTrecho || `${t.idInicio}-${t.idFim}`,
+                  system: (t.tipoRedeManual === "agua" ? "agua" : t.tipoRedeManual === "drenagem" ? "drenagem" : "esgoto") as SystemType,
                   plannedTotal: t.comprimento,
                   executedBefore: 0,
                   executedToday: 0,
@@ -299,6 +334,31 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* Segment filters */}
+          {form.segments.length > 0 && (
+            <div className="flex gap-2 flex-wrap items-center border-b pb-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => {
+                const incomplete = form.segments.filter(s => (s.executedBefore + s.executedToday) < s.plannedTotal);
+                if (incomplete.length === form.segments.length) return;
+                setForm(p => ({ ...p, segments: incomplete }));
+                toast.info(`Filtrado: ${incomplete.length} trechos nao concluidos.`);
+              }}>Nao Concluidos</Button>
+              {["agua", "esgoto", "drenagem"].map(sys => {
+                const count = form.segments.filter(s => s.system === sys).length;
+                if (count === 0) return null;
+                return (
+                  <Badge key={sys} variant="outline" className="text-xs cursor-default">
+                    {sys === "agua" ? <Droplets className="h-3 w-3 inline-block mr-0.5 text-blue-400" /> : sys === "esgoto" ? <Droplets className="h-3 w-3 inline-block mr-0.5 text-green-500" /> : <CloudRain className="h-3 w-3 inline-block mr-0.5 text-amber-500" />} {sys}: {count}
+                  </Badge>
+                );
+              })}
+              <Badge variant="outline" className="text-xs">
+                Total: {form.segments.length} trechos
+              </Badge>
+            </div>
+          )}
+
           {form.segments.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">
               {trechos.length > 0
@@ -307,13 +367,25 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
             </p>
           )}
           {form.segments.map((seg, idx) => (
-            <div key={seg.id} className="grid grid-cols-6 gap-2 items-end">
+            <div key={seg.id} className="grid grid-cols-7 gap-2 items-end">
               <Input placeholder="Trecho" value={seg.segmentName}
                 onChange={e => {
                   const s = [...form.segments];
                   s[idx] = { ...s[idx], segmentName: e.target.value };
                   setForm(p => ({ ...p, segments: s }));
                 }} />
+              <Select value={seg.system} onValueChange={v => {
+                const s = [...form.segments];
+                s[idx] = { ...s[idx], system: v as SystemType };
+                setForm(p => ({ ...p, segments: s }));
+              }}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="agua"><Droplets className="h-3 w-3 inline-block mr-1 text-blue-400" /> Agua</SelectItem>
+                  <SelectItem value="esgoto"><Droplets className="h-3 w-3 inline-block mr-1 text-green-500" /> Esgoto</SelectItem>
+                  <SelectItem value="drenagem"><CloudRain className="h-3 w-3 inline-block mr-1 text-amber-500" /> Drenagem</SelectItem>
+                </SelectContent>
+              </Select>
               <Input type="number" placeholder="Planej." value={seg.plannedTotal || ""}
                 onChange={e => {
                   const s = [...form.segments];
@@ -345,7 +417,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
 
       {/* 7. Geolocalização */}
       <Card>
-        <CardHeader><CardTitle>📍 7. Georreferenciamento</CardTitle></CardHeader>
+        <CardHeader><CardTitle><MapPin className="h-4 w-4 inline-block mr-1" /> 7. Georreferenciamento</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -365,7 +437,7 @@ export const RDOFormComplete = ({ rdos, setRdos, trechos = [], onComplete }: RDO
 
       {/* 8. Observações */}
       <Card>
-        <CardHeader><CardTitle>📝 8. Observações e Ocorrências</CardTitle></CardHeader>
+        <CardHeader><CardTitle><FileText className="h-4 w-4 inline-block mr-1" /> 8. Observações e Ocorrências</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div>
             <Label>Observações Gerais</Label>

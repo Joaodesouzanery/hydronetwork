@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,262 +6,1261 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Plus, Trash2, Calculator, Upload, Droplets, AlertTriangle, Link, Ruler } from "lucide-react";
+import {
+  Calculator, Droplets, CheckCircle, XCircle, Download,
+  AlertTriangle, Zap, Upload, Settings, MapPin,
+  Map as MapIcon, TableProperties, TrendingUp, BarChart3,
+  Mountain, Play, FileDown, Save, CloudOff,
+} from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
-import { hazenWilliamsHeadloss, hazenWilliamsVelocity } from "@/engine/hydraulics";
-import { NodeMapWidget, ConnectionData } from "@/components/hydronetwork/NodeMapWidget";
+import { Trecho } from "@/engine/domain";
+import { classifyNetworkType } from "@/engine/geometry";
+import {
+  dimensionWaterNetwork,
+  propagateNetworkPressure,
+  getHWCoefficient,
+  numberWaterNetwork,
+  MATERIAIS_AGUA,
+  type WaterSegmentInput,
+  type WaterSegmentResult,
+  type WaterNodeInput,
+} from "@/engine/qwaterEngine";
+import { NetworkMapView } from "@/components/hydronetwork/modules/NetworkMapView";
+import { GisMapTab } from "@/components/hydronetwork/modules/GisMapTab";
+import { ElementTypeAssigner, ElementAssignment } from "@/components/hydronetwork/modules/ElementTypeAssigner";
+import { AttributeTableEditor, WaterNodeAttributes, WaterEdgeAttributes } from "@/components/hydronetwork/modules/AttributeTableEditor";
+import { LongitudinalProfile } from "@/components/hydronetwork/modules/LongitudinalProfile";
+import { WATER_DEFAULTS, DEMO_UTM_ORIGIN } from "@/config/defaults";
+import { useSpatialData } from "@/hooks/useSpatialData";
+import { getNodesByOrigin } from "@/core/spatial";
+import { useDimensioningPersistence } from "@/hooks/useDimensioningPersistence";
+import type { WaterDimensioningState } from "@/engine/sharedPlanningStore";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
+  BarChart, Bar,
+} from "recharts";
 
-interface WaterNode {
-  id: string; x: number; y: number; cota: number; demanda: number;
-}
-
-interface WaterResult {
-  id: string; de: string; para: string; comp: number; dn: number;
-  q: number; v: number; hf: number; pressao: number; status: "OK" | "WARN";
-}
+// ══════════════════════════════════════
+// Interfaces
+// ══════════════════════════════════════
 
 interface WaterModuleProps {
-  pontos: PontoTopografico[];
+  pontos?: PontoTopografico[];
+  trechos?: Trecho[];
+  onPontosChange?: (p: PontoTopografico[]) => void;
+  onTrechosChange?: (t: Trecho[]) => void;
 }
 
-export const WaterModule = ({ pontos }: WaterModuleProps) => {
-  const [hazenC, setHazenC] = useState(140);
-  const [pressaoMin, setPressaoMin] = useState(10);
-  const [velMax, setVelMax] = useState(3.5);
-  const [dnMin, setDnMin] = useState("50");
-  const [nodes, setNodes] = useState<WaterNode[]>([]);
-  const [newNode, setNewNode] = useState({ id: "", x: 0, y: 0, cota: 0, demanda: 2.0 });
-  const [calculated, setCalculated] = useState(false);
-  const [mapConnections, setMapConnections] = useState<ConnectionData[]>([]);
+// ── Map formatters ──
+const formatWaterTooltip = (segId: string, r: WaterSegmentResult) =>
+  `${segId} | DN${r.diametroMm} | V=${r.velocidadeMs.toFixed(2)} m/s | P=${r.pressaoJusante?.toFixed(1) ?? "-"} mca`;
 
-  const addNode = () => {
-    if (!newNode.id.trim()) { toast.error("ID obrigatório"); return; }
-    setNodes([...nodes, { ...newNode }]);
-    setNewNode({ id: `N${nodes.length + 2}`, x: 0, y: 0, cota: 0, demanda: 2.0 });
+const formatWaterPopup = (segId: string, r: WaterSegmentResult) => `
+  <div style="font-size:12px;line-height:1.6">
+    <strong>${segId}</strong><br/>
+    <b>DN:</b> ${r.diametroMm} mm<br/>
+    <b>V:</b> ${r.velocidadeMs.toFixed(3)} m/s<br/>
+    <b>hf:</b> ${r.perdaCargaM.toFixed(3)} m<br/>
+    <b>J:</b> ${r.perdaCargaUnitaria.toFixed(5)} m/m<br/>
+    <b>P jus:</b> ${r.pressaoJusante?.toFixed(1) ?? "-"} mca<br/>
+    <b>Status:</b> ${r.atendeNorma ? "OK" : "FALHA"}<br/>
+    ${r.observacoes.length > 0 ? `<b>Obs:</b> ${r.observacoes.join("; ")}` : ""}
+  </div>`;
+
+// ══════════════════════════════════════
+// Main Component — 5 GIS Tabs
+// ══════════════════════════════════════
+
+export const WaterModule = ({ pontos, trechos, onPontosChange, onTrechosChange }: WaterModuleProps) => {
+  // ── Spatial data (primary source) ──
+  const spatial = useSpatialData("qwater");
+
+  // ── GIS data ──
+  const [gisPontos, setGisPontos] = useState<PontoTopografico[]>(pontos || []);
+  const [gisTrechos, setGisTrechos] = useState<Trecho[]>(trechos || []);
+  const [assignments, setAssignments] = useState<ElementAssignment>({
+    nodeTypes: new Map(), edgeTypes: new Map(),
+  });
+  const [waterNodeAttrs, setWaterNodeAttrs] = useState<WaterNodeAttributes[]>([]);
+  const [waterEdgeAttrs, setWaterEdgeAttrs] = useState<WaterEdgeAttributes[]>([]);
+
+  // Sync external data on first load
+  useEffect(() => {
+    if (pontos && pontos.length > 0 && gisPontos.length === 0) setGisPontos(pontos);
+  }, [pontos?.length]);
+  useEffect(() => {
+    if (trechos && trechos.length > 0 && gisTrechos.length === 0) setGisTrechos(trechos);
+  }, [trechos?.length]);
+
+  const handleGisPontosChange = useCallback((p: PontoTopografico[]) => {
+    setGisPontos(p);
+    onPontosChange?.(p);
+  }, [onPontosChange]);
+  const handleGisTrechosChange = useCallback((t: Trecho[]) => {
+    setGisTrechos(t);
+    onTrechosChange?.(t);
+  }, [onTrechosChange]);
+
+  // ── Hydraulic parameters ──
+  const [formula, setFormula] = useState<"hazen-williams" | "colebrook">(WATER_DEFAULTS.formula);
+  const [coefHW, setCoefHW] = useState(WATER_DEFAULTS.coefHW);
+  const [velMinAgua, setVelMinAgua] = useState(WATER_DEFAULTS.velMin);
+  const [velMaxAgua, setVelMaxAgua] = useState(WATER_DEFAULTS.velMax);
+  const [pressaoMin, setPressaoMin] = useState(WATER_DEFAULTS.pressaoMin);
+  const [pressaoMax, setPressaoMax] = useState(WATER_DEFAULTS.pressaoMax);
+  const [diamMinAgua, setDiamMinAgua] = useState(WATER_DEFAULTS.diamMinMm);
+  const [materialAgua, setMaterialAgua] = useState(WATER_DEFAULTS.defaultMaterial);
+  const [vazaoAgua, setVazaoAgua] = useState(WATER_DEFAULTS.defaultVazaoLps);
+
+  // ── Results ──
+  const [waterResults, setWaterResults] = useState<WaterSegmentResult[]>([]);
+  const [waterResumo, setWaterResumo] = useState<{ total: number; atendem: number } | null>(null);
+  const [pressureData, setPressureData] = useState<{ nodeId: string; pressao: number; hfAcumulada: number }[]>([]);
+
+  // ── EPANET integration ──
+  const [epanetResults, setEpanetResults] = useState<any>(null);
+  const [epanetRunning, setEpanetRunning] = useState(false);
+
+  // ── Persistence ──
+  const persistence = useDimensioningPersistence("water");
+  const restoredRef = useRef(false);
+
+  // Load saved state on mount
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    persistence.load().then((saved) => {
+      if (!saved) return;
+      const s = saved as WaterDimensioningState;
+      if (s.nodeAttrs?.length > 0) setWaterNodeAttrs(s.nodeAttrs);
+      if (s.edgeAttrs?.length > 0) setWaterEdgeAttrs(s.edgeAttrs);
+      if (s.results?.length > 0) {
+        setWaterResults(s.results);
+        const atendem = s.results.filter((r: any) => r.atendeNorma).length;
+        setWaterResumo({ total: s.results.length, atendem });
+      }
+      if (s.pressureData?.length > 0) setPressureData(s.pressureData);
+      if (s.gisPontos?.length > 0) setGisPontos(s.gisPontos);
+      if (s.gisTrechos?.length > 0) setGisTrechos(s.gisTrechos);
+      if (s.params) {
+        if (s.params.formula) setFormula(s.params.formula as "hazen-williams" | "colebrook");
+        if (s.params.coefHW) setCoefHW(s.params.coefHW);
+        if (s.params.velMin) setVelMinAgua(s.params.velMin);
+        if (s.params.velMax) setVelMaxAgua(s.params.velMax);
+        if (s.params.pressaoMin) setPressaoMin(s.params.pressaoMin);
+        if (s.params.pressaoMax) setPressaoMax(s.params.pressaoMax);
+        if (s.params.diamMin) setDiamMinAgua(s.params.diamMin);
+        if (s.params.material) setMaterialAgua(s.params.material);
+        if (s.params.vazao) setVazaoAgua(s.params.vazao);
+      }
+    });
+  }, []);
+
+  // Auto-save on state changes (debounced)
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    const hasData = waterNodeAttrs.length > 0 || waterEdgeAttrs.length > 0 || waterResults.length > 0 || gisPontos.length > 0;
+    if (!hasData) return;
+    const state: WaterDimensioningState = {
+      nodeAttrs: waterNodeAttrs,
+      edgeAttrs: waterEdgeAttrs,
+      results: waterResults,
+      pressureData,
+      params: {
+        formula, coefHW, velMin: velMinAgua, velMax: velMaxAgua,
+        pressaoMin, pressaoMax, diamMin: diamMinAgua,
+        material: materialAgua, vazao: vazaoAgua,
+      },
+      gisPontos,
+      gisTrechos,
+    };
+    persistence.save(state);
+  }, [waterNodeAttrs, waterEdgeAttrs, waterResults, pressureData,
+      gisPontos, gisTrechos, formula, coefHW, velMinAgua, velMaxAgua,
+      pressaoMin, pressaoMax, diamMinAgua, materialAgua, vazaoAgua]);
+
+  // Auto-import from topography if no local data
+  useEffect(() => {
+    if (gisPontos.length > 0 || spatial.nodes.length > 0) return;
+    const topoNodes = getNodesByOrigin("topografia");
+    if (topoNodes.length > 0) {
+      spatial.importFromTopography();
+      toast.info("Rede importada da Topografia automaticamente");
+    }
+  }, []); // mount only
+
+  // ── Derived ──
+  const activePontos = spatial.legacyPontos.length > 0
+    ? spatial.legacyPontos
+    : gisPontos.length > 0
+      ? gisPontos
+      : (pontos || []);
+  const activeTrechos = spatial.legacyTrechos.length > 0
+    ? spatial.legacyTrechos
+    : gisTrechos.length > 0
+      ? gisTrechos
+      : (trechos || []);
+  const waterTrechos = useMemo(() =>
+    activeTrechos.filter(t => {
+      if (!t.tipoRedeManual) return true; // include unclassified trechos
+      return t.tipoRedeManual === "agua" || t.tipoRedeManual === "outro";
+    }), [activeTrechos]);
+
+  const handleMaterialChange = (mat: string) => {
+    setMaterialAgua(mat);
+    setCoefHW(getHWCoefficient(mat));
   };
 
+  // ── Transfer / Demo ──
   const transferFromTopography = () => {
-    if (pontos.length === 0) { toast.error("Nenhum ponto na topografia"); return; }
-    const newNodes = pontos.map(p => ({ id: p.id, x: p.x, y: p.y, cota: p.cota, demanda: 2.0 }));
-    setNodes(newNodes);
-    setMapConnections(newNodes.slice(0, -1).map((n, i) => ({
-      from: n.id, to: newNodes[i + 1].id, color: "#06b6d4", label: `${n.id} → ${newNodes[i + 1].id}`
-    })));
-    toast.success(`${pontos.length} nós transferidos`);
+    spatial.importFromTopography();
+    const topoNodes = getNodesByOrigin("topografia");
+    if (topoNodes.length === 0 && (!pontos || pontos.length === 0)) {
+      toast.error("Nenhum ponto na topografia"); return;
+    }
+    // If spatial import worked
+    if (spatial.nodes.length > 0) {
+      setGisPontos(spatial.legacyPontos);
+      // Tag trechos with correct network type
+      setGisTrechos(spatial.legacyTrechos.map(t => ({
+        ...t,
+        tipoRedeManual: t.tipoRedeManual || "agua",
+      })));
+    } else if (pontos && pontos.length > 0) {
+      setGisPontos(pontos);
+      // Tag trechos with correct network type
+      setGisTrechos((trechos || []).map(t => ({
+        ...t,
+        tipoRedeManual: t.tipoRedeManual || "agua",
+      })));
+    }
+    toast.success(`Dados transferidos da topografia`);
   };
 
   const loadDemo = () => {
-    const demo: WaterNode[] = [
-      { id: "N1", x: 350000, y: 7400000, cota: 105.0, demanda: 3.0 },
-      { id: "N2", x: 350060, y: 7400020, cota: 103.5, demanda: 2.5 },
-      { id: "N3", x: 350120, y: 7400050, cota: 102.0, demanda: 4.0 },
-      { id: "N4", x: 350180, y: 7400080, cota: 101.0, demanda: 1.5 },
+    const { x: X0, y: Y0 } = DEMO_UTM_ORIGIN;
+    const demoPontos: PontoTopografico[] = [
+      { id: "RES", x: X0,       y: Y0,       cota: 110.0 },
+      { id: "N1",  x: X0 + 80,  y: Y0 + 20,  cota: 105.0 },
+      { id: "N2",  x: X0 + 160, y: Y0 + 50,  cota: 102.0 },
+      { id: "N3",  x: X0 + 220, y: Y0 + 70,  cota: 100.0 },
+      { id: "N4",  x: X0 + 280, y: Y0 + 90,  cota: 98.0 },
     ];
-    setNodes(demo);
-    setMapConnections(demo.slice(0, -1).map((n, i) => ({
-      from: n.id, to: demo[i + 1].id, color: "#06b6d4", label: `${n.id} → ${demo[i + 1].id}`
-    })));
-    setCalculated(false);
-    toast.success("Demo de água carregado");
-  };
-
-  const handleNodeDemandChange = (nodeId: string, demanda: number) => {
-    setNodes(nodes.map(n => n.id === nodeId ? { ...n, demanda } : n));
-  };
-
-  const results = useMemo<WaterResult[]>(() => {
-    if (nodes.length < 2 || !calculated) return [];
-    const res: WaterResult[] = [];
-    const dn = parseInt(dnMin);
-    const D = dn / 1000;
-    let cumulativePressureLoss = 0;
-    for (let i = 0; i < nodes.length - 1; i++) {
-      const n1 = nodes[i]; const n2 = nodes[i + 1];
-      const dx = n2.x - n1.x; const dy = n2.y - n1.y;
+    const demoTrechos: Trecho[] = [];
+    for (let i = 0; i < demoPontos.length - 1; i++) {
+      const p0 = demoPontos[i], p1 = demoPontos[i + 1];
+      const dx = p1.x - p0.x, dy = p1.y - p0.y;
       const comp = Math.sqrt(dx * dx + dy * dy);
-      if (comp === 0) continue;
-      const q = n1.demanda / 1000;
-      const v = hazenWilliamsVelocity(q, D);
-      const hf = hazenWilliamsHeadloss(q, D, comp, hazenC);
-      cumulativePressureLoss += hf;
-      const pressao = nodes[0].cota - n2.cota - cumulativePressureLoss;
-      res.push({
-        id: `L${i + 1}`, de: `P${String(i + 1).padStart(2, "0")}`, para: `P${String(i + 2).padStart(2, "0")}`,
-        comp: Math.round(comp * 10) / 10, dn, q: n1.demanda,
-        v: parseFloat(v.toFixed(3)), hf: parseFloat(hf.toFixed(4)),
-        pressao: parseFloat(pressao.toFixed(1)), status: pressao < pressaoMin ? "WARN" : "OK",
+      const decl = comp > 0 ? (p0.cota - p1.cota) / comp : 0;
+      demoTrechos.push({
+        idInicio: p0.id, idFim: p1.id, comprimento: Math.round(comp * 10) / 10,
+        declividade: decl, tipoRede: classifyNetworkType(decl), diametroMm: 100, material: "PVC",
+        xInicio: p0.x, yInicio: p0.y, cotaInicio: p0.cota,
+        xFim: p1.x, yFim: p1.y, cotaFim: p1.cota,
+        tipoRedeManual: "agua",
       });
     }
-    return res;
-  }, [nodes, calculated, dnMin, hazenC, pressaoMin]);
-
-  const warnings = useMemo(() => results.filter(r => r.pressao < pressaoMin).map(r => ({
-    trecho: `${r.de}-${r.para}`, msg: `Pressão ${r.pressao.toFixed(1)} < ${pressaoMin} mca em ${r.para}`,
-  })), [results, pressaoMin]);
-
-  const summary = useMemo(() => {
-    if (results.length === 0) return null;
-    const totalComp = results.reduce((s, r) => s + r.comp, 0);
-    const minPressao = Math.min(...results.map(r => r.pressao));
-    return { trechos: results.length, extensao: totalComp, pressaoMin: minPressao, alertas: warnings.length };
-  }, [results, warnings]);
-
-  const calculate = () => {
-    if (nodes.length < 2) { toast.error("Mínimo 2 nós"); return; }
-    setCalculated(true);
-    toast.success(`Cálculo de água: ${nodes.length} nós, C=${hazenC}, Pmin=${pressaoMin} mca`);
+    handleGisPontosChange(demoPontos);
+    handleGisTrechosChange(demoTrechos);
+    // Also set demand attributes for demo
+    setWaterNodeAttrs([
+      { id: "RES", tipo: "reservoir", cota: 110.0, demanda: 0, pressao: 0, x: X0, y: Y0, observacao: "" },
+      { id: "N1", tipo: "junction", cota: 105.0, demanda: 0.8, pressao: 0, x: X0 + 80, y: Y0 + 20, observacao: "" },
+      { id: "N2", tipo: "junction", cota: 102.0, demanda: 1.2, pressao: 0, x: X0 + 160, y: Y0 + 50, observacao: "" },
+      { id: "N3", tipo: "junction", cota: 100.0, demanda: 0.6, pressao: 0, x: X0 + 220, y: Y0 + 70, observacao: "" },
+      { id: "N4", tipo: "junction", cota: 98.0, demanda: 0.4, pressao: 0, x: X0 + 280, y: Y0 + 90, observacao: "" },
+    ]);
+    toast.success("Demo de água carregado (5 nós)");
   };
+
+  // ── Dimensioning ──
+  const dimensionWater = useCallback(() => {
+    // Parameter validation
+    if (velMinAgua >= velMaxAgua) {
+      toast.error(`V mín (${velMinAgua}) deve ser menor que V máx (${velMaxAgua})`);
+      return;
+    }
+    if (pressaoMin >= pressaoMax) {
+      toast.error(`P mín (${pressaoMin}) deve ser menor que P máx (${pressaoMax})`);
+      return;
+    }
+    if (coefHW <= 0) {
+      toast.error("Coeficiente Hazen-Williams deve ser maior que zero");
+      return;
+    }
+
+    let inputs: WaterSegmentInput[];
+
+    if (waterEdgeAttrs.length > 0) {
+      // From attribute table (priority)
+      inputs = waterEdgeAttrs.map(e => ({
+        id: e.key,
+        comprimento: e.comprimento,
+        cotaMontante: 0, cotaJusante: 0, // Will use node cotas
+        vazaoLps: e.vazao > 0 ? e.vazao : vazaoAgua,
+        material: e.material,
+      }));
+      // Fill cotas from node attributes
+      const nodeMap = new Map(waterNodeAttrs.map(n => [n.id, n]));
+      inputs = inputs.map(inp => {
+        const edge = waterEdgeAttrs.find(e => e.key === inp.id);
+        if (!edge) return inp;
+        const fromNode = nodeMap.get(edge.idInicio);
+        const toNode = nodeMap.get(edge.idFim);
+        return {
+          ...inp,
+          cotaMontante: fromNode?.cota ?? 0,
+          cotaJusante: toNode?.cota ?? 0,
+        };
+      });
+    } else if (waterTrechos.length > 0) {
+      inputs = waterTrechos.map(t => ({
+        id: `${t.idInicio}-${t.idFim}`,
+        comprimento: t.comprimento,
+        cotaMontante: t.cotaInicio,
+        cotaJusante: t.cotaFim,
+        vazaoLps: vazaoAgua,
+        material: materialAgua,
+      }));
+    } else {
+      toast.error("Importe dados no Mapa ou preencha a tabela de Rede.");
+      return;
+    }
+
+    const { resultados, resumo } = dimensionWaterNetwork(inputs, {
+      formula, coefHW, velMin: velMinAgua, velMax: velMaxAgua, pressaoMin, pressaoMax, diamMinMm: diamMinAgua,
+    });
+    setWaterResults(resultados);
+    setWaterResumo({ total: resumo.total, atendem: resumo.atendem });
+
+    // Propagate calculated diameters back to trechos
+    const resultMap = new Map(resultados.map(r => [r.id, r]));
+    const updatedTrechos = activeTrechos.map(t => {
+      const r = resultMap.get(`${t.idInicio}-${t.idFim}`);
+      return r ? { ...t, diametroMm: r.diametroMm } : t;
+    });
+    handleGisTrechosChange(updatedTrechos);
+
+    // Write results to Spatial Core edges
+    for (const r of resultados) {
+      const edge = spatial.edges.find(e => e.id === r.id);
+      if (edge) {
+        edge.properties.DN = r.diametroMm;
+        edge.properties.velocity = r.velocidadeMs;
+        edge.properties.compliance = r.atendeNorma;
+        edge.properties.perdaCarga = r.perdaCargaM;
+      }
+    }
+    spatial.refresh();
+
+    // Propagate pressure
+    const nodeInputs: WaterNodeInput[] = waterNodeAttrs.length > 0
+      ? waterNodeAttrs.map(n => ({ id: n.id, cota: n.cota, demanda: n.demanda }))
+      : activePontos.map(p => ({ id: p.id, cota: p.cota, demanda: vazaoAgua }));
+
+    if (nodeInputs.length >= 2) {
+      const sourceElev = nodeInputs[0].cota;
+      const pData = propagateNetworkPressure(nodeInputs, resultados, sourceElev);
+      setPressureData(pData);
+    }
+
+    toast.success(`QWater: ${resumo.atendem}/${resumo.total} atendem NBR 12218`);
+  }, [waterEdgeAttrs, waterNodeAttrs, waterTrechos, activePontos, activeTrechos,
+      formula, coefHW, velMinAgua, velMaxAgua, pressaoMin, pressaoMax, diamMinAgua,
+      vazaoAgua, materialAgua, handleGisTrechosChange, spatial]);
+
+  const applyDiameters = useCallback(() => {
+    if (waterResults.length === 0) return;
+    const m = new Map(waterResults.map(r => [r.id, r.diametroMm]));
+    handleGisTrechosChange(activeTrechos.map(t => {
+      const d = m.get(`${t.idInicio}-${t.idFim}`);
+      return d ? { ...t, diametroMm: d } : t;
+    }));
+    toast.success("Diâmetros aplicados");
+  }, [waterResults, activeTrechos, handleGisTrechosChange]);
+
+  // ── Run EPANET ──
+  const runEpanet = useCallback(async () => {
+    if (waterNodeAttrs.length === 0 || waterEdgeAttrs.length === 0) {
+      toast.error("Preencha a tabela de Rede primeiro (nós e trechos).");
+      return;
+    }
+    setEpanetRunning(true);
+    try {
+      const { runWaterEpanet, epanetResultsToWater } = await import("@/engine/qwaterEpanetBridge");
+      const simResult = await runWaterEpanet(waterNodeAttrs, waterEdgeAttrs);
+      const { updatedNodes, linkResults } = epanetResultsToWater(simResult, waterNodeAttrs);
+      setWaterNodeAttrs(updatedNodes);
+      setEpanetResults({ nodes: simResult.nodes, links: linkResults, converged: simResult.converged });
+      toast.success(`EPANET: simulação concluída (${simResult.nodes.length} nós, ${simResult.links.length} links)`);
+    } catch (err: any) {
+      toast.error(`Erro EPANET: ${err.message}`);
+    } finally {
+      setEpanetRunning(false);
+    }
+  }, [waterNodeAttrs, waterEdgeAttrs]);
+
+  // ── Export DXF ──
+  const exportDxf = useCallback(() => {
+    const pts = activePontos;
+    const segs = activeTrechos.filter(t => !t.tipoRedeManual || t.tipoRedeManual === "agua");
+    if (pts.length === 0) { toast.error("Sem dados para exportar"); return; }
+    import("@/lib/dxfExporter").then(({ downloadDXF }) => {
+      downloadDXF(pts, segs, "qwater_rede.dxf");
+      toast.success("DXF exportado");
+    });
+  }, [activePontos, activeTrechos]);
+
+  const exportCSV = () => {
+    if (waterResults.length === 0) return;
+    let csv = "Trecho;DN (mm);V (m/s);hf (m);J (m/m);P jus (mca);Status;Obs\n";
+    for (const r of waterResults) csv += `${r.id};${r.diametroMm};${r.velocidadeMs};${r.perdaCargaM};${r.perdaCargaUnitaria};${r.pressaoJusante ?? "-"};${r.atendeNorma ? "OK" : "NAO"};${r.observacoes.join(" | ")}\n`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url;
+    a.download = "dimensionamento_agua.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── Stats ──
+  const alertCount = waterResults.filter(r => !r.atendeNorma).length;
+  const compliance = waterResumo
+    ? Math.round((waterResumo.atendem / Math.max(waterResumo.total, 1)) * 100) : 0;
+  const canDimension = waterEdgeAttrs.length > 0 || waterTrechos.length > 0;
+  const totalDemanda = waterNodeAttrs.length > 0
+    ? waterNodeAttrs.reduce((s, n) => s + n.demanda, 0) : 0;
+  const minPressao = pressureData.length > 0
+    ? Math.min(...pressureData.map(p => p.pressao)) : null;
+
+  // Chart data
+  const pressureChartData = useMemo(() =>
+    pressureData.map(p => ({ name: p.nodeId, pressao: p.pressao, hf: p.hfAcumulada })),
+    [pressureData]);
+
+  const velocityChartData = useMemo(() =>
+    waterResults.map(r => ({ name: r.id, velocidade: r.velocidadeMs, hf: r.perdaCargaM })),
+    [waterResults]);
+
+  // Pressure profile data for LongitudinalProfile component
+  const pressureProfileData = useMemo(() => {
+    if (pressureData.length === 0 || waterNodeAttrs.length === 0) return undefined;
+    let cumDist = 0;
+    return pressureData.map((p, i) => {
+      const nodeAttr = waterNodeAttrs.find(n => n.id === p.nodeId);
+      if (i > 0 && waterEdgeAttrs.length > i - 1) {
+        cumDist += waterEdgeAttrs[i - 1]?.comprimento ?? 0;
+      } else if (i > 0 && waterTrechos.length > i - 1) {
+        cumDist += waterTrechos[i - 1]?.comprimento ?? 0;
+      }
+      return {
+        nodeId: p.nodeId,
+        distancia: cumDist,
+        cota: nodeAttr?.cota ?? 0,
+        pressao: p.pressao,
+        linhaP: (nodeAttr?.cota ?? 0) + p.pressao,
+      };
+    });
+  }, [pressureData, waterNodeAttrs, waterEdgeAttrs, waterTrechos]);
+
+  // ── Fill Fields (auto-fill attributes from geometry) ──
+  const fillWaterFields = useCallback(() => {
+    if (activePontos.length === 0) {
+      toast.error("Importe dados no Mapa primeiro.");
+      return;
+    }
+    // Create node attrs if they don't exist
+    if (waterNodeAttrs.length === 0) {
+      const nodes: WaterNodeAttributes[] = activePontos.map(p => ({
+        id: p.id, tipo: "junction", cota: p.cota, demanda: vazaoAgua,
+        pressao: 0, x: p.x, y: p.y, observacao: "",
+      }));
+      // First node defaults to reservoir
+      if (nodes.length > 0) nodes[0].tipo = "reservoir";
+      setWaterNodeAttrs(nodes);
+    }
+    // Create edge attrs if they don't exist
+    if (waterEdgeAttrs.length === 0 && waterTrechos.length > 0) {
+      const nodeMap = new Map(activePontos.map(p => [p.id, p]));
+      const edges: WaterEdgeAttributes[] = waterTrechos.map(t => {
+        const fromPt = nodeMap.get(t.idInicio);
+        const toPt = nodeMap.get(t.idFim);
+        return {
+          key: `${t.idInicio}-${t.idFim}`,
+          dcId: `T${t.idInicio}-${t.idFim}`,
+          idInicio: t.idInicio, idFim: t.idFim,
+          comprimento: t.comprimento,
+          diametro: t.diametroMm || diamMinAgua,
+          rugosidade: coefHW,
+          material: materialAgua,
+          status: "OPEN",
+          vazao: vazaoAgua,
+          observacao: "",
+        };
+      });
+      setWaterEdgeAttrs(edges);
+    }
+    toast.success("Campos preenchidos automaticamente");
+  }, [activePontos, waterTrechos, waterNodeAttrs.length, waterEdgeAttrs.length,
+      vazaoAgua, diamMinAgua, coefHW, materialAgua]);
+
+  // ── MDT Elevation Extraction ──
+  const [mdtProgress, setMdtProgress] = useState<number | null>(null);
+
+  const extractMdtElevations = useCallback(async () => {
+    const { getRasterGrid } = await import("@/engine/rasterStore");
+    const raster = getRasterGrid();
+    if (!raster) {
+      toast.error("Nenhum raster MDT carregado. Importe um arquivo TIF na aba Mapa.");
+      return;
+    }
+
+    const { sampleElevation, getRasterExtent } = await import("@/engine/elevationExtractor");
+    const nodes = waterNodeAttrs.length > 0
+      ? [...waterNodeAttrs]
+      : activePontos.map(p => ({
+          id: p.id, tipo: "junction" as const, cota: p.cota, demanda: vazaoAgua,
+          pressao: 0, x: p.x, y: p.y, observacao: "",
+        }));
+
+    if (nodes.length === 0) {
+      toast.error("Nenhum nó disponível. Importe dados no Mapa primeiro.");
+      return;
+    }
+
+    setMdtProgress(0);
+    let updated = 0;
+    let skipped = 0;
+
+    const updatedNodes = nodes.map((n, i) => {
+      const elevation = sampleElevation(n.x, n.y);
+      setMdtProgress(Math.round(((i + 1) / nodes.length) * 100));
+      if (elevation !== null) {
+        updated++;
+        return { ...n, cota: Math.round(elevation * 100) / 100 };
+      }
+      skipped++;
+      return n;
+    });
+
+    if (updated === 0 && skipped > 0) {
+      const extent = getRasterExtent();
+      let diagnostic = "Nenhum nó dentro do raster MDT.";
+      if (extent && nodes.length > 0) {
+        const sn = nodes[0];
+        diagnostic += ` Nó exemplo: X=${sn.x.toFixed(2)}, Y=${sn.y.toFixed(2)}.` +
+          ` Raster: X=[${extent.minX.toFixed(0)}..${extent.maxX.toFixed(0)}], Y=[${extent.minY.toFixed(0)}..${extent.maxY.toFixed(0)}].` +
+          ` Verifique se o CRS dos nós é compatível com o raster.`;
+      }
+      toast.error(diagnostic);
+      setMdtProgress(null);
+      return;
+    }
+
+    setWaterNodeAttrs(updatedNodes);
+
+    // Update GIS points
+    const newPontos = updatedNodes.map(n => ({
+      id: n.id, x: n.x, y: n.y, cota: n.cota,
+    }));
+    handleGisPontosChange(newPontos);
+
+    // Update edge cotas
+    if (waterEdgeAttrs.length > 0) {
+      const nodeMap = new Map(updatedNodes.map(n => [n.id, n]));
+      const updatedEdges = waterEdgeAttrs.map(e => {
+        const fromNode = nodeMap.get(e.idInicio);
+        const toNode = nodeMap.get(e.idFim);
+        return {
+          ...e,
+          cotaMontante: fromNode?.cota ?? e.cotaMontante,
+          cotaJusante: toNode?.cota ?? e.cotaJusante,
+        };
+      });
+      setWaterEdgeAttrs(updatedEdges);
+    }
+
+    // Also update trechos
+    if (waterTrechos.length > 0) {
+      const nodeMap = new Map(updatedNodes.map(n => [n.id, n]));
+      const updatedTrechos = activeTrechos.map(t => {
+        const fromNode = nodeMap.get(t.idInicio);
+        const toNode = nodeMap.get(t.idFim);
+        return {
+          ...t,
+          cotaInicio: fromNode?.cota ?? t.cotaInicio,
+          cotaFim: toNode?.cota ?? t.cotaFim,
+        };
+      });
+      handleGisTrechosChange(updatedTrechos);
+    }
+
+    // Update SpatialCore
+    const { fillNodeElevations, fillEdgeElevations } = await import("@/engine/elevationExtractor");
+    const spatialResult = fillNodeElevations();
+    if (spatialResult.updated > 0) fillEdgeElevations();
+    spatial.refresh();
+
+    toast.success(`MDT: ${updated} nós atualizados, ${skipped} fora do raster`);
+    setMdtProgress(null);
+  }, [waterNodeAttrs, activePontos, waterEdgeAttrs, waterTrechos, activeTrechos,
+      vazaoAgua, handleGisPontosChange, handleGisTrechosChange, spatial]);
+
+  // ── Generate EPANET INP model ──
+  const generateEpanetModel = useCallback(async () => {
+    if (waterNodeAttrs.length === 0 || waterEdgeAttrs.length === 0) {
+      toast.error("Preencha a tabela de Rede primeiro (nós e trechos).");
+      return;
+    }
+    try {
+      const { generateINPFromWater } = await import("@/engine/qwaterEpanetBridge");
+      const inp = generateINPFromWater(waterNodeAttrs, waterEdgeAttrs);
+      const blob = new Blob([inp], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url;
+      a.download = "qwater_model.inp"; a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Modelo EPANET (.inp) exportado");
+    } catch (err: any) {
+      toast.error(`Erro ao gerar modelo: ${err.message}`);
+    }
+  }, [waterNodeAttrs, waterEdgeAttrs]);
+
+  // ── Result-colored connections for map ──
+  const resultColoredConnections = useMemo(() => {
+    if (waterResults.length === 0) return undefined;
+    const resultMap = new Map(waterResults.map(r => [r.id, r]));
+    return activeTrechos
+      .filter(t => !t.tipoRedeManual || t.tipoRedeManual === "agua" || t.tipoRedeManual === "outro")
+      .map(t => {
+        const key = `${t.idInicio}-${t.idFim}`;
+        const r = resultMap.get(key);
+        return {
+          from: t.idInicio,
+          to: t.idFim,
+          color: r ? (r.atendeNorma ? "#22c55e" : "#ef4444") : "#3b82f6",
+          label: r ? `${key} DN${r.diametroMm} V=${r.velocidadeMs.toFixed(2)}` : key,
+        };
+      });
+  }, [waterResults, activeTrechos]);
+
+  const fmt = (n: number, d = 1) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Droplets className="h-5 w-5 text-cyan-600" /> Parâmetros de Água</CardTitle>
-            <CardDescription>Rede de água pressurizada (Hazen-Williams)</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div><Label>Coef. Hazen-Williams C</Label><Input type="number" value={hazenC} onChange={e => setHazenC(Number(e.target.value))} /></div>
-            <div><Label>Pressão mínima (mca)</Label><Input type="number" value={pressaoMin} onChange={e => setPressaoMin(Number(e.target.value))} /></div>
-            <div><Label>Velocidade máxima (m/s)</Label><Input type="number" step="0.1" value={velMax} onChange={e => setVelMax(Number(e.target.value))} /></div>
-            <div>
-              <Label>DN Mínimo (mm)</Label>
-              <Select value={dnMin} onValueChange={setDnMin}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="50">50 mm</SelectItem>
-                  <SelectItem value="75">75 mm</SelectItem>
-                  <SelectItem value="100">100 mm</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Adicionar Nó</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div><Label>ID</Label><Input value={newNode.id} onChange={e => setNewNode({ ...newNode, id: e.target.value })} placeholder="N1" /></div>
-              <div><Label>X</Label><Input type="number" value={newNode.x} onChange={e => setNewNode({ ...newNode, x: Number(e.target.value) })} /></div>
-              <div><Label>Y</Label><Input type="number" value={newNode.y} onChange={e => setNewNode({ ...newNode, y: Number(e.target.value) })} /></div>
-              <div><Label>Cota</Label><Input type="number" step="0.01" value={newNode.cota} onChange={e => setNewNode({ ...newNode, cota: Number(e.target.value) })} /></div>
-              <div className="col-span-2"><Label>Demanda (L/s)</Label><Input type="number" step="0.1" value={newNode.demanda} onChange={e => setNewNode({ ...newNode, demanda: Number(e.target.value) })} /></div>
-            </div>
-            <Button onClick={addNode} className="w-full"><Plus className="h-4 w-4 mr-1" /> Adicionar Nó</Button>
-          </CardContent>
-        </Card>
+      <div className="flex items-center gap-2">
+        <div className="flex-1" />
+        {persistence.status === "saving" && (
+          <Badge variant="outline" className="text-yellow-600 text-xs animate-pulse">Salvando...</Badge>
+        )}
+        {persistence.status === "saved" && persistence.lastSaved && (
+          <Badge variant="outline" className="text-green-600 text-xs">
+            <Save className="h-3 w-3 mr-1" />Salvo {persistence.lastSaved}
+          </Badge>
+        )}
+        {persistence.status === "error" && (
+          <Badge variant="outline" className="text-red-600 text-xs">
+            <CloudOff className="h-3 w-3 mr-1" />Erro ao salvar
+          </Badge>
+        )}
       </div>
+      <Tabs defaultValue="mapa">
+        <TabsList className="grid grid-cols-5 w-full max-w-2xl">
+          <TabsTrigger value="mapa"><MapIcon className="h-3.5 w-3.5 mr-1" />Mapa</TabsTrigger>
+          <TabsTrigger value="config"><Settings className="h-3.5 w-3.5 mr-1" />Configuração</TabsTrigger>
+          <TabsTrigger value="rede"><TableProperties className="h-3.5 w-3.5 mr-1" />Rede</TabsTrigger>
+          <TabsTrigger value="dimensionamento"><Calculator className="h-3.5 w-3.5 mr-1" />Dimensionamento</TabsTrigger>
+          <TabsTrigger value="resultados"><BarChart3 className="h-3.5 w-3.5 mr-1" />Resultados</TabsTrigger>
+        </TabsList>
 
-      <div className="flex gap-2 flex-wrap">
-        <Button onClick={transferFromTopography} variant="outline"><Upload className="h-4 w-4 mr-1" /> Transferir da Topografia</Button>
-        <Button onClick={calculate}><Calculator className="h-4 w-4 mr-1" /> Calcular Água</Button>
-        <Button onClick={loadDemo} variant="secondary">Carregar Demo</Button>
-      </div>
+        {/* ═══════ TAB 1: MAPA ═══════ */}
+        <TabsContent value="mapa" className="space-y-4">
+          <GisMapTab
+            networkType="agua"
+            pontos={gisPontos}
+            trechos={gisTrechos}
+            onPontosChange={handleGisPontosChange}
+            onTrechosChange={handleGisTrechosChange}
+            accentColor="#3b82f6"
+            originModule="qwater"
+            resultConnections={resultColoredConnections}
+          />
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={transferFromTopography} variant="outline" size="sm">
+              <Upload className="h-4 w-4 mr-1" /> Transferir da Topografia
+            </Button>
+            <Button onClick={async () => {
+              const { fillNodeElevations, fillEdgeElevations, sampleElevation } = await import("@/engine/elevationExtractor");
+              const { updated, noRaster } = fillNodeElevations();
+              if (noRaster) { toast.error("Importe um arquivo TIF/GeoTIFF primeiro"); return; }
+              fillEdgeElevations();
+              spatial.refresh();
+              // BUG FIX: Also update gisPontos and gisTrechos with MDT elevations
+              if (activePontos.length > 0) {
+                const updatedPontos = activePontos.map(p => {
+                  const elev = sampleElevation(p.x, p.y);
+                  return elev !== null ? { ...p, cota: Math.round(elev * 100) / 100 } : p;
+                });
+                handleGisPontosChange(updatedPontos);
+              }
+              if (activeTrechos.length > 0) {
+                const ptMap = new Map(activePontos.map(p => {
+                  const elev = sampleElevation(p.x, p.y);
+                  return [p.id, elev !== null ? Math.round(elev * 100) / 100 : p.cota];
+                }));
+                const updatedTrechos = activeTrechos.map(t => ({
+                  ...t,
+                  cotaInicio: ptMap.get(t.idInicio) ?? t.cotaInicio,
+                  cotaFim: ptMap.get(t.idFim) ?? t.cotaFim,
+                }));
+                handleGisTrechosChange(updatedTrechos);
+              }
+              toast.success(`${updated} cotas preenchidas do MDT`);
+            }} variant="outline" size="sm">
+              <Mountain className="h-4 w-4 mr-1" /> Preencher Cota (MDT)
+            </Button>
+            <Button onClick={loadDemo} variant="secondary" size="sm">Carregar Demo</Button>
+          </div>
+        </TabsContent>
 
-      {nodes.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle>Nós de Água ({nodes.length})</CardTitle></CardHeader>
-          <CardContent>
-            <div className="max-h-[300px] overflow-auto">
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead>ID</TableHead><TableHead>X</TableHead><TableHead>Y</TableHead>
-                  <TableHead>Cota</TableHead><TableHead>Demanda (L/s)</TableHead><TableHead></TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {nodes.map(n => (
-                    <TableRow key={n.id}>
-                      <TableCell className="font-medium">{n.id}</TableCell>
-                      <TableCell>{n.x.toFixed(3)}</TableCell><TableCell>{n.y.toFixed(3)}</TableCell>
-                      <TableCell>{n.cota.toFixed(3)}</TableCell><TableCell>{n.demanda.toFixed(1)}</TableCell>
-                      <TableCell><Button size="icon" variant="ghost" onClick={() => setNodes(nodes.filter(nd => nd.id !== n.id))}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+        {/* ═══════ TAB 2: CONFIGURAÇÃO ═══════ */}
+        <TabsContent value="config" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Droplets className="h-5 w-5 text-blue-600" /> Parâmetros Hidráulicos
+                </CardTitle>
+                <CardDescription>NBR 12218</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Fórmula</Label>
+                    <Select value={formula} onValueChange={v => setFormula(v as "hazen-williams" | "colebrook")}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hazen-williams">Hazen-Williams</SelectItem>
+                        <SelectItem value="colebrook">Colebrook-White</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Material</Label>
+                    <Select value={materialAgua} onValueChange={handleMaterialChange}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {MATERIAIS_AGUA.map(m => (
+                          <SelectItem key={m} value={m}>{m} (C={getHWCoefficient(m)})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><Label className="text-xs">C (H-W)</Label><Input type="number" step="5" value={coefHW} onChange={e => setCoefHW(Number(e.target.value))} /></div>
+                  <div><Label className="text-xs">DN mín (mm)</Label><Input type="number" step="25" value={diamMinAgua} onChange={e => setDiamMinAgua(Number(e.target.value))} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><Label className="text-xs">V mín (m/s)</Label><Input type="number" step="0.1" value={velMinAgua} onChange={e => setVelMinAgua(Number(e.target.value))} /></div>
+                  <div><Label className="text-xs">V máx (m/s)</Label><Input type="number" step="0.1" value={velMaxAgua} onChange={e => setVelMaxAgua(Number(e.target.value))} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><Label className="text-xs">P mín (mca)</Label><Input type="number" step="1" value={pressaoMin} onChange={e => setPressaoMin(Number(e.target.value))} /></div>
+                  <div><Label className="text-xs">P máx (mca)</Label><Input type="number" step="1" value={pressaoMax} onChange={e => setPressaoMax(Number(e.target.value))} /></div>
+                </div>
+              </CardContent>
+            </Card>
 
-      <NodeMapWidget
-        nodes={nodes.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cota, demanda: n.demanda }))}
-        connections={mapConnections}
-        onConnectionsChange={setMapConnections}
-        onNodeDemandChange={handleNodeDemandChange}
-        onNodesDelete={(ids) => {
-          setNodes(prev => prev.filter(n => !ids.includes(n.id)));
-          setCalculated(false);
-        }}
-        title="Mapa da Rede de Água"
-        accentColor="#06b6d4"
-        editable
-      />
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-blue-600" /> Demanda
+                </CardTitle>
+                <CardDescription>Configuração de demanda por nó</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <Label className="text-xs">Vazão padrão por nó (L/s)</Label>
+                  <Input type="number" step="0.1" value={vazaoAgua} onChange={e => setVazaoAgua(Number(e.target.value))} />
+                </div>
+                <div className="bg-muted/50 rounded p-2 text-xs space-y-1">
+                  <p className="font-semibold">Demandas típicas:</p>
+                  <p>Residencial: 0.3 - 0.5 L/s</p>
+                  <p>Comercial: 0.8 - 1.5 L/s</p>
+                  <p>Industrial: 2.0 - 5.0 L/s</p>
+                </div>
+                <div className="bg-blue-50 dark:bg-blue-950/20 rounded p-2 text-xs">
+                  Edite a demanda individual na aba "Rede".
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-      {calculated && results.length > 0 && summary && (
-        <Card className="border-cyan-500/30">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Droplets className="h-5 w-5 text-cyan-600" /> Resultados - Rede de Água</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-blue-600">{summary.trechos}</div>
-                <div className="text-xs text-muted-foreground">Trechos</div>
+          {/* Network tools: MDT import + Numbering */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5 text-blue-600" /> Ferramentas de Rede
+              </CardTitle>
+              <CardDescription>Importar MDT, numerar rede e preencher cotas</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex gap-2 flex-wrap">
+                <Button variant="outline" size="sm" onClick={async () => {
+                  const input = document.createElement("input");
+                  input.type = "file";
+                  input.accept = ".tif,.tiff";
+                  input.onchange = async (ev) => {
+                    const file = (ev.target as HTMLInputElement).files?.[0];
+                    if (!file) return;
+                    try {
+                      const buffer = await file.arrayBuffer();
+                      const { parseGeoTIFF } = await import("@/engine/tifReader");
+                      const { setRasterGrid } = await import("@/engine/rasterStore");
+                      const result = await parseGeoTIFF(buffer, 10000, -9999, true);
+                      if (result.grid) {
+                        setRasterGrid(result.grid, { width: result.width, height: result.height, noDataValue: result.noDataValue });
+                        toast.success(`MDT carregado: ${result.width}×${result.height} pixels (${file.name})`);
+                      }
+                    } catch (err: any) {
+                      toast.error(`Erro ao carregar MDT: ${err.message}`);
+                    }
+                  };
+                  input.click();
+                }}>
+                  <Upload className="h-3.5 w-3.5 mr-1" /> Importar TIF (MDT)
+                </Button>
+                <Button variant="outline" size="sm" onClick={async () => {
+                  const { fillNodeElevations, fillEdgeElevations, sampleElevation } = await import("@/engine/elevationExtractor");
+                  const { getRasterGrid } = await import("@/engine/rasterStore");
+                  if (!getRasterGrid()) {
+                    toast.error("Importe um arquivo TIF (MDT) primeiro");
+                    return;
+                  }
+                  // Update SpatialCore nodes
+                  const { updated, skipped } = fillNodeElevations();
+                  if (updated > 0) fillEdgeElevations();
+                  spatial.refresh();
+
+                  // BUG FIX: Sync MDT elevations back to waterNodeAttrs AND waterEdgeAttrs
+                  const { getSpatialProject } = await import("@/core/spatial");
+                  const project = getSpatialProject();
+
+                  if (waterNodeAttrs.length > 0) {
+                    // Update existing node attrs with spatial data
+                    const updatedNodes = waterNodeAttrs.map(n => {
+                      const spatialNode = project.nodes.get(n.id);
+                      if (spatialNode && spatialNode.z !== undefined) {
+                        return { ...n, cota: Math.round(spatialNode.z * 100) / 100 };
+                      }
+                      // Fallback: direct sample from raster
+                      const elev = sampleElevation(n.x, n.y);
+                      return elev !== null ? { ...n, cota: Math.round(elev * 100) / 100 } : n;
+                    });
+                    setWaterNodeAttrs(updatedNodes);
+                  } else if (activePontos.length > 0) {
+                    // BUG FIX: When no waterNodeAttrs exist yet, update activePontos
+                    const updatedPontos = activePontos.map(p => {
+                      const spatialNode = project.nodes.get(p.id);
+                      if (spatialNode && spatialNode.z !== undefined) {
+                        return { ...p, cota: Math.round(spatialNode.z * 100) / 100 };
+                      }
+                      const elev = sampleElevation(p.x, p.y);
+                      return elev !== null ? { ...p, cota: Math.round(elev * 100) / 100 } : p;
+                    });
+                    handleGisPontosChange(updatedPontos);
+                  }
+
+                  // BUG FIX: Also update edge CTM/CTJ from node elevations
+                  if (waterEdgeAttrs.length > 0) {
+                    const nodeMap = waterNodeAttrs.length > 0
+                      ? new Map(waterNodeAttrs.map(n => [n.id, n.cota]))
+                      : new Map(activePontos.map(p => [p.id, p.cota]));
+                    const updatedEdges = waterEdgeAttrs.map(e => {
+                      const cotaM = nodeMap.get(e.idInicio);
+                      const cotaJ = nodeMap.get(e.idFim);
+                      return {
+                        ...e,
+                        cotaTerrenoM: cotaM ?? e.cotaTerrenoM,
+                        cotaTerrenoJ: cotaJ ?? e.cotaTerrenoJ,
+                      };
+                    });
+                    setWaterEdgeAttrs(updatedEdges);
+                  }
+
+                  // Update trechos CTM/CTJ too
+                  if (activeTrechos.length > 0) {
+                    const nodeMap = new Map<string, number>();
+                    for (const n of (waterNodeAttrs.length > 0 ? waterNodeAttrs : [])) {
+                      const sn = project.nodes.get(n.id);
+                      if (sn?.z) nodeMap.set(n.id, sn.z);
+                    }
+                    for (const p of activePontos) {
+                      if (!nodeMap.has(p.id)) {
+                        const elev = sampleElevation(p.x, p.y);
+                        if (elev !== null) nodeMap.set(p.id, elev);
+                      }
+                    }
+                    if (nodeMap.size > 0) {
+                      const updatedTrechos = activeTrechos.map(t => ({
+                        ...t,
+                        cotaInicio: nodeMap.get(t.idInicio) ?? t.cotaInicio,
+                        cotaFim: nodeMap.get(t.idFim) ?? t.cotaFim,
+                      }));
+                      handleGisTrechosChange(updatedTrechos);
+                    }
+                  }
+
+                  toast.success(`${updated} cotas atualizadas via MDT${skipped > 0 ? ` (${skipped} fora do raster)` : ""}`);
+                }}>
+                  <Mountain className="h-3.5 w-3.5 mr-1" /> Preencher Cotas (MDT)
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => {
+                  const nodes = waterNodeAttrs.length > 0
+                    ? waterNodeAttrs.map(n => ({ id: n.id, x: n.x, y: n.y, cota: n.cota, tipo: n.tipo }))
+                    : activePontos.map(p => ({ id: p.id, x: p.x, y: p.y, cota: p.cota, tipo: "junction" }));
+                  const edges = waterEdgeAttrs.length > 0
+                    ? waterEdgeAttrs.map(e => ({ key: e.key, dcId: e.dcId || "", idInicio: e.idInicio, idFim: e.idFim, comprimento: e.comprimento, diametro: e.diametro }))
+                    : waterTrechos.map((t, i) => ({ key: `${t.idInicio}-${t.idFim}`, dcId: `T${String(i + 1).padStart(3, "0")}`, idInicio: t.idInicio, idFim: t.idFim, comprimento: t.comprimento, diametro: t.diametroMm || 100 }));
+                  if (edges.length === 0) {
+                    toast.error("Nenhum trecho para numerar. Importe dados no Mapa primeiro.");
+                    return;
+                  }
+                  try {
+                    const result = numberWaterNetwork(nodes, edges);
+                    // Update node attrs with renamed IDs
+                    if (waterNodeAttrs.length > 0) {
+                      const updatedNodes = waterNodeAttrs.map((n, i) => ({
+                        ...n,
+                        id: result.nodes[i]?.id ?? n.id,
+                      }));
+                      setWaterNodeAttrs(updatedNodes);
+                    }
+                    // Update edge attrs
+                    if (waterEdgeAttrs.length > 0) {
+                      const updatedEdges = waterEdgeAttrs.map((e, i) => ({
+                        ...e,
+                        dcId: result.edges[i]?.dcId ?? e.dcId,
+                        idInicio: result.edges[i]?.idInicio ?? e.idInicio,
+                        idFim: result.edges[i]?.idFim ?? e.idFim,
+                      }));
+                      setWaterEdgeAttrs(updatedEdges);
+                    }
+                    toast.success(`Rede numerada: ${result.edges.length} trechos, ${result.nodes.length} nós`);
+                  } catch (err: any) {
+                    toast.error(err.message || "Erro ao numerar a rede");
+                  }
+                }}>
+                  <TrendingUp className="h-3.5 w-3.5 mr-1" /> Numerar Rede
+                </Button>
               </div>
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-green-600">{summary.extensao.toFixed(1)} m</div>
-                <div className="text-xs text-muted-foreground">Extensão Total</div>
+              <div className="flex items-center gap-2 text-xs">
+                <Badge variant="outline">{activePontos.length} pontos</Badge>
+                <Badge variant="outline">{waterTrechos.length} trechos</Badge>
               </div>
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-cyan-600">{summary.pressaoMin.toFixed(1)} mca</div>
-                <div className="text-xs text-muted-foreground">Pressão Mínima</div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ═══════ TAB 3: REDE ═══════ */}
+        <TabsContent value="rede" className="space-y-4">
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={fillWaterFields} variant="outline" size="sm" disabled={activePontos.length === 0}>
+              <TableProperties className="h-4 w-4 mr-1" /> Preencher Campos
+            </Button>
+            <Button onClick={extractMdtElevations} variant="outline" size="sm" disabled={activePontos.length === 0}>
+              <Mountain className="h-4 w-4 mr-1" /> Cota TN (MDT)
+            </Button>
+            {mdtProgress !== null && (
+              <Badge variant="secondary" className="text-blue-600">MDT: {mdtProgress}%</Badge>
+            )}
+            {waterNodeAttrs.length > 0 && (
+              <Badge variant="outline" className="text-blue-600">{waterNodeAttrs.length} nós</Badge>
+            )}
+            {waterEdgeAttrs.length > 0 && (
+              <Badge variant="outline" className="text-blue-600">{waterEdgeAttrs.length} trechos</Badge>
+            )}
+          </div>
+          <ElementTypeAssigner
+            networkType="agua"
+            pontos={activePontos}
+            trechos={waterTrechos}
+            assignments={assignments}
+            onAssignmentsChange={setAssignments}
+          />
+          <AttributeTableEditor
+            networkType="agua"
+            pontos={activePontos}
+            trechos={waterTrechos}
+            assignments={assignments}
+            waterNodes={waterNodeAttrs}
+            waterEdges={waterEdgeAttrs}
+            onWaterNodesChange={setWaterNodeAttrs}
+            onWaterEdgesChange={setWaterEdgeAttrs}
+          />
+        </TabsContent>
+
+        {/* ═══════ TAB 4: DIMENSIONAMENTO ═══════ */}
+        <TabsContent value="dimensionamento" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Droplets className="h-5 w-5 text-blue-600" /> Dimensionamento QWater (NBR 12218)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Hazen-Williams: hf = 10.643·Q^1.85 / (C^1.85·D^4.87)·L
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2 flex-wrap">
+                {waterEdgeAttrs.length > 0 && (
+                  <Badge variant="outline" className="text-blue-600">{waterEdgeAttrs.length} trechos (atributos)</Badge>
+                )}
+                {waterEdgeAttrs.length === 0 && waterTrechos.length > 0 && (
+                  <Badge variant="outline" className="text-blue-600">{waterTrechos.length} trechos (GIS)</Badge>
+                )}
               </div>
-              <div className="bg-muted/50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-yellow-600">{summary.alertas}</div>
-                <div className="text-xs text-muted-foreground">Alertas</div>
+
+              <div className="flex gap-2 flex-wrap">
+                <Button onClick={dimensionWater} disabled={!canDimension}>
+                  <Calculator className="h-4 w-4 mr-1" /> Dimensionar
+                </Button>
+                {waterResults.length > 0 && (
+                  <>
+                    <Button variant="outline" onClick={applyDiameters}>
+                      <Zap className="h-4 w-4 mr-1" /> Aplicar Diâmetros
+                    </Button>
+                    <Button variant="outline" onClick={exportCSV}>
+                      <Download className="h-4 w-4 mr-1" /> CSV
+                    </Button>
+                  </>
+                )}
               </div>
-            </div>
-            {warnings.length > 0 && (
-              <Card className="mb-4 border-yellow-400/30 bg-yellow-500/5">
-                <CardHeader className="pb-2"><CardTitle className="text-sm">📋 Validação Normativa</CardTitle></CardHeader>
+
+              {/* QWater QGIS Sequential Actions */}
+              <Card className="border-blue-200 dark:border-blue-800">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Play className="h-4 w-4 text-blue-600" /> QWater — Sequência QGIS
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Fluxo completo: Vazão → EPANET → Diâmetro Econômico → Exportar
+                  </CardDescription>
+                </CardHeader>
                 <CardContent>
-                  <div className="max-h-[200px] overflow-auto space-y-1">
-                    {warnings.map((w, i) => <p key={i} className="text-sm text-yellow-700 dark:text-yellow-400">{w.trecho}: {w.msg}</p>)}
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" variant="outline" onClick={fillWaterFields} disabled={activePontos.length === 0}>
+                      <TableProperties className="h-4 w-4 mr-1" /> Fill up Fields
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={extractMdtElevations} disabled={activePontos.length === 0}>
+                      <Mountain className="h-4 w-4 mr-1" /> Cota TN (MDT)
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={generateEpanetModel} disabled={waterNodeAttrs.length === 0 || waterEdgeAttrs.length === 0}>
+                      <FileDown className="h-4 w-4 mr-1" /> Make Model
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={dimensionWater} disabled={!canDimension}>
+                      <Droplets className="h-4 w-4 mr-1" /> Calc Flow
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={runEpanet} disabled={epanetRunning || waterNodeAttrs.length === 0}>
+                      <Play className="h-4 w-4 mr-1" /> {epanetRunning ? "Simulando..." : "Run EPANET"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={applyDiameters} disabled={waterResults.length === 0}>
+                      <Zap className="h-4 w-4 mr-1" /> Economic Diameter
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => {
+                      if (resultColoredConnections) {
+                        toast.success("Mapa atualizado com cores de resultado");
+                      } else {
+                        toast.warning("Execute o dimensionamento primeiro para colorir o mapa");
+                      }
+                    }} disabled={waterResults.length === 0}>
+                      <MapIcon className="h-4 w-4 mr-1" /> Load Styles
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={exportDxf} disabled={activePontos.length === 0}>
+                      <FileDown className="h-4 w-4 mr-1" /> Export DXF
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
-            )}
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">📋 Resultados Detalhados</CardTitle></CardHeader>
-              <CardContent>
-                <div className="max-h-[400px] overflow-auto">
+
+              {waterResumo && (
+                <div className="flex gap-3 text-sm">
+                  <Badge variant="outline">{waterResumo.total} trechos</Badge>
+                  <Badge className="bg-green-500">{waterResumo.atendem} OK</Badge>
+                  {waterResumo.total - waterResumo.atendem > 0 && (
+                    <Badge variant="destructive">{waterResumo.total - waterResumo.atendem} falha</Badge>
+                  )}
+                  <Badge variant="outline">{compliance}%</Badge>
+                </div>
+              )}
+
+              {waterResults.length > 0 && (
+                <div className="border overflow-auto max-h-80">
                   <Table>
-                    <TableHeader><TableRow>
-                      <TableHead>ID</TableHead><TableHead>De</TableHead><TableHead>Para</TableHead>
-                      <TableHead>Comp (m)</TableHead><TableHead>DN (mm)</TableHead><TableHead>Q (L/s)</TableHead>
-                      <TableHead>V (m/s)</TableHead><TableHead>hf (m)</TableHead><TableHead>Status</TableHead>
-                    </TableRow></TableHeader>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Trecho</TableHead>
+                        <TableHead>DN (mm)</TableHead>
+                        <TableHead>V (m/s)</TableHead>
+                        <TableHead>hf (m)</TableHead>
+                        <TableHead>J (m/m)</TableHead>
+                        <TableHead>P jus (mca)</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
                     <TableBody>
-                      {results.map(r => (
-                        <TableRow key={r.id}>
-                          <TableCell className="font-medium">{r.id}</TableCell>
-                          <TableCell>{r.de}</TableCell><TableCell>{r.para}</TableCell>
-                          <TableCell>{r.comp.toFixed(1)}</TableCell><TableCell>{r.dn}</TableCell>
-                          <TableCell>{r.q.toFixed(2)}</TableCell><TableCell>{r.v.toFixed(3)}</TableCell>
-                          <TableCell>{r.hf.toFixed(4)}</TableCell>
-                          <TableCell><Badge className={r.status === "OK" ? "bg-green-500" : "bg-yellow-500"}>{r.status}</Badge></TableCell>
+                      {waterResults.map(r => (
+                        <TableRow key={r.id} className={!r.atendeNorma ? "bg-red-50 dark:bg-red-950/20" : ""}>
+                          <TableCell className="font-mono text-xs">{r.id}</TableCell>
+                          <TableCell className="font-semibold">{r.diametroMm}</TableCell>
+                          <TableCell>{r.velocidadeMs.toFixed(3)}</TableCell>
+                          <TableCell>{r.perdaCargaM.toFixed(3)}</TableCell>
+                          <TableCell>{r.perdaCargaUnitaria.toFixed(5)}</TableCell>
+                          <TableCell>{r.pressaoJusante?.toFixed(1) ?? "-"}</TableCell>
+                          <TableCell>
+                            {r.atendeNorma
+                              ? <Badge className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" />OK</Badge>
+                              : <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Falha</Badge>}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
                 </div>
+              )}
+
+              {alertCount > 0 && (
+                <Card className="border-yellow-500/30 bg-yellow-500/5">
+                  <CardContent className="py-3">
+                    <div className="max-h-[150px] overflow-auto space-y-1">
+                      {waterResults.filter(r => !r.atendeNorma).map(r => (
+                        <div key={r.id} className="text-xs text-yellow-700">
+                          <strong>{r.id}:</strong> {r.observacoes.join("; ")}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!canDimension && (
+                <div className="flex items-center gap-2 p-3 bg-muted text-sm text-muted-foreground">
+                  <AlertTriangle className="h-4 w-4" /> Importe dados no "Mapa" ou preencha a "Rede".
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {waterResults.length > 0 && activePontos.length > 0 && (
+            <NetworkMapView<WaterSegmentResult>
+              pontos={activePontos}
+              trechos={waterTrechos}
+              results={waterResults}
+              okColor={WATER_DEFAULTS.mapOkColor}
+              failColor={WATER_DEFAULTS.mapFailColor}
+              markerColor={WATER_DEFAULTS.markerColor}
+              markerFillColor={WATER_DEFAULTS.markerFillColor}
+              title="Mapa — Rede Dimensionada"
+              description="Azul = atende NBR 12218 | Vermelho = falha"
+              iconColorClass="text-blue-600"
+              formatTooltip={formatWaterTooltip}
+              formatPopup={formatWaterPopup}
+            />
+          )}
+        </TabsContent>
+
+        {/* ═══════ TAB 5: RESULTADOS ═══════ */}
+        <TabsContent value="resultados" className="space-y-4">
+          {waterResults.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6 text-center text-muted-foreground">
+                Calcule a rede na aba "Dimensionamento" para ver resultados.
               </CardContent>
             </Card>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <>
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { icon: <MapPin className="h-6 w-6 inline-block text-blue-600" />, label: "Nós", value: waterNodeAttrs.length || activePontos.length },
+                  { icon: <Droplets className="h-6 w-6 inline-block text-blue-600" />, label: "Demanda Total", value: `${fmt(totalDemanda, 2)} L/s` },
+                  { icon: <TrendingUp className="h-6 w-6 inline-block text-green-600" />, label: "Pressão Mín", value: minPressao !== null ? `${fmt(minPressao, 1)} mca` : "-" },
+                  { icon: <AlertTriangle className="h-6 w-6 inline-block text-red-500" />, label: "Conformidade", value: `${compliance}%` },
+                ].map((item, i) => (
+                  <Card key={i}>
+                    <CardContent className="pt-4 text-center">
+                      <div className="text-2xl">{item.icon}</div>
+                      <div className="text-xl font-bold mt-1">{item.value}</div>
+                      <div className="text-xs text-muted-foreground">{item.label}</div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Pressure chart */}
+              {pressureChartData.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-blue-600" /> Pressão nos Nós (mca)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <LineChart data={pressureChartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" fontSize={10} />
+                        <YAxis fontSize={10} />
+                        <RechartsTooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="pressao" stroke="hsl(210, 70%, 50%)" name="Pressão (mca)" strokeWidth={2} />
+                        <Line type="monotone" dataKey="hf" stroke="hsl(25, 90%, 55%)" name="hf Acum. (m)" strokeWidth={2} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Piezometric profile */}
+              {pressureProfileData && pressureProfileData.length > 0 && (
+                <LongitudinalProfile
+                  sewerNodes={[]}
+                  sewerEdges={[]}
+                  mode="water"
+                  pressureData={pressureProfileData}
+                />
+              )}
+
+              {/* Velocity chart */}
+              {velocityChartData.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4 text-blue-600" /> Velocidade e Perda de Carga
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={velocityChartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" fontSize={10} />
+                        <YAxis fontSize={10} />
+                        <RechartsTooltip />
+                        <Legend />
+                        <Bar dataKey="velocidade" fill="hsl(210, 70%, 50%)" name="Velocidade (m/s)" />
+                        <Bar dataKey="hf" fill="hsl(25, 90%, 55%)" name="hf (m)" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

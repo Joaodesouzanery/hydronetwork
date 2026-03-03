@@ -3,9 +3,11 @@
  * SpatialCore re-exports the project-aware versions of layer operations.
  */
 export * from "./ProjectCRS";
-export { 
+export {
   type LayerGeometryType, type LayerDiscipline, type LayerSource,
   type LayerMetadata, type SpatialLayer, type LayerRegistryStore,
+  type OriginModule,
   createLayerRegistryStore, isSimulationLayer,
 } from "./LayerRegistry";
 export * from "./SpatialCore";
+export * from "./ResultsStore";

@@ -26,16 +26,40 @@ const utmToLatLng = (x: number, y: number): [number, number] => {
   return [lat, lng];
 };
 
-// Generate GeoJSON from data
+// Generate GeoJSON from data — uses real trecho properties instead of random values
 const generateGeoJSON = (pontos: PontoTopografico[], trechos: Trecho[], layers: { nodes: boolean; links: boolean; areas: boolean }, attrs: { hydraulic: boolean; quantities: boolean; budget: boolean }) => {
   const features: any[] = [];
+
+  // Build a lookup: nodeId → list of trechos arriving at that node
+  const nodePressureMap = new Map<string, number>();
+  const nodeDepthMap = new Map<string, number>();
+  if (attrs.hydraulic || attrs.quantities) {
+    trechos.forEach(t => {
+      const pS = pontos.find(p => p.id === t.idInicio);
+      const pE = pontos.find(p => p.id === t.idFim);
+      if (pS && pE) {
+        // Estimate pressure from elevation difference (hydrostatic approximation)
+        const desnivel = pS.cota - pE.cota;
+        nodePressureMap.set(t.idFim, Math.max(0, desnivel));
+      }
+      if (pE) {
+        // Estimate depth from typical pipe cover (1.0m) + pipe diameter
+        const coverDepth = 1.0 + (t.diametroMm / 1000);
+        nodeDepthMap.set(t.idFim, +coverDepth.toFixed(2));
+      }
+    });
+  }
 
   if (layers.nodes) {
     pontos.forEach(p => {
       const [lat, lng] = utmToLatLng(p.x, p.y);
       const props: any = { id: p.id, x: p.x, y: p.y, cota: p.cota };
-      if (attrs.hydraulic) { props.pressao_mca = +(Math.random() * 30 + 10).toFixed(2); }
-      if (attrs.quantities) { props.profundidade_m = +(Math.random() * 3 + 1).toFixed(2); }
+      if (attrs.hydraulic) {
+        props.pressao_mca = +(nodePressureMap.get(p.id) ?? 0).toFixed(2);
+      }
+      if (attrs.quantities) {
+        props.profundidade_m = +(nodeDepthMap.get(p.id) ?? 1.5).toFixed(2);
+      }
       features.push({ type: "Feature", geometry: { type: "Point", coordinates: [lng, lat, p.cota] }, properties: props });
     });
   }
@@ -47,10 +71,41 @@ const generateGeoJSON = (pontos: PontoTopografico[], trechos: Trecho[], layers: 
       if (!pS || !pE) return;
       const [lat1, lng1] = utmToLatLng(pS.x, pS.y);
       const [lat2, lng2] = utmToLatLng(pE.x, pE.y);
-      const props: any = { id: `T${String(i + 1).padStart(2, "0")}`, de: t.idInicio, para: t.idFim, comprimento_m: +t.comprimento.toFixed(2), dn_mm: t.diametroMm, declividade: +(t.declividade * 100).toFixed(3), material: t.material, tipo: t.tipoRede };
-      if (attrs.hydraulic) { props.vazao_ls = +(Math.random() * 50 + 5).toFixed(2); props.velocidade_ms = +(Math.random() * 2 + 0.5).toFixed(2); props.lamina_yD = +(Math.random() * 0.5 + 0.2).toFixed(3); }
-      if (attrs.quantities) { props.escavacao_m3 = +(t.comprimento * 0.6 * 1.5).toFixed(2); props.reaterro_m3 = +(t.comprimento * 0.6 * 1.0).toFixed(2); props.pavimentacao_m2 = +(t.comprimento * 1.2).toFixed(2); }
-      if (attrs.budget) { props.custo_total = +(t.comprimento * 250).toFixed(2); }
+      const props: any = {
+        id: `T${String(i + 1).padStart(2, "0")}`,
+        de: t.idInicio,
+        para: t.idFim,
+        comprimento_m: +t.comprimento.toFixed(2),
+        dn_mm: t.diametroMm,
+        declividade: +(t.declividade * 100).toFixed(3),
+        material: t.material,
+        tipo: t.tipoRede,
+      };
+      if (attrs.hydraulic) {
+        // Derive hydraulic properties from real trecho data using Manning formula
+        const diamM = t.diametroMm / 1000;
+        const area = Math.PI * diamM * diamM / 4;
+        const rh = diamM / 4; // full pipe
+        const n = 0.013; // PVC Manning
+        const slope = Math.abs(t.declividade);
+        const vel = slope > 0 && rh > 0 ? (1 / n) * Math.pow(rh, 2 / 3) * Math.pow(slope, 0.5) : 0;
+        const vazao = vel * area * 1000; // L/s
+        const yd = 0.5; // assume half-full as default
+        props.vazao_ls = +vazao.toFixed(2);
+        props.velocidade_ms = +vel.toFixed(2);
+        props.lamina_yD = +yd.toFixed(3);
+      }
+      if (attrs.quantities) {
+        // Derive quantities from real dimensions
+        const profMedia = 1.0 + (t.diametroMm / 1000);
+        const larguraVala = 0.6;
+        props.escavacao_m3 = +(t.comprimento * larguraVala * profMedia).toFixed(2);
+        props.reaterro_m3 = +(t.comprimento * larguraVala * (profMedia - t.diametroMm / 1000)).toFixed(2);
+        props.pavimentacao_m2 = +(t.comprimento * (larguraVala + 0.6)).toFixed(2);
+      }
+      if (attrs.budget) {
+        props.custo_total = +(t.comprimento * 250).toFixed(2);
+      }
       features.push({ type: "Feature", geometry: { type: "LineString", coordinates: [[lng1, lat1], [lng2, lat2]] }, properties: props });
     });
   }
@@ -195,22 +250,22 @@ export const QgisModule = ({ pontos = [], trechos = [] }: QgisModuleProps) => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div className="border-2 border-blue-200 bg-white dark:bg-card rounded-xl p-4 text-center">
+            <div className="border-2 border-blue-200 bg-white dark:bg-card p-4 text-center">
               <MapPin className="h-8 w-8 mx-auto mb-1 text-red-500" />
               <div className="text-2xl font-bold text-blue-600">{localPontos.length}</div>
               <div className="text-xs text-muted-foreground font-medium">NÓS DA REDE</div>
             </div>
-            <div className="border-2 border-green-200 bg-white dark:bg-card rounded-xl p-4 text-center">
+            <div className="border-2 border-green-200 bg-white dark:bg-card p-4 text-center">
               <GitBranch className="h-8 w-8 mx-auto mb-1 text-green-600" />
               <div className="text-2xl font-bold text-green-600">{localTrechos.length}</div>
               <div className="text-xs text-muted-foreground font-medium">TRECHOS DA REDE</div>
             </div>
-            <div className="border-2 border-orange-200 bg-white dark:bg-card rounded-xl p-4 text-center">
+            <div className="border-2 border-orange-200 bg-white dark:bg-card p-4 text-center">
               <Ruler className="h-8 w-8 mx-auto mb-1 text-orange-500" />
               <div className="text-2xl font-bold text-orange-600">{totalExtension.toFixed(1)}</div>
               <div className="text-xs text-muted-foreground font-medium">EXTENSÃO TOTAL (m)</div>
             </div>
-            <div className="border-2 border-purple-200 bg-white dark:bg-card rounded-xl p-4 text-center">
+            <div className="border-2 border-purple-200 bg-white dark:bg-card p-4 text-center">
               <Layers className="h-8 w-8 mx-auto mb-1 text-purple-500" />
               <div className="text-2xl font-bold text-purple-600">{[layerNodes, layerLinks, layerAreas].filter(Boolean).length}</div>
               <div className="text-xs text-muted-foreground font-medium">CAMADAS ATIVAS</div>
@@ -335,7 +390,7 @@ export const QgisModule = ({ pontos = [], trechos = [] }: QgisModuleProps) => {
           {localPontos.length > 0 && (
             <div className="mt-4">
               <Label className="font-semibold mb-2 block">Prévia dos Dados ({localTrechos.length} trechos)</Label>
-              <div className="max-h-[250px] overflow-auto border rounded-lg">
+              <div className="max-h-[250px] overflow-auto border">
                 <Table>
                   <TableHeader>
                     <TableRow>

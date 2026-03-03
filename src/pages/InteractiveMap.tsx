@@ -107,10 +107,10 @@ async function clearTileCache(): Promise<void> {
 // Annotation marker colors based on type
 function getAnnotationColor(tipo: string): string {
   switch (tipo) {
-    case "ponto": return "#3b82f6";
-    case "area": return "#22c55e";
-    case "setor": return "#f59e0b";
-    case "inspecao": return "#ef4444";
+    case "ponto": return "#3B82F6";
+    case "area": return "#22C55E";
+    case "setor": return "#F59E0B";
+    case "inspecao": return "#EF4444";
     default: return "#6366f1";
   }
 }
@@ -214,20 +214,7 @@ export default function InteractiveMap() {
     enabled: !!projectId && !!session,
   });
 
-  const { data: mapConstraints = [] } = useQuery({
-    queryKey: ["lps-constraints-map", projectId],
-    queryFn: async () => {
-      if (!projectId) return [];
-      const { data, error } = await supabase
-        .from("lps_constraints")
-        .select("id, tipo_restricao, descricao, status, impacto, latitude, longitude, responsavel_nome, data_identificacao, service_fronts(name), employees(name)")
-        .eq("project_id", projectId)
-        .not("latitude", "is", null);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!projectId && !!session && showConstraintLayer,
-  });
+  const mapConstraints: any[] = [];
 
   const { data: serviceFronts = [] } = useQuery({
     queryKey: ["service-fronts", projectId],
@@ -714,7 +701,7 @@ export default function InteractiveMap() {
     if (!showConstraintLayer || mapConstraints.length === 0) return;
 
     const constraintMarkers: L.CircleMarker[] = [];
-    const statusColors: Record<string, string> = { ativa: '#f59e0b', critica: '#ef4444', resolvida: '#22c55e' };
+    const statusColors: Record<string, string> = { ativa: '#F59E0B', critica: '#EF4444', resolvida: '#22C55E' };
 
     mapConstraints.forEach((c: any) => {
       if (c.latitude == null || c.longitude == null) return;
@@ -832,7 +819,7 @@ export default function InteractiveMap() {
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar aos Projetos
             </Button>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
+            <h1 className="text-3xl font-bold font-mono flex items-center gap-2">
               <Map className="h-8 w-8" />
               Mapa Interativo
             </h1>
@@ -1009,7 +996,7 @@ export default function InteractiveMap() {
                     <Card className="border-dashed border-2">
                       <CardContent className="flex flex-col items-center justify-center py-12">
                         <Map className="h-16 w-16 text-muted-foreground mb-4" />
-                        <h3 className="text-xl font-semibold mb-2">Nenhum Mapa QGIS Carregado</h3>
+                        <h3 className="text-xl font-semibold font-mono mb-2">Nenhum Mapa QGIS Carregado</h3>
                         <p className="text-muted-foreground text-center mb-6 max-w-md">
                           Envie um ZIP do qgis2web ou use uma URL externa para visualizar aqui.
                         </p>
@@ -1071,7 +1058,7 @@ export default function InteractiveMap() {
                     { tipo: "inspecao", label: "Inspecao" },
                   ].map(item => (
                     <span key={item.tipo} className="flex items-center gap-1">
-                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: getAnnotationColor(item.tipo) }} />
+                      <span className="w-3 h-3" style={{ backgroundColor: getAnnotationColor(item.tipo) }} />
                       {item.label}
                     </span>
                   ))}
@@ -1081,7 +1068,7 @@ export default function InteractiveMap() {
 
             <TabsContent value="annotations" className="space-y-4">
               <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Anotações do Mapa</h2>
+                <h2 className="text-xl font-semibold font-mono">Anotações do Mapa</h2>
                 <Button onClick={() => setShowAddMarkerDialog(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Nova Anotação
@@ -1229,7 +1216,7 @@ export default function InteractiveMap() {
                         </div>
                       </div>
 
-                      <div className="bg-muted/50 p-4 rounded-lg">
+                      <div className="bg-muted/50 p-4 rounded-none">
                         <h4 className="font-semibold mb-2">Dicas de Uso:</h4>
                         <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
                           <li>O mapa será exibido com todas as camadas e interatividade</li>
@@ -1271,7 +1258,7 @@ export default function InteractiveMap() {
                   </p>
                 </div>
 
-                <div className="bg-muted/50 p-3 rounded-lg">
+                <div className="bg-muted/50 p-3 rounded-none">
                   <h4 className="text-sm font-semibold mb-2">Dicas:</h4>
                   <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
                     <li>Use URLs de embed quando disponíveis</li>

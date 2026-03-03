@@ -140,7 +140,7 @@ export const ImportDataDialog = ({ open, onOpenChange, onSuccess }: ImportDataDi
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="files">Selecione os Arquivos</Label>
-                <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                <div className="border-2 border-dashed p-8 text-center">
                   <input
                     id="files"
                     type="file"
@@ -164,7 +164,7 @@ export const ImportDataDialog = ({ open, onOpenChange, onSuccess }: ImportDataDi
               {files.length > 0 && (
                 <div className="space-y-2">
                   <Label>Arquivos Selecionados:</Label>
-                  <div className="border rounded-lg p-4 space-y-2">
+                  <div className="border p-4 space-y-2">
                     {files.map((file, idx) => (
                       <div key={idx} className="flex items-center gap-2 text-sm">
                         {file.name.endsWith('.csv') ? (
@@ -197,7 +197,7 @@ export const ImportDataDialog = ({ open, onOpenChange, onSuccess }: ImportDataDi
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <h4 className="font-semibold">Formato CSV Esperado:</h4>
-                <div className="bg-muted p-4 rounded-lg font-mono text-xs overflow-x-auto">
+                <div className="bg-muted p-4 font-mono text-xs overflow-x-auto">
                   <div>nome,status,data_inicio,data_fim,empresa</div>
                   <div>Projeto A,active,2024-01-01,2024-12-31,Empresa XYZ</div>
                   <div>Projeto B,active,2024-02-01,,Empresa ABC</div>
@@ -206,7 +206,7 @@ export const ImportDataDialog = ({ open, onOpenChange, onSuccess }: ImportDataDi
 
               <div className="space-y-2">
                 <h4 className="font-semibold">Formato JSON Esperado:</h4>
-                <div className="bg-muted p-4 rounded-lg font-mono text-xs overflow-x-auto">
+                <div className="bg-muted p-4 font-mono text-xs overflow-x-auto">
                   <pre>{`[
   {
     "nome": "Projeto A",

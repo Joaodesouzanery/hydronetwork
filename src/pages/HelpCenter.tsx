@@ -195,9 +195,9 @@ const HelpCenter = () => {
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <div className="flex-1">
-          <div className="flex items-center gap-2 border-b px-4 py-3 bg-background/95 backdrop-blur sticky top-0 z-10">
+          <div className="flex items-center gap-2 border-b px-4 py-3 bg-background/95 sticky top-0 z-10">
             <SidebarTrigger />
-            <h1 className="text-xl font-semibold">Central de Ajuda</h1>
+            <h1 className="text-xl font-semibold font-mono">Central de Ajuda</h1>
           </div>
 
           <main className="flex-1 p-6">
@@ -217,7 +217,7 @@ const HelpCenter = () => {
               <div className="grid sm:grid-cols-2 gap-4">
                 <Card className="border-primary/20">
                   <CardContent className="flex items-center gap-4 p-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-none bg-primary/10 flex items-center justify-center">
                       <Mail className="w-5 h-5 text-primary" />
                     </div>
                     <div className="flex-1">
@@ -232,7 +232,7 @@ const HelpCenter = () => {
                 </Card>
                 <Card className="border-primary/20">
                   <CardContent className="flex items-center gap-4 p-4">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-none bg-primary/10 flex items-center justify-center">
                       <Linkedin className="w-5 h-5 text-primary" />
                     </div>
                     <div className="flex-1">
@@ -294,10 +294,10 @@ const HelpCenter = () => {
                   ) : (
                     <Accordion type="single" collapsible className="space-y-2">
                       {filteredTutorials.map((t, i) => (
-                        <AccordionItem key={i} value={`tutorial-${i}`} className="border rounded-lg px-4">
+                        <AccordionItem key={i} value={`tutorial-${i}`} className="border rounded-none px-4">
                           <AccordionTrigger className="hover:no-underline py-4">
                             <div className="flex items-center gap-3">
-                              <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${t.color} flex items-center justify-center flex-shrink-0`}>
+                              <div className={`w-9 h-9 rounded-none bg-gradient-to-br ${t.color} flex items-center justify-center flex-shrink-0`}>
                                 <t.icon className="w-4.5 h-4.5 text-white" />
                               </div>
                               <div className="text-left">
@@ -322,7 +322,7 @@ const HelpCenter = () => {
                                 <div className="space-y-3">
                                   {t.steps.map((s, j) => (
                                     <div key={j} className="flex gap-3">
-                                      <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
+                                      <div className="w-7 h-7 bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">
                                         {j + 1}
                                       </div>
                                       <div>
@@ -351,7 +351,7 @@ const HelpCenter = () => {
                                 <h4 className="font-bold text-sm mb-2">Benefícios</h4>
                                 <div className="flex flex-wrap gap-2">
                                   {t.benefits.map((b, j) => (
-                                    <span key={j} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/10 text-xs font-medium text-primary">
+                                    <span key={j} className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary/10 text-xs font-medium text-primary">
                                       <Check className="w-3 h-3" /> {b}
                                     </span>
                                   ))}
@@ -360,7 +360,7 @@ const HelpCenter = () => {
 
                               {/* Tips */}
                               {t.tips && t.tips.length > 0 && (
-                                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                                <div className="p-3 rounded-none bg-amber-500/10 border border-amber-500/20">
                                   <h4 className="font-bold text-sm mb-1 flex items-center gap-1.5 text-amber-600">
                                     <Lightbulb className="w-4 h-4" /> Dicas
                                   </h4>
@@ -394,7 +394,7 @@ const HelpCenter = () => {
                   ) : (
                     <Accordion type="single" collapsible className="space-y-2">
                       {filteredFAQ.map((f, i) => (
-                        <AccordionItem key={i} value={`faq-${i}`} className="border rounded-lg px-4">
+                        <AccordionItem key={i} value={`faq-${i}`} className="border rounded-none px-4">
                           <AccordionTrigger className="hover:no-underline text-left text-sm font-medium">
                             {f.q}
                           </AccordionTrigger>

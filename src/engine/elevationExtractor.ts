@@ -1,0 +1,236 @@
+/**
+ * Elevation Extractor — Samples elevation from raster data (GeoTIFF DEM/DTM)
+ * for spatial network nodes, and propagates terrain elevations to edges.
+ *
+ * Uses bilinear interpolation for sub-pixel accuracy and integrates with
+ * the SpatialCore node/edge store for automatic topology updates.
+ */
+
+import { getRasterGrid } from "./rasterStore";
+import type { TifRasterGrid } from "./tifReader";
+import {
+  getSpatialProject,
+  recalculateEdge,
+  getConnectedEdges,
+  type SpatialNode,
+} from "@/core/spatial";
+
+// ══════════════════════════════════════
+// Elevation sampling (bilinear interpolation)
+// ══════════════════════════════════════
+
+/**
+ * Sample an elevation value from the currently loaded raster grid at (x, y).
+ *
+ * Uses bilinear interpolation across the 4 surrounding pixels for
+ * sub-pixel accuracy. Returns null if no raster is loaded or if the
+ * coordinates fall outside the raster extent.
+ */
+export function sampleElevation(x: number, y: number): number | null {
+  const rasterInfo = getRasterGrid();
+  if (!rasterInfo) return null;
+
+  const { grid, meta } = rasterInfo;
+  const { data, origin, pixelSize } = grid;
+  const { width, height, noDataValue } = meta;
+
+  // Calculate continuous pixel position
+  const col = (x - origin[0]) / pixelSize[0];
+  const row = (y - origin[1]) / pixelSize[1];
+
+  // Bounds check: outside raster entirely
+  if (col < 0 || col >= width || row < 0 || row >= height) {
+    return null;
+  }
+
+  // Edge pixels: fall back to nearest-neighbor (no bilinear neighbors available)
+  if (col >= width - 1 || row >= height - 1) {
+    const nearCol = Math.min(Math.round(col), width - 1);
+    const nearRow = Math.min(Math.round(row), height - 1);
+    const val = data[nearRow * width + nearCol];
+    if (noDataValue !== undefined && val === noDataValue) return null;
+    if (isNaN(val)) return null;
+    return val;
+  }
+
+  // Integer pixel coordinates for the 4 surrounding cells
+  const col0 = Math.floor(col);
+  const row0 = Math.floor(row);
+  const col1 = col0 + 1;
+  const row1 = row0 + 1;
+
+  // Fractional offsets within the cell
+  const dx = col - col0;
+  const dy = row - row0;
+
+  // Sample the 4 corner values
+  const q00 = data[row0 * width + col0]; // top-left
+  const q10 = data[row0 * width + col1]; // top-right
+  const q01 = data[row1 * width + col0]; // bottom-left
+  const q11 = data[row1 * width + col1]; // bottom-right
+
+  // Check for nodata in any of the 4 corners
+  if (noDataValue !== undefined) {
+    if (q00 === noDataValue || q10 === noDataValue || q01 === noDataValue || q11 === noDataValue) {
+      return null;
+    }
+  }
+  if (isNaN(q00) || isNaN(q10) || isNaN(q01) || isNaN(q11)) {
+    return null;
+  }
+
+  // Bilinear interpolation
+  const elevation =
+    q00 * (1 - dx) * (1 - dy) +
+    q10 * dx * (1 - dy) +
+    q01 * (1 - dx) * dy +
+    q11 * dx * dy;
+
+  return elevation;
+}
+
+// ══════════════════════════════════════
+// Batch node elevation fill
+// ══════════════════════════════════════
+
+/**
+ * Get the raster extent (bounding box) in raster coordinates.
+ * Useful for diagnosing CRS mismatches.
+ */
+export function getRasterExtent(): {
+  minX: number; maxX: number; minY: number; maxY: number;
+} | null {
+  const rasterInfo = getRasterGrid();
+  if (!rasterInfo) return null;
+
+  const { grid, meta } = rasterInfo;
+  const { origin, pixelSize } = grid;
+  const { width, height } = meta;
+
+  const x1 = origin[0];
+  const x2 = origin[0] + width * pixelSize[0];
+  const y1 = origin[1];
+  const y2 = origin[1] + height * pixelSize[1];
+
+  return {
+    minX: Math.min(x1, x2),
+    maxX: Math.max(x1, x2),
+    minY: Math.min(y1, y2),
+    maxY: Math.max(y1, y2),
+  };
+}
+
+/**
+ * Fill terrain elevation (z) for spatial nodes by sampling the loaded raster.
+ *
+ * If `nodeIds` is provided, only those nodes are updated. Otherwise all nodes
+ * in the project are processed.
+ *
+ * For nodes that have a `cotaFundo` (invert elevation), the `profundidade`
+ * (depth) is recalculated as z - cotaFundo.
+ *
+ * @returns Counts of updated/skipped nodes, noRaster flag, and diagnostic info.
+ */
+export function fillNodeElevations(nodeIds?: string[]): {
+  updated: number;
+  skipped: number;
+  noRaster: boolean;
+  diagnostic?: string;
+} {
+  const rasterInfo = getRasterGrid();
+  if (!rasterInfo) {
+    return { updated: 0, skipped: 0, noRaster: true };
+  }
+
+  const project = getSpatialProject();
+  let updated = 0;
+  let skipped = 0;
+
+  // Determine which nodes to process
+  const targetNodes: SpatialNode[] = nodeIds
+    ? nodeIds
+        .map((id) => project.nodes.get(id))
+        .filter((n): n is SpatialNode => n !== undefined)
+    : Array.from(project.nodes.values());
+
+  if (targetNodes.length === 0) {
+    return { updated: 0, skipped: 0, noRaster: false, diagnostic: "Nenhum nó encontrado no projeto." };
+  }
+
+  for (const node of targetNodes) {
+    const elevation = sampleElevation(node.x, node.y);
+    if (elevation !== null) {
+      node.z = elevation;
+
+      // Recalculate depth if invert elevation is known
+      if (node.cotaFundo !== undefined) {
+        node.profundidade = node.z - node.cotaFundo;
+      }
+
+      updated++;
+    } else {
+      skipped++;
+    }
+  }
+
+  // Generate diagnostic if all nodes were skipped (likely CRS mismatch)
+  let diagnostic: string | undefined;
+  if (updated === 0 && skipped > 0) {
+    const extent = getRasterExtent();
+    if (extent && targetNodes.length > 0) {
+      const sampleNode = targetNodes[0];
+      diagnostic = `Nenhum nó dentro do raster. ` +
+        `Nó exemplo: X=${sampleNode.x.toFixed(2)}, Y=${sampleNode.y.toFixed(2)}. ` +
+        `Raster: X=[${extent.minX.toFixed(2)}..${extent.maxX.toFixed(2)}], Y=[${extent.minY.toFixed(2)}..${extent.maxY.toFixed(2)}]. ` +
+        `Verifique se o CRS dos nós é o mesmo do raster MDT.`;
+    }
+  }
+
+  return { updated, skipped, noRaster: false, diagnostic };
+}
+
+// ══════════════════════════════════════
+// Batch edge elevation fill
+// ══════════════════════════════════════
+
+/**
+ * Fill edge terrain elevations from their start/end node z-values.
+ *
+ * Sets edge properties:
+ * - CTM (cotaTerreno montante) = startNode.z
+ * - CTJ (cotaTerreno jusante) = endNode.z
+ *
+ * After setting elevations, calls `recalculateEdge()` to update
+ * comprimento (length) and declividade (slope).
+ *
+ * @returns Count of updated edges.
+ */
+export function fillEdgeElevations(edgeIds?: string[]): { updated: number } {
+  const project = getSpatialProject();
+  let updated = 0;
+
+  // Determine which edges to process
+  const targetEdges = edgeIds
+    ? edgeIds
+        .map((id) => project.edges.get(id))
+        .filter((e) => e !== undefined)
+    : Array.from(project.edges.values());
+
+  for (const edge of targetEdges) {
+    const startNode = project.nodes.get(edge.startNodeId);
+    const endNode = project.nodes.get(edge.endNodeId);
+
+    if (!startNode || !endNode) continue;
+
+    // Set terrain elevations on edge properties
+    edge.properties.CTM = startNode.z;
+    edge.properties.CTJ = endNode.z;
+
+    // Recalculate comprimento and declividade from node positions
+    recalculateEdge(edge.id);
+
+    updated++;
+  }
+
+  return { updated };
+}

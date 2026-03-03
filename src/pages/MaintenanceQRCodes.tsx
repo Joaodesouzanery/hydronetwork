@@ -112,7 +112,7 @@ export default function MaintenanceQRCodes() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
+              <h1 className="text-3xl font-bold font-mono flex items-center gap-2">
                 <QrCode className="h-8 w-8" />
                 QR Codes de Manutenção
               </h1>

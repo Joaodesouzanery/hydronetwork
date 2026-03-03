@@ -123,7 +123,7 @@ export function AlertHistoryDialog({ open, onOpenChange }: AlertHistoryDialogPro
                   </div>
 
                   {alert.justificativa ? (
-                    <div className="mt-4 p-4 bg-muted rounded-lg">
+                    <div className="mt-4 p-4 bg-muted">
                       <Label className="text-sm font-medium">Justificativa:</Label>
                       <p className="text-sm mt-2">{alert.justificativa}</p>
                       {alert.justificado_em && (

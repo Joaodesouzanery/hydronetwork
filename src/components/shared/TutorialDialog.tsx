@@ -37,7 +37,7 @@ export function TutorialDialog({
             {steps.map((step, index) => (
               <div key={index} className="space-y-2">
                 <div className="flex items-start gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center bg-primary text-primary-foreground font-semibold">
                     {index + 1}
                   </div>
                   <div className="flex-1 space-y-1">

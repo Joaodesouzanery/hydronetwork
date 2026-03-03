@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Play, Download, Upload, Trash2, Droplets } from "lucide-react";
+import { Play, Download, Upload, Trash2, Droplets, MapPin, Link, Mountain, Zap, Globe, BarChart3, TrendingUp } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
 import { hazenWilliamsHeadloss, hazenWilliamsVelocity } from "@/engine/hydraulics";
@@ -129,12 +129,12 @@ export const EpanetModule = ({ pontos, trechos }: EpanetModuleProps) => {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {[
-              { icon: "📍", value: stats.juncoes, label: "NÓS CARREGADOS", color: "text-blue-600" },
-              { icon: "🔗", value: stats.tubos, label: "TRECHOS CARREGADOS", color: "text-green-600" },
-              { icon: "🏔️", value: stats.reservatorios, label: "RESERVATÓRIOS", color: "text-yellow-600" },
-              { icon: "⚡", value: stats.bombas, label: "BOMBAS", color: "text-purple-600" },
+              { icon: <MapPin className="h-7 w-7 inline-block text-blue-600" />, value: stats.juncoes, label: "NÓS CARREGADOS", color: "text-blue-600" },
+              { icon: <Link className="h-7 w-7 inline-block text-green-600" />, value: stats.tubos, label: "TRECHOS CARREGADOS", color: "text-green-600" },
+              { icon: <Mountain className="h-7 w-7 inline-block text-yellow-600" />, value: stats.reservatorios, label: "RESERVATÓRIOS", color: "text-yellow-600" },
+              { icon: <Zap className="h-7 w-7 inline-block text-purple-600" />, value: stats.bombas, label: "BOMBAS", color: "text-purple-600" },
             ].map((s, i) => (
-              <div key={i} className="bg-muted/50 border rounded-xl p-4 text-center">
+              <div key={i} className="bg-muted/50 border p-4 text-center">
                 <div className="text-3xl">{s.icon}</div>
                 <div className={`text-3xl font-bold ${s.color}`}>{s.value}</div>
                 <div className="text-xs font-semibold text-muted-foreground">{s.label}</div>
@@ -142,7 +142,7 @@ export const EpanetModule = ({ pontos, trechos }: EpanetModuleProps) => {
             ))}
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" onClick={loadPlatformData}>🌐 Usar Dados da Plataforma</Button>
+            <Button variant="outline" onClick={loadPlatformData}><Globe className="h-4 w-4 inline-block mr-1" /> Usar Dados da Plataforma</Button>
             <Button variant="outline" onClick={clearData}><Trash2 className="h-4 w-4 mr-1" /> Limpar Dados</Button>
             <Button onClick={simulate} disabled={nodes.length < 2}><Play className="h-4 w-4 mr-1" /> Simular</Button>
           </div>
@@ -206,24 +206,24 @@ export const EpanetModule = ({ pontos, trechos }: EpanetModuleProps) => {
         <CardContent className="pt-4">
           <Tabs value={resultTab} onValueChange={setResultTab}>
             <TabsList>
-              <TabsTrigger value="summary">📊 Resumo</TabsTrigger>
-              <TabsTrigger value="nodes">📍 Nós</TabsTrigger>
-              <TabsTrigger value="links">➖ Trechos</TabsTrigger>
-              <TabsTrigger value="charts">📈 Gráficos</TabsTrigger>
+              <TabsTrigger value="summary"><><BarChart3 className="h-4 w-4 inline-block mr-1" /> Resumo</></TabsTrigger>
+              <TabsTrigger value="nodes"><><MapPin className="h-4 w-4 inline-block mr-1" /> Nós</></TabsTrigger>
+              <TabsTrigger value="links">Trechos</TabsTrigger>
+              <TabsTrigger value="charts"><><TrendingUp className="h-4 w-4 inline-block mr-1" /> Gráficos</></TabsTrigger>
             </TabsList>
 
             <TabsContent value="summary" className="py-4">
               {simulated && summary ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-muted/50 border rounded-xl p-4 text-center">
+                  <div className="bg-muted/50 border p-4 text-center">
                     <div className="text-2xl font-bold text-blue-600">{summary.demandaTotal.toFixed(1)}</div>
                     <div className="text-xs font-semibold text-muted-foreground">DEMANDA TOTAL (L/S)</div>
                   </div>
-                  <div className="bg-muted/50 border rounded-xl p-4 text-center">
+                  <div className="bg-muted/50 border p-4 text-center">
                     <div className="text-2xl font-bold text-green-600">{summary.pressaoMin.toFixed(1)}</div>
                     <div className="text-xs font-semibold text-muted-foreground">PRESSÃO MÍN (MCA)</div>
                   </div>
-                  <div className="bg-muted/50 border rounded-xl p-4 text-center">
+                  <div className="bg-muted/50 border p-4 text-center">
                     <div className="text-2xl font-bold text-yellow-600">{summary.velMax.toFixed(2)}</div>
                     <div className="text-xs font-semibold text-muted-foreground">VELOCIDADE MÁX (M/S)</div>
                   </div>

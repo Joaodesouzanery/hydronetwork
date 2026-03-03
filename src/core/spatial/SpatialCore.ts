@@ -12,6 +12,8 @@ import {
   createLayer as _createLayer, removeLayer as _removeLayer,
   getLayersByDiscipline as _getLayersByDiscipline,
   getAllLayers as _getAllLayers, getSimulationLayers as _getSimulationLayers,
+  getLayersByOrigin as _getLayersByOrigin,
+  OriginModule,
 } from "./LayerRegistry";
 
 // ════════════════════════════════════════
@@ -44,6 +46,7 @@ export interface SpatialNode {
   label?: string;
   properties: Record<string, any>;
   layerId: string;
+  origin_module?: OriginModule;
 }
 
 export interface SpatialEdge {
@@ -59,6 +62,7 @@ export interface SpatialEdge {
   vertices?: [number, number, number][];
   properties: Record<string, any>;
   layerId: string;
+  origin_module?: OriginModule;
 }
 
 // ════════════════════════════════════════
@@ -126,6 +130,10 @@ export function getAllLayers(): SpatialLayer[] {
   return _getAllLayers(getLayerStore());
 }
 
+export function getLayersByOrigin(origin: OriginModule): SpatialLayer[] {
+  return _getLayersByOrigin(getLayerStore(), origin);
+}
+
 // ── Node operations ──
 
 export function addNode(node: Omit<SpatialNode, "properties"> & { properties?: Record<string, any> }): SpatialNode {
@@ -182,6 +190,11 @@ export function getAllNodes(): SpatialNode[] {
 
 export function getNodesByLayer(layerId: string): SpatialNode[] {
   return getAllNodes().filter(n => n.layerId === layerId);
+}
+
+export function getNodesByOrigin(origin: OriginModule): SpatialNode[] {
+  const originLayerIds = new Set(getLayersByOrigin(origin).map(l => l.id));
+  return getAllNodes().filter(n => n.origin_module === origin || originLayerIds.has(n.layerId));
 }
 
 // ── Edge operations ──
@@ -259,6 +272,11 @@ export function getAllEdges(): SpatialEdge[] {
 
 export function getEdgesByLayer(layerId: string): SpatialEdge[] {
   return getAllEdges().filter(e => e.layerId === layerId);
+}
+
+export function getEdgesByOrigin(origin: OriginModule): SpatialEdge[] {
+  const originLayerIds = new Set(getLayersByOrigin(origin).map(l => l.id));
+  return getAllEdges().filter(e => e.origin_module === origin || originLayerIds.has(e.layerId));
 }
 
 // ── Import helper: auto-create nodes at endpoints ──

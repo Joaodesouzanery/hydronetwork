@@ -1,6 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Hero Section — Custom Animations */
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes fade-up {
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes scroll-dot {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(16px); }
+}
 
 /* Lean Constraints - Pulsing marker for critical constraints */
 @keyframes pulse-constraint {
@@ -13,108 +36,122 @@
   border-radius: 50%;
 }
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* ═══════════════════════════════════════════════════
+   ConstruData Design System — FONTE DE VERDADE
+   ═══════════════════════════════════════════════════ */
 
 @layer base {
+  /* ── LIGHT MODE (landing page, seções públicas) ── */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    --background: 0 0% 96%;         /* #F5F5F5 surface light */
+    --foreground: 220 44% 15%;       /* #0E1B3D text-primary light */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card: 0 0% 100%;              /* white cards */
+    --card-foreground: 220 44% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 220 44% 15%;
 
-    --primary: 217 91% 60%;
+    --primary: 220 78% 28%;          /* #10367D azul escuro */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 27 96% 61%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 0 0% 92%;           /* #EBEBEB cinza claro */
+    --secondary-foreground: 220 44% 15%;
 
-    --muted: 220 13% 95%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 0 0% 92%;
+    --muted-foreground: 215 16% 47%; /* #64748B text-secondary light */
 
-    --accent: 217 78% 85%;
-    --accent-foreground: 217 91% 20%;
+    --accent: 18 100% 59%;            /* #FF6B2C laranja */
+    --accent-foreground: 0 0% 100%;   /* branco sobre accent */
 
-    --destructive: 0 84% 60%;
+    --destructive: 0 84% 60%;        /* #EF4444 */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 217 91% 60%;
+    --border: 0 0% 83%;              /* #D4D4D4 */
+    --input: 0 0% 83%;
+    --ring: 18 100% 59%;
 
-    --radius: 0.5rem;
-    
-    --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(217 78% 70%) 100%);
-    --gradient-secondary: linear-gradient(135deg, hsl(27 96% 61%) 0%, hsl(27 96% 70%) 100%);
-    --gradient-hero: linear-gradient(135deg, hsl(217 91% 60%) 0%, hsl(217 78% 70%) 50%, hsl(27 96% 61%) 100%);
-    --gradient-start: 217 91% 60%;
-    --gradient-end: 27 96% 61%;
-    --shadow-primary: 0 10px 40px -10px hsl(217 91% 60% / 0.3);
-    --shadow-card: 0 2px 8px -2px hsl(217 91% 60% / 0.1);
+    --radius: 0;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, #10367D 0%, #1A4A9E 100%);
+    --gradient-secondary: linear-gradient(135deg, #FF6B2C 0%, #E55A1F 100%);
+    --gradient-hero: linear-gradient(135deg, #0A2456 0%, #10367D 50%, #1A4A9E 100%);
+    --gradient-start: 220 78% 28%;
+    --gradient-end: 18 100% 59%;
+    --shadow-primary: 0 10px 40px -10px rgba(16, 54, 125, 0.3);
+    --shadow-card: 0 2px 8px -2px rgba(16, 54, 125, 0.08);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-    --radius: 0.75rem;
+    /* Semantic status colors */
+    --success: 142 71% 45%;          /* #22C55E green */
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;           /* #F59E0B */
+    --warning-foreground: 0 0% 100%;
+    --info: 217 91% 60%;             /* #3B82F6 */
+    --info-foreground: 0 0% 100%;
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
+    /* Sidebar — light mode (white bg, gray text) */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 14% 34%;
+    --sidebar-primary: 215 14% 34%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 215 28% 17%;
     --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 215 14% 34%;
   }
 
+  /* ── DARK MODE (dashboard/app interno — padrão) ── */
   .dark {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
+    --background: 222 50% 15%;       /* #0E1B3D surface dark */
+    --foreground: 213 31% 97%;       /* #F8FAFC text-primary dark */
 
-    --card: 222 47% 15%;
-    --card-foreground: 210 40% 98%;
+    --card: 224 40% 17%;             /* #162044 cards dark */
+    --card-foreground: 213 31% 97%;
 
-    --popover: 222 47% 15%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 224 40% 17%;
+    --popover-foreground: 213 31% 97%;
 
-    --primary: 217 91% 60%;
+    --primary: 220 78% 28%;          /* #10367D — same brand */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 27 96% 61%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 0 0% 92%;
+    --secondary-foreground: 220 44% 15%;
 
-    --muted: 217 33% 20%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 224 38% 18%;
+    --muted-foreground: 215 20% 65%; /* #94A3B8 text-secondary dark */
 
-    --accent: 217 78% 30%;
-    --accent-foreground: 217 78% 90%;
+    --accent: 18 100% 59%;           /* #FF6B2C */
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 213 31% 97%;
 
-    --border: 217 33% 20%;
-    --input: 217 33% 20%;
-    --ring: 217 91% 60%;
-    --gradient-start: 217 91% 60%;
-    --gradient-end: 27 96% 61%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --border: 220 51% 27%;           /* #1E3A6E */
+    --input: 220 51% 27%;
+    --ring: 18 100% 59%;
+
+    /* Semantic status colors (dark) */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --gradient-start: 220 78% 28%;
+    --gradient-end: 18 100% 59%;
+
+    /* Sidebar — dark mode (white bg, gray text — matches light) */
+    --sidebar-background: 0 0% 100%;       /* white */
+    --sidebar-foreground: 215 14% 34%;     /* gray-600 */
+    --sidebar-primary: 215 14% 34%;        /* gray-600 */
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 220 14% 96%;         /* gray-100 */
+    --sidebar-accent-foreground: 215 28% 17%; /* gray-800 */
+    --sidebar-border: 220 13% 91%;         /* gray-200 */
+    --sidebar-ring: 215 14% 34%;
   }
 }
 
@@ -125,15 +162,22 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+    font-variant-numeric: tabular-nums;
   }
-  
+
+  /* Typography hierarchy */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  }
+
   .bg-grid-pattern {
-    background-image: 
+    background-image:
       linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px),
       linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px);
     background-size: 60px 60px;
   }
-  
+
   @keyframes fade-in {
     from {
       opacity: 0;
@@ -144,11 +188,11 @@ All colors MUST be HSL.
       transform: translateY(0);
     }
   }
-  
+
   .animate-fade-in {
     animation: fade-in 0.8s ease-out;
   }
-  
+
   /* Enhanced click animations */
   @keyframes click-ripple {
     0% {
@@ -164,7 +208,7 @@ All colors MUST be HSL.
       opacity: 1;
     }
   }
-  
+
   @keyframes subtle-bounce {
     0%, 100% {
       transform: translateY(0);
@@ -173,11 +217,11 @@ All colors MUST be HSL.
       transform: translateY(-2px);
     }
   }
-  
+
   .animate-click {
     animation: click-ripple 0.15s ease-out;
   }
-  
+
   .animate-subtle-bounce {
     animation: subtle-bounce 0.3s ease-out;
   }
@@ -211,107 +255,172 @@ All colors MUST be HSL.
     z-index: 1 !important;
   }
 
+  /* ═══ ConstruData Button Styles ═══ */
+  .btn-cta {
+    @apply bg-[#FF6B2C] text-white font-semibold font-mono rounded-none transition-all duration-200;
+  }
+  .btn-cta:hover {
+    @apply bg-[#E55A1F];
+  }
+
+  .btn-secondary-outline {
+    @apply bg-transparent border border-[#10367D] text-[#10367D] font-mono rounded-none transition-all duration-200;
+  }
+  .btn-secondary-outline:hover {
+    background: rgba(16, 54, 125, 0.05);
+  }
+
+  .btn-destructive {
+    background: rgba(239, 68, 68, 0.1);
+    @apply text-[#EF4444] font-mono rounded-none transition-all duration-200;
+  }
+  .btn-destructive:hover {
+    background: rgba(239, 68, 68, 0.2);
+  }
+
+  /* ═══ ConstruData Status Badges ═══ */
+  .badge-success {
+    background: rgba(34, 197, 94, 0.1);
+    @apply text-[#22C55E];
+  }
+  .badge-info {
+    background: rgba(59, 130, 246, 0.1);
+    @apply text-[#3B82F6];
+  }
+  .badge-warning {
+    background: rgba(245, 158, 11, 0.1);
+    @apply text-[#F59E0B];
+  }
+  .badge-error {
+    background: rgba(239, 68, 68, 0.1);
+    @apply text-[#EF4444];
+  }
+
+  /* ═══ ConstruData Card Styles ═══ */
+  .dark .card-cd {
+    background: #162044;
+    border: 1px solid #1E3A6E;
+  }
+
+  .card-cd {
+    background: #FFFFFF;
+    border: 1px solid #EBEBEB;
+  }
+
   /* Card hover effects */
   .card-interactive {
-    @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-1 cursor-pointer;
+    @apply transition-all duration-200 hover:border-[#FF6B2C]/50 cursor-pointer;
   }
-  
+
   .card-interactive:active {
-    @apply scale-[0.98] shadow-md;
+    @apply scale-[0.98];
+  }
+
+  /* ═══ Sidebar active item ═══ */
+  .sidebar-item-active {
+    background: #F3F4F6;
+    color: #111827;
+    font-weight: 600;
+  }
+
+  /* ═══ Section labels ═══ */
+  .section-label {
+    @apply uppercase text-[11px] tracking-[1.5px] font-semibold font-mono;
+    color: #64748B;
   }
 
   /* Mobile-first touch optimizations */
   .touch-target {
     @apply min-h-[44px] min-w-[44px];
   }
-  
+
   .mobile-container {
     @apply px-4 md:px-6 lg:px-8;
   }
-  
+
   .mobile-section {
     @apply py-12 md:py-16 lg:py-20;
   }
-  
+
   .mobile-heading {
     @apply text-2xl sm:text-3xl md:text-4xl font-bold;
   }
-  
+
   .mobile-subheading {
     @apply text-lg sm:text-xl md:text-2xl font-semibold;
   }
-  
+
   .mobile-text {
     @apply text-sm sm:text-base;
   }
-  
+
   .mobile-card {
-    @apply p-4 sm:p-5 md:p-6 rounded-lg sm:rounded-xl;
+    @apply p-4 sm:p-5 md:p-6;
   }
-  
+
   .mobile-button {
     @apply px-4 py-2.5 sm:px-6 sm:py-3 text-sm sm:text-base;
   }
-  
+
   .mobile-grid-2 {
     @apply grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4;
   }
-  
+
   .mobile-grid-3 {
     @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6;
   }
-  
+
   .mobile-grid-4 {
     @apply grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4;
   }
-  
+
   /* Safe area for mobile devices */
   .safe-area-inset {
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
     padding-bottom: env(safe-area-inset-bottom);
   }
-  
+
   /* Scrollable containers for mobile */
   .mobile-scroll-x {
     @apply flex overflow-x-auto gap-3 pb-2 -mx-4 px-4 snap-x snap-mandatory;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
-  
+
   .mobile-scroll-x::-webkit-scrollbar {
     display: none;
   }
-  
+
   .mobile-scroll-item {
     @apply flex-shrink-0 snap-start;
   }
-  
+
   /* Bottom navigation for mobile */
   .mobile-bottom-nav {
     @apply fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50 safe-area-inset;
   }
-  
+
   /* Mobile modal/dialog improvements */
   .mobile-dialog {
     @apply max-h-[85vh] overflow-y-auto;
   }
-  
+
   /* Touch feedback */
   .touch-feedback:active {
     @apply bg-muted/50 transition-colors duration-75;
   }
-  
+
   /* Mobile tabs with horizontal scroll */
   .mobile-tabs {
     @apply flex overflow-x-auto gap-1 p-1 -mx-1;
     scrollbar-width: none;
   }
-  
+
   .mobile-tabs::-webkit-scrollbar {
     display: none;
   }
-  
+
   .mobile-tab {
     @apply flex-shrink-0 whitespace-nowrap px-3 py-2 text-sm;
   }

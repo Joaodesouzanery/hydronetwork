@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 48" fill="none">
+  <!-- ConstruData logo - O replaced by </> code symbol -->
+  <!-- "C" -->
+  <text x="0" y="36" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="32" font-weight="700" fill="#10367D">C</text>
+  <!-- </> code symbol replacing "O" -->
+  <g transform="translate(19, 12)">
+    <path d="M2 12L9 5M2 12L9 19" stroke="#FF6B2C" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M12 20L17 4" stroke="#10367D" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M27 12L20 5M27 12L20 19" stroke="#FF6B2C" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <!-- "NSTRUDATA" -->
+  <text x="52" y="36" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="32" font-weight="700" fill="#10367D">NSTRUDATA</text>
+</svg>

@@ -266,7 +266,7 @@ export const MaterialComparisonDashboard = ({ projectId }: MaterialComparisonDas
         <CardContent>
           <div className="space-y-4">
             {(selectedMaterials.length > 0 ? filteredData : comparisonData).map((item, idx) => (
-              <div key={idx} className="flex items-center justify-between p-4 border rounded-lg">
+              <div key={idx} className="flex items-center justify-between p-4 border">
                 <div className="flex-1">
                   <div className="font-semibold">{item.material}</div>
                   <div className="text-sm text-muted-foreground">

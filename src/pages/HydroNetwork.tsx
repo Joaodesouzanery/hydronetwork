@@ -1,15 +1,16 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from "react";
 import * as XLSX from "xlsx";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
-  Download, MapPin, Droplets,
+  Download, MapPin, Droplets, Calculator,
   AlertTriangle, Settings2, X, Map
 } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -28,22 +29,33 @@ import { TopographyMap } from "@/components/hydronetwork/TopographyMap";
 import { PerfilLongitudinal } from "@/components/hydronetwork/PerfilLongitudinal";
 import { RDOHydroModule } from "@/components/hydronetwork/RDOHydroModule";
 import { PlanningModule } from "@/components/hydronetwork/PlanningModule";
+import type { QuantRow, QuantityParams } from "@/components/hydronetwork/modules/QuantitiesModule";
 import { downloadDXF } from "@/lib/dxfExporter";
-import { SewerModule } from "@/components/hydronetwork/modules/SewerModule";
-import { WaterModule } from "@/components/hydronetwork/modules/WaterModule";
-import { DrainageModule } from "@/components/hydronetwork/modules/DrainageModule";
-import { QuantitiesModule } from "@/components/hydronetwork/modules/QuantitiesModule";
-import { EpanetModule } from "@/components/hydronetwork/modules/EpanetModule";
-import { EpanetProModule } from "@/components/hydronetwork/modules/EpanetProModule";
-import { SwmmModule } from "@/components/hydronetwork/modules/SwmmModule";
-import { OpenProjectModule } from "@/components/hydronetwork/modules/OpenProjectModule";
-import { ProjectLibreModule } from "@/components/hydronetwork/modules/ProjectLibreModule";
-import { QgisModule } from "@/components/hydronetwork/modules/QgisModule";
-import { PeerReviewModule } from "@/components/hydronetwork/modules/PeerReviewModule";
-import { BudgetCostModule } from "@/components/hydronetwork/modules/BudgetCostModule";
-import { BdiModule } from "@/components/hydronetwork/modules/BdiModule";
-import { RDOPlanningModule } from "@/components/hydronetwork/modules/RDOPlanningModule";
-import { saveHydroProject, loadHydroProject } from "@/engine/sharedPlanningStore";
+// Lazy-loaded modules for code splitting — only loaded when navigated to
+const SewerModule = lazy(() => import("@/components/hydronetwork/modules/SewerModule").then(m => ({ default: m.SewerModule })));
+const WaterModule = lazy(() => import("@/components/hydronetwork/modules/WaterModule").then(m => ({ default: m.WaterModule })));
+const DrainageModule = lazy(() => import("@/components/hydronetwork/modules/DrainageModule").then(m => ({ default: m.DrainageModule })));
+const QuantitiesModule = lazy(() => import("@/components/hydronetwork/modules/QuantitiesModule").then(m => ({ default: m.QuantitiesModule })));
+const EpanetModule = lazy(() => import("@/components/hydronetwork/modules/EpanetModule").then(m => ({ default: m.EpanetModule })));
+const EpanetProModule = lazy(() => import("@/components/hydronetwork/modules/EpanetProModule").then(m => ({ default: m.EpanetProModule })));
+const SwmmModule = lazy(() => import("@/components/hydronetwork/modules/SwmmModule").then(m => ({ default: m.SwmmModule })));
+const OpenProjectModule = lazy(() => import("@/components/hydronetwork/modules/OpenProjectModule").then(m => ({ default: m.OpenProjectModule })));
+const ProjectLibreModule = lazy(() => import("@/components/hydronetwork/modules/ProjectLibreModule").then(m => ({ default: m.ProjectLibreModule })));
+const QgisModule = lazy(() => import("@/components/hydronetwork/modules/QgisModule").then(m => ({ default: m.QgisModule })));
+const PeerReviewModule = lazy(() => import("@/components/hydronetwork/modules/PeerReviewModule").then(m => ({ default: m.PeerReviewModule })));
+const BudgetCostModule = lazy(() => import("@/components/hydronetwork/modules/BudgetCostModule").then(m => ({ default: m.BudgetCostModule })));
+const BdiModule = lazy(() => import("@/components/hydronetwork/modules/BdiModule").then(m => ({ default: m.BdiModule })));
+const RDOPlanningModule = lazy(() => import("@/components/hydronetwork/modules/RDOPlanningModule").then(m => ({ default: m.RDOPlanningModule })));
+const LPSModule = lazy(() => import("@/components/hydronetwork/modules/LPSModule").then(m => ({ default: m.LPSModule })));
+const QEsgWaterModule = lazy(() => import("@/components/hydronetwork/modules/QEsgWaterModule").then(m => ({ default: m.QEsgWaterModule })));
+const ElevatorStationModule = lazy(() => import("@/components/hydronetwork/modules/ElevatorStationModule").then(m => ({ default: m.ElevatorStationModule })));
+const RecalqueModule = lazy(() => import("@/components/hydronetwork/modules/RecalqueModule").then(m => ({ default: m.RecalqueModule })));
+const TransientModule = lazy(() => import("@/components/hydronetwork/modules/TransientModule").then(m => ({ default: m.TransientModule })));
+import { QEsgWaterPanel } from "@/components/hydronetwork/panels/QEsgWaterPanel";
+import { getRasterGrid } from "@/engine/rasterStore";
+import { extractContours, type ContourExtractionResult } from "@/engine/contourExtractor";
+import { saveHydroProject, loadHydroProject, loadHydroProjectAsync, saveHydroProjectAsync, type HydroProjectSave } from "@/engine/sharedPlanningStore";
+import { ProjectSelector } from "@/components/hydronetwork/ProjectSelector";
 import {
   getSpatialProject, validateProject, ValidationIssue,
   getAllLayers, resetSpatialProject,
@@ -61,12 +73,14 @@ const useHydroState = () => {
   const [material, setMaterial] = useState(DEFAULT_MATERIAL);
   const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null);
   const [rdos, setRdos] = useState<RDO[]>(loadRDOs());
+  const [quantityRows, setQuantityRows] = useState<QuantRow[]>([]);
+  const [quantityParams, setQuantityParams] = useState<QuantityParams | null>(null);
 
   return {
     pontos, setPontos, trechos, setTrechos, networkSummary, setNetworkSummary,
     costBase, setCostBase, budgetRows, setBudgetRows, budgetSummary, setBudgetSummary,
     diametroMm, setDiametroMm, material, setMaterial, scheduleResult, setScheduleResult,
-    rdos, setRdos,
+    rdos, setRdos, quantityRows, setQuantityRows, quantityParams, setQuantityParams,
   };
 };
 
@@ -80,8 +94,89 @@ const HydroNetwork = () => {
     pontos, setPontos, trechos, setTrechos, networkSummary, setNetworkSummary,
     costBase, setCostBase, budgetRows, setBudgetRows, budgetSummary, setBudgetSummary,
     diametroMm, setDiametroMm, material, setMaterial, scheduleResult, setScheduleResult,
-    rdos, setRdos,
+    rdos, setRdos, quantityRows, setQuantityRows, quantityParams, setQuantityParams,
   } = state;
+
+  // ══════════════════════════════════════════════
+  // PROJECT VERSIONING: current project identity
+  // ══════════════════════════════════════════════
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [currentProjectName, setCurrentProjectName] = useState("HydroNetwork");
+
+  const getProjectData = useCallback((): HydroProjectSave => ({
+    pontos, trechos, rdos, planning: null, scheduleResult,
+    savedAt: new Date().toISOString(), projectName: currentProjectName,
+  }), [pontos, trechos, rdos, scheduleResult, currentProjectName]);
+
+  const handleLoadProject = useCallback((id: string, name: string, data: HydroProjectSave) => {
+    setCurrentProjectId(id);
+    setCurrentProjectName(name);
+    setPontos(data.pontos || []);
+    setTrechos(data.trechos || []);
+    if (data.trechos?.length) setNetworkSummary(summarizeNetwork(data.trechos));
+    else setNetworkSummary(null);
+    setRdos(data.rdos || []);
+    setScheduleResult(data.scheduleResult || null);
+  }, []);
+
+  const handleProjectChange = useCallback((id: string, name: string) => {
+    setCurrentProjectId(id);
+    setCurrentProjectName(name);
+  }, []);
+
+  // ══════════════════════════════════════════════
+  // AUTO-LOAD: restore saved project on page open
+  // ══════════════════════════════════════════════
+  const autoLoadDone = useRef(false);
+  useEffect(() => {
+    if (autoLoadDone.current) return;
+    autoLoadDone.current = true;
+    (async () => {
+      const saved = await loadHydroProjectAsync();
+      if (!saved) return;
+      if (saved.pontos?.length) setPontos(saved.pontos);
+      if (saved.trechos?.length) {
+        setTrechos(saved.trechos);
+        setNetworkSummary(summarizeNetwork(saved.trechos));
+      }
+      if (saved.rdos?.length) setRdos(saved.rdos);
+      if (saved.scheduleResult) setScheduleResult(saved.scheduleResult);
+      if (saved.projectName) setCurrentProjectName(saved.projectName);
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ══════════════════════════════════════════════
+  // AUTO-SAVE: persist every change with 2s debounce
+  // ══════════════════════════════════════════════
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    // Skip initial render (avoid saving empty state)
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    // Only save if there's actual data
+    if (pontos.length === 0 && trechos.length === 0 && rdos.length === 0) return;
+    const timer = setTimeout(() => {
+      saveHydroProjectAsync({
+        pontos, trechos, rdos, planning: null, scheduleResult,
+        savedAt: new Date().toISOString(), projectName: currentProjectName,
+      }, currentProjectId || undefined);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [pontos, trechos, rdos, scheduleResult, currentProjectId, currentProjectName]);
+
+  // ══════════════════════════════════════════════
+  // SAVE ON CLOSE: sync save when user closes tab
+  // ══════════════════════════════════════════════
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (pontos.length === 0 && trechos.length === 0) return;
+      saveHydroProject({
+        pontos, trechos, rdos, planning: null, scheduleResult,
+        savedAt: new Date().toISOString(), projectName: currentProjectName,
+      });
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [pontos, trechos, rdos, scheduleResult, currentProjectName]);
 
   const [pasteData, setPasteData] = useState("");
   const [tipoSolo, setTipoSolo] = useState<TipoSolo>("normal");
@@ -176,11 +271,11 @@ const HydroNetwork = () => {
       case "esgoto":
         return <SewerModule pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />;
       case "agua":
-        return <WaterModule pontos={pontos} />;
+        return <WaterModule pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />;
       case "drenagem":
         return <DrainageModule pontos={pontos} />;
       case "quantitativos":
-        return <QuantitiesModule trechos={trechos} pontos={pontos} />;
+        return <QuantitiesModule trechos={trechos} pontos={pontos} onQuantitiesCalculated={(rows, params) => { setQuantityRows(rows); setQuantityParams(params); }} />;
       case "orcamento":
         return <OrcamentoModule />;
       case "planejamento":
@@ -205,6 +300,16 @@ const HydroNetwork = () => {
         return <RDOHydroModule pontos={pontos} trechos={trechos} rdos={rdos} setRdos={setRdos} onPontosChange={setPontos} onTrechosChange={setTrechos} />;
       case "rdo-planejamento":
         return <RDOPlanningModule pontos={pontos} trechos={trechos} rdos={rdos} scheduleResult={scheduleResult} />;
+      case "lps":
+        return <LPSModule pontos={pontos} trechos={trechos} />;
+      case "qesg-qwater":
+        return <QEsgWaterModule pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />;
+      case "elevatoria":
+        return <ElevatorStationModule />;
+      case "recalque":
+        return <RecalqueModule />;
+      case "transientes":
+        return <TransientModule />;
       case "perfil":
         return <PerfilLongitudinal pontos={pontos} trechos={trechos} />;
       case "mapa":
@@ -220,6 +325,21 @@ const HydroNetwork = () => {
   function TopografiaModule() {
     const spatialProject = getSpatialProject();
     const layerCount = getAllLayers().length;
+    const [contourInterval, setContourInterval] = useState(5);
+    const [contourResult, setContourResult] = useState<ContourExtractionResult | null>(null);
+
+    const handleGenerateContours = () => {
+      const raster = getRasterGrid();
+      if (!raster) { toast.error("Importe um arquivo TIF/GeoTIFF primeiro."); return; }
+      const { grid, meta } = raster;
+      const result = extractContours(
+        grid.data, meta.width, meta.height,
+        grid.origin, grid.pixelSize,
+        contourInterval, meta.noDataValue,
+      );
+      setContourResult(result);
+      toast.success(`${result.contours.length} curvas de nível geradas (intervalo ${contourInterval}m)`);
+    };
 
     return (
       <div className="space-y-4">
@@ -249,7 +369,7 @@ const HydroNetwork = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {pontos.length > 0 && (
-              <div className="border border-border rounded-lg p-4 bg-card">
+              <div className="border border-border rounded-none p-4 bg-card">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Badge variant="default" className="bg-green-600">{pontos.length} pontos</Badge>
@@ -282,7 +402,7 @@ const HydroNetwork = () => {
                       { label: "Elevatoria", value: networkSummary.trechosElevatoria, color: "text-orange-600" },
                       { label: "Decliv. Media", value: `${(networkSummary.declividadeMedia * 100).toFixed(2)}%`, color: "text-purple-600" },
                     ].map((item, i) => (
-                      <div key={i} className="bg-muted/50 rounded-lg p-2 text-center">
+                      <div key={i} className="bg-muted/50 rounded-none p-2 text-center">
                         <div className={`text-sm font-bold ${item.color}`}>{item.value}</div>
                         <div className="text-[10px] text-muted-foreground">{item.label}</div>
                       </div>
@@ -385,7 +505,7 @@ const HydroNetwork = () => {
                 {getAllLayers().map(layer => (
                   <div key={layer.id} className="flex items-center justify-between py-1 px-2 rounded hover:bg-muted/50 text-xs">
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: layer.color }} />
+                      <div className="w-3 h-3" style={{ backgroundColor: layer.color }} />
                       <span className="font-medium">{layer.name}</span>
                       <Badge variant="outline" className="text-[10px]">{layer.discipline}</Badge>
                       <Badge variant="outline" className="text-[10px]">{layer.geometryType}</Badge>
@@ -398,7 +518,7 @@ const HydroNetwork = () => {
           </Card>
         )}
 
-        <TopographyMap pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} onClearAll={handleClearTopography} onPontosChange={setPontos} />
+        <TopographyMap pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} onClearAll={handleClearTopography} onPontosChange={setPontos} contourLines={contourResult?.contours} />
 
         {pontos.length > 0 && (
           <Card>
@@ -413,6 +533,73 @@ const HydroNetwork = () => {
             </CardContent>
           </Card>
         )}
+        {/* MDE / Curvas de Nível */}
+        {getRasterGrid() && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-green-600" /> Modelo Digital de Elevação (MDE)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Extraia curvas de nível do raster importado (TIF/GeoTIFF)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {contourResult && (
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="bg-muted/50 rounded p-2 text-center">
+                    <div className="text-sm font-bold">{contourResult.stats.min.toFixed(1)}m</div>
+                    <div className="text-[10px] text-muted-foreground">Mín</div>
+                  </div>
+                  <div className="bg-muted/50 rounded p-2 text-center">
+                    <div className="text-sm font-bold">{contourResult.stats.max.toFixed(1)}m</div>
+                    <div className="text-[10px] text-muted-foreground">Máx</div>
+                  </div>
+                  <div className="bg-muted/50 rounded p-2 text-center">
+                    <div className="text-sm font-bold">{contourResult.stats.mean.toFixed(1)}m</div>
+                    <div className="text-[10px] text-muted-foreground">Média</div>
+                  </div>
+                  <div className="bg-muted/50 rounded p-2 text-center">
+                    <div className="text-sm font-bold">{contourResult.contours.length}</div>
+                    <div className="text-[10px] text-muted-foreground">Curvas</div>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <Label className="text-xs whitespace-nowrap">Intervalo (m)</Label>
+                <Select value={String(contourInterval)} onValueChange={v => setContourInterval(Number(v))}>
+                  <SelectTrigger className="w-24 h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 5, 10, 20, 50].map(i => (
+                      <SelectItem key={i} value={String(i)}>{i}m</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" onClick={handleGenerateContours}>Gerar Curvas de Nível</Button>
+                {contourResult && contourResult.contours.length > 0 && (
+                  <Button size="sm" variant="outline" onClick={() => {
+                    const features = contourResult.contours.flatMap(c =>
+                      c.segments.map(seg => ({
+                        type: "Feature" as const,
+                        properties: { elevation: c.elevation },
+                        geometry: { type: "LineString" as const, coordinates: seg },
+                      }))
+                    );
+                    const geojson = JSON.stringify({ type: "FeatureCollection", features }, null, 2);
+                    const blob = new Blob([geojson], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = "curvas_nivel.geojson"; a.click();
+                    URL.revokeObjectURL(url);
+                    toast.success("Curvas exportadas como GeoJSON");
+                  }}>
+                    <Download className="h-3 w-3 mr-1" /> GeoJSON
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {trechos.length > 0 && (
           <Card>
             <CardHeader><CardTitle>Trechos ({trechos.length})</CardTitle></CardHeader>
@@ -421,19 +608,74 @@ const HydroNetwork = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="min-w-[40px]">#</TableHead>
+                      <TableHead className="min-w-[120px]">Nome</TableHead>
                       <TableHead>Inicio</TableHead><TableHead>Fim</TableHead><TableHead>Comp.</TableHead>
-                      <TableHead>Decliv.</TableHead><TableHead>Desnivel</TableHead><TableHead>Material</TableHead>
+                      <TableHead className="min-w-[100px]">Tipo Rede</TableHead>
+                      <TableHead className="min-w-[100px]">Frente</TableHead>
+                      <TableHead className="min-w-[80px]">Lote</TableHead>
+                      <TableHead>Decliv.</TableHead><TableHead>Material</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>{trechos.map((t, i) => (
                     <TableRow key={i}>
+                      <TableCell className="text-muted-foreground text-xs">T{String(i + 1).padStart(2, "0")}</TableCell>
+                      <TableCell>
+                        <input
+                          className="bg-transparent border-b border-dashed border-muted-foreground/30 hover:border-primary focus:border-primary outline-none text-sm w-full px-0 py-0.5"
+                          placeholder={`Trecho ${i + 1}`}
+                          value={t.nomeTrecho || t.nome || ""}
+                          onChange={e => {
+                            const updated = [...trechos];
+                            updated[i] = { ...updated[i], nomeTrecho: e.target.value, nome: e.target.value };
+                            setTrechos(updated);
+                          }}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">{t.idInicio}</TableCell>
                       <TableCell className="font-medium">{t.idFim}</TableCell>
                       <TableCell>{fmt(t.comprimento, 2)}m</TableCell>
-                      <TableCell className={t.declividade < 0 ? "text-destructive font-medium" : ""}>{(t.declividade * 100).toFixed(2)}%</TableCell>
-                      <TableCell className={t.cotaInicio - t.cotaFim < 0 ? "text-destructive" : "text-green-600"}>
-                        {(t.cotaInicio - t.cotaFim).toFixed(3)}m
+                      <TableCell>
+                        <Select value={t.tipoRedeManual || "esgoto"} onValueChange={v => {
+                          const updated = [...trechos];
+                          updated[i] = { ...updated[i], tipoRedeManual: v as any };
+                          setTrechos(updated);
+                        }}>
+                          <SelectTrigger className="h-7 text-xs w-full"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="agua">Agua</SelectItem>
+                            <SelectItem value="esgoto">Esgoto</SelectItem>
+                            <SelectItem value="drenagem">Drenagem</SelectItem>
+                            <SelectItem value="recalque">Recalque</SelectItem>
+                            <SelectItem value="outro">Outro</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </TableCell>
+                      <TableCell>
+                        <input
+                          className="bg-transparent border-b border-dashed border-muted-foreground/30 hover:border-primary focus:border-primary outline-none text-xs w-full px-0 py-0.5"
+                          placeholder="Frente"
+                          value={t.frenteServico || ""}
+                          onChange={e => {
+                            const updated = [...trechos];
+                            updated[i] = { ...updated[i], frenteServico: e.target.value };
+                            setTrechos(updated);
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <input
+                          className="bg-transparent border-b border-dashed border-muted-foreground/30 hover:border-primary focus:border-primary outline-none text-xs w-full px-0 py-0.5"
+                          placeholder="Lote"
+                          value={t.lote || ""}
+                          onChange={e => {
+                            const updated = [...trechos];
+                            updated[i] = { ...updated[i], lote: e.target.value };
+                            setTrechos(updated);
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell className={t.declividade < 0 ? "text-destructive font-medium" : ""}>{(t.declividade * 100).toFixed(2)}%</TableCell>
                       <TableCell><Badge variant="outline">{t.material}</Badge></TableCell>
                     </TableRow>
                   ))}</TableBody>
@@ -486,6 +728,23 @@ const HydroNetwork = () => {
           </Card>
         )}
 
+        {/* Inline QEsg/QWater dimensioning */}
+        {trechos.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Calculator className="h-4 w-4" /> Dimensionamento Hidráulico (QEsg / QWater)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Dimensione diâmetros de esgoto (Manning/NBR 9649) e água (Hazen-Williams/NBR 12218) diretamente aqui.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <QEsgWaterPanel pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />
+            </CardContent>
+          </Card>
+        )}
+
         {/* Validation Report */}
         <ValidationReport
           open={showValidation}
@@ -500,7 +759,7 @@ const HydroNetwork = () => {
 
   // â"€â"€ ORÃ‡AMENTO MODULE â"€â"€
   function OrcamentoModule() {
-    return <BudgetCostModule trechos={trechos} pontos={pontos} />;
+    return <BudgetCostModule trechos={trechos} pontos={pontos} quantityRows={quantityRows} quantityParams={quantityParams ?? undefined} />;
   }
 
   // ... keep existing code
@@ -566,44 +825,44 @@ const HydroNetwork = () => {
     swmm: "SWMM", openproject: "OpenProject", projectlibre: "ProjectLibre", qgis: "QGIS",
     revisao: "Revisao por Pares", rdo: "RDO", "rdo-planejamento": "RDO Ã-- Planejamento",
     perfil: "Perfil Longitudinal", mapa: "Mapa Interativo", exportacao: "Exportacao GIS",
+    lps: "LPS — Last Planner System",
+    "qesg-qwater": "QEsg / QWater — Dimensionamento Hidráulico",
+    elevatoria: "Orçamento de Elevatória",
+    recalque: "Recalque / Booster — Linhas de Recalque",
+    transientes: "Transientes Hidráulicos — Golpe de Aríete",
   };
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+      <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <main className="flex-1 p-4 md:p-6 overflow-auto">
           <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
-                <h1 className="text-3xl font-bold flex items-center gap-2">
-                  <Droplets className="h-8 w-8 text-blue-600" /> HydroNetwork
+                <h1 className="text-2xl font-bold font-mono flex items-center gap-2 text-primary">
+                  <Droplets className="h-7 w-7 text-primary" /> HydroNetwork
                 </h1>
-                <p className="text-muted-foreground mt-1">{moduleNames[activeModule] || "Plataforma de Saneamento"}</p>
+                <p className="text-muted-foreground mt-1 text-sm">{moduleNames[activeModule] || "Plataforma de Saneamento"}</p>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => {
-                  saveHydroProject({
-                    pontos, trechos, rdos, planning: null, scheduleResult,
-                    savedAt: new Date().toISOString(), projectName: "HydroNetwork",
-                  });
-                  toast.success("Projeto salvo localmente!");
-                }}> Salvar Projeto</Button>
-                <Button variant="outline" size="sm" onClick={() => {
-                  const saved = loadHydroProject();
-                  if (!saved) { toast.error("Nenhum projeto salvo encontrado."); return; }
-                  if (saved.pontos?.length) setPontos(saved.pontos);
-                  if (saved.trechos?.length) setTrechos(saved.trechos);
-                  if (saved.rdos?.length) setRdos(saved.rdos);
-                  if (saved.scheduleResult) setScheduleResult(saved.scheduleResult);
-                  toast.success(`Projeto restaurado: ${saved.pontos?.length || 0} pontos, ${saved.trechos?.length || 0} trechos`);
-                }}>"‚ Carregar Projeto</Button>
+              <div className="flex gap-2 items-center">
+                <ProjectSelector
+                  currentProjectId={currentProjectId}
+                  currentProjectName={currentProjectName}
+                  getData={getProjectData}
+                  onLoadProject={handleLoadProject}
+                  onProjectChange={handleProjectChange}
+                />
                 <Button variant="outline" size="sm" onClick={() => {
                   toast.info(`Pontos: ${pontos.length} | Trechos: ${trechos.length} | RDOs: ${rdos.length} | Camadas: ${getAllLayers().length} | CRS: ${getSpatialProject().crs.name}`);
-                }}>âœ… Verificar Plataforma</Button>
+                }}>Verificar Plataforma</Button>
               </div>
             </div>
-            {renderModule()}
+            <ErrorBoundary moduleName={moduleNames[activeModule] || activeModule} key={activeModule}>
+              <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-b-2 border-primary" /></div>}>
+                {renderModule()}
+              </Suspense>
+            </ErrorBoundary>
           </div>
         </main>
       </div>

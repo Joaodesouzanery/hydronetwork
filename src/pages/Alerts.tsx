@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { AlertHistoryDialog } from "@/components/alerts/AlertHistoryDialog";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
+import { ALERT_TYPES, isValidEmail, type AlertType } from "@/config/defaults";
 
 interface Alert {
   id: string;
@@ -82,13 +83,25 @@ const Alerts = () => {
 
     if (!user) return;
 
+    // Validate emails with proper regex
+    const validEmails = newAlert.destinatarios.filter(email => email.trim() !== "");
+    const invalidEmails = validEmails.filter(email => !isValidEmail(email));
+    if (invalidEmails.length > 0) {
+      toast.error(`E-mail(s) inválido(s): ${invalidEmails.join(", ")}`);
+      return;
+    }
+    if (validEmails.length === 0) {
+      toast.error("Adicione pelo menos um destinatário");
+      return;
+    }
+
     try {
       const alertPayload = {
         user_id: user.id,
         tipo_alerta: newAlert.tipo_alerta,
         obra_id: newAlert.obra_id || null,
         condicao: newAlert.condicao,
-        destinatarios: newAlert.destinatarios.filter(email => email.trim() !== ""),
+        destinatarios: validEmails,
         ativo: newAlert.ativo
       };
 
@@ -172,7 +185,7 @@ const Alerts = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <Bell className="w-12 h-12 mx-auto text-primary animate-pulse mb-4" />
           <p className="text-muted-foreground">Carregando alertas...</p>
@@ -182,8 +195,8 @@ const Alerts = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+    <div className="min-h-screen bg-background">
+      <header className="border-b bg-card/50 sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -192,9 +205,9 @@ const Alerts = () => {
               </Button>
               <Button variant="ghost" onClick={() => navigate('/dashboard')}>
                 <Building2 className="w-6 h-6 mr-2" />
-                <span className="font-bold">ConstruData</span>
+                <span className="font-bold font-mono">CONSTRUDATA</span>
               </Button>
-              <h1 className="text-xl font-semibold">Alertas e Notificações</h1>
+              <h1 className="text-xl font-semibold font-mono">Alertas e Notificações</h1>
             </div>
             <div className="flex gap-2">
               <PageTutorialButton pageKey="alerts" />
@@ -223,8 +236,8 @@ const Alerts = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="tipo">Tipo de Alerta *</Label>
-                    <Select 
-                      value={newAlert.tipo_alerta} 
+                    <Select
+                      value={newAlert.tipo_alerta}
                       onValueChange={(value) => setNewAlert(prev => ({ ...prev, tipo_alerta: value }))}
                       required
                     >
@@ -232,10 +245,9 @@ const Alerts = () => {
                         <SelectValue placeholder="Selecione o tipo" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="producao_baixa">Produção Abaixo da Meta</SelectItem>
-                        <SelectItem value="funcionarios_ausentes">Funcionários Ausentes</SelectItem>
-                        <SelectItem value="clima_adverso">Clima Adverso</SelectItem>
-                        <SelectItem value="atraso_cronograma">Atraso no Cronograma</SelectItem>
+                        {Object.entries(ALERT_TYPES).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>{label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -335,10 +347,7 @@ const Alerts = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <CardTitle className="text-lg">
-                          {alert.tipo_alerta === 'producao_baixa' && 'Produção Abaixo da Meta'}
-                          {alert.tipo_alerta === 'funcionarios_ausentes' && 'Funcionários Ausentes'}
-                          {alert.tipo_alerta === 'clima_adverso' && 'Clima Adverso'}
-                          {alert.tipo_alerta === 'atraso_cronograma' && 'Atraso no Cronograma'}
+                          {ALERT_TYPES[alert.tipo_alerta as AlertType] || alert.tipo_alerta}
                         </CardTitle>
                         <Badge variant={alert.ativo ? "default" : "secondary"}>
                           {alert.ativo ? "Ativo" : "Inativo"}

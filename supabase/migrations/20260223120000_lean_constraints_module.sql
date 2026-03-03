@@ -1,33 +1,59 @@
--- Lean Constraints Management Module
--- Tables for LPS (Last Planner System) constraints, weekly commitments, and 5 Whys analysis
-
 -- ============================================================
--- ENUMS
+-- Lean Constraints Management Module (LPS - Last Planner System)
+-- Safe migration: uses IF NOT EXISTS to avoid errors on re-run
 -- ============================================================
 
-CREATE TYPE public.lps_constraint_type AS ENUM (
-  'projeto_nao_liberado',
-  'material_nao_entregue',
-  'equipe_indisponivel',
-  'interferencia_tecnica',
-  'falta_equipamento',
-  'condicao_climatica',
-  'aprovacao_pendente',
-  'restricao_contratual',
-  'restricao_externa'
-);
+-- ============================================================
+-- ENUMS (safe creation)
+-- ============================================================
 
-CREATE TYPE public.lps_constraint_status AS ENUM ('ativa', 'resolvida', 'critica');
+DO $$ BEGIN
+  CREATE TYPE public.lps_constraint_type AS ENUM (
+    'projeto_nao_liberado',
+    'material_nao_entregue',
+    'equipe_indisponivel',
+    'interferencia_tecnica',
+    'falta_equipamento',
+    'condicao_climatica',
+    'aprovacao_pendente',
+    'restricao_contratual',
+    'restricao_externa'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TYPE public.lps_impact_level AS ENUM ('baixo', 'medio', 'alto');
+DO $$ BEGIN
+  CREATE TYPE public.lps_constraint_status AS ENUM ('ativa', 'resolvida', 'critica');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TYPE public.lps_commitment_status AS ENUM ('planejado', 'cumprido', 'nao_cumprido', 'parcial');
+DO $$ BEGIN
+  CREATE TYPE public.lps_impact_level AS ENUM ('baixo', 'medio', 'alto');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE public.lps_commitment_status AS ENUM ('planejado', 'cumprido', 'nao_cumprido', 'parcial');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- ============================================================
+-- Ensure update_updated_at_column() function exists
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 -- ============================================================
 -- TABLE: lps_constraints
 -- ============================================================
 
-CREATE TABLE public.lps_constraints (
+CREATE TABLE IF NOT EXISTS public.lps_constraints (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   created_by_user_id UUID NOT NULL,
   project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
@@ -53,37 +79,50 @@ CREATE TABLE public.lps_constraints (
 
 ALTER TABLE public.lps_constraints ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own constraints"
-  ON public.lps_constraints FOR SELECT TO authenticated
-  USING (created_by_user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "Users can view their own constraints"
+    ON public.lps_constraints FOR SELECT TO authenticated
+    USING (created_by_user_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Users can create constraints"
-  ON public.lps_constraints FOR INSERT TO authenticated
-  WITH CHECK (created_by_user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "Users can create constraints"
+    ON public.lps_constraints FOR INSERT TO authenticated
+    WITH CHECK (created_by_user_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Users can update their own constraints"
-  ON public.lps_constraints FOR UPDATE TO authenticated
-  USING (created_by_user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "Users can update their own constraints"
+    ON public.lps_constraints FOR UPDATE TO authenticated
+    USING (created_by_user_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Users can delete their own constraints"
-  ON public.lps_constraints FOR DELETE TO authenticated
-  USING (created_by_user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "Users can delete their own constraints"
+    ON public.lps_constraints FOR DELETE TO authenticated
+    USING (created_by_user_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
+DROP TRIGGER IF EXISTS update_lps_constraints_updated_at ON public.lps_constraints;
 CREATE TRIGGER update_lps_constraints_updated_at
   BEFORE UPDATE ON public.lps_constraints
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-CREATE INDEX idx_lps_constraints_project ON public.lps_constraints(project_id);
-CREATE INDEX idx_lps_constraints_status ON public.lps_constraints(status);
-CREATE INDEX idx_lps_constraints_front ON public.lps_constraints(service_front_id);
-CREATE INDEX idx_lps_constraints_date ON public.lps_constraints(data_identificacao DESC);
-CREATE INDEX idx_lps_constraints_type ON public.lps_constraints(tipo_restricao);
+CREATE INDEX IF NOT EXISTS idx_lps_constraints_project ON public.lps_constraints(project_id);
+CREATE INDEX IF NOT EXISTS idx_lps_constraints_status ON public.lps_constraints(status);
+CREATE INDEX IF NOT EXISTS idx_lps_constraints_front ON public.lps_constraints(service_front_id);
+CREATE INDEX IF NOT EXISTS idx_lps_constraints_date ON public.lps_constraints(data_identificacao DESC);
+CREATE INDEX IF NOT EXISTS idx_lps_constraints_type ON public.lps_constraints(tipo_restricao);
 
 -- ============================================================
 -- TABLE: lps_weekly_commitments
 -- ============================================================
 
-CREATE TABLE public.lps_weekly_commitments (
+CREATE TABLE IF NOT EXISTS public.lps_weekly_commitments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   created_by_user_id UUID NOT NULL,
   project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
@@ -104,35 +143,48 @@ CREATE TABLE public.lps_weekly_commitments (
 
 ALTER TABLE public.lps_weekly_commitments ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own commitments"
-  ON public.lps_weekly_commitments FOR SELECT TO authenticated
-  USING (created_by_user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "Users can view their own commitments"
+    ON public.lps_weekly_commitments FOR SELECT TO authenticated
+    USING (created_by_user_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Users can create commitments"
-  ON public.lps_weekly_commitments FOR INSERT TO authenticated
-  WITH CHECK (created_by_user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "Users can create commitments"
+    ON public.lps_weekly_commitments FOR INSERT TO authenticated
+    WITH CHECK (created_by_user_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Users can update their own commitments"
-  ON public.lps_weekly_commitments FOR UPDATE TO authenticated
-  USING (created_by_user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "Users can update their own commitments"
+    ON public.lps_weekly_commitments FOR UPDATE TO authenticated
+    USING (created_by_user_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Users can delete their own commitments"
-  ON public.lps_weekly_commitments FOR DELETE TO authenticated
-  USING (created_by_user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "Users can delete their own commitments"
+    ON public.lps_weekly_commitments FOR DELETE TO authenticated
+    USING (created_by_user_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
+DROP TRIGGER IF EXISTS update_lps_weekly_commitments_updated_at ON public.lps_weekly_commitments;
 CREATE TRIGGER update_lps_weekly_commitments_updated_at
   BEFORE UPDATE ON public.lps_weekly_commitments
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-CREATE INDEX idx_lps_commitments_project ON public.lps_weekly_commitments(project_id);
-CREATE INDEX idx_lps_commitments_week ON public.lps_weekly_commitments(semana_inicio);
-CREATE INDEX idx_lps_commitments_status ON public.lps_weekly_commitments(status);
+CREATE INDEX IF NOT EXISTS idx_lps_commitments_project ON public.lps_weekly_commitments(project_id);
+CREATE INDEX IF NOT EXISTS idx_lps_commitments_week ON public.lps_weekly_commitments(semana_inicio);
+CREATE INDEX IF NOT EXISTS idx_lps_commitments_status ON public.lps_weekly_commitments(status);
 
 -- ============================================================
 -- TABLE: lps_five_whys
 -- ============================================================
 
-CREATE TABLE public.lps_five_whys (
+CREATE TABLE IF NOT EXISTS public.lps_five_whys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   created_by_user_id UUID NOT NULL,
   constraint_id UUID NOT NULL REFERENCES public.lps_constraints(id) ON DELETE CASCADE,
@@ -152,24 +204,43 @@ CREATE TABLE public.lps_five_whys (
 
 ALTER TABLE public.lps_five_whys ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own analyses"
-  ON public.lps_five_whys FOR SELECT TO authenticated
-  USING (created_by_user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "Users can view their own analyses"
+    ON public.lps_five_whys FOR SELECT TO authenticated
+    USING (created_by_user_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Users can create analyses"
-  ON public.lps_five_whys FOR INSERT TO authenticated
-  WITH CHECK (created_by_user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "Users can create analyses"
+    ON public.lps_five_whys FOR INSERT TO authenticated
+    WITH CHECK (created_by_user_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Users can update their own analyses"
-  ON public.lps_five_whys FOR UPDATE TO authenticated
-  USING (created_by_user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "Users can update their own analyses"
+    ON public.lps_five_whys FOR UPDATE TO authenticated
+    USING (created_by_user_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Users can delete their own analyses"
-  ON public.lps_five_whys FOR DELETE TO authenticated
-  USING (created_by_user_id = auth.uid());
+DO $$ BEGIN
+  CREATE POLICY "Users can delete their own analyses"
+    ON public.lps_five_whys FOR DELETE TO authenticated
+    USING (created_by_user_id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
+DROP TRIGGER IF EXISTS update_lps_five_whys_updated_at ON public.lps_five_whys;
 CREATE TRIGGER update_lps_five_whys_updated_at
   BEFORE UPDATE ON public.lps_five_whys
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-CREATE INDEX idx_lps_five_whys_constraint ON public.lps_five_whys(constraint_id);
+CREATE INDEX IF NOT EXISTS idx_lps_five_whys_constraint ON public.lps_five_whys(constraint_id);
+
+-- ============================================================
+-- Reload PostgREST schema cache
+-- ============================================================
+
+NOTIFY pgrst, 'reload schema';

@@ -72,7 +72,7 @@ export default function MaintenanceRequests() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold">Solicitações de Manutenção</h1>
+              <h1 className="text-3xl font-bold font-mono">Solicitações de Manutenção</h1>
               <p className="text-muted-foreground">Recebidas via QR Code</p>
             </div>
           </div>

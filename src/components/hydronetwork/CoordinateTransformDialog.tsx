@@ -173,7 +173,7 @@ export const CoordinateTransformDialog: React.FC<CoordinateTransformDialogProps>
     onChange: (c: ImportCRSConfig) => void;
     label: string;
   }) => (
-    <div className="space-y-2 border border-border rounded-lg p-3">
+    <div className="space-y-2 border border-border p-3">
       <Label className="text-xs font-semibold">{label}</Label>
       <RadioGroup
         value={config.type}
@@ -331,7 +331,7 @@ export const CoordinateTransformDialog: React.FC<CoordinateTransformDialogProps>
               O sistema calcula o deslocamento e aplica a todos.
             </p>
 
-            <div className="space-y-2 border border-border rounded-lg p-3">
+            <div className="space-y-2 border border-border p-3">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-red-500">Posição Errada</Label>
                 {pontos.length > 0 && (
@@ -370,7 +370,7 @@ export const CoordinateTransformDialog: React.FC<CoordinateTransformDialogProps>
               </div>
             </div>
 
-            <div className="space-y-2 border border-border rounded-lg p-3">
+            <div className="space-y-2 border border-border p-3">
               <Label className="text-xs font-semibold text-green-500">Posição Correta</Label>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
@@ -421,7 +421,7 @@ export const CoordinateTransformDialog: React.FC<CoordinateTransformDialogProps>
               Use 2 pontos de referência para uma correção mais precisa.
             </p>
 
-            <div className="space-y-2 border border-border rounded-lg p-3">
+            <div className="space-y-2 border border-border p-3">
               <Label className="text-xs font-semibold">Ponto A</Label>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
@@ -443,7 +443,7 @@ export const CoordinateTransformDialog: React.FC<CoordinateTransformDialogProps>
               </div>
             </div>
 
-            <div className="space-y-2 border border-border rounded-lg p-3">
+            <div className="space-y-2 border border-border p-3">
               <Label className="text-xs font-semibold">Ponto B</Label>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">

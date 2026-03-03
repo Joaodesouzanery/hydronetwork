@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Calculator, Download, Upload, Database, FileSpreadsheet } from "lucide-react";
 import { Trecho } from "@/engine/domain";
 import { PontoTopografico } from "@/engine/reader";
+import { QuantRow, QuantityParams } from "./QuantitiesModule";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line, ComposedChart, Area } from "recharts";
 import * as XLSX from "xlsx";
 
@@ -80,7 +81,7 @@ const SICRO = {
 const UFS = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
 
 interface BudgetTrecho {
-  id: string; inicio: string; fim: string; comp: number; dn: number; prof: number;
+  id: string; nome?: string; inicio: string; fim: string; comp: number; dn: number; prof: number;
   escavacao: number; escoramento: number; tubo: number; berco: number; envoltoria: number;
   reaterro: number; botafora: number; subbase: number; base: number; asfalto: number;
   pvCusto: number; subtotal: number; bdi: number; total: number;
@@ -89,13 +90,17 @@ interface BudgetTrecho {
 interface BudgetCostModuleProps {
   trechos: Trecho[];
   pontos?: PontoTopografico[];
+  quantityRows?: QuantRow[];
+  quantityParams?: QuantityParams;
 }
 
-export const BudgetCostModule = ({ trechos, pontos }: BudgetCostModuleProps) => {
+export const BudgetCostModule = ({ trechos, pontos, quantityRows, quantityParams }: BudgetCostModuleProps) => {
+  const hasQuantities = quantityRows && quantityRows.length > 0;
   const [baseCustos, setBaseCustos] = useState("sinapi_des");
   const [uf, setUf] = useState("SP");
   const [mesRef, setMesRef] = useState("12/2024");
   const [bdiPct, setBdiPct] = useState(25);
+  const [tipoPavimento, setTipoPavimento] = useState(quantityParams?.tipoPavimento ?? "terra");
   const [customCosts, setCustomCosts] = useState<any[] | null>(null);
   const [rows, setRows] = useState<BudgetTrecho[]>([]);
 
@@ -124,14 +129,6 @@ export const BudgetCostModule = ({ trechos, pontos }: BudgetCostModuleProps) => 
   const calculate = () => {
     if (trechos.length === 0) { toast.error("Carregue a topografia primeiro."); return; }
     const db = getDB();
-    const baseProfundidade = 1.35;
-    const incremento = 0.10;
-    const larguraMin = 0.6;
-    const folgaLateral = 0.15;
-    const empolamento = 1.25;
-    const espBerco = 0.10;
-    const espEnvoltoria = 0.30;
-    const faixaTecnica = 0.30;
 
     const getEscCusto = (prof: number) => {
       if (prof <= 1.5) return db.escavacao[0].custo;
@@ -144,6 +141,57 @@ export const BudgetCostModule = ({ trechos, pontos }: BudgetCostModuleProps) => 
       if (prof <= 2.5) return db.pv[1].custo;
       return db.pv[2].custo;
     };
+    const getEscorCusto = () => {
+      if (quantityParams?.tipoEscoramento === "metalico") return db.escoramento[1]?.custo ?? db.escoramento[0].custo;
+      if (quantityParams?.tipoEscoramento === "estaca") return db.escoramento[2]?.custo ?? db.escoramento[0].custo;
+      return db.escoramento[0].custo;
+    };
+
+    // Use quantities from QuantitiesModule when available
+    if (hasQuantities) {
+      const result: BudgetTrecho[] = quantityRows.map((q) => {
+        const custoEsc = q.escavacao * getEscCusto(q.prof);
+        const custoEscor = q.escorArea * getEscorCusto();
+        const custoTubo = q.comp * getTuboCusto(q.dn);
+        const custoBerco = q.bercoVol * db.reaterro[1].custo;
+        const custoEnv = q.envoltoriaVol * db.reaterro[2].custo;
+        const custoReat = q.reaterro * db.reaterro[0].custo;
+        const custoBota = q.botafora * 12.50;
+        let custoSubbase = 0, custoBase = 0, custoAsfalto = 0;
+        if (tipoPavimento !== "terra") {
+          custoSubbase = q.pavimento * 0.20 * db.pavimentacao[0].custo;
+          custoBase = q.pavimento * 0.15 * db.pavimentacao[1].custo;
+          if (tipoPavimento === "asfalto") custoAsfalto = q.pavimento * db.pavimentacao[2].custo;
+        }
+        const custoPV = getPVCusto(q.prof);
+
+        const subtotal = custoEsc + custoEscor + custoTubo + custoBerco + custoEnv + custoReat + custoBota + custoSubbase + custoBase + custoAsfalto + custoPV;
+        const bdiVal = subtotal * (bdiPct / 100);
+
+        return {
+          id: q.id,
+          nome: q.trecho, inicio: q.trecho.split("→")[0] ?? "", fim: q.trecho.split("→")[1] ?? "",
+          comp: q.comp, dn: q.dn, prof: q.prof,
+          escavacao: custoEsc, escoramento: custoEscor, tubo: custoTubo,
+          berco: custoBerco, envoltoria: custoEnv, reaterro: custoReat,
+          botafora: custoBota, subbase: custoSubbase, base: custoBase,
+          asfalto: custoAsfalto, pvCusto: custoPV, subtotal, bdi: bdiVal, total: subtotal + bdiVal,
+        };
+      });
+      setRows(result);
+      toast.success(`Orçamento calculado para ${result.length} trechos (quantitativos importados)`);
+      return;
+    }
+
+    // Fallback: calculate from raw trechos when no quantities data
+    const baseProfundidade = 1.35;
+    const incremento = 0.10;
+    const larguraMin = 0.6;
+    const folgaLateral = 0.15;
+    const empolamento = 1.25;
+    const espBerco = 0.10;
+    const espEnvoltoria = 0.30;
+    const faixaTecnica = 0.30;
 
     const result: BudgetTrecho[] = trechos.map((t, idx) => {
       const dnM = t.diametroMm / 1000;
@@ -166,9 +214,12 @@ export const BudgetCostModule = ({ trechos, pontos }: BudgetCostModuleProps) => 
       const custoEnv = volEnv * db.reaterro[2].custo;
       const custoReat = volReat * db.reaterro[0].custo;
       const custoBota = volBota * 12.50;
-      const custoSubbase = areaPav * 0.20 * db.pavimentacao[0].custo;
-      const custoBase = areaPav * 0.15 * db.pavimentacao[1].custo;
-      const custoAsfalto = areaPav * db.pavimentacao[2].custo;
+      let custoSubbase = 0, custoBase = 0, custoAsfalto = 0;
+      if (tipoPavimento !== "terra") {
+        custoSubbase = areaPav * 0.20 * db.pavimentacao[0].custo;
+        custoBase = areaPav * 0.15 * db.pavimentacao[1].custo;
+        if (tipoPavimento === "asfalto") custoAsfalto = areaPav * db.pavimentacao[2].custo;
+      }
       const custoPV = getPVCusto(prof);
 
       const subtotal = custoEsc + custoEscor + custoTubo + custoBerco + custoEnv + custoReat + custoBota + custoSubbase + custoBase + custoAsfalto + custoPV;
@@ -176,7 +227,7 @@ export const BudgetCostModule = ({ trechos, pontos }: BudgetCostModuleProps) => 
 
       return {
         id: `T-${String(idx + 1).padStart(2, "0")}`,
-        inicio: t.idInicio, fim: t.idFim, comp: t.comprimento, dn: t.diametroMm, prof,
+        nome: t.nomeTrecho || "", inicio: t.idInicio, fim: t.idFim, comp: t.comprimento, dn: t.diametroMm, prof,
         escavacao: custoEsc, escoramento: custoEscor, tubo: custoTubo,
         berco: custoBerco, envoltoria: custoEnv, reaterro: custoReat,
         botafora: custoBota, subbase: custoSubbase, base: custoBase,
@@ -272,9 +323,12 @@ export const BudgetCostModule = ({ trechos, pontos }: BudgetCostModuleProps) => 
       {trechos.length > 0 && (
         <Card className="border-green-500/30 bg-green-500/5">
           <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Badge variant="outline" className="text-green-600">✓ Topografia carregada</Badge>
               <span className="text-sm text-muted-foreground">{trechos.length} trechos | {fmt(trechos.reduce((s, t) => s + t.comprimento, 0))}m</span>
+              {hasQuantities && (
+                <Badge variant="outline" className="text-blue-600">✓ Quantitativos importados ({quantityRows.length} trechos)</Badge>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -333,9 +387,20 @@ export const BudgetCostModule = ({ trechos, pontos }: BudgetCostModuleProps) => 
                   <Input type="number" value={bdiPct} onChange={e => setBdiPct(Number(e.target.value))} />
                   <p className="text-xs text-muted-foreground mt-1">Bonificação e Despesas Indiretas (padrão: 25%)</p>
                 </div>
+                <div>
+                  <Label>Tipo de Pavimento</Label>
+                  <Select value={tipoPavimento} onValueChange={setTipoPavimento}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[["terra", "Terra (sem pavimentação)"], ["asfalto", "Asfalto (CBUQ)"], ["concreto", "Concreto"], ["bloquete", "Bloquete"]].map(([v, l]) => (
+                        <SelectItem key={v} value={v}>{l}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               {baseCustos === "custom" && (
-                <div className="border-2 border-dashed border-border rounded-lg p-4 text-center">
+                <div className="border-2 border-dashed border-border p-4 text-center">
                   <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground mb-2">Carregue sua base de custos (CSV ou Excel)</p>
                   <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleCustomUpload} />
@@ -410,7 +475,7 @@ export const BudgetCostModule = ({ trechos, pontos }: BudgetCostModuleProps) => 
                         {rows.map(r => (
                           <TableRow key={r.id}>
                             <TableCell className="font-medium">{r.id}</TableCell>
-                            <TableCell className="text-xs">{r.inicio}→{r.fim}</TableCell>
+                            <TableCell className="text-xs">{r.nome || `${r.inicio}→${r.fim}`}</TableCell>
                             <TableCell>{fmt(r.comp)}</TableCell>
                             <TableCell>{fmtC(r.escavacao)}</TableCell>
                             <TableCell>{fmtC(r.escoramento)}</TableCell>

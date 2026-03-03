@@ -108,7 +108,7 @@ export const TaskKanbanBoard = ({
             onDragOver={handleDragOver}
             onDrop={() => handleDrop(column.key)}
           >
-            <div className={`${column.color} p-4 rounded-lg`}>
+            <div className={`${column.color} p-4`}>
               <h3 className="font-semibold">
                 {column.label} ({columnTasks.length})
               </h3>

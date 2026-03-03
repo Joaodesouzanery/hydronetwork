@@ -8,47 +8,20 @@
  * TRECHOS: identificacao correta de polilinhas individuais.
  */
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import * as XLSX from 'xlsx';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { PontoTopografico, parseTopographyCSV } from '@/engine/reader';
+import { PontoTopografico } from '@/engine/reader';
 import { Trecho, createTrechoFromPoints, DEFAULT_DIAMETRO_MM, DEFAULT_MATERIAL } from '@/engine/domain';
 import { parseINPToInternal, parseSWMMToInternal } from '@/engine/importEngine';
-import { Upload, Trash2, Check, X, FileText, Loader2, ChevronDown, ChevronRight, Globe, AlertTriangle, History, Save, FolderOpen, Undo2 } from 'lucide-react';
+import { Upload, Trash2, Check, X, FileText, Loader2, ChevronDown, ChevronRight, ChevronLeft, Globe, AlertTriangle, History, Save, FolderOpen, Undo2 } from 'lucide-react';
 import { CRSSelector } from '@/components/hydronetwork/CRSSelector';
 import { ImportCRSConfig, validateUTMRange } from '@/engine/coordinateTransform';
-
-// ── Types ──
-
-interface ParsedPoint {
-  id: string;
-  x: number;
-  y: number;
-  z: number;
-  layer: string;
-  sourceFile: string;
-  properties: Record<string, any>;
-}
-
-interface ParsedEdge {
-  id: string;
-  type: string;
-  coordinates: number[][];
-  isClosed: boolean;
-  layer: string;
-  sourceFile: string;
-  properties: Record<string, any>;
-}
-
-interface ParseResult {
-  points: ParsedPoint[];
-  edges: ParsedEdge[];
-  layers: string[];
-  fields: string[];
-  patternsCount?: number;
-  curvesCount?: number;
-  verticesCount?: number;
-}
+import {
+  type ParsedPoint, type ParsedEdge, type ParseResult,
+  calculateEdgeLength, getDxfColor,
+} from '@/engine/importParsers';
+import type { WorkerResponse } from '@/engine/importWorker';
 
 interface FileQueueItem {
   id: string;
@@ -94,723 +67,14 @@ interface UnifiedImportPanelProps {
   onUndo?: (snapshot: { pontos: PontoTopografico[]; trechos: Trecho[] }) => void;
 }
 
-// ── Helpers ──
+// ── Parsers kept on main thread (complex external dependencies) ──
+//
+// NOTE: DXF, CSV, GeoJSON, XLSX, IFC parsers were moved to
+// src/engine/importParsers.ts and run via Web Worker (importWorker.ts)
+// for non-blocking parsing of large files.
 
-function calculateEdgeLength(coords: number[][]): number {
-  let len = 0;
-  for (let i = 0; i < coords.length - 1; i++) {
-    const dx = coords[i + 1][0] - coords[i][0];
-    const dy = coords[i + 1][1] - coords[i][1];
-    const dz = (coords[i + 1][2] || 0) - (coords[i][2] || 0);
-    len += Math.sqrt(dx * dx + dy * dy + dz * dz);
-  }
-  return len;
-}
-
-/** Map DXF ACI color index to CSS color */
-function getDxfColor(colorIndex: number): string {
-  const colors: Record<number, string> = {
-    1: '#ff0000', 2: '#ffff00', 3: '#00ff00', 4: '#00ffff', 5: '#0000ff',
-    6: '#ff00ff', 7: '#ffffff', 8: '#808080', 9: '#c0c0c0',
-    10: '#ff0000', 30: '#ff7f00', 40: '#ffff00', 50: '#00ff00',
-    70: '#00ffff', 90: '#0000ff', 110: '#ff00ff', 130: '#ff7f7f',
-    150: '#ffff7f', 170: '#7fff7f', 190: '#7fffff', 210: '#7f7fff',
-    230: '#ff7fff', 250: '#7f7f7f',
-  };
-  return colors[colorIndex] || '#888888';
-}
-
-// ── Parsers ──
-
-function parseDXFComplete(content: string, fileName: string): ParseResult {
-  const points: ParsedPoint[] = [];
-  const edges: ParsedEdge[] = [];
-  const layersSet = new Set<string>();
-  const fieldsSet = new Set<string>();
-  const lines = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-  let inEntities = false;
-  let i = 0;
-
-  // Standard fields always tracked
-  fieldsSet.add('handle'); fieldsSet.add('layer'); fieldsSet.add('entityType');
-
-  while (i < lines.length) {
-    const line = lines[i]?.trim();
-    if (line === 'ENTITIES') { inEntities = true; i++; continue; }
-    if (inEntities && line === 'ENDSEC') break;
-    if (!inEntities) { i++; continue; }
-
-    if (line === '0') {
-      i++;
-      const entityType = lines[i]?.trim().toUpperCase();
-
-      // ── LWPOLYLINE / 3DPOLYLINE ──
-      if (entityType === 'LWPOLYLINE' || entityType === '3DPOLYLINE') {
-        const coords: number[][] = [];
-        let handle = '', layer = '0', closed = false, cx: number | null = null, cy: number | null = null, cz = 0, elev = 0;
-        const props: Record<string, any> = { entityType };
-        i++;
-        while (i < lines.length - 1) {
-          const code = parseInt(lines[i]?.trim() || '');
-          const val = lines[i + 1]?.trim() || '';
-          if (code === 0) break;
-          if (code === 5) { handle = val; props.handle = val; }
-          if (code === 6) { props.lineType = val; fieldsSet.add('lineType'); }
-          if (code === 8) { layer = val; layersSet.add(val); props.layer = val; }
-          if (code === 38) { elev = parseFloat(val); props.elevation = elev; fieldsSet.add('elevation'); }
-          if (code === 39) { props.thickness = parseFloat(val); fieldsSet.add('thickness'); }
-          if (code === 48) { props.lineTypeScale = parseFloat(val); fieldsSet.add('lineTypeScale'); }
-          if (code === 62) { props.color = parseInt(val); fieldsSet.add('color'); }
-          if (code === 70) { closed = (parseInt(val) & 1) === 1; props.flags = parseInt(val); fieldsSet.add('flags'); }
-          if (code === 370) { props.lineweight = parseInt(val); fieldsSet.add('lineweight'); }
-          if (code === 210) { props.extrusionX = parseFloat(val); fieldsSet.add('extrusionX'); }
-          if (code === 220) { props.extrusionY = parseFloat(val); fieldsSet.add('extrusionY'); }
-          if (code === 230) { props.extrusionZ = parseFloat(val); fieldsSet.add('extrusionZ'); }
-          if (code === 10) { if (cx !== null && cy !== null) coords.push([cx, cy, cz || elev]); cx = parseFloat(val); cy = null; cz = elev; }
-          if (code === 20) cy = parseFloat(val);
-          if (code === 30) cz = parseFloat(val);
-          i += 2;
-        }
-        if (cx !== null && cy !== null) coords.push([cx, cy, cz || elev]);
-        if (closed && coords.length > 0) coords.push([...coords[0]]);
-        if (coords.length >= 2) {
-          props.vertexCount = coords.length;
-          props.length = calculateEdgeLength(coords);
-          fieldsSet.add('vertexCount'); fieldsSet.add('length');
-          edges.push({ id: handle || `lw_${edges.length}`, type: entityType, coordinates: coords, isClosed: closed, layer, sourceFile: fileName, properties: props });
-        }
-        continue;
-      }
-
-      // ── LINE ──
-      if (entityType === 'LINE') {
-        let handle = '', layer = '0';
-        let x1: number | null = null, y1: number | null = null, z1 = 0, x2: number | null = null, y2: number | null = null, z2 = 0;
-        const props: Record<string, any> = { entityType };
-        i++;
-        while (i < lines.length - 1) {
-          const code = parseInt(lines[i]?.trim() || '');
-          const val = lines[i + 1]?.trim() || '';
-          if (code === 0) break;
-          if (code === 5) { handle = val; props.handle = val; }
-          if (code === 6) { props.lineType = val; fieldsSet.add('lineType'); }
-          if (code === 8) { layer = val; layersSet.add(val); props.layer = val; }
-          if (code === 39) { props.thickness = parseFloat(val); fieldsSet.add('thickness'); }
-          if (code === 48) { props.lineTypeScale = parseFloat(val); fieldsSet.add('lineTypeScale'); }
-          if (code === 62) { props.color = parseInt(val); fieldsSet.add('color'); }
-          if (code === 370) { props.lineweight = parseInt(val); fieldsSet.add('lineweight'); }
-          if (code === 210) { props.extrusionX = parseFloat(val); fieldsSet.add('extrusionX'); }
-          if (code === 220) { props.extrusionY = parseFloat(val); fieldsSet.add('extrusionY'); }
-          if (code === 230) { props.extrusionZ = parseFloat(val); fieldsSet.add('extrusionZ'); }
-          if (code === 10) x1 = parseFloat(val);
-          if (code === 20) y1 = parseFloat(val);
-          if (code === 30) z1 = parseFloat(val);
-          if (code === 11) x2 = parseFloat(val);
-          if (code === 21) y2 = parseFloat(val);
-          if (code === 31) z2 = parseFloat(val);
-          i += 2;
-        }
-        if (x1 !== null && y1 !== null && x2 !== null && y2 !== null) {
-          const dx = x2 - x1, dy = y2 - y1, dz2 = z2 - z1;
-          props.length = Math.sqrt(dx * dx + dy * dy + dz2 * dz2);
-          fieldsSet.add('length');
-          edges.push({ id: handle || `ln_${edges.length}`, type: 'LINE', coordinates: [[x1, y1, z1], [x2, y2, z2]], isClosed: false, layer, sourceFile: fileName, properties: props });
-          layersSet.add(layer);
-        }
-        continue;
-      }
-
-      // ── POLYLINE ──
-      if (entityType === 'POLYLINE') {
-        let handle = '', layer = '0', closed = false;
-        const coords: number[][] = [];
-        const props: Record<string, any> = { entityType };
-        i++;
-        while (i < lines.length - 1) {
-          const code = parseInt(lines[i]?.trim() || '');
-          const val = lines[i + 1]?.trim() || '';
-          if (code === 0 && val === 'SEQEND') { i += 2; break; }
-          if (code === 5) { handle = val; props.handle = val; }
-          if (code === 6) { props.lineType = val; fieldsSet.add('lineType'); }
-          if (code === 8) { layer = val; layersSet.add(val); props.layer = val; }
-          if (code === 39) { props.thickness = parseFloat(val); fieldsSet.add('thickness'); }
-          if (code === 48) { props.lineTypeScale = parseFloat(val); fieldsSet.add('lineTypeScale'); }
-          if (code === 62) { props.color = parseInt(val); fieldsSet.add('color'); }
-          if (code === 70) { closed = (parseInt(val) & 1) === 1; props.flags = parseInt(val); fieldsSet.add('flags'); }
-          if (code === 370) { props.lineweight = parseInt(val); fieldsSet.add('lineweight'); }
-          if (code === 0 && val === 'VERTEX') {
-            i += 2;
-            let vx: number | null = null, vy: number | null = null, vz = 0;
-            while (i < lines.length - 1) {
-              const vc = parseInt(lines[i]?.trim() || '');
-              const vv = lines[i + 1]?.trim() || '';
-              if (vc === 0) break;
-              if (vc === 10) vx = parseFloat(vv);
-              if (vc === 20) vy = parseFloat(vv);
-              if (vc === 30) vz = parseFloat(vv);
-              i += 2;
-            }
-            if (vx !== null && vy !== null) coords.push([vx, vy, vz]);
-            continue;
-          }
-          i += 2;
-        }
-        if (closed && coords.length > 0) coords.push([...coords[0]]);
-        if (coords.length >= 2) {
-          props.vertexCount = coords.length;
-          props.length = calculateEdgeLength(coords);
-          fieldsSet.add('vertexCount'); fieldsSet.add('length');
-          edges.push({ id: handle || `pl_${edges.length}`, type: 'POLYLINE', coordinates: coords, isClosed: closed, layer, sourceFile: fileName, properties: props });
-        }
-        continue;
-      }
-
-      // ── POINT ──
-      if (entityType === 'POINT') {
-        let handle = '', layer = '0', x: number | null = null, y: number | null = null, z = 0;
-        const props: Record<string, any> = { entityType };
-        i++;
-        while (i < lines.length - 1) {
-          const code = parseInt(lines[i]?.trim() || '');
-          const val = lines[i + 1]?.trim() || '';
-          if (code === 0) break;
-          if (code === 5) { handle = val; props.handle = val; }
-          if (code === 6) { props.lineType = val; fieldsSet.add('lineType'); }
-          if (code === 8) { layer = val; layersSet.add(val); props.layer = val; }
-          if (code === 39) { props.thickness = parseFloat(val); fieldsSet.add('thickness'); }
-          if (code === 62) { props.color = parseInt(val); fieldsSet.add('color'); }
-          if (code === 370) { props.lineweight = parseInt(val); fieldsSet.add('lineweight'); }
-          if (code === 10) x = parseFloat(val);
-          if (code === 20) y = parseFloat(val);
-          if (code === 30) z = parseFloat(val);
-          i += 2;
-        }
-        if (x !== null && y !== null) {
-          points.push({ id: handle || `pt_${points.length}`, x, y, z, layer, sourceFile: fileName, properties: props });
-          layersSet.add(layer);
-        }
-        continue;
-      }
-
-      // ── INSERT (block reference → point) ──
-      if (entityType === 'INSERT') {
-        let handle = '', layer = '0', x: number | null = null, y: number | null = null, z = 0;
-        const props: Record<string, any> = { entityType };
-        i++;
-        while (i < lines.length - 1) {
-          const code = parseInt(lines[i]?.trim() || '');
-          const val = lines[i + 1]?.trim() || '';
-          if (code === 0) break;
-          if (code === 2) { props.blockName = val; fieldsSet.add('blockName'); }
-          if (code === 5) { handle = val; props.handle = val; }
-          if (code === 6) { props.lineType = val; fieldsSet.add('lineType'); }
-          if (code === 8) { layer = val; layersSet.add(val); props.layer = val; }
-          if (code === 41) { props.scaleX = parseFloat(val); fieldsSet.add('scaleX'); }
-          if (code === 42) { props.scaleY = parseFloat(val); fieldsSet.add('scaleY'); }
-          if (code === 43) { props.scaleZ = parseFloat(val); fieldsSet.add('scaleZ'); }
-          if (code === 50) { props.rotation = parseFloat(val); fieldsSet.add('rotation'); }
-          if (code === 62) { props.color = parseInt(val); fieldsSet.add('color'); }
-          if (code === 370) { props.lineweight = parseInt(val); fieldsSet.add('lineweight'); }
-          if (code === 10) x = parseFloat(val);
-          if (code === 20) y = parseFloat(val);
-          if (code === 30) z = parseFloat(val);
-          i += 2;
-        }
-        if (x !== null && y !== null) {
-          points.push({ id: handle || `ins_${points.length}`, x, y, z, layer, sourceFile: fileName, properties: props });
-          layersSet.add(layer);
-        }
-        continue;
-      }
-
-      // ── CIRCLE / ARC ──
-      if (entityType === 'CIRCLE' || entityType === 'ARC') {
-        let handle = '', layer = '0', cx2 = 0, cy2 = 0, cz2 = 0, radius = 0, startAngle = 0, endAngle = 360;
-        const props: Record<string, any> = { entityType };
-        i++;
-        while (i < lines.length - 1) {
-          const code = parseInt(lines[i]?.trim() || '');
-          const val = lines[i + 1]?.trim() || '';
-          if (code === 0) break;
-          if (code === 5) { handle = val; props.handle = val; }
-          if (code === 6) { props.lineType = val; fieldsSet.add('lineType'); }
-          if (code === 8) { layer = val; layersSet.add(val); props.layer = val; }
-          if (code === 39) { props.thickness = parseFloat(val); fieldsSet.add('thickness'); }
-          if (code === 62) { props.color = parseInt(val); fieldsSet.add('color'); }
-          if (code === 370) { props.lineweight = parseInt(val); fieldsSet.add('lineweight'); }
-          if (code === 10) cx2 = parseFloat(val);
-          if (code === 20) cy2 = parseFloat(val);
-          if (code === 30) cz2 = parseFloat(val);
-          if (code === 40) { radius = parseFloat(val); props.radius = radius; fieldsSet.add('radius'); }
-          if (code === 50) { startAngle = parseFloat(val); props.startAngle = startAngle; fieldsSet.add('startAngle'); }
-          if (code === 51) { endAngle = parseFloat(val); props.endAngle = endAngle; fieldsSet.add('endAngle'); }
-          i += 2;
-        }
-        const coords: number[][] = [];
-        const segs = entityType === 'CIRCLE' ? 36 : Math.max(8, Math.ceil(Math.abs(endAngle - startAngle) / 10));
-        const sA = (startAngle * Math.PI) / 180;
-        const eA = entityType === 'CIRCLE' ? sA + 2 * Math.PI : (endAngle * Math.PI) / 180;
-        for (let j = 0; j <= segs; j++) {
-          const angle = sA + (eA - sA) * (j / segs);
-          coords.push([cx2 + radius * Math.cos(angle), cy2 + radius * Math.sin(angle), cz2]);
-        }
-        props.length = calculateEdgeLength(coords);
-        fieldsSet.add('length');
-        if (coords.length > 0) edges.push({ id: handle || `${entityType.toLowerCase()}_${edges.length}`, type: entityType, coordinates: coords, isClosed: entityType === 'CIRCLE', layer, sourceFile: fileName, properties: props });
-        continue;
-      }
-
-      // ── SPLINE ──
-      if (entityType === 'SPLINE') {
-        let handle = '', layer = '0', closed = false;
-        const controlPts: number[][] = [];
-        const fitPts: number[][] = [];
-        let sx: number | null = null, sy: number | null = null, sz = 0;
-        const props: Record<string, any> = { entityType };
-        i++;
-        while (i < lines.length - 1) {
-          const code = parseInt(lines[i]?.trim() || '');
-          const val = lines[i + 1]?.trim() || '';
-          if (code === 0) break;
-          if (code === 5) { handle = val; props.handle = val; }
-          if (code === 6) { props.lineType = val; fieldsSet.add('lineType'); }
-          if (code === 8) { layer = val; layersSet.add(val); props.layer = val; }
-          if (code === 62) { props.color = parseInt(val); fieldsSet.add('color'); }
-          if (code === 70) { closed = (parseInt(val) & 1) === 1; props.flags = parseInt(val); fieldsSet.add('flags'); }
-          if (code === 71) { props.degree = parseInt(val); fieldsSet.add('degree'); }
-          if (code === 370) { props.lineweight = parseInt(val); fieldsSet.add('lineweight'); }
-          if (code === 10) { if (sx !== null && sy !== null) controlPts.push([sx, sy, sz]); sx = parseFloat(val); sy = null; sz = 0; }
-          if (code === 20) sy = parseFloat(val);
-          if (code === 30) sz = parseFloat(val);
-          if (code === 11) fitPts.push([parseFloat(val), 0, 0]);
-          if (code === 21 && fitPts.length > 0) fitPts[fitPts.length - 1][1] = parseFloat(val);
-          if (code === 31 && fitPts.length > 0) fitPts[fitPts.length - 1][2] = parseFloat(val);
-          i += 2;
-        }
-        if (sx !== null && sy !== null) controlPts.push([sx, sy, sz]);
-        const coords = fitPts.length > 0 ? fitPts : controlPts;
-        if (closed && coords.length > 0) coords.push([...coords[0]]);
-        if (coords.length >= 2) {
-          props.vertexCount = coords.length;
-          props.length = calculateEdgeLength(coords);
-          fieldsSet.add('vertexCount'); fieldsSet.add('length');
-          edges.push({ id: handle || `spl_${edges.length}`, type: 'SPLINE', coordinates: coords, isClosed: closed, layer, sourceFile: fileName, properties: props });
-        }
-        continue;
-      }
-
-      // ── ELLIPSE ──
-      if (entityType === 'ELLIPSE') {
-        let handle = '', layer = '0';
-        let ecx = 0, ecy = 0, ecz = 0, majorX = 0, majorY = 0;
-        let minorRatio = 1, startParam = 0, endParam = Math.PI * 2;
-        const props: Record<string, any> = { entityType };
-        i++;
-        while (i < lines.length - 1) {
-          const code = parseInt(lines[i]?.trim() || '');
-          const val = lines[i + 1]?.trim() || '';
-          if (code === 0) break;
-          if (code === 5) { handle = val; props.handle = val; }
-          if (code === 8) { layer = val; layersSet.add(val); props.layer = val; }
-          if (code === 62) { props.color = parseInt(val); fieldsSet.add('color'); }
-          if (code === 370) { props.lineweight = parseInt(val); fieldsSet.add('lineweight'); }
-          if (code === 10) ecx = parseFloat(val);
-          if (code === 20) ecy = parseFloat(val);
-          if (code === 30) ecz = parseFloat(val);
-          if (code === 11) majorX = parseFloat(val);
-          if (code === 21) majorY = parseFloat(val);
-          if (code === 40) { minorRatio = parseFloat(val); props.minorRatio = minorRatio; fieldsSet.add('minorRatio'); }
-          if (code === 41) startParam = parseFloat(val);
-          if (code === 42) endParam = parseFloat(val);
-          i += 2;
-        }
-        const majorLen = Math.sqrt(majorX * majorX + majorY * majorY);
-        props.majorRadius = majorLen; props.minorRadius = majorLen * minorRatio;
-        fieldsSet.add('majorRadius'); fieldsSet.add('minorRadius');
-        const segs = 36;
-        const coords: number[][] = [];
-        const baseAngle = Math.atan2(majorY, majorX);
-        for (let j = 0; j <= segs; j++) {
-          const t = startParam + (endParam - startParam) * (j / segs);
-          const ex = ecx + majorLen * Math.cos(t) * Math.cos(baseAngle) - majorLen * minorRatio * Math.sin(t) * Math.sin(baseAngle);
-          const ey = ecy + majorLen * Math.cos(t) * Math.sin(baseAngle) + majorLen * minorRatio * Math.sin(t) * Math.cos(baseAngle);
-          coords.push([ex, ey, ecz]);
-        }
-        props.length = calculateEdgeLength(coords);
-        fieldsSet.add('length');
-        if (coords.length > 0) edges.push({ id: handle || `ellipse_${edges.length}`, type: 'ELLIPSE', coordinates: coords, isClosed: Math.abs(endParam - startParam - Math.PI * 2) < 0.01, layer, sourceFile: fileName, properties: props });
-        continue;
-      }
-
-      // ── 3DFACE ──
-      if (entityType === '3DFACE') {
-        let handle = '', layer = '0';
-        const faceCoords: Record<string, number> = {};
-        const props: Record<string, any> = { entityType };
-        i++;
-        while (i < lines.length - 1) {
-          const code = parseInt(lines[i]?.trim() || '');
-          const val = lines[i + 1]?.trim() || '';
-          if (code === 0) break;
-          if (code === 5) { handle = val; props.handle = val; }
-          if (code === 8) { layer = val; layersSet.add(val); props.layer = val; }
-          if (code === 62) { props.color = parseInt(val); fieldsSet.add('color'); }
-          if (code === 10) faceCoords.x1 = parseFloat(val);
-          if (code === 20) faceCoords.y1 = parseFloat(val);
-          if (code === 30) faceCoords.z1 = parseFloat(val);
-          if (code === 11) faceCoords.x2 = parseFloat(val);
-          if (code === 21) faceCoords.y2 = parseFloat(val);
-          if (code === 31) faceCoords.z2 = parseFloat(val);
-          if (code === 12) faceCoords.x3 = parseFloat(val);
-          if (code === 22) faceCoords.y3 = parseFloat(val);
-          if (code === 32) faceCoords.z3 = parseFloat(val);
-          if (code === 13) faceCoords.x4 = parseFloat(val);
-          if (code === 23) faceCoords.y4 = parseFloat(val);
-          if (code === 33) faceCoords.z4 = parseFloat(val);
-          i += 2;
-        }
-        const coords: number[][] = [];
-        if (faceCoords.x1 !== undefined) coords.push([faceCoords.x1, faceCoords.y1 || 0, faceCoords.z1 || 0]);
-        if (faceCoords.x2 !== undefined) coords.push([faceCoords.x2, faceCoords.y2 || 0, faceCoords.z2 || 0]);
-        if (faceCoords.x3 !== undefined) coords.push([faceCoords.x3, faceCoords.y3 || 0, faceCoords.z3 || 0]);
-        if (faceCoords.x4 !== undefined) coords.push([faceCoords.x4, faceCoords.y4 || 0, faceCoords.z4 || 0]);
-        if (coords.length >= 3) {
-          coords.push([...coords[0]]); // close the face
-          edges.push({ id: handle || `3df_${edges.length}`, type: '3DFACE', coordinates: coords, isClosed: true, layer, sourceFile: fileName, properties: props });
-        }
-        continue;
-      }
-
-      // ── TEXT / MTEXT → point with text content ──
-      if (entityType === 'TEXT' || entityType === 'MTEXT') {
-        let handle = '', layer = '0', x: number | null = null, y: number | null = null, z = 0;
-        const props: Record<string, any> = { entityType };
-        i++;
-        while (i < lines.length - 1) {
-          const code = parseInt(lines[i]?.trim() || '');
-          const val = lines[i + 1]?.trim() || '';
-          if (code === 0) break;
-          if (code === 1) { props.textContent = val; fieldsSet.add('textContent'); }
-          if (code === 5) { handle = val; props.handle = val; }
-          if (code === 7) { props.textStyle = val; fieldsSet.add('textStyle'); }
-          if (code === 8) { layer = val; layersSet.add(val); props.layer = val; }
-          if (code === 40) { props.textHeight = parseFloat(val); fieldsSet.add('textHeight'); }
-          if (code === 50) { props.rotation = parseFloat(val); fieldsSet.add('rotation'); }
-          if (code === 62) { props.color = parseInt(val); fieldsSet.add('color'); }
-          if (code === 10) x = parseFloat(val);
-          if (code === 20) y = parseFloat(val);
-          if (code === 30) z = parseFloat(val);
-          i += 2;
-        }
-        if (x !== null && y !== null) {
-          points.push({ id: handle || `txt_${points.length}`, x, y, z, layer, sourceFile: fileName, properties: props });
-          layersSet.add(layer);
-        }
-        continue;
-      }
-    }
-    i++;
-  }
-  return { points, edges, layers: Array.from(layersSet), fields: Array.from(fieldsSet) };
-}
-
-function parseCSVContent(content: string, fileName: string): ParseResult {
-  const points: ParsedPoint[] = [];
-  const edges: ParsedEdge[] = [];
-  const fieldsSet = new Set<string>();
-  const csvLines = content.split('\n').filter(l => l.trim());
-  if (csvLines.length < 2) return { points, edges, layers: [], fields: [] };
-
-  const delim = csvLines[0].includes(';') ? ';' : csvLines[0].includes('\t') ? '\t' : ',';
-  const headers = csvLines[0].split(delim).map(h => h.trim().replace(/"/g, ''));
-  const isHeader = headers.some(h => isNaN(Number(h)) && h.length > 0);
-
-  if (!isHeader) {
-    try {
-      const pts = parseTopographyCSV(content);
-      return {
-        points: pts.map(p => ({ id: p.id, x: p.x, y: p.y, z: p.cota, layer: 'CSV', sourceFile: fileName, properties: { id: p.id, x: p.x, y: p.y, cota: p.cota } })),
-        edges: [],
-        layers: ['CSV'],
-        fields: ['id', 'x', 'y', 'cota'],
-      };
-    } catch { return { points, edges, layers: [], fields: [] }; }
-  }
-
-  // ALL headers are fields
-  headers.forEach(h => fieldsSet.add(h));
-
-  const xField = headers.find(h => /^(x|coord_?x|longitude|lon|este|easting|e)$/i.test(h));
-  const yField = headers.find(h => /^(y|coord_?y|latitude|lat|norte|northing|n)$/i.test(h));
-  const zField = headers.find(h => /^(z|coord_?z|cota|elevation|elev|altitude|alt|h)$/i.test(h));
-  const idField = headers.find(h => /^(id|codigo|nome|name)$/i.test(h));
-  const xIniField = headers.find(h => /^(x_?ini|x_?inicio|x_?start|x1|x_?mont)$/i.test(h));
-  const yIniField = headers.find(h => /^(y_?ini|y_?inicio|y_?start|y1|y_?mont)$/i.test(h));
-  const xFimField = headers.find(h => /^(x_?fim|x_?end|x2|x_?jus)$/i.test(h));
-  const yFimField = headers.find(h => /^(y_?fim|y_?end|y2|y_?jus)$/i.test(h));
-
-  for (let r = 1; r < csvLines.length; r++) {
-    const vals = csvLines[r].split(delim).map(v => v.trim().replace(/"/g, ''));
-    const attrs: Record<string, any> = {};
-    headers.forEach((h, j) => { attrs[h] = vals[j] || ''; });
-    const id = (idField ? attrs[idField] : '') || `row_${r}`;
-
-    if (xField && yField) {
-      const x = parseFloat(String(attrs[xField]).replace(',', '.'));
-      const y = parseFloat(String(attrs[yField]).replace(',', '.'));
-      const z = zField ? parseFloat(String(attrs[zField]).replace(',', '.')) || 0 : 0;
-      if (!isNaN(x) && !isNaN(y)) points.push({ id, x, y, z, layer: 'CSV', sourceFile: fileName, properties: { ...attrs } });
-    }
-
-    if (xIniField && yIniField && xFimField && yFimField) {
-      const x1 = parseFloat(String(attrs[xIniField]).replace(',', '.'));
-      const y1 = parseFloat(String(attrs[yIniField]).replace(',', '.'));
-      const x2 = parseFloat(String(attrs[xFimField]).replace(',', '.'));
-      const y2 = parseFloat(String(attrs[yFimField]).replace(',', '.'));
-      if (!isNaN(x1) && !isNaN(y1) && !isNaN(x2) && !isNaN(y2)) {
-        const dx = x2 - x1, dy = y2 - y1;
-        edges.push({ id, type: 'LINE', coordinates: [[x1, y1, 0], [x2, y2, 0]], isClosed: false, layer: 'CSV', sourceFile: fileName, properties: { ...attrs, length: Math.sqrt(dx * dx + dy * dy) } });
-      }
-    }
-  }
-  return { points, edges, layers: points.length > 0 || edges.length > 0 ? ['CSV'] : [], fields: Array.from(fieldsSet) };
-}
-
-function parseGeoJSONContent(content: string, fileName: string): ParseResult {
-  const points: ParsedPoint[] = [];
-  const edges: ParsedEdge[] = [];
-  const layersSet = new Set<string>();
-  const fieldsSet = new Set<string>();
-  try {
-    const json = JSON.parse(content);
-    const features = json.features || (json.type === 'Feature' ? [json] : []);
-    features.forEach((f: any, idx: number) => {
-      const props = f.properties || {};
-      // Collect ALL property keys
-      Object.keys(props).forEach(k => fieldsSet.add(k));
-      const layer = props.layer || 'GeoJSON';
-      layersSet.add(layer);
-      const id = f.id || props.id || `feat_${idx}`;
-      const geom = f.geometry;
-      if (!geom) return;
-      if (geom.type === 'Point') {
-        const [x, y, z = 0] = geom.coordinates;
-        points.push({ id, x, y, z, layer, sourceFile: fileName, properties: { ...props } });
-      }
-      if (geom.type === 'MultiPoint') {
-        (geom.coordinates as number[][]).forEach((c: number[], ci: number) => {
-          points.push({ id: `${id}_pt${ci}`, x: c[0], y: c[1], z: c[2] || 0, layer, sourceFile: fileName, properties: { ...props } });
-        });
-      }
-      if (geom.type === 'LineString') {
-        const coords = geom.coordinates.map((c: number[]) => [c[0], c[1], c[2] || 0]);
-        edges.push({ id, type: 'LineString', coordinates: coords, isClosed: false, layer, sourceFile: fileName, properties: { ...props, vertexCount: coords.length, length: calculateEdgeLength(coords) } });
-      }
-      if (geom.type === 'Polygon') {
-        geom.coordinates.forEach((ring: number[][], ri: number) => {
-          const coords = ring.map((c: number[]) => [c[0], c[1], c[2] || 0]);
-          edges.push({ id: `${id}_ring${ri}`, type: 'Polygon', coordinates: coords, isClosed: true, layer, sourceFile: fileName, properties: { ...props, vertexCount: coords.length, length: calculateEdgeLength(coords) } });
-        });
-      }
-      if (geom.type === 'MultiLineString') {
-        geom.coordinates.forEach((line: number[][], li: number) => {
-          const coords = line.map((c: number[]) => [c[0], c[1], c[2] || 0]);
-          edges.push({ id: `${id}_line${li}`, type: 'MultiLineString', coordinates: coords, isClosed: false, layer, sourceFile: fileName, properties: { ...props, vertexCount: coords.length, length: calculateEdgeLength(coords) } });
-        });
-      }
-      if (geom.type === 'MultiPolygon') {
-        geom.coordinates.forEach((poly: number[][][], pi: number) => {
-          poly.forEach((ring: number[][], ri: number) => {
-            const coords = ring.map((c: number[]) => [c[0], c[1], c[2] || 0]);
-            edges.push({ id: `${id}_poly${pi}_ring${ri}`, type: 'MultiPolygon', coordinates: coords, isClosed: true, layer, sourceFile: fileName, properties: { ...props, vertexCount: coords.length, length: calculateEdgeLength(coords) } });
-          });
-        });
-      }
-    });
-  } catch { /* invalid JSON */ }
-  return { points, edges, layers: Array.from(layersSet), fields: Array.from(fieldsSet) };
-}
-
-function parseXLSXContent(buffer: ArrayBuffer, fileName: string): ParseResult {
-  const points: ParsedPoint[] = [];
-  const edges: ParsedEdge[] = [];
-  const wb = XLSX.read(buffer, { type: 'array' });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  const data = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
-  if (data.length === 0) return { points, edges: [], layers: [], fields: [] };
-
-  const headers = Object.keys(data[0]);
-  const xField = headers.find(h => /^(x|coord_?x|longitude|lon|este|easting)$/i.test(h));
-  const yField = headers.find(h => /^(y|coord_?y|latitude|lat|norte|northing)$/i.test(h));
-  const zField = headers.find(h => /^(z|cota|elevation|elev|altitude)$/i.test(h));
-  const idField = headers.find(h => /^(id|codigo|nome|name)$/i.test(h));
-  const xIniField = headers.find(h => /^(x_?ini|x_?inicio|x_?start|x1|x_?mont)$/i.test(h));
-  const yIniField = headers.find(h => /^(y_?ini|y_?inicio|y_?start|y1|y_?mont)$/i.test(h));
-  const xFimField = headers.find(h => /^(x_?fim|x_?end|x2|x_?jus)$/i.test(h));
-  const yFimField = headers.find(h => /^(y_?fim|y_?end|y2|y_?jus)$/i.test(h));
-
-  // Points
-  if (xField && yField) {
-    data.forEach((row, i) => {
-      const x = parseFloat(String(row[xField]));
-      const y = parseFloat(String(row[yField]));
-      const z = zField ? parseFloat(String(row[zField])) : 0;
-      if (isNaN(x) || isNaN(y)) return;
-      const id = idField ? String(row[idField] || `P${String(i + 1).padStart(3, '0')}`) : `P${String(i + 1).padStart(3, '0')}`;
-      // Store ALL columns in properties
-      const props: Record<string, any> = {};
-      headers.forEach(h => { props[h] = row[h]; });
-      points.push({ id, x, y, z: isNaN(z) ? 0 : z, layer: 'XLSX', sourceFile: fileName, properties: props });
-    });
-  }
-
-  // Edges from start/end coordinate pairs
-  if (xIniField && yIniField && xFimField && yFimField) {
-    data.forEach((row, i) => {
-      const x1 = parseFloat(String(row[xIniField]));
-      const y1 = parseFloat(String(row[yIniField]));
-      const x2 = parseFloat(String(row[xFimField]));
-      const y2 = parseFloat(String(row[yFimField]));
-      if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) return;
-      const id = idField ? String(row[idField] || `T${String(i + 1).padStart(3, '0')}`) : `T${String(i + 1).padStart(3, '0')}`;
-      const props: Record<string, any> = {};
-      headers.forEach(h => { props[h] = row[h]; });
-      const dx = x2 - x1, dy = y2 - y1;
-      props.length = Math.sqrt(dx * dx + dy * dy);
-      edges.push({ id, type: 'LINE', coordinates: [[x1, y1, 0], [x2, y2, 0]], isClosed: false, layer: 'XLSX', sourceFile: fileName, properties: props });
-    });
-  }
-
-  return { points, edges, layers: points.length > 0 || edges.length > 0 ? ['XLSX'] : [], fields: headers };
-}
-
-function parseIFCContent(content: string, fileName: string): ParseResult {
-  const points: ParsedPoint[] = [];
-  const edges: ParsedEdge[] = [];
-  const fieldsSet = new Set<string>(['entityClass', 'ifcId']);
-  const layersSet = new Set<string>();
-  const ifcLines = content.split(/\r?\n/);
-
-  // First pass: collect IFCCARTESIANPOINT coordinates by #ID
-  const cartesianPoints = new Map<string, [number, number, number]>();
-  for (const line of ifcLines) {
-    const m = line.match(/^(#\d+)\s*=\s*IFCCARTESIANPOINT\s*\(\s*\(\s*([-\d.eE+]+)\s*,\s*([-\d.eE+]+)\s*(?:,\s*([-\d.eE+]+))?\s*\)/i);
-    if (m) {
-      cartesianPoints.set(m[1], [parseFloat(m[2]), parseFloat(m[3]), parseFloat(m[4] || '0')]);
-    }
-  }
-
-  // Collect IFCLOCALPLACEMENT → IFCAXIS2PLACEMENT3D → location point
-  const placementToPoint = new Map<string, string>(); // placementId → cartesianPointRef
-  const localPlacementMap = new Map<string, string>(); // localPlacementId → axis2placement ref
-  for (const line of ifcLines) {
-    // IFCAXIS2PLACEMENT3D(#point, ...)
-    const axis = line.match(/^(#\d+)\s*=\s*IFCAXIS2PLACEMENT3D\s*\(\s*(#\d+)/i);
-    if (axis) placementToPoint.set(axis[1], axis[2]);
-    // IFCLOCALPLACEMENT(relativeTo, #axis2placement)
-    const lp = line.match(/^(#\d+)\s*=\s*IFCLOCALPLACEMENT\s*\([^,]*,\s*(#\d+)/i);
-    if (lp) localPlacementMap.set(lp[1], lp[2]);
-  }
-
-  // Resolve placement → coordinates
-  const getPlacementCoords = (placementRef: string): [number, number, number] | null => {
-    const axisRef = localPlacementMap.get(placementRef);
-    if (!axisRef) return null;
-    const ptRef = placementToPoint.get(axisRef);
-    if (!ptRef) return null;
-    return cartesianPoints.get(ptRef) || null;
-  };
-
-  // Extract IFC entity types for info
-  const entityTypeRegex = /^(#\d+)\s*=\s*(IFC\w+)\s*\(/gm;
-  const entityCounts = new Map<string, number>();
-  const mepEntities: { id: string; type: string; name: string; placement: string }[] = [];
-  const mepTypes = new Set(['IFCPIPESEGMENT', 'IFCPIPEFITTING', 'IFCDUCTSEGMENT', 'IFCDUCTFITTING',
-    'IFCFLOWTERMINAL', 'IFCFLOWSEGMENT', 'IFCFLOWFITTING', 'IFCFLOWCONTROLLER',
-    'IFCPUMP', 'IFCVALVE', 'IFCFIRESUPPRESSIONTERMINAL', 'IFCSANITARYTERMINAL']);
-
-  let eMatch;
-  while ((eMatch = entityTypeRegex.exec(content)) !== null) {
-    const entId = eMatch[1];
-    const type = eMatch[2].toUpperCase();
-    if (type.includes('PIPE') || type.includes('FLOW') || type.includes('DUCT') ||
-      type.includes('FITTING') || type.includes('SEGMENT') || type.includes('TERMINAL') ||
-      type.includes('VALVE') || type.includes('PUMP')) {
-      entityCounts.set(type, (entityCounts.get(type) || 0) + 1);
-    }
-    if (mepTypes.has(type)) {
-      // Try to extract name and placement from the line
-      const fullLine = content.substring(eMatch.index, content.indexOf('\n', eMatch.index));
-      const nameMatch = fullLine.match(/'([^']+)'/);
-      const placementMatch = fullLine.match(/,\s*(#\d+)\s*,/);
-      mepEntities.push({
-        id: entId, type,
-        name: nameMatch ? nameMatch[1] : type,
-        placement: placementMatch ? placementMatch[1] : '',
-      });
-    }
-  }
-  const ifcEntitySummary = Object.fromEntries(entityCounts);
-  if (entityCounts.size > 0) fieldsSet.add('ifcEntityTypes');
-
-  // Extract MEP entities as points with their placement coordinates
-  let autoId = 1;
-  for (const ent of mepEntities) {
-    const coords = getPlacementCoords(ent.placement);
-    if (coords) {
-      const layer = ent.type.includes('PIPE') ? 'Tubulações IFC'
-        : ent.type.includes('DUCT') ? 'Dutos IFC'
-        : ent.type.includes('PUMP') ? 'Bombas IFC'
-        : ent.type.includes('VALVE') ? 'Válvulas IFC'
-        : 'MEP IFC';
-      layersSet.add(layer);
-      fieldsSet.add('ifcName');
-      points.push({
-        id: `IFC_${autoId++}`, x: coords[0], y: coords[1], z: coords[2],
-        layer, sourceFile: fileName,
-        properties: { entityClass: ent.type, ifcId: ent.id, ifcName: ent.name },
-      });
-    }
-  }
-
-  // Fallback: if no MEP entities found with placement, extract cartesian points
-  if (points.length === 0) {
-    layersSet.add('IFC');
-    for (const [ifcId, coords] of cartesianPoints) {
-      if (autoId > 5000) break;
-      points.push({
-        id: `IFC_${autoId++}`, x: coords[0], y: coords[1], z: coords[2],
-        layer: 'IFC', sourceFile: fileName,
-        properties: { entityClass: 'IFCCARTESIANPOINT', ifcId, ...ifcEntitySummary },
-      });
-    }
-  }
-
-  // Extract IFCPOLYLINE as edges
-  const polylineRegex = /^(#\d+)\s*=\s*IFCPOLYLINE\s*\(\s*\(([^)]+)\)/gm;
-  let plMatch;
-  let edgeId = 1;
-  while ((plMatch = polylineRegex.exec(content)) !== null) {
-    const refs = plMatch[2].split(',').map(r => r.trim());
-    const coords: number[][] = [];
-    for (const ref of refs) {
-      const pt = cartesianPoints.get(ref);
-      if (pt) coords.push([...pt]);
-    }
-    if (coords.length >= 2) {
-      layersSet.add('IFC Polylines');
-      fieldsSet.add('vertexCount'); fieldsSet.add('length');
-      edges.push({
-        id: `IFC_E${edgeId++}`, type: 'POLYLINE', coordinates: coords, isClosed: false,
-        layer: 'IFC Polylines', sourceFile: fileName,
-        properties: { entityClass: 'IFCPOLYLINE', ifcId: plMatch[1], vertexCount: coords.length, length: calculateEdgeLength(coords) },
-      });
-    }
-  }
-
-  const layers = layersSet.size > 0 ? Array.from(layersSet) : (points.length > 0 || edges.length > 0 ? ['IFC'] : []);
-  return { points, edges, layers, fields: Array.from(fieldsSet) };
-}
+// Worker-compatible formats
+const WORKER_FORMATS = new Set(['DXF', 'CSV', 'TXT', 'GeoJSON', 'XLSX', 'IFC']);
 
 function parseINPContent(content: string, fileName: string): ParseResult {
   const parsed = parseINPToInternal(content);
@@ -890,116 +154,214 @@ function parseSWMMContent(content: string, fileName: string): ParseResult {
   return { points, edges, layers: Array.from(layersSet), fields: Array.from(fieldsSet) };
 }
 
-function parseSHPContent(buffer: ArrayBuffer, fileName: string): ParseResult {
+async function parseSHPContentAsync(buffer: ArrayBuffer, fileName: string): Promise<ParseResult> {
   const points: ParsedPoint[] = [];
   const edges: ParsedEdge[] = [];
-  const fieldsSet = new Set<string>(['shapeType']);
+  const fieldsSet = new Set<string>();
+  const layersSet = new Set<string>();
 
+  try {
+    // Use shpjs library for full SHP+DBF parsing (supports .shp and .zip)
+    const { parseSHPBuffer } = await import('@/engine/shpReader');
+    const shpResult = await parseSHPBuffer(buffer);
+
+    for (const feature of shpResult.features) {
+      if (!feature.geometry) continue;
+      const props = feature.properties || {};
+      Object.keys(props).forEach(k => fieldsSet.add(k));
+      const layer = props.layer || props.LAYER || 'SHP';
+      layersSet.add(layer);
+
+      switch (feature.geometry.type) {
+        case 'Point': {
+          const [x, y, z] = feature.geometry.coordinates;
+          points.push({
+            id: props.id || props.ID || `SHP_P${points.length}`,
+            x, y, z: z || props.cota || props.COTA || props.Z || props.ELEVACAO || 0,
+            layer, sourceFile: fileName,
+            properties: { ...props, geometryType: 'Point' },
+          });
+          break;
+        }
+        case 'MultiPoint': {
+          for (const coord of feature.geometry.coordinates) {
+            const [x, y, z] = coord;
+            points.push({
+              id: `SHP_P${points.length}`, x, y, z: z || 0,
+              layer, sourceFile: fileName,
+              properties: { ...props, geometryType: 'MultiPoint' },
+            });
+          }
+          break;
+        }
+        case 'LineString': {
+          const coords = feature.geometry.coordinates;
+          if (coords.length >= 2) {
+            edges.push({
+              id: props.id || `SHP_E${edges.length}`,
+              type: 'PolyLine', coordinates: coords.map((c: number[]) => [c[0], c[1], c[2] || 0]),
+              isClosed: false, layer, sourceFile: fileName,
+              properties: { ...props, geometryType: 'LineString', length: calculateEdgeLength(coords) },
+            });
+          }
+          break;
+        }
+        case 'MultiLineString': {
+          for (const line of feature.geometry.coordinates) {
+            if (line.length >= 2) {
+              edges.push({
+                id: `SHP_E${edges.length}`,
+                type: 'PolyLine', coordinates: line.map((c: number[]) => [c[0], c[1], c[2] || 0]),
+                isClosed: false, layer, sourceFile: fileName,
+                properties: { ...props, geometryType: 'MultiLineString', length: calculateEdgeLength(line) },
+              });
+            }
+          }
+          break;
+        }
+        case 'Polygon': {
+          // Polygons are area features (parcels, zones), NOT network segments.
+          // Import centroid as a point for reference only.
+          if (feature.geometry.coordinates?.[0]?.length >= 2) {
+            const ring = feature.geometry.coordinates[0];
+            let cx = 0, cy = 0;
+            for (const c of ring) { cx += c[0]; cy += c[1]; }
+            cx /= ring.length; cy /= ring.length;
+            points.push({
+              id: `SHP_P${points.length}`, x: cx, y: cy, z: props.cota || props.COTA || props.Z || 0,
+              layer, sourceFile: fileName,
+              properties: { ...props, geometryType: 'Polygon' },
+            });
+          }
+          break;
+        }
+        case 'MultiPolygon': {
+          // MultiPolygons are area features, NOT network segments.
+          for (const poly of feature.geometry.coordinates) {
+            if (poly[0]?.length >= 2) {
+              const ring = poly[0];
+              let cx = 0, cy = 0;
+              for (const c of ring) { cx += c[0]; cy += c[1]; }
+              cx /= ring.length; cy /= ring.length;
+              points.push({
+                id: `SHP_P${points.length}`, x: cx, y: cy, z: props.cota || props.COTA || props.Z || 0,
+                layer, sourceFile: fileName,
+                properties: { ...props, geometryType: 'MultiPolygon' },
+              });
+            }
+          }
+          break;
+        }
+      }
+    }
+  } catch (shpErr) {
+    // Fallback: try raw binary SHP parsing (without DBF attributes)
+    return parseSHPContentFallback(buffer, fileName);
+  }
+
+  return {
+    points, edges,
+    layers: Array.from(layersSet).length > 0 ? Array.from(layersSet) : ['SHP'],
+    fields: Array.from(fieldsSet),
+  };
+}
+
+// Fallback binary SHP parser (used when shpjs fails, e.g., raw .shp without .dbf)
+function parseSHPContentFallback(buffer: ArrayBuffer, fileName: string): ParseResult {
+  const points: ParsedPoint[] = [];
+  const edges: ParsedEdge[] = [];
   const view = new DataView(buffer);
-  // SHP file header: magic number 9994 at byte 0 (big-endian)
   const magic = view.getInt32(0, false);
   if (magic !== 9994) return { points, edges, layers: ['SHP'], fields: [] };
 
-  const shapeType = view.getInt32(32, true); // little-endian
-  let offset = 100; // records start after 100-byte header
-
+  let offset = 100;
   let recIdx = 0;
   while (offset + 12 < buffer.byteLength) {
     try {
-      const contentLength = view.getInt32(offset + 4, false) * 2; // big-endian, in 16-bit words
+      const contentLength = view.getInt32(offset + 4, false) * 2;
       const recStart = offset + 8;
       if (recStart + 4 > buffer.byteLength) break;
       const recShapeType = view.getInt32(recStart, true);
 
-      if (recShapeType === 0) {
-        // Null shape
-      } else if (recShapeType === 1 || recShapeType === 11 || recShapeType === 21) {
-        // Point / PointZ / PointM
+      if (recShapeType === 1 || recShapeType === 11 || recShapeType === 21) {
         const x = view.getFloat64(recStart + 4, true);
         const y = view.getFloat64(recStart + 12, true);
         const z = recShapeType === 11 && recStart + 28 <= buffer.byteLength ? view.getFloat64(recStart + 20, true) : 0;
-        points.push({
-          id: `SHP_P${recIdx}`, x, y, z,
-          layer: 'SHP', sourceFile: fileName,
-          properties: { shapeType: recShapeType === 1 ? 'Point' : recShapeType === 11 ? 'PointZ' : 'PointM' },
-        });
-      } else if (recShapeType === 3 || recShapeType === 13 || recShapeType === 23 ||
-                 recShapeType === 5 || recShapeType === 15 || recShapeType === 25) {
-        // PolyLine / PolyLineZ / PolyLineM / Polygon / PolygonZ / PolygonM
+        points.push({ id: `SHP_P${recIdx}`, x, y, z, layer: 'SHP', sourceFile: fileName, properties: {} });
+      } else if (recShapeType === 3 || recShapeType === 13 || recShapeType === 5 || recShapeType === 15) {
         const numParts = view.getInt32(recStart + 36, true);
         const numPoints = view.getInt32(recStart + 40, true);
-        const partsOffset = recStart + 44;
-        const pointsOffset = partsOffset + numParts * 4;
-
+        const partsOff = recStart + 44;
+        const ptsOff = partsOff + numParts * 4;
         const parts: number[] = [];
+        for (let p = 0; p < numParts; p++) parts.push(view.getInt32(partsOff + p * 4, true));
         for (let p = 0; p < numParts; p++) {
-          parts.push(view.getInt32(partsOffset + p * 4, true));
-        }
-
-        for (let p = 0; p < numParts; p++) {
-          const start = parts[p];
-          const end = p + 1 < numParts ? parts[p + 1] : numPoints;
+          const start = parts[p], end = p + 1 < numParts ? parts[p + 1] : numPoints;
           const coords: number[][] = [];
           for (let pt = start; pt < end; pt++) {
-            const ptOff = pointsOffset + pt * 16;
+            const ptOff = ptsOff + pt * 16;
             if (ptOff + 16 > buffer.byteLength) break;
-            const px = view.getFloat64(ptOff, true);
-            const py = view.getFloat64(ptOff + 8, true);
-            coords.push([px, py, 0]);
+            coords.push([view.getFloat64(ptOff, true), view.getFloat64(ptOff + 8, true), 0]);
           }
-          // Read Z values if available (PolyLineZ/PolygonZ)
-          if ((recShapeType === 13 || recShapeType === 15) && numPoints > 0) {
-            const zOffset = pointsOffset + numPoints * 16 + 16; // skip bbox min/max
-            for (let pt = start; pt < end; pt++) {
-              const zOff = zOffset + pt * 8;
-              if (zOff + 8 <= buffer.byteLength && coords[pt - start]) {
-                coords[pt - start][2] = view.getFloat64(zOff, true);
-              }
-            }
-          }
-          const isPolygon = recShapeType === 5 || recShapeType === 15 || recShapeType === 25;
           if (coords.length >= 2) {
             edges.push({
-              id: `SHP_E${recIdx}_${p}`,
-              type: isPolygon ? 'Polygon' : 'PolyLine',
-              coordinates: coords,
-              isClosed: isPolygon,
-              layer: 'SHP', sourceFile: fileName,
-              properties: {
-                shapeType: isPolygon ? 'Polygon' : 'PolyLine',
-                vertexCount: coords.length,
-                length: calculateEdgeLength(coords),
-              },
+              id: `SHP_E${recIdx}_${p}`, type: recShapeType >= 5 ? 'Polygon' : 'PolyLine',
+              coordinates: coords, isClosed: recShapeType >= 5, layer: 'SHP', sourceFile: fileName,
+              properties: { length: calculateEdgeLength(coords) },
             });
-            fieldsSet.add('vertexCount');
-            fieldsSet.add('length');
           }
         }
-      } else if (recShapeType === 8 || recShapeType === 18 || recShapeType === 28) {
-        // MultiPoint / MultiPointZ / MultiPointM
-        const numPoints = view.getInt32(recStart + 36, true);
-        const ptBase = recStart + 40;
-        for (let pt = 0; pt < numPoints; pt++) {
-          const ptOff = ptBase + pt * 16;
-          if (ptOff + 16 > buffer.byteLength) break;
-          const px = view.getFloat64(ptOff, true);
-          const py = view.getFloat64(ptOff + 8, true);
-          points.push({
-            id: `SHP_P${recIdx}_${pt}`, x: px, y: py, z: 0,
-            layer: 'SHP', sourceFile: fileName,
-            properties: { shapeType: 'MultiPoint' },
-          });
-        }
       }
-
       offset += 8 + contentLength;
       recIdx++;
-    } catch {
-      break;
+    } catch { break; }
+  }
+  return { points, edges, layers: ['SHP'], fields: [] };
+}
+
+// TIF/GeoTIFF parser for elevation raster data
+async function parseTIFContentAsync(buffer: ArrayBuffer, fileName: string): Promise<ParseResult> {
+  const points: ParsedPoint[] = [];
+  const edges: ParsedEdge[] = [];
+  const fieldsSet = new Set<string>(['cota', 'resolution']);
+
+  try {
+    const { parseGeoTIFF } = await import('@/engine/tifReader');
+    const { setRasterGrid } = await import('@/engine/rasterStore');
+    const tifResult = await parseGeoTIFF(buffer, 15000, -9999, true);
+
+    // Store raw grid for contour extraction and elevation sampling
+    if (tifResult.grid) {
+      setRasterGrid(tifResult.grid, {
+        width: tifResult.width, height: tifResult.height,
+        noDataValue: tifResult.noDataValue,
+      });
+      // Add raster metadata to fields for display
+      fieldsSet.add(`${tifResult.width}×${tifResult.height} px`);
+      if (tifResult.grid.pixelSize) {
+        const res = Math.abs(tifResult.grid.pixelSize[0]);
+        fieldsSet.add(`${res.toFixed(2)} m/px`);
+      }
     }
+
+    for (const pt of tifResult.points) {
+      points.push({
+        id: pt.id, x: pt.x, y: pt.y, z: pt.cota,
+        layer: 'GeoTIFF', sourceFile: fileName,
+        properties: { cota: pt.cota, _source: 'GeoTIFF' },
+      });
+    }
+
+    if (tifResult.crs?.epsg) fieldsSet.add(`EPSG:${tifResult.crs.epsg}`);
+  } catch (err: any) {
+    throw new Error(`Erro ao ler GeoTIFF: ${err.message}`);
   }
 
-  return { points, edges, layers: points.length > 0 || edges.length > 0 ? ['SHP'] : [], fields: Array.from(fieldsSet) };
+  return {
+    points, edges,
+    layers: points.length > 0 ? ['GeoTIFF'] : [],
+    fields: Array.from(fieldsSet),
+  };
 }
 
 // ── Validation ──
@@ -1151,6 +513,8 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
   const [filterType, setFilterType] = useState('all');
   const [isDragging, setIsDragging] = useState(false);
   const [expandedEntities, setExpandedEntities] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(0);
+  const PAGE_SIZE = 50;
   const [showFields, setShowFields] = useState(false);
   const [importCRS, setImportCRS] = useState<ImportCRSConfig | null>(null);
   const [validationIssues, setValidationIssues] = useState<ValidationIssueItem[]>([]);
@@ -1164,18 +528,50 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
   const fileInputRef = useRef<HTMLInputElement>(null);
   const processingRef = useRef(false);
 
-  // Merged data from all files
-  const allPoints = fileQueue.filter(f => f.status === 'ok').flatMap(f => f.result?.points ?? []);
-  const allEdges = fileQueue.filter(f => f.status === 'ok').flatMap(f => f.result?.edges ?? []);
-  const allLayers = [...new Set([...allPoints.map(p => p.layer), ...allEdges.map(e => e.layer)])];
-  const allTypes = [...new Set(allEdges.map(e => e.type))];
-  const allFields = [...new Set(fileQueue.filter(f => f.status === 'ok').flatMap(f => f.result?.fields ?? []))];
+  // ── Web Worker for heavy parsing (DXF, CSV, XLSX, GeoJSON, IFC) ──
+  const workerRef = useRef<Worker | null>(null);
+
+  useEffect(() => {
+    try {
+      workerRef.current = new Worker(
+        new URL('@/engine/importWorker.ts', import.meta.url),
+        { type: 'module' },
+      );
+    } catch {
+      // Worker creation may fail in some environments; parsing falls back to main thread
+      workerRef.current = null;
+    }
+    return () => {
+      workerRef.current?.terminate();
+      workerRef.current = null;
+    };
+  }, []);
+
+  // Merged data from all files (memoized to avoid recalculation on each render)
+  const allPoints = useMemo(
+    () => fileQueue.filter(f => f.status === 'ok').flatMap(f => f.result?.points ?? []),
+    [fileQueue],
+  );
+  const allEdges = useMemo(
+    () => fileQueue.filter(f => f.status === 'ok').flatMap(f => f.result?.edges ?? []),
+    [fileQueue],
+  );
+  const allLayers = useMemo(
+    () => [...new Set([...allPoints.map(p => p.layer), ...allEdges.map(e => e.layer)])],
+    [allPoints, allEdges],
+  );
+  const allTypes = useMemo(
+    () => [...new Set(allEdges.map(e => e.type))],
+    [allEdges],
+  );
+  const allFields = useMemo(
+    () => [...new Set(fileQueue.filter(f => f.status === 'ok').flatMap(f => f.result?.fields ?? []))],
+    [fileQueue],
+  );
   const totalEntities = allPoints.length + allEdges.length;
 
   // Field info with samples and types for "Campos do Arquivo"
   const allFieldInfo = useMemo(() => {
-    const pts = fileQueue.filter(f => f.status === 'ok').flatMap(f => f.result?.points ?? []);
-    const edg = fileQueue.filter(f => f.status === 'ok').flatMap(f => f.result?.edges ?? []);
     const fieldMap = new Map<string, { samples: Set<string>; count: number; numeric: boolean }>();
 
     const processProps = (props: Record<string, any>) => {
@@ -1191,8 +587,8 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
       }
     };
 
-    pts.forEach(p => processProps(p.properties));
-    edg.forEach(e => processProps(e.properties));
+    allPoints.forEach(p => processProps(p.properties));
+    allEdges.forEach(e => processProps(e.properties));
 
     return Array.from(fieldMap.entries()).map(([name, info]) => ({
       name,
@@ -1200,11 +596,27 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
       samples: Array.from(info.samples),
       count: info.count,
     })).sort((a, b) => b.count - a.count);
-  }, [fileQueue]);
+  }, [allPoints, allEdges]);
 
-  // Filtered
-  const filteredPoints = allPoints.filter(p => (filterLayer === 'all' || p.layer === filterLayer));
-  const filteredEdges = allEdges.filter(e => (filterLayer === 'all' || e.layer === filterLayer) && (filterType === 'all' || e.type === filterType));
+  // Filtered (memoized)
+  const filteredPoints = useMemo(
+    () => allPoints.filter(p => (filterLayer === 'all' || p.layer === filterLayer)),
+    [allPoints, filterLayer],
+  );
+  const filteredEdges = useMemo(
+    () => allEdges.filter(e => (filterLayer === 'all' || e.layer === filterLayer) && (filterType === 'all' || e.type === filterType)),
+    [allEdges, filterLayer, filterType],
+  );
+
+  // Pagination
+  const allFilteredEntities = [
+    ...filteredPoints.map(p => ({ type: 'point' as const, data: p })),
+    ...filteredEdges.map(e => ({ type: 'edge' as const, data: e })),
+  ];
+  const filteredTotal = allFilteredEntities.length;
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages - 1);
+  const paginatedEntities = allFilteredEntities.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   // File detection
   const detectFormat = (name: string): string => {
@@ -1212,40 +624,110 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
     const map: Record<string, string> = {
       dxf: 'DXF', csv: 'CSV', txt: 'TXT', xlsx: 'XLSX', xls: 'XLSX',
       geojson: 'GeoJSON', json: 'GeoJSON', ifc: 'IFC',
-      inp: 'INP', shp: 'SHP',
+      inp: 'INP', shp: 'SHP', tif: 'TIF', tiff: 'TIF',
+      zip: 'SHP', // ZIP files typically contain Shapefiles
     };
     return map[ext] || 'Desconhecido';
   };
+
+  // ── Parse via Web Worker (non-blocking) ──
+  const parseInWorker = useCallback((item: FileQueueItem, content: string | ArrayBuffer): Promise<FileQueueItem> => {
+    const worker = workerRef.current;
+    if (!worker) {
+      // Fallback: import and run on main thread if Worker unavailable
+      return (async () => {
+        const { parseDXFComplete, parseCSVContent, parseGeoJSONContent, parseXLSXContent, parseIFCContent } = await import('@/engine/importParsers');
+        let result: ParseResult;
+        switch (item.format) {
+          case 'DXF': result = parseDXFComplete(content as string, item.file.name); break;
+          case 'CSV': case 'TXT': result = parseCSVContent(content as string, item.file.name); break;
+          case 'GeoJSON': result = parseGeoJSONContent(content as string, item.file.name); break;
+          case 'XLSX': result = parseXLSXContent(content as ArrayBuffer, item.file.name); break;
+          case 'IFC': result = parseIFCContent(content as string, item.file.name); break;
+          default: throw new Error(`Formato nao suportado: ${item.format}`);
+        }
+        if (result.points.length === 0 && result.edges.length === 0) {
+          return { ...item, status: 'erro' as const, error: 'Nenhuma entidade encontrada' };
+        }
+        return { ...item, status: 'ok' as const, progress: 100, result };
+      })();
+    }
+
+    return new Promise<FileQueueItem>((resolve) => {
+      const msgId = item.id;
+
+      const handler = (e: MessageEvent<WorkerResponse>) => {
+        if (e.data.id !== msgId) return;
+
+        if (e.data.type === 'progress') {
+          // Update progress in real-time while worker parses
+          setFileQueue(prev =>
+            prev.map(f => f.id === msgId ? { ...f, progress: e.data.progress ?? f.progress } : f),
+          );
+          return;
+        }
+
+        // Result or error — remove listener
+        worker.removeEventListener('message', handler);
+
+        if (e.data.type === 'error') {
+          resolve({ ...item, status: 'erro', error: e.data.error || 'Erro ao processar' });
+          return;
+        }
+
+        const result = e.data.result!;
+        if (result.points.length === 0 && result.edges.length === 0) {
+          resolve({ ...item, status: 'erro', error: 'Nenhuma entidade encontrada' });
+          return;
+        }
+        resolve({ ...item, status: 'ok', progress: 100, result });
+      };
+
+      worker.addEventListener('message', handler);
+
+      // Send to worker — transfer ArrayBuffer for zero-copy performance
+      if (content instanceof ArrayBuffer) {
+        worker.postMessage(
+          { id: msgId, format: item.format, buffer: content, fileName: item.file.name },
+          [content],
+        );
+      } else {
+        worker.postMessage(
+          { id: msgId, format: item.format, content, fileName: item.file.name },
+        );
+      }
+    });
+  }, []);
 
   // Process a single file
   const processFile = useCallback(async (item: FileQueueItem): Promise<FileQueueItem> => {
     try {
       const format = item.format;
+
+      // ── Formats handled by Web Worker (non-blocking) ──
+      if (WORKER_FORMATS.has(format)) {
+        const content = format === 'XLSX'
+          ? await item.file.arrayBuffer()
+          : await item.file.text();
+        return await parseInWorker(item, content);
+      }
+
+      // ── Formats kept on main thread (external dependencies) ──
       let result: ParseResult;
 
-      if (format === 'DXF') {
+      if (format === 'INP') {
         const text = await item.file.text();
-        result = parseDXFComplete(text, item.file.name);
-      } else if (format === 'CSV' || format === 'TXT') {
-        const text = await item.file.text();
-        result = parseCSVContent(text, item.file.name);
-      } else if (format === 'GeoJSON') {
-        const text = await item.file.text();
-        result = parseGeoJSONContent(text, item.file.name);
-      } else if (format === 'XLSX') {
-        const buffer = await item.file.arrayBuffer();
-        result = parseXLSXContent(buffer, item.file.name);
-      } else if (format === 'IFC') {
-        const text = await item.file.text();
-        result = parseIFCContent(text, item.file.name);
-      } else if (format === 'INP') {
-        const text = await item.file.text();
-        // Detect SWMM vs EPANET by checking for SWMM-specific sections
         const isSWMM = /\[SUBCATCHMENTS\]|\[CONDUITS\]|\[OUTFALLS\]/i.test(text);
         result = isSWMM ? parseSWMMContent(text, item.file.name) : parseINPContent(text, item.file.name);
       } else if (format === 'SHP') {
         const buffer = await item.file.arrayBuffer();
-        result = parseSHPContent(buffer, item.file.name);
+        result = await parseSHPContentAsync(buffer, item.file.name);
+      } else if (format === 'TIF') {
+        toast.info(`Processando DEM: ${item.file.name} (${(item.file.size / 1024 / 1024).toFixed(1)} MB)...`);
+        const buffer = await item.file.arrayBuffer();
+        result = await parseTIFContentAsync(buffer, item.file.name);
+        const rasterInfo = result.fields.filter(f => f.startsWith('EPSG:')).join(', ');
+        toast.success(`DEM carregado: ${result.points.length} pontos amostrados${rasterInfo ? ` | ${rasterInfo}` : ''}`);
       } else {
         return { ...item, status: 'erro', error: `Formato nao suportado: ${format}` };
       }
@@ -1258,7 +740,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
     } catch (err: any) {
       return { ...item, status: 'erro', error: err.message || 'Erro ao processar' };
     }
-  }, []);
+  }, [parseInWorker]);
 
   // Process queue
   useEffect(() => {
@@ -1267,7 +749,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
     if (!pending) return;
 
     processingRef.current = true;
-    setFileQueue(prev => prev.map(f => f.id === pending.id ? { ...f, status: 'lendo', progress: 30 } : f));
+    setFileQueue(prev => prev.map(f => f.id === pending.id ? { ...f, status: 'lendo', progress: 5 } : f));
 
     processFile(pending).then(processed => {
       setFileQueue(prev => prev.map(f => f.id === pending.id ? processed : f));
@@ -1452,7 +934,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
     <div className="space-y-3">
       {/* Enhanced Drop Zone */}
       <div
-        className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-300 cursor-pointer relative overflow-hidden
+        className={`border-2 border-dashed p-6 text-center transition-all duration-300 cursor-pointer relative overflow-hidden
           ${isDragging
             ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30 scale-[1.02] shadow-lg shadow-blue-500/20'
             : 'border-border hover:border-primary/50 hover:bg-muted/30'
@@ -1480,7 +962,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
           ref={fileInputRef}
           type="file"
           multiple
-          accept=".dxf,.csv,.txt,.xlsx,.xls,.geojson,.json,.ifc,.inp,.shp"
+          accept=".dxf,.csv,.txt,.xlsx,.xls,.geojson,.json,.ifc,.inp,.shp,.tif,.tiff,.zip"
           className="hidden"
           onChange={e => { if (e.target.files) handleFiles(e.target.files); e.target.value = ''; }}
         />
@@ -1505,7 +987,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
 
       {/* Import History */}
       {showHistory && importHistory.length > 0 && (
-        <div className="border border-border rounded-lg overflow-hidden">
+        <div className="border border-border overflow-hidden">
           <div className="px-3 py-2 bg-muted/50 text-xs font-medium">Historico de Importacoes</div>
           <div className="max-h-[120px] overflow-auto divide-y divide-border">
             {importHistory.slice(0, 10).map((h, i) => (
@@ -1523,7 +1005,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
 
       {/* File Queue */}
       {fileQueue.length > 0 && (
-        <div className="border border-border rounded-lg overflow-hidden">
+        <div className="border border-border overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
             <span className="text-xs font-medium">Fila de Arquivos ({fileQueue.length})</span>
             <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={clearQueue}><Trash2 className="h-3 w-3 mr-1" />Limpar</Button>
@@ -1535,7 +1017,14 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
                 <span className="truncate flex-1 font-medium">{item.file.name}</span>
                 <Badge variant="outline" className="text-[10px] flex-shrink-0">{item.format}</Badge>
                 {item.status === 'aguardando' && <Badge variant="secondary" className="text-[10px]">Aguardando</Badge>}
-                {item.status === 'lendo' && <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />}
+                {item.status === 'lendo' && (
+                  <span className="flex items-center gap-1">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
+                    {item.progress > 0 && item.progress < 100 && (
+                      <span className="text-[10px] text-blue-500 font-mono">{item.progress}%</span>
+                    )}
+                  </span>
+                )}
                 {item.status === 'ok' && (
                   <Badge className="bg-green-600 text-[10px]">
                     {(item.result?.points.length || 0) + (item.result?.edges.length || 0)} entidades
@@ -1564,7 +1053,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
               { label: 'Layers', value: allLayers.length, color: 'text-purple-600' },
               { label: 'Selecionados', value: selectedEntities.size, color: 'text-blue-600' },
             ].map(s => (
-              <div key={s.label} className="bg-muted/50 rounded-lg p-2 text-center">
+              <div key={s.label} className="bg-muted/50 p-2 text-center">
                 <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
                 <div className="text-[10px] text-muted-foreground">{s.label}</div>
               </div>
@@ -1588,7 +1077,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
 
           {/* Campos do Arquivo */}
           {allFieldInfo.length > 0 && (
-            <div className="border border-border rounded-lg overflow-hidden">
+            <div className="border border-border overflow-hidden">
               <button
                 className="flex items-center justify-between w-full px-3 py-2 bg-muted/50 text-xs font-medium hover:bg-muted/70 transition-colors"
                 onClick={() => setShowFields(!showFields)}
@@ -1625,13 +1114,13 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
 
           {/* Filters */}
           <div className="flex items-center gap-2 flex-wrap">
-            <select value={filterLayer} onChange={e => setFilterLayer(e.target.value)}
+            <select value={filterLayer} onChange={e => { setFilterLayer(e.target.value); setCurrentPage(0); }}
               className="text-xs border border-border rounded px-2 py-1 bg-background">
               <option value="all">Todos Layers ({allLayers.length})</option>
               {allLayers.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
             {allTypes.length > 0 && (
-              <select value={filterType} onChange={e => setFilterType(e.target.value)}
+              <select value={filterType} onChange={e => { setFilterType(e.target.value); setCurrentPage(0); }}
                 className="text-xs border border-border rounded px-2 py-1 bg-background">
                 <option value="all">Todos Tipos</option>
                 {allTypes.map(t => <option key={t} value={t}>{t}</option>)}
@@ -1642,7 +1131,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
           </div>
 
           {/* Entity Table */}
-          <div className="border border-border rounded-lg overflow-hidden">
+          <div className="border border-border overflow-hidden">
             <div className="max-h-[250px] overflow-auto">
               <table className="w-full text-xs">
                 <thead className="bg-muted/50 sticky top-0">
@@ -1662,96 +1151,129 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {filteredPoints.slice(0, 100).map(p => {
-                    const rowKey = `p_${p.id}_${p.sourceFile}`;
-                    const isExpanded = expandedEntities.has(rowKey);
-                    return (
-                      <React.Fragment key={rowKey}>
-                        <tr className="hover:bg-muted/30 cursor-pointer" onClick={() => toggleEntity(p.id)}>
-                          <td className="px-2 py-1 text-center"><input type="checkbox" checked={selectedEntities.has(p.id)} readOnly /></td>
-                          <td className="px-2 py-1 font-mono">{p.id}</td>
-                          <td className="px-2 py-1">
-                            {p.properties.color !== undefined && <span className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ backgroundColor: getDxfColor(p.properties.color) }} />}
-                            <Badge variant="outline" className="text-[10px]">{p.properties.entityType || 'POINT'}</Badge>
-                          </td>
-                          <td className="px-2 py-1 text-center font-mono">{p.x.toFixed(1)}, {p.y.toFixed(1)}</td>
-                          <td className="px-2 py-1 text-center text-muted-foreground">—</td>
-                          <td className="px-2 py-1">{p.layer}</td>
-                          <td className="px-2 py-1 text-muted-foreground truncate max-w-[80px]">{p.sourceFile}</td>
-                          <td className="px-2 py-1 text-center">
-                            {Object.keys(p.properties).length > 0 && (
-                              <button onClick={ev => { ev.stopPropagation(); toggleExpand(rowKey); }} className="text-muted-foreground hover:text-foreground">
-                                {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                        {isExpanded && (
-                          <tr>
-                            <td colSpan={8} className="px-4 py-2 bg-muted/20">
-                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
-                                {Object.entries(p.properties).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => (
-                                  <span key={k}><span className="font-medium text-muted-foreground">{k}:</span> <span className="font-mono">{String(v)}</span></span>
-                                ))}
-                              </div>
+                  {paginatedEntities.map(entity => {
+                    if (entity.type === 'point') {
+                      const p = entity.data as ParsedPoint;
+                      const rowKey = `p_${p.id}_${p.sourceFile}`;
+                      const isExpanded = expandedEntities.has(rowKey);
+                      return (
+                        <React.Fragment key={rowKey}>
+                          <tr className="hover:bg-muted/30 cursor-pointer" onClick={() => toggleEntity(p.id)}>
+                            <td className="px-2 py-1 text-center"><input type="checkbox" checked={selectedEntities.has(p.id)} readOnly /></td>
+                            <td className="px-2 py-1 font-mono">{p.id}</td>
+                            <td className="px-2 py-1">
+                              {p.properties.color !== undefined && <span className="inline-block w-2 h-2 mr-1 align-middle" style={{ backgroundColor: getDxfColor(p.properties.color) }} />}
+                              <Badge variant="outline" className="text-[10px]">{p.properties.entityType || 'POINT'}</Badge>
+                            </td>
+                            <td className="px-2 py-1 text-center font-mono">{p.x.toFixed(1)}, {p.y.toFixed(1)}</td>
+                            <td className="px-2 py-1 text-center text-muted-foreground">—</td>
+                            <td className="px-2 py-1">{p.layer}</td>
+                            <td className="px-2 py-1 text-muted-foreground truncate max-w-[80px]">{p.sourceFile}</td>
+                            <td className="px-2 py-1 text-center">
+                              {Object.keys(p.properties).length > 0 && (
+                                <button onClick={ev => { ev.stopPropagation(); toggleExpand(rowKey); }} className="text-muted-foreground hover:text-foreground">
+                                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                </button>
+                              )}
                             </td>
                           </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                  {filteredEdges.slice(0, 100).map(e => {
-                    const rowKey = `e_${e.id}_${e.sourceFile}`;
-                    const isExpanded = expandedEntities.has(rowKey);
-                    const edgeLen = e.properties.length ?? calculateEdgeLength(e.coordinates);
-                    return (
-                      <React.Fragment key={rowKey}>
-                        <tr className="hover:bg-muted/30 cursor-pointer" onClick={() => toggleEntity(e.id)}>
-                          <td className="px-2 py-1 text-center"><input type="checkbox" checked={selectedEntities.has(e.id)} readOnly /></td>
-                          <td className="px-2 py-1 font-mono">{e.id}</td>
-                          <td className="px-2 py-1">
-                            {e.properties.color !== undefined && <span className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ backgroundColor: getDxfColor(e.properties.color) }} />}
-                            <Badge variant="outline" className="text-[10px]">{e.type}</Badge>
-                          </td>
-                          <td className="px-2 py-1 text-center">{e.coordinates.length} vertices</td>
-                          <td className="px-2 py-1 text-center font-mono">{edgeLen > 0 ? edgeLen.toFixed(1) : '—'}</td>
-                          <td className="px-2 py-1">{e.layer}</td>
-                          <td className="px-2 py-1 text-muted-foreground truncate max-w-[80px]">{e.sourceFile}</td>
-                          <td className="px-2 py-1 text-center">
-                            {Object.keys(e.properties).length > 0 && (
-                              <button onClick={ev => { ev.stopPropagation(); toggleExpand(rowKey); }} className="text-muted-foreground hover:text-foreground">
-                                {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                        {isExpanded && (
-                          <tr>
-                            <td colSpan={8} className="px-4 py-2 bg-muted/20">
-                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
-                                {Object.entries(e.properties).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => (
-                                  <span key={k}><span className="font-medium text-muted-foreground">{k}:</span> <span className="font-mono">{String(v)}</span></span>
-                                ))}
-                              </div>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={8} className="px-4 py-2 bg-muted/20">
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
+                                  {Object.entries(p.properties).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => (
+                                    <span key={k}><span className="font-medium text-muted-foreground">{k}:</span> <span className="font-mono">{String(v)}</span></span>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    } else {
+                      const e = entity.data as ParsedEdge;
+                      const rowKey = `e_${e.id}_${e.sourceFile}`;
+                      const isExpanded = expandedEntities.has(rowKey);
+                      const edgeLen = e.properties.length ?? calculateEdgeLength(e.coordinates);
+                      return (
+                        <React.Fragment key={rowKey}>
+                          <tr className="hover:bg-muted/30 cursor-pointer" onClick={() => toggleEntity(e.id)}>
+                            <td className="px-2 py-1 text-center"><input type="checkbox" checked={selectedEntities.has(e.id)} readOnly /></td>
+                            <td className="px-2 py-1 font-mono">{e.id}</td>
+                            <td className="px-2 py-1">
+                              {e.properties.color !== undefined && <span className="inline-block w-2 h-2 mr-1 align-middle" style={{ backgroundColor: getDxfColor(e.properties.color) }} />}
+                              <Badge variant="outline" className="text-[10px]">{e.type}</Badge>
+                            </td>
+                            <td className="px-2 py-1 text-center">{e.coordinates.length} vertices</td>
+                            <td className="px-2 py-1 text-center font-mono">{edgeLen > 0 ? edgeLen.toFixed(1) : '—'}</td>
+                            <td className="px-2 py-1">{e.layer}</td>
+                            <td className="px-2 py-1 text-muted-foreground truncate max-w-[80px]">{e.sourceFile}</td>
+                            <td className="px-2 py-1 text-center">
+                              {Object.keys(e.properties).length > 0 && (
+                                <button onClick={ev => { ev.stopPropagation(); toggleExpand(rowKey); }} className="text-muted-foreground hover:text-foreground">
+                                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                </button>
+                              )}
                             </td>
                           </tr>
-                        )}
-                      </React.Fragment>
-                    );
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={8} className="px-4 py-2 bg-muted/20">
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
+                                  {Object.entries(e.properties).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => (
+                                    <span key={k}><span className="font-medium text-muted-foreground">{k}:</span> <span className="font-mono">{String(v)}</span></span>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    }
                   })}
-                  {(filteredPoints.length > 100 || filteredEdges.length > 100) && (
-                    <tr><td colSpan={8} className="px-2 py-1.5 text-center text-muted-foreground">
-                      ... e mais {Math.max(0, filteredPoints.length - 100) + Math.max(0, filteredEdges.length - 100)} entidades
+                  {filteredTotal === 0 && (
+                    <tr><td colSpan={8} className="px-2 py-4 text-center text-muted-foreground">
+                      Nenhuma entidade encontrada
                     </td></tr>
                   )}
                 </tbody>
               </table>
             </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-t border-border text-xs">
+                <span className="text-muted-foreground">
+                  {safePage * PAGE_SIZE + 1}–{Math.min((safePage + 1) * PAGE_SIZE, filteredTotal)} de {filteredTotal}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs"
+                    disabled={safePage === 0}
+                    onClick={() => setCurrentPage(0)}>
+                    Inicio
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs"
+                    disabled={safePage === 0}
+                    onClick={() => setCurrentPage(p => p - 1)}>
+                    <ChevronLeft className="h-3 w-3" />
+                  </Button>
+                  <span className="px-2 font-medium">{safePage + 1} / {totalPages}</span>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs"
+                    disabled={safePage >= totalPages - 1}
+                    onClick={() => setCurrentPage(p => p + 1)}>
+                    <ChevronRight className="h-3 w-3" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs"
+                    disabled={safePage >= totalPages - 1}
+                    onClick={() => setCurrentPage(totalPages - 1)}>
+                    Fim
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Trecho preview count */}
           {allEdges.filter(e => selectedEntities.has(e.id)).length > 0 && (
-            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-2 text-xs text-blue-700 dark:text-blue-300">
+            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-2 text-xs text-blue-700 dark:text-blue-300">
               {(() => {
                 const selEdges = allEdges.filter(e => selectedEntities.has(e.id));
                 const trechoCount = selEdges.reduce((acc, e) => {
@@ -1773,7 +1295,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
           />
 
           {/* Import Templates */}
-          <div className="border border-border rounded-lg overflow-hidden">
+          <div className="border border-border overflow-hidden">
             <button
               className="flex items-center justify-between w-full px-3 py-2 bg-muted/50 text-xs font-medium hover:bg-muted/70 transition-colors"
               onClick={() => setShowTemplates(!showTemplates)}
@@ -1845,7 +1367,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
 
           {/* Validation Report */}
           {validationIssues.length > 0 && (
-            <div className="border border-border rounded-lg overflow-hidden">
+            <div className="border border-border overflow-hidden">
               <button
                 className="flex items-center justify-between w-full px-3 py-2 bg-muted/50 text-xs font-medium hover:bg-muted/70 transition-colors"
                 onClick={() => setShowValidation(!showValidation)}
@@ -1888,7 +1410,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
             const invalidPts = allPoints.slice(0, 50).filter(p => !validateUTMRange(p.x, p.y).valid);
             if (invalidPts.length === 0) return null;
             return (
-              <div className="flex items-start gap-2 border border-amber-500 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-2 text-xs text-amber-700 dark:text-amber-300">
+              <div className="flex items-start gap-2 border border-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 text-xs text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                 <span>
                   {invalidPts.length} ponto(s) fora da faixa UTM esperada (X: 100.000-900.000, Y: 1.000.000-10.000.000).

@@ -100,7 +100,7 @@ export function ProductionChartWidget({
     const completionRate = dataPoint.planned > 0 ? ((dataPoint.actual / dataPoint.planned) * 100).toFixed(1) : 0;
     
     return (
-      <div className="bg-popover border rounded-lg p-3 shadow-lg max-w-xs">
+      <div className="bg-popover border p-3 shadow-lg max-w-xs">
         <p className="font-medium mb-2">{dataPoint.dayName}, {dataPoint.dateFormatted}</p>
         <div className="space-y-1 text-sm">
           <p className="text-blue-500">Planejado Total: {dataPoint.planned.toLocaleString('pt-BR')}</p>
@@ -115,7 +115,7 @@ export function ProductionChartWidget({
                 return (
                   <div key={service} className="flex items-center gap-2">
                     <div 
-                      className="w-2 h-2 rounded-full" 
+                      className="w-2 h-2" 
                       style={{ backgroundColor: serviceColorMap[service] }}
                     />
                     <span className="text-xs truncate flex-1">{service}:</span>

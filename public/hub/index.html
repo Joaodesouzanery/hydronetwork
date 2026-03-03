@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ConstruData - Plataforma de Inteligência</title>
+    <meta name="description" content="Plataforma de inteligência para engenharia, saneamento e infraestrutura. Dashboard, mapa interativo, licitações, alertas e indicadores do setor." />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data: blob:; connect-src 'self' https://basemaps.cartocdn.com https://raw.githubusercontent.com https://pncp.gov.br https://*.supabase.co https://saneamentobasico.com.br https://tratamentodeagua.com.br https://cbic.org.br https://www.confea.org.br https://tratabrasil.org.br https://agenciabrasil.ebc.com.br https://abes-dn.org.br https://oeco.org.br https://revistaadnormas.com.br https://sindusconsp.com.br https://canalmeioambiente.com.br https://engenharia360.com https://www.aecweb.com.br https://api.portaldatransparencia.gov.br https://www.in.gov.br https://portal.tcu.gov.br; worker-src 'self' blob:; frame-ancestors 'none';" />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <style>
+      #hub-freshness-banner {
+        display: none;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 9999;
+        padding: 10px 20px;
+        font-family: Inter, sans-serif;
+        font-size: 13px;
+        text-align: center;
+        backdrop-filter: blur(8px);
+        transition: opacity 0.3s;
+      }
+      #hub-freshness-banner.stale {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        background: rgba(245, 158, 11, 0.15);
+        border-top: 1px solid rgba(245, 158, 11, 0.3);
+        color: #fbbf24;
+      }
+      #hub-freshness-banner.placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        background: rgba(239, 68, 68, 0.15);
+        border-top: 1px solid rgba(239, 68, 68, 0.3);
+        color: #fca5a5;
+      }
+      #hub-freshness-banner.fresh {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        background: rgba(34, 197, 94, 0.1);
+        border-top: 1px solid rgba(34, 197, 94, 0.2);
+        color: #86efac;
+      }
+      #hub-freshness-banner .close-btn {
+        cursor: pointer;
+        margin-left: 12px;
+        opacity: 0.7;
+        font-size: 16px;
+      }
+      #hub-freshness-banner .close-btn:hover { opacity: 1; }
+    </style>
+    <script type="module" crossorigin src="./assets/index-BHbm8DCN.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Betm05b8.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="hub-freshness-banner">
+      <span id="hub-freshness-icon"></span>
+      <span id="hub-freshness-text"></span>
+      <span class="close-btn" onclick="this.parentElement.style.display='none'">&times;</span>
+    </div>
+    <noscript>
+      <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Inter,sans-serif;text-align:center;padding:2rem;">
+        <div>
+          <h1 style="font-size:2rem;font-weight:800;">Hub ConstruData</h1>
+          <p style="color:#64748b;margin-top:0.5rem;">Ative o JavaScript no seu navegador para usar a plataforma.</p>
+        </div>
+      </div>
+    </noscript>
+    <script>
+      (function checkDataFreshness() {
+        var banner = document.getElementById('hub-freshness-banner');
+        var icon = document.getElementById('hub-freshness-icon');
+        var text = document.getElementById('hub-freshness-text');
+
+        // Check noticias.json for _meta
+        fetch('./noticias.json')
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (!data._meta) {
+              // Old format without metadata - unknown freshness
+              return;
+            }
+
+            var meta = data._meta;
+            var isPlaceholder = meta.fonte_dados === 'placeholder';
+            var geradoEm = new Date(meta.gerado_em);
+            var agora = new Date();
+            var diasAtras = Math.floor((agora - geradoEm) / (1000 * 60 * 60 * 24));
+
+            if (isPlaceholder) {
+              banner.className = 'placeholder';
+              icon.textContent = '\u26A0\uFE0F';
+              text.innerHTML = '<strong>Dados ilustrativos</strong> \u2014 Execute <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;">npm run hub:coletar</code> para buscar dados reais de RSS e PNCP.';
+            } else if (diasAtras > 7) {
+              banner.className = 'stale';
+              icon.textContent = '\u23F0';
+              text.innerHTML = '<strong>Dados de ' + diasAtras + ' dias atr\u00E1s</strong> \u2014 Execute <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;">npm run hub:coletar</code> para atualizar.';
+            } else if (diasAtras <= 7) {
+              banner.className = 'fresh';
+              icon.textContent = '\u2705';
+              text.innerHTML = '<strong>Dados atualizados</strong> \u2014 \u00DAltima coleta: ' + geradoEm.toLocaleDateString('pt-BR') + ' (' + meta.total + ' itens de fontes reais)';
+              // Auto-hide after 5 seconds if fresh
+              setTimeout(function() { banner.style.display = 'none'; }, 5000);
+            }
+          })
+          .catch(function() {
+            // Silently fail - don't break the UI
+          });
+      })();
+    </script>
+  </body>
+</html>

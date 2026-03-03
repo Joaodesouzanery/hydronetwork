@@ -47,7 +47,7 @@ const ControleDeObra = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-screen bg-background">
       <div className="container px-4 py-12 mx-auto max-w-6xl">
         <Button
           variant="ghost"
@@ -61,10 +61,10 @@ const ControleDeObra = () => {
         <div className="space-y-12">
           {/* Hero Section */}
           <div className="text-center space-y-6">
-            <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mx-auto">
+            <div className="w-20 h-20 bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mx-auto">
               <Building2 className="w-10 h-10" />
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold">Controle de Obra</h1>
+            <h1 className="text-4xl md:text-5xl font-bold font-mono">Controle de Obra</h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
               Tenha visibilidade total de todas as suas obras em um único lugar. Dashboard, alertas, RDO e relatórios integrados para uma gestão profissional.
             </p>
@@ -75,20 +75,20 @@ const ControleDeObra = () => {
             {features.map((feature, index) => (
               <div 
                 key={index}
-                className="p-6 rounded-xl border bg-card hover:shadow-lg transition-all duration-300 hover:border-primary/30"
+                className="p-6 border bg-card hover:border-foreground/20 transition-all duration-300 hover:border-primary/30"
               >
-                <div className="w-12 h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-4">
+                <div className="w-12 h-12 rounded-none bg-primary/10 text-primary flex items-center justify-center mb-4">
                   {feature.icon}
                 </div>
-                <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+                <h3 className="text-lg font-semibold font-mono mb-2">{feature.title}</h3>
                 <p className="text-muted-foreground text-sm">{feature.description}</p>
               </div>
             ))}
           </div>
 
           {/* Benefits Section */}
-          <div className="bg-card rounded-xl border p-8 md:p-12">
-            <h2 className="text-2xl font-bold mb-8 text-center">Benefícios para sua Gestão</h2>
+          <div className="bg-card border p-8 md:p-12">
+            <h2 className="text-2xl font-bold font-mono mb-8 text-center">Benefícios para sua Gestão</h2>
             <div className="grid md:grid-cols-2 gap-4">
               {benefits.map((benefit, index) => (
                 <div key={index} className="flex items-start gap-3">
@@ -101,7 +101,7 @@ const ControleDeObra = () => {
 
           {/* How it works */}
           <div className="space-y-8">
-            <h2 className="text-2xl font-bold text-center">Como Funciona</h2>
+            <h2 className="text-2xl font-bold font-mono text-center">Como Funciona</h2>
             <div className="grid md:grid-cols-4 gap-6">
               {[
                 { step: "1", title: "Cadastre Obras", desc: "Adicione seus projetos com informações básicas" },
@@ -110,7 +110,7 @@ const ControleDeObra = () => {
                 { step: "4", title: "Acompanhe em Tempo Real", desc: "Veja tudo no dashboard centralizado" }
               ].map((item, index) => (
                 <div key={index} className="text-center space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xl font-bold mx-auto">
+                  <div className="w-12 h-12 bg-primary text-primary-foreground flex items-center justify-center text-xl font-bold mx-auto">
                     {item.step}
                   </div>
                   <h3 className="font-semibold">{item.title}</h3>

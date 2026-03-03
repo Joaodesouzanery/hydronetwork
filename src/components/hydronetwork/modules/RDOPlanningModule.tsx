@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Download, BarChart3, Calendar, AlertTriangle, TrendingUp, FileText } from "lucide-react";
+import { Download, BarChart3, Calendar, AlertTriangle, TrendingUp, FileText, CheckCircle2 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line
@@ -170,9 +170,9 @@ export const RDOPlanningModule = ({ pontos, trechos, rdos, scheduleResult }: RDO
       {/* Navigation */}
       <div className="flex gap-2 flex-wrap">
         {[
-          { key: "dashboard", label: "📊 Dashboard Integrado" },
-          { key: "comparison", label: "📈 Curva S Comparativa" },
-          { key: "delays", label: "⚠️ Análise de Atrasos" },
+          { key: "dashboard", label: <><BarChart3 className="h-4 w-4 inline-block mr-1" /> Dashboard Integrado</> },
+          { key: "comparison", label: <><TrendingUp className="h-4 w-4 inline-block mr-1" /> Curva S Comparativa</> },
+          { key: "delays", label: <><AlertTriangle className="h-4 w-4 inline-block mr-1" /> Análise de Atrasos</> },
         ].map(({ key, label }) => (
           <Button key={key} variant={view === key ? "default" : "outline"} size="sm" onClick={() => setView(key as any)}>{label}</Button>
         ))}
@@ -217,8 +217,8 @@ export const RDOPlanningModule = ({ pontos, trechos, rdos, scheduleResult }: RDO
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { icon: "📏", label: "Planejado", value: `${fmt(totalPlanned, 1)} m`, color: "text-blue-600" },
-              { icon: "✅", label: "Executado", value: `${fmt(totalExecuted, 1)} m`, color: "text-green-600" },
-              { icon: "📊", label: "Progresso", value: `${fmt(progressPercent)}%`, color: "text-purple-600" },
+              { icon: <CheckCircle2 className="h-6 w-6 inline-block" />, label: "Executado", value: `${fmt(totalExecuted, 1)} m`, color: "text-green-600" },
+              { icon: <BarChart3 className="h-6 w-6 inline-block" />, label: "Progresso", value: `${fmt(progressPercent)}%`, color: "text-purple-600" },
               { icon: "⏱️", label: "Prod. Média", value: `${fmt(avgDailyProduction, 1)} m/dia`, color: "text-orange-600" },
             ].map((c, i) => (
               <Card key={i}><CardContent className="pt-4 text-center">
@@ -289,7 +289,7 @@ export const RDOPlanningModule = ({ pontos, trechos, rdos, scheduleResult }: RDO
       {view === "comparison" && (
         <Card>
           <CardHeader>
-            <CardTitle>📈 Curva S — Planejado vs Executado</CardTitle>
+            <CardTitle><TrendingUp className="h-4 w-4 inline-block mr-1" /> Curva S — Planejado vs Executado</CardTitle>
             <CardDescription>Comparação entre progresso planejado e execução real</CardDescription>
           </CardHeader>
           <CardContent>
@@ -319,21 +319,21 @@ export const RDOPlanningModule = ({ pontos, trechos, rdos, scheduleResult }: RDO
             <CardHeader><CardTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5" /> Análise de Atrasos</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-lg bg-muted/50 text-center">
+                <div className="p-4 bg-muted/50 text-center">
                   <div className="text-sm text-muted-foreground">Produtividade Necessária</div>
                   <div className="text-2xl font-bold text-blue-600">
                     {plannedDays > 0 ? fmt(totalPlanned / plannedDays, 1) : "N/A"} m/dia
                   </div>
                   <div className="text-xs text-muted-foreground">Para cumprir o prazo</div>
                 </div>
-                <div className="p-4 rounded-lg bg-muted/50 text-center">
+                <div className="p-4 bg-muted/50 text-center">
                   <div className="text-sm text-muted-foreground">Produtividade Real</div>
                   <div className={`text-2xl font-bold ${avgDailyProduction >= (totalPlanned / (plannedDays || 1)) ? "text-green-600" : "text-red-600"}`}>
                     {fmt(avgDailyProduction, 1)} m/dia
                   </div>
                   <div className="text-xs text-muted-foreground">Média dos RDOs</div>
                 </div>
-                <div className="p-4 rounded-lg bg-muted/50 text-center">
+                <div className="p-4 bg-muted/50 text-center">
                   <div className="text-sm text-muted-foreground">Restante</div>
                   <div className="text-2xl font-bold text-orange-600">{fmt(totalPlanned - totalExecuted, 1)} m</div>
                   <div className="text-xs text-muted-foreground">A executar</div>
@@ -346,7 +346,7 @@ export const RDOPlanningModule = ({ pontos, trechos, rdos, scheduleResult }: RDO
                     <TrendingUp className={`h-8 w-8 ${delayDays > 5 ? "text-red-600" : delayDays > 0 ? "text-orange-600" : "text-green-600"}`} />
                     <div>
                       <div className="font-bold text-lg">
-                        {delayDays > 5 ? "⚠️ Atraso Crítico" : delayDays > 0 ? "⏰ Atenção: Atraso Detectado" : "✅ Obra no Prazo"}
+                        {delayDays > 5 ? <><AlertTriangle className="h-4 w-4 inline-block mr-1" /> Atraso Crítico</> : delayDays > 0 ? <><AlertTriangle className="h-4 w-4 inline-block mr-1" /> Atenção: Atraso Detectado</> : <><CheckCircle2 className="h-4 w-4 inline-block mr-1" /> Obra no Prazo</>}
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {delayDays > 0

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Upload, FileJson, FileSpreadsheet, FileText, Loader2, CheckCircle2, AlertCircle, Archive } from "lucide-react";
+import { Upload, FileJson, FileSpreadsheet, FileText, Loader2, CheckCircle2, AlertCircle, Archive, Building2, MapPin, Users, AlertTriangle, Thermometer } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { Progress } from "@/components/ui/progress";
@@ -727,7 +727,7 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
   const renderUpload = () => (
     <div className="space-y-4">
       <div
-        className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
+        className="border-2 border-dashed p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
         onClick={() => fileInputRef.current?.click()}
       >
         <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
@@ -823,7 +823,7 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
               <div>
                 <div className="font-medium text-sm">{rdo.date}</div>
                 <div className="text-xs text-muted-foreground">{rdo.location} — {rdo.front}</div>
-                {rdo.sourceFile && <div className="text-xs text-muted-foreground/60">📄 {rdo.sourceFile}</div>}
+                {rdo.sourceFile && <div className="text-xs text-muted-foreground/60"><FileText className="h-3 w-3 inline-block mr-0.5" /> {rdo.sourceFile}</div>}
               </div>
               <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
                 {rdo.services.length} serviço(s)
@@ -831,12 +831,12 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
             </div>
             {/* Extra fields summary */}
             <div className="mt-1 flex flex-wrap gap-1">
-              {rdo.terrainCondition && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">🏗 Terreno</span>}
-              {rdo.gpsLocation && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">📍 GPS</span>}
-              {rdo.visits && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">👥 Visitas</span>}
-              {rdo.occurrences && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">⚠️ Ocorrências</span>}
-              {rdo.observations && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">📝 Obs</span>}
-              {rdo.temperature && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded">🌡 {rdo.temperature}°C</span>}
+              {rdo.terrainCondition && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded"><Building2 className="h-2.5 w-2.5 inline-block mr-0.5" /> Terreno</span>}
+              {rdo.gpsLocation && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded"><MapPin className="h-2.5 w-2.5 inline-block mr-0.5" /> GPS</span>}
+              {rdo.visits && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded"><Users className="h-2.5 w-2.5 inline-block mr-0.5" /> Visitas</span>}
+              {rdo.occurrences && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded"><AlertTriangle className="h-2.5 w-2.5 inline-block mr-0.5" /> Ocorrências</span>}
+              {rdo.observations && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded"><FileText className="h-2.5 w-2.5 inline-block mr-0.5" /> Obs</span>}
+              {rdo.temperature && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded"><Thermometer className="h-2.5 w-2.5 inline-block mr-0.5" /> {rdo.temperature}°C</span>}
             </div>
             {rdo.services.length > 0 && (
               <div className="mt-2 space-y-1">

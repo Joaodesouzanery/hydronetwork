@@ -143,7 +143,7 @@ export const PointClassificationPanel = ({
 
           {/* Quick classify all */}
           {unclassifiedCount > 0 && (
-            <div className="flex items-center gap-2 mb-3 bg-muted/50 rounded-lg p-2">
+            <div className="flex items-center gap-2 mb-3 bg-muted/50 p-2">
               <span className="text-xs text-muted-foreground">Classificar todos sem tipo como:</span>
               <Select onValueChange={classifyAll}>
                 <SelectTrigger className="h-7 w-40 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>

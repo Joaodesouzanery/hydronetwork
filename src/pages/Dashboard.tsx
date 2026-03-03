@@ -10,6 +10,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SurveyNotification } from "@/components/shared/SurveyNotification";
+import { LogoText } from "@/components/shared/Logo";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -31,9 +32,7 @@ const Dashboard = () => {
       }
       
       setUser(session.user);
-      await loadProjects();
-      await loadProductionStats();
-      await loadRecentActivities();
+      await Promise.all([loadProjects(), loadProductionStats(), loadRecentActivities()]);
       setIsLoading(false);
     };
 
@@ -244,9 +243,9 @@ const Dashboard = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
-          <Building2 className="w-12 h-12 mx-auto text-primary animate-pulse mb-4" />
+          <img src="/logo.svg" alt="ConstruData" className="h-10 mx-auto animate-pulse mb-4" />
           <p className="text-muted-foreground">Carregando...</p>
         </div>
       </div>
@@ -255,22 +254,22 @@ const Dashboard = () => {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
-        
+
         <div className="flex-1 flex flex-col">
           {/* Header */}
-          <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-            <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <header className="border-b border-border bg-background/90-md sticky top-0 z-10">
+            <div className="container mx-auto px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <SidebarTrigger />
-                <div className="flex items-center gap-2 text-primary">
-                  <Building2 className="w-8 h-8" />
-                  <span className="text-2xl font-bold">ConstruData</span>
+                <div className="flex items-center gap-2">
+                  <img src="/logo.svg" alt="ConstruData" className="h-8" />
+                  <LogoText className="text-xl" />
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <span className="text-sm text-muted-foreground hidden sm:inline">
+                <span className="text-sm font-mono text-muted-foreground hidden sm:inline">
                   {user?.user_metadata?.name || user?.email}
                 </span>
                 <Button variant="ghost" size="icon" onClick={() => navigate('/settings')}>
@@ -289,8 +288,8 @@ const Dashboard = () => {
         <SurveyNotification />
 
         <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2">Bem-vindo ao ConstruData</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold font-mono mb-2">Bem-vindo ao CONSTRUDATA</h1>
+          <p className="text-sm sm:text-base text-muted-foreground font-mono">
             Gerencie suas obras com eficiência e precisão
           </p>
         </div>
@@ -310,8 +309,8 @@ const Dashboard = () => {
             {/* Dashboard 360º Section */}
             <div id="dashboard-360" className="space-y-3 sm:space-y-4 scroll-mt-20">
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="h-6 sm:h-8 w-1 bg-gradient-to-b from-gradient-start to-gradient-end rounded-full" />
-                <h2 className="text-lg sm:text-xl md:text-2xl font-bold">Dashboard 360º</h2>
+                <div className="h-6 sm:h-8 w-1 bg-gradient-to-b from-gradient-start to-gradient-end" />
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold font-mono">Dashboard 360º</h2>
               </div>
               <p className="text-xs sm:text-sm text-muted-foreground ml-4 sm:ml-7">
                 Visão completa dos seus projetos em tempo real
@@ -337,16 +336,16 @@ const Dashboard = () => {
                 </Card>
                 <Card className="border-accent/30 p-3 sm:p-4">
                   <p className="text-xs sm:text-sm text-muted-foreground mb-1">Status</p>
-                  <div className="text-2xl sm:text-3xl font-bold text-green-600">
+                  <div className="text-2xl sm:text-3xl font-bold text-success">
                     Ótimo
                   </div>
                   <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
                     Operacional
                   </p>
                 </Card>
-                <Card className="border-amber-500/30 p-3 sm:p-4">
+                <Card className="border-warning/30 p-3 sm:p-4">
                   <p className="text-xs sm:text-sm text-muted-foreground mb-1">Alertas</p>
-                  <div className="text-2xl sm:text-3xl font-bold text-amber-600">
+                  <div className="text-2xl sm:text-3xl font-bold text-warning">
                     0
                   </div>
                   <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
@@ -358,9 +357,9 @@ const Dashboard = () => {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-          <Card className="hover:shadow-card transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/projects')}>
+          <Card className="hover:border-foreground/30 transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/projects')}>
             <CardHeader className="p-3 sm:p-4 md:p-6">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-primary-foreground mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-primary flex items-center justify-center text-primary-foreground mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
                 <Building2 className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </div>
               <CardTitle className="text-sm sm:text-base md:text-lg">Projetos</CardTitle>
@@ -370,9 +369,9 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card className="hover:shadow-card transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/rdo-new')}>
+          <Card className="hover:border-foreground/30 transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/rdo-new')}>
             <CardHeader className="p-3 sm:p-4 md:p-6">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center text-accent-foreground mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-accent flex items-center justify-center text-accent-foreground mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
                 <Plus className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </div>
               <CardTitle className="text-sm sm:text-base md:text-lg">Novo RDO</CardTitle>
@@ -382,9 +381,9 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card className="hover:shadow-card transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/rdo-history')}>
+          <Card className="hover:border-foreground/30 transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/rdo-history')}>
             <CardHeader className="p-3 sm:p-4 md:p-6">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br from-purple-500 to-purple-400 flex items-center justify-center text-white mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-purple-500 flex items-center justify-center text-white mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
                 <History className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </div>
               <CardTitle className="text-sm sm:text-base md:text-lg">Histórico RDO</CardTitle>
@@ -394,9 +393,9 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card className="hover:shadow-card transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/rdo-photos')}>
+          <Card className="hover:border-foreground/30 transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/rdo-photos')}>
             <CardHeader className="p-3 sm:p-4 md:p-6">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br from-pink-500 to-pink-400 flex items-center justify-center text-white mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-pink-500 flex items-center justify-center text-white mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
                 <Image className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </div>
               <CardTitle className="text-sm sm:text-base md:text-lg">Fotos</CardTitle>
@@ -406,9 +405,9 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card className="hover:shadow-card transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/production-control')}>
+          <Card className="hover:border-foreground/30 transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/production-control')}>
             <CardHeader className="p-3 sm:p-4 md:p-6">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br from-secondary to-secondary/70 flex items-center justify-center text-secondary-foreground mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-secondary flex items-center justify-center text-secondary-foreground mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
                 <Target className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </div>
               <CardTitle className="text-sm sm:text-base md:text-lg">Produção</CardTitle>
@@ -418,9 +417,9 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card className="hover:shadow-card transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/dashboard-360')}>
+          <Card className="hover:border-foreground/30 transition-all duration-300 border-primary/20 hover:border-primary/50 cursor-pointer group active:scale-[0.98]" onClick={() => navigate('/dashboard-360')}>
             <CardHeader className="p-3 sm:p-4 md:p-6">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-400 flex items-center justify-center text-white mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-cyan-500 flex items-center justify-center text-white mb-2 sm:mb-3 md:mb-4 group-hover:scale-110 transition-transform">
                 <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </div>
               <CardTitle className="text-sm sm:text-base md:text-lg">360º</CardTitle>
@@ -471,8 +470,8 @@ const Dashboard = () => {
                     </CardHeader>
                     <CardContent>
                       <div className={`text-2xl font-bold flex items-center gap-2 ${
-                        productionStats.completionRate >= 100 ? 'text-green-600' : 
-                        productionStats.completionRate >= 80 ? 'text-yellow-600' : 'text-red-600'
+                        productionStats.completionRate >= 100 ? 'text-success' :
+                        productionStats.completionRate >= 80 ? 'text-warning' : 'text-destructive'
                       }`}>
                         {productionStats.completionRate}%
                         <TrendingUp className="w-5 h-5" />
@@ -491,25 +490,25 @@ const Dashboard = () => {
                       <div className="flex items-center gap-2">
                         {productionStats.completionRate >= 90 ? (
                           <>
-                            <Target className="w-8 h-8 text-green-600" />
+                            <Target className="w-8 h-8 text-success" />
                             <div>
-                              <p className="font-semibold text-green-600">Excelente</p>
+                              <p className="font-semibold text-success">Excelente</p>
                               <p className="text-xs text-muted-foreground">Acima da meta</p>
                             </div>
                           </>
                         ) : productionStats.completionRate >= 70 ? (
                           <>
-                            <AlertCircle className="w-8 h-8 text-yellow-600" />
+                            <AlertCircle className="w-8 h-8 text-warning" />
                             <div>
-                              <p className="font-semibold text-yellow-600">Atenção</p>
+                              <p className="font-semibold text-warning">Atenção</p>
                               <p className="text-xs text-muted-foreground">Próximo da meta</p>
                             </div>
                           </>
                         ) : (
                           <>
-                            <AlertCircle className="w-8 h-8 text-red-600" />
+                            <AlertCircle className="w-8 h-8 text-destructive" />
                             <div>
-                              <p className="font-semibold text-red-600">Crítico</p>
+                              <p className="font-semibold text-destructive">Crítico</p>
                               <p className="text-xs text-muted-foreground">Abaixo da meta</p>
                             </div>
                           </>
@@ -692,7 +691,7 @@ const Dashboard = () => {
                   const Icon = activity.icon;
                   return (
                     <div key={index} className="flex items-start gap-3 pb-3 border-b last:border-0">
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <div className="w-8 h-8 bg-primary/10 flex items-center justify-center flex-shrink-0">
                         <Icon className="w-4 h-4 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">

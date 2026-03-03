@@ -2,7 +2,7 @@
  * BDI Module — Benefícios e Despesas Indiretas
  * Complete contract management, BDI composition, viability analysis
  */
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,8 @@ import { toast } from "sonner";
 import {
   Calculator, DollarSign, Plus, Trash2, Download, Upload,
   FileText, BarChart3, Users, Wrench, TrendingUp, CheckCircle,
-  AlertTriangle, XCircle, Copy, Printer, Info
+  AlertTriangle, XCircle, Copy, Printer, Info, Target, ClipboardList,
+  Tag, CheckCircle2
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -25,6 +26,7 @@ import {
   PieChart, Pie, Cell, ReferenceLine, ComposedChart, Line
 } from "recharts";
 import * as XLSX from "xlsx";
+import { supabase } from "@/lib/supabase";
 import {
   TipoContrato, StatusContrato, CargoEquipe, EquipamentoContrato,
   ComposicaoBDI, ContratoBDI, AnaliseViabilidade, CenarioBDI,
@@ -77,6 +79,35 @@ export const BdiModule = () => {
   const [contratos, setContratos] = useState<ContratoBDI[]>(() => {
     try { return JSON.parse(localStorage.getItem("contratos_bdi") || "[]"); } catch { return []; }
   });
+
+  // Sync: load from Supabase on mount, merge with localStorage
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.id) return;
+        const userId = session.user.id;
+        const { data, error } = await (supabase as any)
+          .from("hydro_bdi_contracts")
+          .select("*")
+          .eq("user_id", userId);
+        if (error || !data) return;
+        const localContratos: ContratoBDI[] = (() => {
+          try { return JSON.parse(localStorage.getItem("contratos_bdi") || "[]"); } catch { return []; }
+        })();
+        const localIds = new Set(localContratos.map((c: ContratoBDI) => c.id));
+        const cloudOnly = (data as any[])
+          .filter(row => !localIds.has(row.id))
+          .map(row => row.contract_data as ContratoBDI)
+          .filter(Boolean);
+        if (cloudOnly.length > 0) {
+          const merged = [...localContratos, ...cloudOnly];
+          setContratos(merged);
+          localStorage.setItem("contratos_bdi", JSON.stringify(merged));
+        }
+      } catch { /* offline — use localStorage only */ }
+    })();
+  }, []);
 
   const [activeTab, setActiveTab] = useState("contrato");
 
@@ -153,7 +184,7 @@ export const BdiModule = () => {
     toast.success("Demo carregado: Itapetininga — R$ 112M");
   };
 
-  const saveContrato = () => {
+  const saveContrato = async () => {
     if (!nome) { toast.error("Preencha o nome do contrato"); return; }
     const contrato: ContratoBDI = {
       id: genId(), nome, contratante, tipoContrato, numeroEdital, dataInicio, dataTermino,
@@ -166,6 +197,31 @@ export const BdiModule = () => {
     setContratos(updated);
     localStorage.setItem("contratos_bdi", JSON.stringify(updated));
     toast.success("Contrato salvo!");
+    // Sync to Supabase
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        await (supabase as any).from("hydro_bdi_contracts").upsert({
+          id: contrato.id,
+          user_id: session.user.id,
+          nome: contrato.nome,
+          contratante: contrato.contratante,
+          tipo_contrato: contrato.tipoContrato,
+          numero_edital: contrato.numeroEdital,
+          status: contrato.status,
+          municipio: contrato.municipio,
+          estado: contrato.estado,
+          data_inicio: contrato.dataInicio,
+          data_termino: contrato.dataTermino,
+          duracao_meses: contrato.duracaoMeses,
+          custo_direto_total: custoDiretoTotal,
+          bdi_percentual: bdiPercentual,
+          preco_venda: precoVenda,
+          valor_edital: contrato.valorEdital,
+          contract_data: contrato,
+        }, { onConflict: "id" });
+      }
+    } catch { /* offline — saved to localStorage */ }
   };
 
   const deleteContrato = (id: string) => {
@@ -173,6 +229,8 @@ export const BdiModule = () => {
     setContratos(updated);
     localStorage.setItem("contratos_bdi", JSON.stringify(updated));
     toast.success("Contrato excluído");
+    // Sync deletion to Supabase
+    (supabase as any).from("hydro_bdi_contracts").delete().eq("id", id).then(() => {}).catch(() => {});
   };
 
   const loadContrato = (c: ContratoBDI) => {
@@ -278,7 +336,7 @@ export const BdiModule = () => {
         </CardHeader>
         <CardContent>
           <div className="flex gap-2 flex-wrap">
-            <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={loadDemo}>🎯 Carregar Demo</Button>
+            <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={loadDemo}><Target className="h-4 w-4 inline-block mr-1" /> Carregar Demo</Button>
             <Button variant="outline" onClick={saveContrato}><FileText className="h-4 w-4 mr-1" /> Salvar Contrato</Button>
             <Button variant="outline" onClick={exportExcel} className="text-green-700"><Download className="h-4 w-4 mr-1" /> Excel</Button>
             <Button variant="outline" onClick={exportCSV} className="text-orange-700"><Download className="h-4 w-4 mr-1" /> CSV</Button>
@@ -290,14 +348,14 @@ export const BdiModule = () => {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="flex flex-wrap h-auto gap-1">
-          <TabsTrigger value="contrato">📋 Contrato</TabsTrigger>
-          <TabsTrigger value="equipes">👷 Equipes</TabsTrigger>
-          <TabsTrigger value="orcamento">💰 Orçamento</TabsTrigger>
-          <TabsTrigger value="bdi">📊 BDI</TabsTrigger>
-          <TabsTrigger value="venda">🏷️ Preço de Venda</TabsTrigger>
-          <TabsTrigger value="viabilidade">✅ Viabilidade</TabsTrigger>
-          <TabsTrigger value="cenarios">🔮 Cenários</TabsTrigger>
-          <TabsTrigger value="historico">📁 Histórico</TabsTrigger>
+          <TabsTrigger value="contrato"><ClipboardList className="h-4 w-4 inline-block mr-1" /> Contrato</TabsTrigger>
+          <TabsTrigger value="equipes"><Users className="h-4 w-4 inline-block mr-1" /> Equipes</TabsTrigger>
+          <TabsTrigger value="orcamento"><DollarSign className="h-4 w-4 inline-block mr-1" /> Orçamento</TabsTrigger>
+          <TabsTrigger value="bdi"><BarChart3 className="h-4 w-4 inline-block mr-1" /> BDI</TabsTrigger>
+          <TabsTrigger value="venda"><Tag className="h-4 w-4 inline-block mr-1" /> Preço de Venda</TabsTrigger>
+          <TabsTrigger value="viabilidade"><CheckCircle2 className="h-4 w-4 inline-block mr-1" /> Viabilidade</TabsTrigger>
+          <TabsTrigger value="cenarios"><TrendingUp className="h-4 w-4 inline-block mr-1" /> Cenários</TabsTrigger>
+          <TabsTrigger value="historico"><FileText className="h-4 w-4 inline-block mr-1" /> Histórico</TabsTrigger>
         </TabsList>
 
         {/* TAB 1: Contract Data */}
@@ -402,11 +460,11 @@ export const BdiModule = () => {
                     </TableBody>
                   </Table>
                 </div>
-                <div className="mt-3 flex justify-between items-center bg-muted/50 rounded-lg p-3">
+                <div className="mt-3 flex justify-between items-center bg-muted/50 p-3">
                   <span className="text-sm font-medium">Subtotal Mão de Obra/Mês</span>
                   <span className="text-lg font-bold text-blue-600">{fmtBRL(custoMaoObraMes)}</span>
                 </div>
-                <div className="mt-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 rounded-lg p-3">
+                <div className="mt-3 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 p-3">
                   <p className="text-xs text-yellow-800 dark:text-yellow-200"><Info className="h-3 w-3 inline mr-1" />
                     Os encargos sociais incluem: INSS, FGTS, 13º salário, férias, aviso prévio, multa FGTS, etc. O valor padrão de 73,33% é referência para obras de construção civil (desonerado).</p>
                 </div>
@@ -450,7 +508,7 @@ export const BdiModule = () => {
                     </TableBody>
                   </Table>
                 </div>
-                <div className="mt-3 flex justify-between items-center bg-muted/50 rounded-lg p-3">
+                <div className="mt-3 flex justify-between items-center bg-muted/50 p-3">
                   <span className="text-sm font-medium">Subtotal Equipamentos/Mês</span>
                   <span className="text-lg font-bold text-purple-600">{fmtBRL(custoEquipamentosMes)}</span>
                 </div>
@@ -467,7 +525,7 @@ export const BdiModule = () => {
                   <Label>Usar Orçamento da Plataforma</Label>
                 </div>
                 {usarOrcamento ? (
-                  <div className="bg-muted/50 rounded-lg p-3">
+                  <div className="bg-muted/50 p-3">
                     <p className="text-sm text-muted-foreground">Integração com módulo de Orçamento — em desenvolvimento</p>
                   </div>
                 ) : (

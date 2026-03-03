@@ -106,7 +106,7 @@ export const SpreadsheetUploadDialog = ({ open, onOpenChange }: SpreadsheetUploa
 
         {extractedMaterials.length === 0 ? (
           <div className="space-y-4">
-            <div className="border-2 border-dashed rounded-lg p-8 text-center">
+            <div className="border-2 border-dashed p-8 text-center">
               <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-sm text-muted-foreground mb-4">Faça upload de uma planilha CSV ou Excel</p>
               <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileChange} className="max-w-xs mx-auto" />
@@ -141,7 +141,7 @@ export const SpreadsheetUploadDialog = ({ open, onOpenChange }: SpreadsheetUploa
             </div>
             <div className="space-y-2">
               {extractedMaterials.map((material, index) => (
-                <div key={index} className="border rounded-lg p-4">
+                <div key={index} className="border p-4">
                   <div className="flex justify-between mb-2">
                     <Badge variant={material.confidence >= 95 ? "default" : "secondary"}>
                       {material.confidence >= 95 && <Check className="h-3 w-3 mr-1" />}

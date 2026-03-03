@@ -10,6 +10,9 @@
 
 import { PontoTopografico, parseTopographyCSV, parseTopographyXLSX } from "./reader";
 import { parseDxfToPoints, extractDxfLayers, parseDxfEntities, DxfEntity } from "./dxfReader";
+import { parseIFCSinglePass, ifcToInternal, analyzeIFCContent } from "./ifcReader";
+import { parseSHPBuffer, shpFeaturesToInternal } from "./shpReader";
+import { parseGeoTIFF, tifPointsToInternal } from "./tifReader";
 import {
   SpatialNode, SpatialEdge, SpatialLayer, CRSDefinition, CRS_CATALOG,
   NodeType, LayerDiscipline, LayerGeometryType,
@@ -99,7 +102,7 @@ export function validateUTMCoordinates(x: number, y: number): { valid: boolean; 
 
 export type ImportFileFormat =
   | "INP" | "DXF" | "DWG" | "SHP" | "GeoJSON"
-  | "CSV" | "TXT" | "XLSX" | "IFC" | "SWMM" | "Unknown";
+  | "CSV" | "TXT" | "XLSX" | "IFC" | "SWMM" | "TIF" | "Unknown";
 
 export type ImportModelType = "rede" | "topografia" | "bim" | "generico" | "desenho";
 
@@ -115,7 +118,7 @@ export type ImportMode = "geometric" | "tabular";
  * NETWORK: INP, SWMM → native hydraulic model with JUNCTIONS/PIPES. Self-contained.
  * TABULAR: CSV, TXT, XLSX → only paradigm that uses X/Y field mapping.
  */
-export type FormatParadigm = "bim" | "gis" | "cad" | "network" | "tabular";
+export type FormatParadigm = "bim" | "gis" | "cad" | "network" | "tabular" | "raster";
 
 export function getFormatParadigm(format: ImportFileFormat): FormatParadigm {
   switch (format) {
@@ -123,6 +126,7 @@ export function getFormatParadigm(format: ImportFileFormat): FormatParadigm {
     case "GeoJSON": case "SHP": return "gis";
     case "DXF": case "DWG": return "cad";
     case "INP": case "SWMM": return "network";
+    case "TIF": return "raster";
     case "CSV": case "TXT": case "XLSX": default: return "tabular";
   }
 }
@@ -424,30 +428,18 @@ export function analyzeFileRaw(content: string, format: ImportFileFormat): RawFi
       break;
     }
     case "IFC": {
-      const counts = new Map<string, number>();
-      const regex = /^#\d+=\s*(IFC\w+)\s*\(/gm;
-      let match: RegExpExecArray | null;
-      while ((match = regex.exec(content)) !== null) {
-        const type = match[1].toUpperCase();
-        if (type.includes("PIPE") || type.includes("FLOW") || type.includes("DUCT") ||
-          type.includes("WALL") || type.includes("SLAB") || type.includes("BEAM") ||
-          type.includes("COLUMN") || type.includes("POINT") || type.includes("FITTING") ||
-          type.includes("MEMBER") || type.includes("PLATE") || type.includes("OPENING")) {
-          counts.set(type, (counts.get(type) || 0) + 1);
-        }
-      }
-      // Extract cartesian points for bbox
-      const pointRegex = /IFCCARTESIANPOINT\s*\(\(([^)]+)\)\)/gi;
-      while ((match = pointRegex.exec(content)) !== null) {
-        const coords = match[1].split(",").map(c => parseFloat(c.trim()));
-        if (coords.length >= 2 && !isNaN(coords[0]) && !isNaN(coords[1])) {
-          updateBbox(coords[0], coords[1]);
-          if (result.coordSamples.length < 10) result.coordSamples.push({ x: coords[0], y: coords[1], z: coords[2] });
-        }
-      }
-      result.entityCounts = Array.from(counts.entries()).map(([type, count]) => ({
-        type, count, geometricClass: classifyGeometryType(type),
+      // Use improved single-pass IFC parser
+      const ifcAnalysis = analyzeIFCContent(content);
+      result.entityCounts = ifcAnalysis.entityCounts.map(e => ({
+        type: e.type, count: e.count, geometricClass: classifyGeometryType(e.type),
       }));
+      if (ifcAnalysis.bbox) {
+        updateBbox(ifcAnalysis.bbox.minX, ifcAnalysis.bbox.minY);
+        updateBbox(ifcAnalysis.bbox.maxX, ifcAnalysis.bbox.maxY);
+      }
+      for (const s of ifcAnalysis.coordSamples) {
+        if (result.coordSamples.length < 10) result.coordSamples.push(s);
+      }
       break;
     }
     default: {
@@ -492,6 +484,7 @@ export function detectFileFormat(fileName: string, content?: string): ImportFile
     case "txt": return "TXT";
     case "xlsx": case "xls": return "XLSX";
     case "ifc": return "IFC";
+    case "tif": case "tiff": return "TIF";
     default: {
       if (content && content.includes("[SUBCATCHMENTS]")) return "SWMM";
       return "Unknown";
@@ -1376,6 +1369,50 @@ export async function importFile(
     case "GeoJSON":
       parsed = parseGeoJSONToInternal(content, nf);
       break;
+    case "SHP": {
+      const shpBuffer = await file.arrayBuffer();
+      const shpResult = await parseSHPBuffer(shpBuffer);
+      const shpInternal = shpFeaturesToInternal(shpResult.features);
+      parsed = {
+        nodes: shpInternal.nodes.map(n => ({
+          ...n, tipo: n.tipo as NodeType,
+        })),
+        edges: shpInternal.edges,
+      };
+      break;
+    }
+    case "IFC": {
+      const ifcResult = parseIFCSinglePass(content);
+      const ifcInternal = ifcToInternal(ifcResult);
+      parsed = {
+        nodes: ifcInternal.nodes.map(n => ({
+          ...n, tipo: n.tipo as NodeType,
+        })),
+        edges: ifcInternal.edges,
+      };
+      break;
+    }
+    case "TIF": {
+      const tifBuffer = await file.arrayBuffer();
+      const tifResult = await parseGeoTIFF(tifBuffer, 15000, -9999, true);
+      // Store raw grid for elevation sampling (fillNodeElevations)
+      if (tifResult.grid) {
+        const { setRasterGrid } = await import("./rasterStore");
+        setRasterGrid(tifResult.grid, {
+          width: tifResult.width,
+          height: tifResult.height,
+          noDataValue: tifResult.noDataValue,
+        });
+      }
+      const tifInternal = tifPointsToInternal(tifResult.points);
+      parsed = {
+        nodes: tifInternal.nodes.map(n => ({
+          ...n, tipo: n.tipo as NodeType,
+        })),
+        edges: [],
+      };
+      break;
+    }
     case "CSV":
     case "TXT":
     case "XLSX":
@@ -1394,7 +1431,7 @@ export async function importFile(
       }
       break;
     default:
-      throw new Error(`Formato não suportado: ${format}. Use INP, DXF, GeoJSON, CSV, TXT ou XLSX.`);
+      throw new Error(`Formato não suportado: ${format}. Use INP, DXF, SHP, GeoJSON, IFC, TIF, CSV, TXT ou XLSX.`);
   }
 
   return importToSpatialCore(parsed, options);

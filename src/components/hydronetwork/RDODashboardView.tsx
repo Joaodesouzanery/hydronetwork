@@ -1,7 +1,9 @@
+import { type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Droplets, CloudRain, BarChart3 } from "lucide-react";
 import { DashboardMetrics } from "@/engine/rdo";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend
@@ -75,11 +77,11 @@ export const RDODashboardView = ({ metrics, rdoCount }: RDODashboardViewProps) =
 
       {/* Progress bars by system */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { icon: "💧", label: "Água", data: metrics.aguaProgress, color: "#60a5fa", fallback: { planned: 400, executed: 180, percent: 45 } },
-          { icon: "🚰", label: "Esgoto", data: metrics.esgotoProgress, color: "#22c55e", fallback: { planned: 250, executed: 130, percent: 52 } },
-          { icon: "🌧️", label: "Drenagem", data: metrics.drenagemProgress, color: "#f59e0b", fallback: { planned: 200, executed: 30, percent: 15 } },
-        ].map((sys, i) => {
+        {([
+          { icon: <Droplets className="h-5 w-5 text-blue-400" /> as ReactNode, label: "Água", data: metrics.aguaProgress, color: "#60a5fa", fallback: { planned: 400, executed: 180, percent: 45 } },
+          { icon: <Droplets className="h-5 w-5 text-green-500" /> as ReactNode, label: "Esgoto", data: metrics.esgotoProgress, color: "#22c55e", fallback: { planned: 250, executed: 130, percent: 52 } },
+          { icon: <CloudRain className="h-5 w-5 text-amber-500" /> as ReactNode, label: "Drenagem", data: metrics.drenagemProgress, color: "#f59e0b", fallback: { planned: 200, executed: 30, percent: 15 } },
+        ]).map((sys, i) => {
           const data = sys.data.planned > 0 ? sys.data : sys.fallback;
           return (
             <Card key={i}>
@@ -89,9 +91,9 @@ export const RDODashboardView = ({ metrics, rdoCount }: RDODashboardViewProps) =
                   <span className="font-semibold">{sys.label}</span>
                   <span className="ml-auto text-sm font-bold">{fmt(data.percent)}%</span>
                 </div>
-                <div className="w-full h-3 rounded-full bg-muted overflow-hidden">
+                <div className="w-full h-3 bg-muted overflow-hidden">
                   <div
-                    className="h-full rounded-full transition-all"
+                    className="h-full transition-all"
                     style={{ width: `${Math.min(data.percent, 100)}%`, backgroundColor: sys.color }}
                   />
                 </div>
@@ -133,7 +135,7 @@ export const RDODashboardView = ({ metrics, rdoCount }: RDODashboardViewProps) =
 
         {/* EVM Table */}
         <Card>
-          <CardHeader><CardTitle>📊 EVM - Earned Value Management</CardTitle></CardHeader>
+          <CardHeader><CardTitle><BarChart3 className="h-4 w-4 inline-block mr-1" /> EVM - Earned Value Management</CardTitle></CardHeader>
           <CardContent>
             <Table>
               <TableHeader>

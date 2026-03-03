@@ -206,7 +206,7 @@ export const UnifiedExportDialog = ({ open, onOpenChange }: UnifiedExportDialogP
 
             <div className="space-y-2">
               <Label>Incluir no Relatório</Label>
-              <div className="space-y-2 border rounded-lg p-3">
+              <div className="space-y-2 border p-3">
                 <div className="flex items-center gap-2">
                   <Checkbox checked={includeRDOs} onCheckedChange={(c) => setIncludeRDOs(!!c)} id="inc-rdo" />
                   <Label htmlFor="inc-rdo" className="font-normal cursor-pointer">

@@ -7,8 +7,9 @@
 
 import {
   getSpatialProject, getAllNodes, getAllEdges,
-  getLayersByDiscipline, getAllLayers,
+  getLayersByDiscipline, getLayersByOrigin, getAllLayers,
   SpatialNode, SpatialEdge, SpatialLayer,
+  OriginModule,
 } from "@/core/spatial";
 import { isSimulationLayer } from "@/core/spatial/LayerRegistry";
 
@@ -27,9 +28,13 @@ export interface EPANETInput {
   valves: SpatialEdge[];
 }
 
-export function getDataForEPANET(): EPANETInput {
-  const waterLayers = getLayersByDiscipline("agua");
-  const genericLayers = getLayersByDiscipline("generico");
+export function getDataForEPANET(originFilter?: OriginModule): EPANETInput {
+  let waterLayers = getLayersByDiscipline("agua");
+  let genericLayers = getLayersByDiscipline("generico");
+  if (originFilter) {
+    waterLayers = waterLayers.filter(l => l.originModule === originFilter);
+    genericLayers = genericLayers.filter(l => l.originModule === originFilter);
+  }
   const relevantLayerIds = new Set([...waterLayers, ...genericLayers].map(l => l.id));
 
   const project = getSpatialProject();
@@ -175,4 +180,84 @@ export function calculateQuantities(layers?: SpatialLayer[]): Record<string, num
   }
 
   return quantities;
+}
+
+// ════════════════════════════════════════
+// QWATER INPUT
+// ════════════════════════════════════════
+
+export interface QWaterInput {
+  nodes: SpatialNode[];
+  edges: SpatialEdge[];
+  junctions: SpatialNode[];
+  reservoirs: SpatialNode[];
+  tanks: SpatialNode[];
+  pipes: SpatialEdge[];
+  pumps: SpatialEdge[];
+  valves: SpatialEdge[];
+}
+
+export function getDataForQWater(originFilter?: OriginModule): QWaterInput {
+  const originLayers = getLayersByOrigin("qwater");
+  const disciplineLayers = getLayersByDiscipline("agua");
+  const merged = new Map<string, SpatialLayer>();
+  for (const l of [...originLayers, ...disciplineLayers]) merged.set(l.id, l);
+  let layers = Array.from(merged.values());
+  if (originFilter) {
+    layers = layers.filter(l => l.originModule === originFilter);
+  }
+  const relevantLayerIds = new Set(layers.map(l => l.id));
+
+  const project = getSpatialProject();
+  const nodes = Array.from(project.nodes.values()).filter(n => relevantLayerIds.has(n.layerId));
+  const edges = Array.from(project.edges.values()).filter(e => relevantLayerIds.has(e.layerId));
+
+  return {
+    nodes,
+    edges,
+    junctions: nodes.filter(n => n.tipo === "junction" || n.tipo === "generic"),
+    reservoirs: nodes.filter(n => n.tipo === "reservoir"),
+    tanks: nodes.filter(n => n.tipo === "reservoir" && n.properties?._type === "tank"),
+    pipes: edges.filter(e => !e.properties?._type || e.properties?._type === "pipe"),
+    pumps: edges.filter(e => e.properties?._type === "pump"),
+    valves: edges.filter(e => e.properties?._type === "valve"),
+  };
+}
+
+// ════════════════════════════════════════
+// QESG INPUT
+// ════════════════════════════════════════
+
+export interface QEsgInput {
+  nodes: SpatialNode[];
+  edges: SpatialEdge[];
+  manholes: SpatialNode[];
+  conduits: SpatialEdge[];
+  outfalls: SpatialNode[];
+}
+
+export function getDataForQEsg(originFilter?: OriginModule): QEsgInput {
+  const originLayers = getLayersByOrigin("qesg");
+  const disciplineLayers = getLayersByDiscipline("esgoto");
+  const merged = new Map<string, SpatialLayer>();
+  for (const l of [...originLayers, ...disciplineLayers]) merged.set(l.id, l);
+  let layers = Array.from(merged.values());
+  if (originFilter) {
+    layers = layers.filter(l => l.originModule === originFilter);
+  }
+  const relevantLayerIds = new Set(layers.map(l => l.id));
+
+  const project = getSpatialProject();
+  const nodes = Array.from(project.nodes.values()).filter(n => relevantLayerIds.has(n.layerId));
+  const edges = Array.from(project.edges.values()).filter(e => relevantLayerIds.has(e.layerId));
+
+  const manholeTypes = new Set<string>(["pv", "ci", "tl", "cr", "cp"]);
+
+  return {
+    nodes,
+    edges,
+    manholes: nodes.filter(n => manholeTypes.has(n.tipo)),
+    conduits: edges,
+    outfalls: nodes.filter(n => n.tipo === "outfall"),
+  };
 }

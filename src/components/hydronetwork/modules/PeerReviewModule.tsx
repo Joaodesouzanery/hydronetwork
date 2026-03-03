@@ -227,22 +227,22 @@ export const PeerReviewModule = ({ pontos = [], trechos = [] }: PeerReviewModule
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div className="border-2 border-green-200 bg-white dark:bg-card rounded-xl p-4 text-center">
+            <div className="border-2 border-green-200 bg-white dark:bg-card p-4 text-center">
               <CheckCircle2 className="h-8 w-8 mx-auto mb-1 text-green-600" />
               <div className="text-2xl font-bold text-green-600">{passed}</div>
               <div className="text-xs text-muted-foreground font-medium">APROVADOS</div>
             </div>
-            <div className="border-2 border-yellow-200 bg-white dark:bg-card rounded-xl p-4 text-center">
+            <div className="border-2 border-yellow-200 bg-white dark:bg-card p-4 text-center">
               <AlertTriangle className="h-8 w-8 mx-auto mb-1 text-yellow-600" />
               <div className="text-2xl font-bold text-yellow-600">{warnings}</div>
               <div className="text-xs text-muted-foreground font-medium">ALERTAS</div>
             </div>
-            <div className="border-2 border-red-200 bg-white dark:bg-card rounded-xl p-4 text-center">
+            <div className="border-2 border-red-200 bg-white dark:bg-card p-4 text-center">
               <XCircle className="h-8 w-8 mx-auto mb-1 text-red-600" />
               <div className="text-2xl font-bold text-red-600">{failures}</div>
               <div className="text-xs text-muted-foreground font-medium">REPROVADOS</div>
             </div>
-            <div className="border-2 border-blue-200 bg-white dark:bg-card rounded-xl p-4 text-center">
+            <div className="border-2 border-blue-200 bg-white dark:bg-card p-4 text-center">
               <Shield className="h-8 w-8 mx-auto mb-1 text-blue-600" />
               <div className="text-2xl font-bold text-blue-600">{score}%</div>
               <div className="text-xs text-muted-foreground font-medium">SCORE</div>

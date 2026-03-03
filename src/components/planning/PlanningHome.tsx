@@ -1,8 +1,8 @@
 import { Calculator, Upload, FileText, ArrowRight, FolderOpen, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getProjects, deleteProject, formatCurrency, type ProjectData } from "./planningUtils";
-import { useState } from "react";
+import { getProjects, deleteProject, loadProjectsFromCloud, formatCurrency, type ProjectData } from "./planningUtils";
+import { useState, useEffect } from "react";
 
 interface PlanningHomeProps {
   onNewProject: () => void;
@@ -11,6 +11,14 @@ interface PlanningHomeProps {
 
 export function PlanningHome({ onNewProject, onOpenProject }: PlanningHomeProps) {
   const [projects, setProjects] = useState(getProjects());
+
+  useEffect(() => {
+    loadProjectsFromCloud().then(cloudProjects => {
+      if (cloudProjects.length > 0) {
+        setProjects(cloudProjects);
+      }
+    });
+  }, []);
 
   const handleDelete = (createdAt: string) => {
     deleteProject(createdAt);

@@ -227,7 +227,7 @@ export default function Admin() {
   if (roleLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="animate-spin h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -273,7 +273,7 @@ export default function Admin() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
+              <h1 className="text-3xl font-bold font-mono flex items-center gap-2">
                 <Shield className="h-8 w-8" />
                 Painel Administrativo
               </h1>
@@ -485,7 +485,7 @@ export default function Admin() {
           <TabsContent value="surveys" className="space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-2xl font-bold flex items-center gap-2">
+                <h2 className="text-2xl font-bold font-mono flex items-center gap-2">
                   <BarChart3 className="h-6 w-6" />
                   Pesquisas de Satisfação
                 </h2>

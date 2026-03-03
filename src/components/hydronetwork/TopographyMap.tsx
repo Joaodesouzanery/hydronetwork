@@ -17,13 +17,28 @@ import { CoordinateTransformDialog } from "@/components/hydronetwork/CoordinateT
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+export interface ContourLineData {
+  elevation: number;
+  segments: Array<[number, number][]>;
+}
+
 interface TopographyMapProps {
   pontos: PontoTopografico[];
   trechos: Trecho[];
   onTrechosChange?: (trechos: Trecho[]) => void;
   onClearAll?: () => void;
   onPontosChange?: (pontos: PontoTopografico[]) => void;
+  contourLines?: ContourLineData[];
 }
+
+type TipoRedeManualMap = "agua" | "esgoto" | "drenagem" | "recalque" | "outro";
+const REDE_COLORS: Record<TipoRedeManualMap, string> = {
+  agua: "#60a5fa",
+  esgoto: "#22c55e",
+  drenagem: "#f59e0b",
+  recalque: "#a855f7",
+  outro: "#6b7280",
+};
 
 const STORAGE_KEY = "hydronetwork_trechos";
 
@@ -36,7 +51,7 @@ const TILE_LAYERS: Record<string, { url: string; attribution: string; name: stri
   terrain: { url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", attribution: "© Esri", name: "Ruas" },
 };
 
-export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, onPontosChange }: TopographyMapProps) => {
+export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, onPontosChange, contourLines }: TopographyMapProps) => {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
@@ -52,9 +67,27 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   const [showTransformDialog, setShowTransformDialog] = useState(false);
   const markersRef = useRef<L.CircleMarker[]>([]);
   const polylinesRef = useRef<L.Polyline[]>([]);
+  const contourLayersRef = useRef<L.Polyline[]>([]);
   const [tileKey, setTileKey] = useState("osm");
   const [utmZone, setUtmZone] = useState<string>(String(getGlobalUtmZone() || "auto"));
   const [utmZoneVersion, setUtmZoneVersion] = useState(0);
+
+  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
+
+  // Structure mode state
+  const [structureMode, setStructureMode] = useState(false);
+  const [selectedTrechoIdx, setSelectedTrechoIdx] = useState<number | null>(null);
+  const [editingTrechoName, setEditingTrechoName] = useState("");
+  const [editingTrechoRede, setEditingTrechoRede] = useState<TipoRedeManualMap>("esgoto");
+  const [editingTrechoFrente, setEditingTrechoFrente] = useState("");
+  const [editingTrechoLote, setEditingTrechoLote] = useState("");
+  // Batch selection for structure mode
+  const [batchSelectedTrechos, setBatchSelectedTrechos] = useState<Set<number>>(new Set());
+  const [batchPrefix, setBatchPrefix] = useState("");
+  const [batchRede, setBatchRede] = useState<TipoRedeManualMap>("esgoto");
+  const [batchFrente, setBatchFrente] = useState("");
+  const [batchLote, setBatchLote] = useState("");
+  const [showBatchPanel, setShowBatchPanel] = useState(false);
 
   // Batch CRS detection: analyze ALL points together for consistent conversion
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,11 +138,12 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         if (addNodeMode) { setAddNodeMode(false); toast.info("Modo adicionar ponto desativado"); }
         if (deleteMode) { setDeleteMode(false); setSelectedForDelete(new Set()); setSelectedTrechosForDelete(new Set()); toast.info("Modo exclusão desativado"); }
         if (bulkMoveMode) { setBulkMoveMode(false); setBulkMoveStart(null); toast.info("Modo mover em massa desativado"); }
+        if (structureMode) { setStructureMode(false); setSelectedTrechoIdx(null); toast.info("Modo Estrutura desativado"); }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [drawMode, addNodeMode, deleteMode, bulkMoveMode]);
+  }, [drawMode, addNodeMode, deleteMode, bulkMoveMode, structureMode]);
 
   // UTM zone change handler
   const handleUtmZoneChange = useCallback((value: string) => {
@@ -155,39 +189,21 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         setBulkMoveStart(e.latlng);
         toast.info("Ponto de origem marcado. Agora clique onde os pontos devem estar.");
       } else {
-        // Calculate offset in map coordinates and apply to all pontos
         const startLatLng = bulkMoveStart;
         const endLatLng = e.latlng;
-
-        // For UTM data, we need the delta in UTM coords
-        // We'll use a simple approach: apply delta in lat/lng to get approximate offset
         const deltaLat = endLatLng.lat - startLatLng.lat;
         const deltaLng = endLatLng.lng - startLatLng.lng;
-
-        // Check if data is UTM (large coordinate values) or geographic
         const isUTMData = pontos.length > 0 && (Math.abs(pontos[0].x) > 1000 || Math.abs(pontos[0].y) > 1000);
 
         if (isUTMData) {
-          // For UTM data: convert both clicks to UTM space to get delta
-          // Approximate: 1 degree lat ≈ 111320m, 1 degree lng ≈ 111320 * cos(lat)
           const cosLat = Math.cos(startLatLng.lat * Math.PI / 180);
           const deltaXMeters = deltaLng * 111320 * cosLat;
           const deltaYMeters = deltaLat * 111320;
-
-          const newPontos = pontos.map(p => ({
-            ...p,
-            x: p.x + deltaXMeters,
-            y: p.y + deltaYMeters,
-          }));
+          const newPontos = pontos.map(p => ({ ...p, x: p.x + deltaXMeters, y: p.y + deltaYMeters }));
           onPontosChange(newPontos);
           toast.success(`${pontos.length} pontos movidos: dX=${deltaXMeters.toFixed(1)}m, dY=${deltaYMeters.toFixed(1)}m`);
         } else {
-          // For geographic data, apply lat/lng delta directly
-          const newPontos = pontos.map(p => ({
-            ...p,
-            x: p.x + deltaLng,
-            y: p.y + deltaLat,
-          }));
+          const newPontos = pontos.map(p => ({ ...p, x: p.x + deltaLng, y: p.y + deltaLat }));
           onPontosChange(newPontos);
           toast.success(`${pontos.length} pontos movidos: dLat=${deltaLat.toFixed(6)}, dLng=${deltaLng.toFixed(6)}`);
         }
@@ -209,7 +225,28 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   }, [onPontosChange, onTrechosChange]);
 
   // Handle marker click - draw mode or select mode
-  const handleTrechoClick = useCallback((idx: number) => {
+  const handleTrechoClick = useCallback((idx: number, event?: any) => {
+    if (structureMode) {
+      // Ctrl+click for batch selection
+      const isCtrl = event?.originalEvent?.ctrlKey || event?.originalEvent?.metaKey;
+      if (isCtrl || showBatchPanel) {
+        setBatchSelectedTrechos(prev => {
+          const next = new Set(prev);
+          if (next.has(idx)) next.delete(idx); else next.add(idx);
+          return next;
+        });
+        return;
+      }
+      setSelectedTrechoIdx(idx);
+      const t = trechos[idx];
+      if (t) {
+        setEditingTrechoName(t.nomeTrecho || "");
+        setEditingTrechoRede((t.tipoRedeManual || "esgoto") as TipoRedeManualMap);
+        setEditingTrechoFrente(t.frenteServico || "");
+        setEditingTrechoLote(t.lote || "");
+      }
+      return;
+    }
     if (deleteMode === "trechos") {
       setSelectedTrechosForDelete(prev => {
         const next = new Set(prev);
@@ -217,9 +254,25 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         return next;
       });
     }
-  }, [deleteMode]);
+  }, [deleteMode, structureMode, trechos, showBatchPanel]);
 
   const handleMarkerClick = useCallback((pointId: string) => {
+    if (bulkMoveMode) {
+      if (draggedNodeId === pointId) {
+        // Drop the node
+        setDraggedNodeId(null);
+        toast.success(`Ponto ${pointId} reposicionado.`);
+      } else if (draggedNodeId) {
+        // Already dragging another, drop it and pick this one
+        setDraggedNodeId(pointId);
+        toast.info(`Arrastando ponto ${pointId}...`);
+      } else {
+        // Start dragging
+        setDraggedNodeId(pointId);
+        toast.info(`Arrastando ponto ${pointId}... Clique para soltar.`);
+      }
+      return;
+    }
     if (deleteMode === "nodes") {
       setSelectedForDelete(prev => {
         const next = new Set(prev);
@@ -291,15 +344,17 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       if (drawMode && drawOrigin === p.id) color = "#f97316";
       if (!drawMode && !deleteMode && selectedPoint === p.id) color = "#f59e0b";
       if (deleteMode === "nodes" && selectedForDelete.has(p.id)) color = "#dc2626";
+      if (bulkMoveMode) color = "#06b6d4"; // cyan for bulk move mode
+      if (bulkMoveMode && draggedNodeId === p.id) color = "#f97316"; // orange for dragged node
 
-      const radius = (drawMode || deleteMode) ? 11 : 8;
+      const radius = (drawMode || deleteMode) ? 11 : bulkMoveMode ? 12 : 8;
 
       const marker = L.circleMarker(coords, {
         radius, fillColor: color, color: "#fff", weight: 2, fillOpacity: 0.9,
       }).addTo(map);
 
-      // In draw/delete mode, use tooltips (don't block clicks). Otherwise popups.
-      if (drawMode || deleteMode) {
+      // In draw/delete/bulkMove mode, use tooltips (don't block clicks). Otherwise popups.
+      if (drawMode || deleteMode || bulkMoveMode) {
         marker.bindTooltip(p.id, { permanent: false, direction: "top", offset: [0, -10] });
       } else {
         marker.bindPopup(`
@@ -328,23 +383,39 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       if (!pInicio || !pFim) return;
       const isGravity = t.tipoRede === "Esgoto por Gravidade";
       const isSelectedForDel = deleteMode === "trechos" && selectedTrechosForDelete.has(idx);
+      const isStructureSelected = structureMode && selectedTrechoIdx === idx;
+      const isBatchSelected = structureMode && batchSelectedTrechos.has(idx);
+
+      // Color logic: structure mode uses rede colors, otherwise default
+      let lineColor = isGravity ? "#22c55e" : "#f59e0b";
+      if (isSelectedForDel) lineColor = "#dc2626";
+      else if (structureMode && t.tipoRedeManual) lineColor = REDE_COLORS[t.tipoRedeManual as TipoRedeManualMap] || lineColor;
+      if (isBatchSelected) lineColor = "#c084fc";
+      if (isStructureSelected) lineColor = "#818cf8";
 
       const polyline = L.polyline([getPointCoords(pInicio), getPointCoords(pFim)], {
-        color: isSelectedForDel ? "#dc2626" : isGravity ? "#22c55e" : "#f59e0b",
-        weight: isSelectedForDel ? 6 : 4,
-        opacity: isSelectedForDel ? 1 : 0.8,
+        color: lineColor,
+        weight: isSelectedForDel ? 6 : isStructureSelected ? 6 : isBatchSelected ? 5 : structureMode ? 5 : 4,
+        opacity: isSelectedForDel ? 1 : isStructureSelected ? 1 : isBatchSelected ? 1 : 0.8,
+        dashArray: isBatchSelected ? "8 4" : undefined,
       }).addTo(map);
 
-      polyline.bindTooltip(`${t.idInicio} → ${t.idFim} (${t.comprimento.toFixed(1)}m)`, { sticky: true });
+      const displayName = t.nomeTrecho || `${t.idInicio} → ${t.idFim}`;
+      const redeLabel = t.tipoRedeManual ? ` [${t.tipoRedeManual}]` : "";
+      polyline.bindTooltip(`${displayName}${redeLabel} (${t.comprimento.toFixed(1)}m)`, { sticky: true });
       if (deleteMode !== "trechos") {
         polyline.bindPopup(`
-          <div style="font-family:sans-serif;min-width:180px;">
-            <strong>${t.idInicio} → ${t.idFim}</strong>
+          <div style="font-family:sans-serif;min-width:200px;">
+            <strong>${displayName}</strong>
+            ${t.nomeTrecho ? `<br><span style="font-size:11px;color:#666;">${t.idInicio} → ${t.idFim}</span>` : ""}
             <hr style="margin:4px 0;">
             <div style="font-size:12px;line-height:1.6;">
               <b>Comprimento:</b> ${t.comprimento.toFixed(2)}m<br>
               <b>Declividade:</b> ${(t.declividade * 100).toFixed(2)}%<br>
               <b>Tipo:</b> ${isGravity ? "Gravidade" : "Elevatória"}<br>
+              <b>Rede:</b> ${t.tipoRedeManual || "Nao definida"}<br>
+              ${t.frenteServico ? `<b>Frente:</b> ${t.frenteServico}<br>` : ""}
+              ${t.lote ? `<b>Lote:</b> ${t.lote}<br>` : ""}
               <b>Diâmetro:</b> DN${t.diametroMm}<br>
               <b>Material:</b> ${t.material}
             </div>
@@ -353,13 +424,13 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       }
       polyline.on("click", (e) => {
         L.DomEvent.stopPropagation(e);
-        handleTrechoClick(idx);
+        handleTrechoClick(idx, e);
       });
       polylinesRef.current.push(polyline);
     });
 
-    // Only fitBounds when actual data changes, not selection state
-    const dataSig = `${pontos.map(p => p.id).join(",")}|${trechos.length}`;
+    // Only fitBounds when the set of points changes (added/removed), not when connections change
+    const dataSig = pontos.map(p => p.id).join(",");
     if (bounds.length > 0 && dataSig !== lastDataSigRef.current) {
       lastDataSigRef.current = dataSig;
       try {
@@ -370,7 +441,50 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       setTimeout(() => map.invalidateSize(), 200);
       setTimeout(() => map.invalidateSize(), 500);
     }
-  }, [pontos, trechos, getPointCoords, handleMarkerClick, handleTrechoClick, drawMode, drawOrigin, selectedPoint, deleteMode, selectedForDelete, selectedTrechosForDelete]);
+  }, [pontos, trechos, getPointCoords, handleMarkerClick, handleTrechoClick, drawMode, drawOrigin, selectedPoint, deleteMode, selectedForDelete, selectedTrechosForDelete, bulkMoveMode, draggedNodeId, structureMode, selectedTrechoIdx, batchSelectedTrechos]);
+
+  // Render contour lines
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    contourLayersRef.current.forEach(l => l.remove());
+    contourLayersRef.current = [];
+    if (!contourLines || contourLines.length === 0) return;
+
+    const detectedCRS = pontos.length > 0
+      ? detectBatchCRS(pontos.map(p => ({ x: p.x, y: p.y })))
+      : { type: "local" as const, baseLatLng: [-23.55, -46.63] as [number, number] };
+
+    // Safe min/max that won't stack overflow on large arrays
+    let minElev = Infinity, maxElev = -Infinity;
+    for (const c of contourLines) {
+      if (c.elevation < minElev) minElev = c.elevation;
+      if (c.elevation > maxElev) maxElev = c.elevation;
+    }
+    if (!isFinite(minElev) || !isFinite(maxElev)) return;
+    const range = maxElev - minElev || 1;
+
+    for (const contour of contourLines) {
+      const t = (contour.elevation - minElev) / range;
+      // Color gradient: blue (low) → green (mid) → red (high)
+      const r = Math.round(t < 0.5 ? 0 : (t - 0.5) * 2 * 255);
+      const g = Math.round(t < 0.5 ? t * 2 * 200 : (1 - t) * 2 * 200);
+      const b = Math.round(t < 0.5 ? (1 - t * 2) * 255 : 0);
+      const color = `rgb(${r},${g},${b})`;
+
+      for (const seg of contour.segments) {
+        const latLngs = seg.map(([x, y]) => {
+          const [lat, lng] = getMapCoordinatesWithCRS(x, y, detectedCRS);
+          return [lat, lng] as [number, number];
+        });
+        if (latLngs.length < 2) continue;
+        const line = L.polyline(latLngs, { color, weight: 1.2, opacity: 0.6 });
+        line.bindTooltip(`${contour.elevation.toFixed(1)}m`, { sticky: true });
+        line.addTo(map);
+        contourLayersRef.current.push(line);
+      }
+    }
+  }, [contourLines, pontos]);
 
   const handleFitBounds = () => {
     if (pontos.length === 0) return;
@@ -411,6 +525,8 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
   const toggleDrawMode = () => {
     if (deleteMode) { setDeleteMode(false); setSelectedForDelete(new Set()); }
+    if (bulkMoveMode) { setBulkMoveMode(false); setDraggedNodeId(null); }
+    if (structureMode) { setStructureMode(false); setSelectedTrechoIdx(null); }
     const newMode = !drawMode;
     setDrawMode(newMode);
     setDrawOrigin(null);
@@ -422,6 +538,8 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   const toggleDeleteMode = (mode: "nodes" | "trechos") => {
     if (drawMode) { setDrawMode(false); setDrawOrigin(null); }
     if (addNodeMode) setAddNodeMode(false);
+    if (bulkMoveMode) { setBulkMoveMode(false); setDraggedNodeId(null); }
+    if (structureMode) { setStructureMode(false); setSelectedTrechoIdx(null); }
     if (deleteMode === mode) {
       setDeleteMode(false);
       setSelectedForDelete(new Set());
@@ -508,7 +626,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           <Button size="sm" variant={addNodeMode ? "default" : "outline"} onClick={() => {
             const newMode = !addNodeMode;
             setAddNodeMode(newMode);
-            if (newMode) { setDrawMode(false); setDrawOrigin(null); }
+            if (newMode) { setDrawMode(false); setDrawOrigin(null); setBulkMoveMode(false); setDraggedNodeId(null); setStructureMode(false); setSelectedTrechoIdx(null); setDeleteMode(false); }
             toast.info(newMode ? "Clique no mapa para adicionar pontos. ESC para sair." : "Modo adicionar ponto desativado.");
           }} className={addNodeMode ? "bg-green-600 hover:bg-green-700 text-white" : ""} disabled={!onPontosChange}>
             <Crosshair className="h-3 w-3 mr-1" /> {addNodeMode ? "Adicionando..." : "Adicionar Ponto"}
@@ -530,13 +648,27 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
               setBulkMoveMode(newMode);
               setBulkMoveStart(null);
               if (newMode) {
-                setDrawMode(false); setDrawOrigin(null); setAddNodeMode(false); setDeleteMode(false);
-                toast.info("Mover em Massa: clique no ponto de referência (posição errada), depois clique onde deveria estar. ESC para cancelar.");
+                setDrawMode(false); setDrawOrigin(null); setAddNodeMode(false); setDeleteMode(false); setStructureMode(false); setSelectedTrechoIdx(null);
+                toast.info("Mover em Massa: clique no ponto de referência, depois clique onde deveria estar. ESC para cancelar.");
               } else { toast.info("Modo mover em massa desativado."); }
             }} className={bulkMoveMode ? "bg-purple-600 hover:bg-purple-700 text-white" : ""}>
               <Move className="h-3 w-3 mr-1" /> {bulkMoveMode ? "Movendo..." : "Mover em Massa"}
             </Button>
           )}
+          {/* Structure mode */}
+          <Button size="sm" variant={structureMode ? "default" : "outline"} onClick={() => {
+            const newMode = !structureMode;
+            setStructureMode(newMode);
+            if (newMode) {
+              setDrawMode(false); setDrawOrigin(null); setDeleteMode(false); setAddNodeMode(false); setBulkMoveMode(false); setBulkMoveStart(null);
+              toast.info("Modo Estrutura: clique em um trecho para editar nome, rede e frente.");
+            } else {
+              setSelectedTrechoIdx(null);
+              toast.info("Modo Estrutura desativado.");
+            }
+          }} className={structureMode ? "bg-indigo-600 hover:bg-indigo-700 text-white" : ""}>
+            <Layers className="h-3 w-3 mr-1" /> {structureMode ? "Estrutura..." : "Modo Estrutura"}
+          </Button>
           {/* Transform Coordinates dialog trigger */}
           <Button size="sm" variant="outline" onClick={() => setShowTransformDialog(true)}>
             <RefreshCw className="h-3 w-3 mr-1" /> Transformar CRS
@@ -570,7 +702,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
         {/* Add node mode status bar */}
         {addNodeMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200">
+          <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/20 border border-green-200">
             <Crosshair className="h-4 w-4 text-green-600" />
             <span className="text-sm font-medium text-green-700 dark:text-green-400">
               Clique no mapa para adicionar um novo ponto topográfico
@@ -583,7 +715,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
         {/* Draw mode status bar */}
         {drawMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200">
+          <div className="flex items-center gap-2 p-2 bg-orange-50 dark:bg-orange-950/20 border border-orange-200">
             <Link2 className="h-4 w-4 text-orange-600" />
             <span className="text-sm font-medium text-orange-700 dark:text-orange-400">
               {drawOrigin
@@ -603,7 +735,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
         {/* Delete mode status bar */}
         {deleteMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200">
+          <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-950/20 border border-red-200">
             <MousePointerClick className="h-4 w-4 text-red-600" />
             <span className="text-sm font-medium text-red-700 dark:text-red-400">
               {deleteMode === "nodes"
@@ -627,7 +759,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
         {/* Bulk move status bar */}
         {bulkMoveMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200">
+          <div className="flex items-center gap-2 p-2 bg-purple-50 dark:bg-purple-950/20 border border-purple-200">
             <Move className="h-4 w-4 text-purple-600" />
             <span className="text-sm font-medium text-purple-700 dark:text-purple-400">
               {bulkMoveStart
@@ -645,10 +777,160 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           </div>
         )}
 
+        {/* Structure mode bar */}
+        {structureMode && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 p-2 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200">
+              <Layers className="h-4 w-4 text-indigo-600" />
+              <span className="text-sm font-medium text-indigo-700 dark:text-indigo-400">
+                Modo Estrutura: Clique em trechos para editar. Ctrl+Clique para selecionar multiplos.
+              </span>
+              <div className="flex gap-1 ml-auto">
+                {batchSelectedTrechos.size > 0 && (
+                  <Badge variant="secondary" className="text-xs">{batchSelectedTrechos.size} selecionados</Badge>
+                )}
+                <Button size="sm" variant={showBatchPanel ? "default" : "outline"} className="h-6 text-xs" onClick={() => setShowBatchPanel(!showBatchPanel)}>
+                  Edicao em Lote
+                </Button>
+                {batchSelectedTrechos.size > 0 && (
+                  <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setBatchSelectedTrechos(new Set())}>
+                    Limpar Selecao
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => {
+                  const all = new Set<number>();
+                  trechos.forEach((_, i) => all.add(i));
+                  setBatchSelectedTrechos(all);
+                  toast.info(`${trechos.length} trechos selecionados.`);
+                }}>
+                  Selecionar Todos
+                </Button>
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setStructureMode(false); setSelectedTrechoIdx(null); setBatchSelectedTrechos(new Set()); setShowBatchPanel(false); }}>
+                  <X className="h-3 w-3 mr-1" /> Sair
+                </Button>
+              </div>
+            </div>
+
+            {/* Batch operations panel */}
+            {showBatchPanel && (
+              <div className="p-3 bg-indigo-50/80 dark:bg-indigo-950/20 border border-indigo-200 space-y-3">
+                <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-400">
+                  Edicao em Lote ({batchSelectedTrechos.size} trechos selecionados)
+                </p>
+                <div className="grid grid-cols-5 gap-2">
+                  <div>
+                    <Label className="text-xs">Prefixo para Nomes</Label>
+                    <Input value={batchPrefix} onChange={e => setBatchPrefix(e.target.value)} placeholder="Ex: Esg-L1-" className="h-7 text-xs" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Tipo de Rede</Label>
+                    <Select value={batchRede} onValueChange={v => setBatchRede(v as TipoRedeManualMap)}>
+                      <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="agua">Agua</SelectItem>
+                        <SelectItem value="esgoto">Esgoto</SelectItem>
+                        <SelectItem value="drenagem">Drenagem</SelectItem>
+                        <SelectItem value="recalque">Recalque</SelectItem>
+                        <SelectItem value="outro">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Frente de Servico</Label>
+                    <Input value={batchFrente} onChange={e => setBatchFrente(e.target.value)} placeholder="Frente" className="h-7 text-xs" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Lote/Area</Label>
+                    <Input value={batchLote} onChange={e => setBatchLote(e.target.value)} placeholder="Lote" className="h-7 text-xs" />
+                  </div>
+                  <div className="flex items-end gap-1">
+                    <Button size="sm" className="h-7 text-xs" disabled={batchSelectedTrechos.size === 0 || !onTrechosChange} onClick={() => {
+                      if (!onTrechosChange) return;
+                      const updated = [...trechos];
+                      const sorted = Array.from(batchSelectedTrechos).sort((a, b) => a - b);
+                      let seq = 1;
+                      for (const idx of sorted) {
+                        if (idx >= updated.length) continue;
+                        const changes: any = {};
+                        if (batchPrefix) changes.nomeTrecho = `${batchPrefix}${String(seq).padStart(3, "0")}`;
+                        if (batchRede) changes.tipoRedeManual = batchRede;
+                        if (batchFrente) changes.frenteServico = batchFrente;
+                        if (batchLote) changes.lote = batchLote;
+                        updated[idx] = { ...updated[idx], ...changes };
+                        seq++;
+                      }
+                      onTrechosChange(updated);
+                      toast.success(`${sorted.length} trechos atualizados!`);
+                    }}>
+                      <Save className="h-3 w-3 mr-1" /> Aplicar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Single trecho editor */}
+            {selectedTrechoIdx !== null && selectedTrechoIdx < trechos.length && (() => {
+              const t = trechos[selectedTrechoIdx];
+              return (
+                <div className="grid grid-cols-6 gap-2 p-2 bg-indigo-50/50 dark:bg-indigo-950/10 border border-indigo-100">
+                  <div>
+                    <Label className="text-xs">Trecho</Label>
+                    <p className="text-sm font-mono font-semibold">{t.idInicio} &rarr; {t.idFim}</p>
+                    <p className="text-xs text-muted-foreground">{t.comprimento.toFixed(1)}m</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Nome</Label>
+                    <Input value={editingTrechoName} onChange={e => setEditingTrechoName(e.target.value)} placeholder="Nome do trecho" className="h-7 text-xs" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Tipo de Rede</Label>
+                    <Select value={editingTrechoRede} onValueChange={v => setEditingTrechoRede(v as TipoRedeManualMap)}>
+                      <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="agua">Agua</SelectItem>
+                        <SelectItem value="esgoto">Esgoto</SelectItem>
+                        <SelectItem value="drenagem">Drenagem</SelectItem>
+                        <SelectItem value="recalque">Recalque</SelectItem>
+                        <SelectItem value="outro">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Frente de Servico</Label>
+                    <Input value={editingTrechoFrente} onChange={e => setEditingTrechoFrente(e.target.value)} placeholder="Frente" className="h-7 text-xs" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Lote/Area</Label>
+                    <Input value={editingTrechoLote} onChange={e => setEditingTrechoLote(e.target.value)} placeholder="Lote" className="h-7 text-xs" />
+                  </div>
+                  <div className="flex items-end">
+                    <Button size="sm" className="h-7 text-xs" onClick={() => {
+                      if (!onTrechosChange) return;
+                      const updated = [...trechos];
+                      updated[selectedTrechoIdx] = {
+                        ...updated[selectedTrechoIdx],
+                        nomeTrecho: editingTrechoName,
+                        tipoRedeManual: editingTrechoRede,
+                        frenteServico: editingTrechoFrente,
+                        lote: editingTrechoLote,
+                      };
+                      onTrechosChange(updated);
+                      toast.success(`Trecho ${t.idInicio} -> ${t.idFim} atualizado!`);
+                    }}>
+                      <Save className="h-3 w-3 mr-1" /> Salvar
+                    </Button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         {/* Map */}
         <div
           ref={mapContainerRef}
-          className="w-full rounded-lg border border-border overflow-hidden"
+          className="w-full border border-border overflow-hidden"
           style={{ height: 450, position: "relative", zIndex: 0 }}
         />
 
@@ -657,7 +939,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           const pt = pontos.find(p => p.id === selectedPoint);
           if (!pt) return null;
           return (
-            <div className="flex items-center gap-3 p-2 bg-muted/50 rounded-lg text-sm">
+            <div className="flex items-center gap-3 p-2 bg-muted/50 text-sm">
               <MapPin className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium">{pt.id}</span>
               <span className="text-muted-foreground">X: {pt.x.toFixed(3)}</span>
@@ -672,12 +954,17 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
         {/* Connections list with individual delete */}
         {trechos.length > 0 && (
-          <div className="max-h-32 overflow-auto border border-border rounded-lg p-2">
+          <div className="max-h-32 overflow-auto border border-border p-2">
             <p className="text-xs font-medium mb-1">Trechos ({trechos.length})</p>
             <div className="space-y-1">
               {trechos.map((t, i) => (
                 <div key={i} className="flex items-center justify-between text-xs bg-muted/30 rounded px-2 py-1">
-                  <span>{t.idInicio} → {t.idFim} ({t.comprimento.toFixed(1)}m)</span>
+                  <span>
+                    {t.nomeTrecho ? <strong>{t.nomeTrecho}: </strong> : null}
+                    {t.idInicio} → {t.idFim} ({t.comprimento.toFixed(1)}m)
+                    {t.tipoRedeManual && <span className="ml-1 text-muted-foreground">[{t.tipoRedeManual}]</span>}
+                    {t.frenteServico && <span className="ml-1 text-muted-foreground">({t.frenteServico})</span>}
+                  </span>
                   <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => {
                     const updated = trechos.filter((_, idx) => idx !== i);
                     onTrechosChange?.(updated);
@@ -693,15 +980,27 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
         {/* Legend */}
         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500" /> Início</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500" /> Fim</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-blue-500" /> Intermediário</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500" /> Selecionado</div>
-          {drawMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-orange-500" /> Origem (ligação)</div>}
-          {deleteMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-600" /> Selecionado p/ exclusão</div>}
-          {bulkMoveMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-purple-600" /> Mover em massa</div>}
-          <div className="flex items-center gap-1"><div className="w-4 h-1 bg-green-500 rounded" /> Gravidade</div>
-          <div className="flex items-center gap-1"><div className="w-4 h-1 bg-orange-500 rounded" /> Elevatória</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500" /> Início</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-500" /> Fim</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-500" /> Intermediário</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-500" /> Selecionado</div>
+          {drawMode && <div className="flex items-center gap-1"><div className="w-3 h-3 bg-orange-500" /> Origem (ligação)</div>}
+          {deleteMode && <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-600" /> Selecionado p/ exclusão</div>}
+          {bulkMoveMode && <div className="flex items-center gap-1"><div className="w-3 h-3 bg-purple-600" /> Mover em massa</div>}
+          {structureMode ? (
+            <>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-blue-400 rounded" /> Agua</div>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-green-500 rounded" /> Esgoto</div>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-yellow-500 rounded" /> Drenagem</div>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-purple-500 rounded" /> Recalque</div>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-indigo-400 rounded" /> Selecionado</div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-green-500 rounded" /> Gravidade</div>
+              <div className="flex items-center gap-1"><div className="w-4 h-1 bg-orange-500 rounded" /> Elevatória</div>
+            </>
+          )}
         </div>
 
         {/* Coordinate Transform Dialog */}

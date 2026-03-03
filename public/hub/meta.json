@@ -1,0 +1,35 @@
+{
+  "ultima_coleta": "2026-03-02T04:00:31.978Z",
+  "versao_coletor": "3.0",
+  "fontes": {
+    "rss": [
+      "CONFEA",
+      "CREA-SP",
+      "Revista AdNormas",
+      "AECweb",
+      "Engenharia 360",
+      "Portal Eng. Civil",
+      "CBIC",
+      "SindusCon-SP",
+      "Buildin",
+      "Sienge",
+      "Saneamento Básico",
+      "Tratamento de Água",
+      "ABES",
+      "Trata Brasil",
+      "Canal Meio Ambiente",
+      "O Eco",
+      "Agência Brasil"
+    ],
+    "pncp": "API PNCP v1",
+    "ceis_cnep": "Portal da Transparência",
+    "diarios": [
+      "DOU Seção 3 (Licitações)",
+      "DOU Seção 1 (Leis)"
+    ],
+    "tce": [
+      "TCU - Tribunal de Contas da União"
+    ]
+  },
+  "status": "ok"
+}

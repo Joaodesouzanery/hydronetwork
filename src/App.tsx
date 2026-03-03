@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -5,80 +6,116 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useAlertNotifications } from "@/hooks/useAlertNotifications";
 import { useProductionUpdates } from "@/hooks/useProductionUpdates";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import MaintenanceOverlay from "@/components/MaintenanceOverlay";
 import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
+
+// Eagerly loaded (landing & auth — critical path)
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
-import Dashboard from "./pages/Dashboard";
-import ProductionControl from "./pages/ProductionControl";
-import RDO from "./pages/RDO";
-import RDONew from "./pages/RDONew";
-import RDOHistory from "./pages/RDOHistory";
-import RDOPhotos from "./pages/RDOPhotos";
-import Alerts from "./pages/Alerts";
-import Settings from "./pages/Settings";
-import ConnectionReports from "./pages/ConnectionReports";
-import Occurrences from "./pages/Occurrences";
-import Admin from "./pages/Admin";
-import Backup from "./pages/Backup";
-import Support from "./pages/Support";
-import HelpCenter from "./pages/HelpCenter";
-import SentimentDashboard from "./pages/SentimentDashboard";
-import UserMetrics from "./pages/UserMetrics";
-import CustomDashboard from "./pages/CustomDashboard";
 import NotFound from "./pages/NotFound";
-import Onboarding from "./pages/Onboarding";
-import HydroNetwork from "./pages/HydroNetwork";
-import HydroNetworkLanding from "./pages/HydroNetworkLanding";
-import ModulesCatalog from "./pages/ModulesCatalog";
-import Projects from "./pages/Projects";
-import ProjectHistory from "./pages/ProjectHistory";
-import ProjectDelays from "./pages/ProjectDelays";
-import InteractiveMap from "./pages/InteractiveMap";
-import LeanConstraints from "./pages/LeanConstraints";
-import LeanDashboard from "./pages/LeanDashboard";
 
-const queryClient = new QueryClient();
+// Lazy-loaded pages for code splitting & faster initial load
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const ProductionControl = lazy(() => import("./pages/ProductionControl"));
+const RDO = lazy(() => import("./pages/RDO"));
+const RDONew = lazy(() => import("./pages/RDONew"));
+const RDOHistory = lazy(() => import("./pages/RDOHistory"));
+const RDOPhotos = lazy(() => import("./pages/RDOPhotos"));
+const Alerts = lazy(() => import("./pages/Alerts"));
+const Settings = lazy(() => import("./pages/Settings"));
+const ConnectionReports = lazy(() => import("./pages/ConnectionReports"));
+const Occurrences = lazy(() => import("./pages/Occurrences"));
+const Admin = lazy(() => import("./pages/Admin"));
+const Backup = lazy(() => import("./pages/Backup"));
+const Support = lazy(() => import("./pages/Support"));
+const HelpCenter = lazy(() => import("./pages/HelpCenter"));
+const SentimentDashboard = lazy(() => import("./pages/SentimentDashboard"));
+const UserMetrics = lazy(() => import("./pages/UserMetrics"));
+const CustomDashboard = lazy(() => import("./pages/CustomDashboard"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const HydroNetwork = lazy(() => import("./pages/HydroNetwork"));
+const HydroNetworkLanding = lazy(() => import("./pages/HydroNetworkLanding"));
+const ModulesCatalog = lazy(() => import("./pages/ModulesCatalog"));
+const Projects = lazy(() => import("./pages/Projects"));
+const ProjectHistory = lazy(() => import("./pages/ProjectHistory"));
+const ProjectDelays = lazy(() => import("./pages/ProjectDelays"));
+const InteractiveMap = lazy(() => import("./pages/InteractiveMap"));
+const LeanConstraints = lazy(() => import("./pages/LeanConstraints"));
+const LeanDashboard = lazy(() => import("./pages/LeanDashboard"));
+const QADiagnostics = lazy(() => import("./pages/QADiagnostics"));
+const ApprovalControl = lazy(() => import("./pages/ApprovalControl"));
+const Tutorials = lazy(() => import("./pages/Tutorials"));
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes before data is considered stale
+      gcTime: 15 * 60 * 1000,   // 15 minutes before unused data is garbage collected
+      retry: 1,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    },
+  },
+});
+
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="text-center">
+      <img src="/logo.svg" alt="ConstruData" className="h-10 mx-auto animate-pulse mb-3" />
+      <p className="text-sm font-mono text-muted-foreground">Carregando...</p>
+    </div>
+  </div>
+);
 
 const AppContent = () => {
   useAlertNotifications();
   useProductionUpdates();
-  
+
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Index />} />
-        <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="/auth" element={<Auth />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/custom-dashboard" element={<CustomDashboard />} />
-        <Route path="/production-control" element={<ProductionControl />} />
-        <Route path="/rdo" element={<RDO />} />
-        <Route path="/rdo-new" element={<RDONew />} />
-        <Route path="/rdo-history" element={<RDOHistory />} />
-        <Route path="/rdo-photos" element={<RDOPhotos />} />
-        <Route path="/alerts" element={<Alerts />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/connection-reports" element={<ConnectionReports />} />
-        <Route path="/occurrences" element={<Occurrences />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/admin/metrics" element={<UserMetrics />} />
-        <Route path="/backup" element={<Backup />} />
-        <Route path="/support" element={<Support />} />
-        <Route path="/help-center" element={<HelpCenter />} />
-        <Route path="/sentiment-dashboard" element={<SentimentDashboard />} />
-        <Route path="/projects" element={<Projects />} />
-        <Route path="/projects/:id/history" element={<ProjectHistory />} />
-        <Route path="/project-delays" element={<ProjectDelays />} />
-        <Route path="/projects/:projectId/map" element={<InteractiveMap />} />
-        <Route path="/lean-constraints" element={<LeanConstraints />} />
-        <Route path="/lean-dashboard" element={<LeanDashboard />} />
-        <Route path="/hydronetwork" element={<HydroNetwork />} />
-        <Route path="/hydronetwork/:module" element={<HydroNetwork />} />
-        <Route path="/hydronetwork-landing" element={<HydroNetworkLanding />} />
-        <Route path="/modules" element={<ModulesCatalog />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<Index />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/hydronetwork-landing" element={<HydroNetworkLanding />} />
+
+          {/* Protected routes - require authentication */}
+          <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/custom-dashboard" element={<ProtectedRoute><CustomDashboard /></ProtectedRoute>} />
+          <Route path="/production-control" element={<ProtectedRoute><ProductionControl /></ProtectedRoute>} />
+          <Route path="/rdo" element={<ProtectedRoute><RDO /></ProtectedRoute>} />
+          <Route path="/rdo-new" element={<ProtectedRoute><RDONew /></ProtectedRoute>} />
+          <Route path="/rdo-history" element={<ProtectedRoute><RDOHistory /></ProtectedRoute>} />
+          <Route path="/rdo-photos" element={<ProtectedRoute><RDOPhotos /></ProtectedRoute>} />
+          <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/connection-reports" element={<ProtectedRoute><ConnectionReports /></ProtectedRoute>} />
+          <Route path="/occurrences" element={<ProtectedRoute><Occurrences /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+          <Route path="/admin/metrics" element={<ProtectedRoute><UserMetrics /></ProtectedRoute>} />
+          <Route path="/backup" element={<ProtectedRoute><Backup /></ProtectedRoute>} />
+          <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+          <Route path="/help-center" element={<ProtectedRoute><HelpCenter /></ProtectedRoute>} />
+          <Route path="/sentiment-dashboard" element={<ProtectedRoute><SentimentDashboard /></ProtectedRoute>} />
+          <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
+          <Route path="/projects/:id/history" element={<ProtectedRoute><ProjectHistory /></ProtectedRoute>} />
+          <Route path="/project-delays" element={<ProtectedRoute><ProjectDelays /></ProtectedRoute>} />
+          <Route path="/projects/:projectId/map" element={<ProtectedRoute><InteractiveMap /></ProtectedRoute>} />
+          <Route path="/lean-constraints" element={<ProtectedRoute><LeanConstraints /></ProtectedRoute>} />
+          <Route path="/lean-dashboard" element={<ProtectedRoute><LeanDashboard /></ProtectedRoute>} />
+          <Route path="/hydronetwork" element={<ProtectedRoute><HydroNetwork /></ProtectedRoute>} />
+          <Route path="/hydronetwork/:module" element={<ProtectedRoute><HydroNetwork /></ProtectedRoute>} />
+          <Route path="/modules" element={<ProtectedRoute><ModulesCatalog /></ProtectedRoute>} />
+          <Route path="/qa" element={<ProtectedRoute><QADiagnostics /></ProtectedRoute>} />
+          <Route path="/approval-control" element={<ProtectedRoute><ApprovalControl /></ProtectedRoute>} />
+          <Route path="/tutorials" element={<ProtectedRoute><Tutorials /></ProtectedRoute>} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
       <FeedbackWidget />
     </BrowserRouter>
   );
@@ -87,10 +124,12 @@ const AppContent = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <MaintenanceOverlay />
-      <Toaster />
-      <Sonner />
-      <AppContent />
+      <AuthProvider>
+        <MaintenanceOverlay />
+        <Toaster />
+        <Sonner />
+        <AppContent />
+      </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

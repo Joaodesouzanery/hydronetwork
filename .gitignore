@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-share
 *.local
 
 # Editor directories and files
@@ -22,3 +23,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Supabase
+supabase/.temp/
+
+# External skills/tools
+skills/

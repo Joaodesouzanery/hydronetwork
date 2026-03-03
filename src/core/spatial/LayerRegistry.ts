@@ -12,6 +12,7 @@ import { CRSDefinition } from "./ProjectCRS";
 export type LayerGeometryType = "Point" | "LineString" | "Polygon" | "Mixed";
 export type LayerDiscipline = "topografia" | "esgoto" | "agua" | "drenagem" | "bim" | "generico" | "desenho";
 export type LayerSource = "imported" | "created" | "calculated";
+export type OriginModule = "topografia" | "qwater" | "qesg" | "drenagem" | "outro";
 
 export interface LayerMetadata {
   modelType?: string;
@@ -37,6 +38,7 @@ export interface SpatialLayer {
   edgeIds: string[];
   metadata: LayerMetadata;
   createdAt: string;
+  originModule?: OriginModule;
 }
 
 let _layerCounter = 0;
@@ -71,6 +73,7 @@ export function createLayer(
     edgeIds: [],
     metadata: opts.metadata || {},
     createdAt: new Date().toISOString(),
+    originModule: opts.originModule,
   };
   store.layers.set(id, layer);
   return layer;
@@ -101,4 +104,8 @@ export function getSimulationLayers(store: LayerRegistryStore): SpatialLayer[] {
 
 export function isSimulationLayer(layer: SpatialLayer): boolean {
   return layer.discipline !== "desenho" && layer.metadata?.isDrawingOnly !== true;
+}
+
+export function getLayersByOrigin(store: LayerRegistryStore, origin: OriginModule): SpatialLayer[] {
+  return Array.from(store.layers.values()).filter(l => l.originModule === origin);
 }

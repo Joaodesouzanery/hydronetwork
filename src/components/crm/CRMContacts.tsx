@@ -430,7 +430,7 @@ export const CRMContacts = () => {
         <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/50 dark:to-blue-900/30 border-blue-200 dark:border-blue-800">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-blue-500/10">
+              <div className="p-2 bg-blue-500/10">
                 <User className="h-5 w-5 text-blue-600" />
               </div>
               <div>
@@ -443,7 +443,7 @@ export const CRMContacts = () => {
         <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/50 dark:to-green-900/30 border-green-200 dark:border-green-800">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-500/10">
+              <div className="p-2 bg-green-500/10">
                 <Building2 className="h-5 w-5 text-green-600" />
               </div>
               <div>
@@ -456,7 +456,7 @@ export const CRMContacts = () => {
         <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/50 dark:to-amber-900/30 border-amber-200 dark:border-amber-800">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-amber-500/10">
+              <div className="p-2 bg-amber-500/10">
                 <Mail className="h-5 w-5 text-amber-600" />
               </div>
               <div>
@@ -469,7 +469,7 @@ export const CRMContacts = () => {
         <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/50 dark:to-purple-900/30 border-purple-200 dark:border-purple-800">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-purple-500/10">
+              <div className="p-2 bg-purple-500/10">
                 <Archive className="h-5 w-5 text-purple-600" />
               </div>
               <div>
@@ -800,7 +800,7 @@ export const CRMContacts = () => {
 
           <div className="space-y-2 max-h-60 overflow-y-auto">
             {duplicates.map((dup) => (
-              <div key={dup.id} className="p-3 bg-muted rounded-lg">
+              <div key={dup.id} className="p-3 bg-muted">
                 <p className="font-medium">{dup.full_name}</p>
                 {dup.email && <p className="text-sm text-muted-foreground">{dup.email}</p>}
                 {dup.phone && <p className="text-sm text-muted-foreground">{dup.phone}</p>}
@@ -837,7 +837,7 @@ export const CRMContacts = () => {
               </p>
             ) : (
               history.map((h: any) => (
-                <div key={h.id} className="p-3 bg-muted rounded-lg">
+                <div key={h.id} className="p-3 bg-muted">
                   <div className="flex justify-between items-start">
                     <Badge variant="outline">{h.action}</Badge>
                     <span className="text-xs text-muted-foreground">

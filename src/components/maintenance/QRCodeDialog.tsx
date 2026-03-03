@@ -57,70 +57,66 @@ export const QRCodeDialog = ({ open, onOpenChange, qrCode }: QRCodeDialogProps) 
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
     
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>QR Code - ${qrCode.location_name}</title>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              min-height: 100vh;
-              margin: 0;
-              padding: 20px;
-            }
-            .container {
-              text-align: center;
-              border: 2px solid #000;
-              padding: 30px;
-              border-radius: 10px;
-            }
-            h1 {
-              margin-bottom: 10px;
-              font-size: 24px;
-            }
-            p {
-              margin: 5px 0;
-              color: #666;
-            }
-            img {
-              margin: 20px 0;
-            }
-            .instructions {
-              margin-top: 20px;
-              font-size: 14px;
-              color: #333;
-            }
-            @media print {
-              body {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>${qrCode.location_name}</h1>
-            <p><strong>Projeto:</strong> ${qrCode.projects.name}</p>
-            ${qrCode.location_description ? `<p>${qrCode.location_description}</p>` : ''}
-            <img src="${qrCodeDataUrl}" alt="QR Code" />
-            <div class="instructions">
-              <p><strong>Escaneie este QR Code para solicitar manutenção</strong></p>
-              <p>Aponte a câmera do celular para o código acima</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `);
-    
-    printWindow.document.close();
+    const escapeHtml = (str: string) =>
+      str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+    const doc = printWindow.document;
+    doc.write("<!DOCTYPE html><html><head></head><body></body></html>");
+    doc.close();
+
+    const style = doc.createElement("style");
+    style.textContent = `
+      body { font-family: Arial, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+      .container { text-align: center; border: 2px solid #000; padding: 30px; border-radius: 10px; }
+      h1 { margin-bottom: 10px; font-size: 24px; }
+      p { margin: 5px 0; color: #666; }
+      img { margin: 20px 0; }
+      .instructions { margin-top: 20px; font-size: 14px; color: #333; }
+      @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+    `;
+    doc.head.appendChild(style);
+    doc.title = `QR Code - ${escapeHtml(qrCode.location_name)}`;
+
+    const container = doc.createElement("div");
+    container.className = "container";
+
+    const h1 = doc.createElement("h1");
+    h1.textContent = qrCode.location_name;
+    container.appendChild(h1);
+
+    const projectP = doc.createElement("p");
+    const strong = doc.createElement("strong");
+    strong.textContent = "Projeto: ";
+    projectP.appendChild(strong);
+    projectP.appendChild(doc.createTextNode(qrCode.projects.name));
+    container.appendChild(projectP);
+
+    if (qrCode.location_description) {
+      const descP = doc.createElement("p");
+      descP.textContent = qrCode.location_description;
+      container.appendChild(descP);
+    }
+
+    const img = doc.createElement("img");
+    img.src = qrCodeDataUrl;
+    img.alt = "QR Code";
+    container.appendChild(img);
+
+    const instructions = doc.createElement("div");
+    instructions.className = "instructions";
+    const instrP1 = doc.createElement("p");
+    const instrStrong = doc.createElement("strong");
+    instrStrong.textContent = "Escaneie este QR Code para solicitar manutenção";
+    instrP1.appendChild(instrStrong);
+    instructions.appendChild(instrP1);
+    const instrP2 = doc.createElement("p");
+    instrP2.textContent = "Aponte a câmera do celular para o código acima";
+    instructions.appendChild(instrP2);
+    container.appendChild(instructions);
+
+    doc.body.appendChild(container);
     printWindow.focus();
-    
+
     setTimeout(() => {
       printWindow.print();
     }, 250);
@@ -141,7 +137,7 @@ export const QRCodeDialog = ({ open, onOpenChange, qrCode }: QRCodeDialogProps) 
 
         <div className="flex flex-col items-center space-y-4 py-4">
           {qrCodeDataUrl ? (
-            <div className="bg-white p-4 rounded-lg border-2 border-gray-200">
+            <div className="bg-white p-4 border-2 border-gray-200">
               <img 
                 src={qrCodeDataUrl} 
                 alt="QR Code" 
@@ -149,7 +145,7 @@ export const QRCodeDialog = ({ open, onOpenChange, qrCode }: QRCodeDialogProps) 
               />
             </div>
           ) : (
-            <div className="w-[300px] h-[300px] flex items-center justify-center bg-gray-100 rounded-lg">
+            <div className="w-[300px] h-[300px] flex items-center justify-center bg-gray-100">
               <p className="text-muted-foreground">Gerando QR Code...</p>
             </div>
           )}

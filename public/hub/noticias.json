@@ -1,0 +1,163 @@
+{
+  "_meta": {
+    "fonte_dados": "placeholder",
+    "aviso": "Dados ilustrativos baseados em temas reais do setor. Execute 'npm run hub:coletar' para buscar dados reais via RSS e APIs públicas.",
+    "gerado_em": "2026-02-15T00:00:00.000Z",
+    "total": 20,
+    "fontes_reais_configuradas": [
+      "saneamentobasico.com.br (RSS)",
+      "tratamentodeagua.com.br (RSS)",
+      "cbic.org.br (RSS)",
+      "confea.org.br (RSS)",
+      "tratabrasil.org.br (RSS)",
+      "agenciabrasil.ebc.com.br (RSS)",
+      "abes-dn.org.br (RSS)",
+      "oeco.org.br (RSS)",
+      "revistaadnormas.com.br (RSS)",
+      "sindusconsp.com.br (RSS)",
+      "canalmeioambiente.com.br (RSS)"
+    ]
+  },
+  "noticias": [
+    {
+      "titulo": "Marco Legal do Saneamento completa 5 anos com avanços e desafios para universalização até 2033",
+      "link": "https://saneamentobasico.com.br/",
+      "data_publicacao": "2026-02-11T14:30:00.000Z",
+      "fonte": "Saneamento Básico",
+      "verificado": false
+    },
+    {
+      "titulo": "BNDES aprova financiamentos para projetos de saneamento na região Nordeste",
+      "link": "https://saneamentobasico.com.br/",
+      "data_publicacao": "2026-02-10T10:15:00.000Z",
+      "fonte": "Saneamento Básico",
+      "verificado": false
+    },
+    {
+      "titulo": "Novas tecnologias de membranas reduzem custo de dessalinização no semiárido",
+      "link": "https://tratamentodeagua.com.br/",
+      "data_publicacao": "2026-02-09T16:45:00.000Z",
+      "fonte": "Tratamento de Água",
+      "verificado": false
+    },
+    {
+      "titulo": "SABESP avança em licitações para universalização do esgoto na Baixada Santista",
+      "link": "https://saneamentobasico.com.br/",
+      "data_publicacao": "2026-02-08T09:20:00.000Z",
+      "fonte": "Saneamento Básico",
+      "verificado": false
+    },
+    {
+      "titulo": "ANA publica estudo sobre acesso à água tratada no Brasil",
+      "link": "https://tratamentodeagua.com.br/",
+      "data_publicacao": "2026-02-07T11:00:00.000Z",
+      "fonte": "Tratamento de Água",
+      "verificado": false
+    },
+    {
+      "titulo": "CBIC projeta crescimento na construção civil em 2026 impulsionado por obras de infraestrutura",
+      "link": "https://cbic.org.br/",
+      "data_publicacao": "2026-02-06T08:30:00.000Z",
+      "fonte": "CBIC",
+      "verificado": false
+    },
+    {
+      "titulo": "Programas federais buscam reduzir perdas na distribuição de água no país",
+      "link": "https://saneamentobasico.com.br/",
+      "data_publicacao": "2026-02-05T13:45:00.000Z",
+      "fonte": "Saneamento Básico",
+      "verificado": false
+    },
+    {
+      "titulo": "ABES promove congresso internacional sobre reúso de água e economia circular",
+      "link": "https://abes-dn.org.br/",
+      "data_publicacao": "2026-02-04T15:10:00.000Z",
+      "fonte": "ABES",
+      "verificado": false
+    },
+    {
+      "titulo": "PPP de resíduos sólidos em Recife prevê investimentos bilionários em 30 anos",
+      "link": "https://canalmeioambiente.com.br/",
+      "data_publicacao": "2026-02-03T10:00:00.000Z",
+      "fonte": "Canal Meio Ambiente",
+      "verificado": false
+    },
+    {
+      "titulo": "Uso de inteligência artificial cresce para detecção de vazamentos em redes de distribuição",
+      "link": "https://tratamentodeagua.com.br/",
+      "data_publicacao": "2026-02-02T17:20:00.000Z",
+      "fonte": "Tratamento de Água",
+      "verificado": false
+    },
+    {
+      "titulo": "Instituto Trata Brasil publica ranking do saneamento nas maiores cidades do país",
+      "link": "https://tratabrasil.org.br/",
+      "data_publicacao": "2026-02-01T09:00:00.000Z",
+      "fonte": "Trata Brasil",
+      "verificado": false
+    },
+    {
+      "titulo": "SindusCon-SP aponta alta nos custos de materiais de construção no último trimestre",
+      "link": "https://sindusconsp.com.br/",
+      "data_publicacao": "2026-01-30T14:20:00.000Z",
+      "fonte": "SindusCon-SP",
+      "verificado": false
+    },
+    {
+      "titulo": "CONFEA discute regulamentação de drones em inspeção de barragens e reservatórios",
+      "link": "https://www.confea.org.br/",
+      "data_publicacao": "2026-01-28T11:30:00.000Z",
+      "fonte": "CONFEA",
+      "verificado": false
+    },
+    {
+      "titulo": "Estudos apontam impacto do desmatamento no ciclo hidrológico e abastecimento de água",
+      "link": "https://oeco.org.br/",
+      "data_publicacao": "2026-01-27T08:45:00.000Z",
+      "fonte": "O Eco",
+      "verificado": false
+    },
+    {
+      "titulo": "Investimento privado em saneamento cresce após marco regulatório",
+      "link": "https://agenciabrasil.ebc.com.br/",
+      "data_publicacao": "2026-01-25T16:00:00.000Z",
+      "fonte": "Agência Brasil",
+      "verificado": false
+    },
+    {
+      "titulo": "Nova norma ABNT para projetos de estações de tratamento de esgoto em revisão",
+      "link": "https://revistaadnormas.com.br/",
+      "data_publicacao": "2026-01-23T10:15:00.000Z",
+      "fonte": "Revista AdNormas",
+      "verificado": false
+    },
+    {
+      "titulo": "Monitoramento de reservatórios no Sul aponta níveis abaixo da média histórica",
+      "link": "https://tratamentodeagua.com.br/",
+      "data_publicacao": "2026-01-21T13:00:00.000Z",
+      "fonte": "Tratamento de Água",
+      "verificado": false
+    },
+    {
+      "titulo": "Leilões de concessão de saneamento atraem múltiplas propostas em 2026",
+      "link": "https://saneamentobasico.com.br/",
+      "data_publicacao": "2026-01-19T09:30:00.000Z",
+      "fonte": "Saneamento Básico",
+      "verificado": false
+    },
+    {
+      "titulo": "CBIC e CNI discutem plataformas digitais para monitoramento de obras de infraestrutura",
+      "link": "https://cbic.org.br/",
+      "data_publicacao": "2026-01-17T14:45:00.000Z",
+      "fonte": "CBIC",
+      "verificado": false
+    },
+    {
+      "titulo": "Trata Brasil destaca relação entre saneamento básico e saúde infantil no país",
+      "link": "https://tratabrasil.org.br/",
+      "data_publicacao": "2026-01-15T08:00:00.000Z",
+      "fonte": "Trata Brasil",
+      "verificado": false
+    }
+  ]
+}

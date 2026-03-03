@@ -260,7 +260,7 @@ export const BackupExportDialog = ({ open, onOpenChange }: BackupExportDialogPro
                   </Button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto border rounded-lg p-3">
+              <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto border p-3">
                 {availableTables.map((table) => (
                   <label
                     key={table.key}
@@ -293,7 +293,7 @@ export const BackupExportDialog = ({ open, onOpenChange }: BackupExportDialogPro
           </TabsContent>
 
           <TabsContent value="schedule" className="space-y-4 mt-4">
-            <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="flex items-center justify-between p-4 border">
               <div className="space-y-0.5">
                 <Label htmlFor="auto-send">Ativar Envio Automático</Label>
                 <p className="text-xs text-muted-foreground">
@@ -337,7 +337,7 @@ export const BackupExportDialog = ({ open, onOpenChange }: BackupExportDialogPro
                   </Select>
                 </div>
 
-                <div className="p-4 bg-muted rounded-lg">
+                <div className="p-4 bg-muted">
                   <h4 className="font-medium mb-2">Tabelas incluídas no backup automático:</h4>
                   <p className="text-sm text-muted-foreground">
                     O backup automático incluirá as mesmas tabelas selecionadas na aba "Exportar Agora".

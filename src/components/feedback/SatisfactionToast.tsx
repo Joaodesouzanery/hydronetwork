@@ -40,7 +40,7 @@ export function SatisfactionToast({ question, triggerEvent, moduleContext, onClo
   };
 
   return (
-    <div className="fixed top-20 right-6 z-50 w-80 bg-card border border-border rounded-xl shadow-2xl overflow-hidden animate-in slide-in-from-top-4 fade-in duration-300">
+    <div className="fixed top-20 right-6 z-50 w-80 bg-card border border-border shadow-2xl overflow-hidden animate-in slide-in-from-top-4 fade-in duration-300">
       <div className="p-4">
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm font-medium leading-snug">{question}</p>

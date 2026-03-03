@@ -13,6 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import { calculateProjectDelays, summarizeDelays, getDelayStatusColor, type ProjectDelay } from "@/utils/projectDelays";
+import { DELAY_THRESHOLDS, isValidEmail } from "@/config/defaults";
 import {
   Clock, AlertTriangle, CheckCircle, XCircle, Building2,
   Bell, Mail, TrendingDown, BarChart3, Calendar, ArrowRight
@@ -21,17 +23,6 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   ResponsiveContainer, Cell
 } from "recharts";
-
-interface ProjectDelay {
-  project: any;
-  totalDays: number;
-  elapsedDays: number;
-  expectedProgress: number;
-  actualProgress: number;
-  delayPercent: number;
-  delayDays: number;
-  status: "on_track" | "warning" | "critical" | "overdue";
-}
 
 const ProjectDelays = () => {
   const navigate = useNavigate();
@@ -65,39 +56,11 @@ const ProjectDelays = () => {
     }
   };
 
-  const delays: ProjectDelay[] = useMemo(() => {
-    const now = new Date();
-    return projects
-      .filter(p => p.start_date)
-      .map(p => {
-        const start = new Date(p.start_date);
-        const end = p.end_date ? new Date(p.end_date) : new Date(start.getTime() + 365 * 24 * 60 * 60 * 1000);
-        const totalDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
-        const elapsedDays = Math.max(0, Math.ceil((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
-        const expectedProgress = Math.min(100, (elapsedDays / totalDays) * 100);
-        const actualProgress = p.progress ?? 0;
-        const delayPercent = Math.max(0, expectedProgress - actualProgress);
-        const delayDays = Math.round((delayPercent / 100) * totalDays);
-
-        let status: ProjectDelay["status"] = "on_track";
-        if (now > end) status = "overdue";
-        else if (delayPercent > 20) status = "critical";
-        else if (delayPercent > 10) status = "warning";
-
-        return { project: p, totalDays, elapsedDays, expectedProgress, actualProgress, delayPercent, delayDays, status };
-      })
-      .sort((a, b) => b.delayPercent - a.delayPercent);
-  }, [projects]);
+  const delays: ProjectDelay[] = useMemo(() => calculateProjectDelays(projects), [projects]);
 
   const filtered = filter === "all" ? delays : delays.filter(d => d.status === filter);
 
-  const summary = useMemo(() => ({
-    total: delays.length,
-    onTrack: delays.filter(d => d.status === "on_track").length,
-    warning: delays.filter(d => d.status === "warning").length,
-    critical: delays.filter(d => d.status === "critical").length,
-    overdue: delays.filter(d => d.status === "overdue").length,
-  }), [delays]);
+  const summary = useMemo(() => summarizeDelays(delays), [delays]);
 
   const chartData = filtered.slice(0, 10).map(d => ({
     name: d.project.name.length > 20 ? d.project.name.substring(0, 20) + "…" : d.project.name,
@@ -108,32 +71,25 @@ const ProjectDelays = () => {
 
   const getStatusBadge = (status: ProjectDelay["status"]) => {
     switch (status) {
-      case "on_track": return <Badge className="bg-green-600 text-white"><CheckCircle className="h-3 w-3 mr-1" />No prazo</Badge>;
-      case "warning": return <Badge className="bg-yellow-500 text-white"><AlertTriangle className="h-3 w-3 mr-1" />Atenção</Badge>;
-      case "critical": return <Badge className="bg-red-600 text-white"><XCircle className="h-3 w-3 mr-1" />Crítico</Badge>;
+      case "on_track": return <Badge className="bg-success text-success-foreground"><CheckCircle className="h-3 w-3 mr-1" />No prazo</Badge>;
+      case "warning": return <Badge className="bg-warning text-warning-foreground"><AlertTriangle className="h-3 w-3 mr-1" />Atenção</Badge>;
+      case "critical": return <Badge className="bg-destructive text-destructive-foreground"><XCircle className="h-3 w-3 mr-1" />Crítico</Badge>;
       case "overdue": return <Badge className="bg-red-900 text-white"><Clock className="h-3 w-3 mr-1" />Vencido</Badge>;
     }
   };
 
-  const getBarColor = (status: string) => {
-    switch (status) {
-      case "on_track": return "#22c55e";
-      case "warning": return "#eab308";
-      case "critical": return "#ef4444";
-      case "overdue": return "#7f1d1d";
-      default: return "#3b82f6";
-    }
-  };
+  const getBarColor = getDelayStatusColor;
 
   const handleSaveAlertConfig = async () => {
     if (!alertEmail.trim()) { toast.error("Informe um e-mail"); return; }
+    if (!isValidEmail(alertEmail)) { toast.error("E-mail inválido"); return; }
     const { data: session } = await supabase.auth.getSession();
     if (!session?.session) return;
 
     const { error } = await supabase.from("alertas_config").insert([{
       user_id: session.session.user.id,
       tipo_alerta: "atraso_cronograma",
-      condicao: { threshold_percent: 10 },
+      condicao: { threshold_percent: DELAY_THRESHOLDS.alertThresholdPercent },
       destinatarios: [alertEmail],
       ativo: emailAlerts,
     }]);
@@ -163,7 +119,7 @@ const ProjectDelays = () => {
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Header */}
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
+              <h1 className="text-3xl font-bold font-mono flex items-center gap-2">
                 <Clock className="h-8 w-8 text-red-600" /> Atrasos de Projeto
               </h1>
               <p className="text-muted-foreground mt-1">Monitore desvios entre progresso esperado e real de cada obra</p>
@@ -172,10 +128,10 @@ const ProjectDelays = () => {
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {[
-                { label: "Total", value: summary.total, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/30" },
-                { label: "No Prazo", value: summary.onTrack, color: "text-green-600", bg: "bg-green-50 dark:bg-green-950/30" },
-                { label: "Atenção", value: summary.warning, color: "text-yellow-600", bg: "bg-yellow-50 dark:bg-yellow-950/30" },
-                { label: "Crítico", value: summary.critical, color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/30" },
+                { label: "Total", value: summary.total, color: "text-info", bg: "bg-info/10" },
+                { label: "No Prazo", value: summary.onTrack, color: "text-success", bg: "bg-success/10" },
+                { label: "Atenção", value: summary.warning, color: "text-warning", bg: "bg-warning/10" },
+                { label: "Crítico", value: summary.critical, color: "text-destructive", bg: "bg-destructive/10" },
                 { label: "Vencido", value: summary.overdue, color: "text-red-900", bg: "bg-red-100 dark:bg-red-950/50" },
               ].map(s => (
                 <Card key={s.label} className={s.bg}>
@@ -261,8 +217,8 @@ const ProjectDelays = () => {
                               <span className="text-xs">{Math.round(d.actualProgress)}%</span>
                             </div>
                           </TableCell>
-                          <TableCell className={d.delayPercent > 10 ? "text-red-600 font-bold" : ""}>{Math.round(d.delayPercent)}%</TableCell>
-                          <TableCell className={d.delayDays > 30 ? "text-red-600 font-bold" : ""}>{d.delayDays}d</TableCell>
+                          <TableCell className={d.delayPercent > 10 ? "text-destructive font-bold" : ""}>{Math.round(d.delayPercent)}%</TableCell>
+                          <TableCell className={d.delayDays > 30 ? "text-destructive font-bold" : ""}>{d.delayDays}d</TableCell>
                           <TableCell>{getStatusBadge(d.status)}</TableCell>
                         </TableRow>
                       ))}
@@ -280,9 +236,9 @@ const ProjectDelays = () => {
             </Card>
 
             {/* Alert Config */}
-            <Card className="border-l-4 border-l-yellow-500">
+            <Card className="border-l-4 border-l-warning">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5 text-yellow-600" /> Configurar Alertas de Atraso</CardTitle>
+                <CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5 text-warning" /> Configurar Alertas de Atraso</CardTitle>
                 <CardDescription>Receba notificações quando um projeto ultrapassar o limite de atraso</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -305,7 +261,7 @@ const ProjectDelays = () => {
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Alertas são disparados quando o desvio de progresso supera 10%. Para configurações avançadas, acesse a página de Alertas.
+                  Alertas são disparados quando o desvio de progresso supera {DELAY_THRESHOLDS.alertThresholdPercent}%. Para configurações avançadas, acesse a página de Alertas.
                 </p>
               </CardContent>
             </Card>

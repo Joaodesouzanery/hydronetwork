@@ -90,7 +90,7 @@ export default function LaborTracking() {
         <main className="flex-1 p-6">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold">Apontamento de Mão de Obra</h1>
+              <h1 className="text-3xl font-bold font-mono">Apontamento de Mão de Obra</h1>
               <p className="text-muted-foreground">
                 Controle de horas trabalhadas e custos de mão de obra
               </p>
