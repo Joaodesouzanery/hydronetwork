@@ -47,15 +47,15 @@ const LeanDashboard = lazy(() => import("./pages/LeanDashboard"));
 const QADiagnostics = lazy(() => import("./pages/QADiagnostics"));
 const ApprovalControl = lazy(() => import("./pages/ApprovalControl"));
 const Tutorials = lazy(() => import("./pages/Tutorials"));
-const HubNoticias = lazy(() => import("./pages/HubNoticias"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 2 * 60 * 1000, // 2 minutes before data is considered stale
-      gcTime: 10 * 60 * 1000,   // 10 minutes before unused data is garbage collected
+      staleTime: 5 * 60 * 1000, // 5 minutes before data is considered stale
+      gcTime: 15 * 60 * 1000,   // 15 minutes before unused data is garbage collected
       retry: 1,
       refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     },
   },
 });
@@ -113,7 +113,6 @@ const AppContent = () => {
           <Route path="/qa" element={<ProtectedRoute><QADiagnostics /></ProtectedRoute>} />
           <Route path="/approval-control" element={<ProtectedRoute><ApprovalControl /></ProtectedRoute>} />
           <Route path="/tutorials" element={<ProtectedRoute><Tutorials /></ProtectedRoute>} />
-          <Route path="/hub-noticias" element={<ProtectedRoute><HubNoticias /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

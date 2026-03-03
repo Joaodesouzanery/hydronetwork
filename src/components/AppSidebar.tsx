@@ -4,8 +4,8 @@ import {
   Calendar, Beaker, Waves, Layers, FileText, Map, Shield, ClipboardList,
   Plus, History, Image, AlertCircle, Archive, HeadphonesIcon, Settings,
   BarChart3, ClipboardCheck, Activity, DollarSign, Building2, Bell, Clock,
-  BookOpen, Smile, Mail, Linkedin, FileCheck2, GraduationCap, Newspaper,
-  ChevronDown, EyeOff, Eye
+  BookOpen, Smile, Mail, Linkedin, FileCheck2, GraduationCap, HelpCircle,
+  ChevronDown, EyeOff, Eye, Compass, PlayCircle
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -30,7 +30,16 @@ const sections: SidebarSection[] = [
       { title: "Dashboard", url: "/dashboard", icon: Home },
       { title: "Dashboard Personalizado", url: "/custom-dashboard", icon: Palette },
       { title: "Projetos", url: "/projects", icon: Building2 },
-      { title: "Hub de Notícias", url: "/hub-noticias", icon: Newspaper },
+    ],
+  },
+  {
+    key: "guide",
+    label: "Guia da Plataforma",
+    items: [
+      { title: "Início Rápido", url: "/onboarding", icon: PlayCircle },
+      { title: "Tutoriais por Módulo", url: "/tutorials", icon: GraduationCap },
+      { title: "Explorar Módulos", url: "/modules", icon: Compass },
+      { title: "Central de Ajuda", url: "/help-center", icon: HelpCircle },
     ],
   },
   {
@@ -88,8 +97,6 @@ const sections: SidebarSection[] = [
     key: "system",
     label: "Sistema",
     items: [
-      { title: "Tutoriais", url: "/tutorials", icon: GraduationCap },
-      { title: "Central de Ajuda", url: "/help-center", icon: BookOpen },
       { title: "Suporte", url: "/support", icon: HeadphonesIcon },
       { title: "Sentimento", url: "/sentiment-dashboard", icon: Smile },
       { title: "Backup", url: "/backup", icon: Archive },

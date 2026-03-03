@@ -32,9 +32,7 @@ const Dashboard = () => {
       }
       
       setUser(session.user);
-      await loadProjects();
-      await loadProductionStats();
-      await loadRecentActivities();
+      await Promise.all([loadProjects(), loadProductionStats(), loadRecentActivities()]);
       setIsLoading(false);
     };
 
