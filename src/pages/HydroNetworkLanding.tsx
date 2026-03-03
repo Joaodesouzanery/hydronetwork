@@ -101,7 +101,7 @@ const HydroNetworkLanding = () => {
   return (
     <div className="min-h-screen" style={{ background: "#F5F5F5", color: "#0E1B3D", fontFamily: "'Inter', system-ui, sans-serif" }}>
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-lg border-b" style={{ background: "rgba(245,245,245,0.95)", borderColor: "#D4D4D4" }}>
+      <header className="fixed top-0 left-0 right-0 z-50-lg border-b" style={{ background: "rgba(245,245,245,0.95)", borderColor: "#D4D4D4" }}>
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
@@ -272,7 +272,7 @@ const HydroNetworkLanding = () => {
           </div>
           <div className="flex flex-wrap justify-center gap-3">
             {normas.map((n, i) => (
-              <div key={i} className="rounded-none px-4 py-2 text-center" style={{ background: "rgba(255,107,44,0.1)", border: "1px solid rgba(255,107,44,0.25)", borderRadius: 8 }}>
+              <div key={i} className="rounded-none px-4 py-2 text-center" style={{ background: "rgba(255,107,44,0.1)", border: "1px solid rgba(255,107,44,0.25)" }}>
                 <span className="font-bold text-sm" style={{ color: "#FF6B2C" }}>{n.code}</span>
                 <span className="text-xs ml-2" style={{ color: "#94A3B8" }}>— {n.desc}</span>
               </div>

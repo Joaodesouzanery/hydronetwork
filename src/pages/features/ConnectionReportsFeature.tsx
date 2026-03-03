@@ -63,7 +63,7 @@ const ConnectionReportsFeature = () => {
           {/* Features Grid */}
           <div className="grid md:grid-cols-2 gap-6">
             {features.map((feature, index) => (
-              <div key={index} className="bg-white/5 backdrop-blur-sm border border-white/10 p-6">
+              <div key={index} className="bg-white/5 border border-white/10 p-6">
                 <feature.icon className="w-10 h-10 text-fuchsia-500 mb-4" />
                 <h3 className="text-lg font-semibold font-mono text-white mb-2">{feature.title}</h3>
                 <p className="text-gray-400">{feature.description}</p>
@@ -72,7 +72,7 @@ const ConnectionReportsFeature = () => {
           </div>
 
           {/* Benefits */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 p-8">
+          <div className="bg-white/5 border border-white/10 p-8">
             <h2 className="text-2xl font-semibold font-mono text-white mb-6">Benefícios</h2>
             <div className="grid md:grid-cols-2 gap-4">
               {benefits.map((benefit, index) => (

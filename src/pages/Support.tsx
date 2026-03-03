@@ -414,7 +414,7 @@ const Support = () => {
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <div className="flex-1">
-          <div className="flex items-center gap-2 border-b px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
+          <div className="flex items-center gap-2 border-b px-4 py-3 bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
             <SidebarTrigger />
             <h1 className="text-xl font-semibold font-mono">Suporte & Documentação</h1>
           </div>

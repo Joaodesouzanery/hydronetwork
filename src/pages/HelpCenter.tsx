@@ -195,7 +195,7 @@ const HelpCenter = () => {
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <div className="flex-1">
-          <div className="flex items-center gap-2 border-b px-4 py-3 bg-background/95 backdrop-blur sticky top-0 z-10">
+          <div className="flex items-center gap-2 border-b px-4 py-3 bg-background/95 sticky top-0 z-10">
             <SidebarTrigger />
             <h1 className="text-xl font-semibold font-mono">Central de Ajuda</h1>
           </div>
