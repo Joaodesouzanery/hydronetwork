@@ -91,15 +91,15 @@
     --info: 217 91% 60%;             /* #3B82F6 */
     --info-foreground: 0 0% 100%;
 
-    /* Sidebar — light mode */
-    --sidebar-background: 0 0% 7%;
-    --sidebar-foreground: 0 0% 58%;
-    --sidebar-primary: 18 100% 59%;
+    /* Sidebar — light mode (white bg, gray text) */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 14% 34%;
+    --sidebar-primary: 215 14% 34%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 18 100% 59% / 0.08;
-    --sidebar-accent-foreground: 18 100% 59%;
-    --sidebar-border: 0 0% 17%;
-    --sidebar-ring: 18 100% 59%;
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 215 28% 17%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 215 14% 34%;
   }
 
   /* ── DARK MODE (dashboard/app interno — padrão) ── */
@@ -143,15 +143,15 @@
     --gradient-start: 220 78% 28%;
     --gradient-end: 18 100% 59%;
 
-    /* Sidebar — dark mode (near black) */
-    --sidebar-background: 0 0% 7%;      /* #111111 */
-    --sidebar-foreground: 0 0% 58%;     /* #949494 */
-    --sidebar-primary: 18 100% 59%;     /* #FF6B2C active */
+    /* Sidebar — dark mode (white bg, gray text — matches light) */
+    --sidebar-background: 0 0% 100%;       /* white */
+    --sidebar-foreground: 215 14% 34%;     /* gray-600 */
+    --sidebar-primary: 215 14% 34%;        /* gray-600 */
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 18 100% 59% / 0.08; /* accent translúcido */
-    --sidebar-accent-foreground: 18 100% 59%;
-    --sidebar-border: 0 0% 17%;         /* #2A2A2A */
-    --sidebar-ring: 18 100% 59%;
+    --sidebar-accent: 220 14% 96%;         /* gray-100 */
+    --sidebar-accent-foreground: 215 28% 17%; /* gray-800 */
+    --sidebar-border: 220 13% 91%;         /* gray-200 */
+    --sidebar-ring: 215 14% 34%;
   }
 }
 
@@ -318,8 +318,9 @@
 
   /* ═══ Sidebar active item ═══ */
   .sidebar-item-active {
-    border-left: 3px solid #FF6B2C;
-    background: rgba(255, 107, 44, 0.08);
+    background: #F3F4F6;
+    color: #111827;
+    font-weight: 600;
   }
 
   /* ═══ Section labels ═══ */

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, NavLink } from "react-router-dom";
-import HubSidebar from "@/components/ui/sidebar-with-submenu";
+import Sidebar from "@/components/ui/sidebar-with-submenu";
 import {
   Newspaper, FileText, Link2, ExternalLink, Calendar,
   MapPin, DollarSign, AlertTriangle, RefreshCw, ArrowLeft,
@@ -103,7 +103,7 @@ export default function HubNoticias() {
   return (
     <div className="min-h-screen" style={{ background: "#0E1B3D" }}>
       {/* Sidebar */}
-      <HubSidebar />
+      <Sidebar />
 
       {/* Main content area - offset for sidebar */}
       <main className="sm:ml-72 min-h-screen">

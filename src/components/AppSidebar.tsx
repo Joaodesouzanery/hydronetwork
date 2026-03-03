@@ -133,33 +133,30 @@ export function AppSidebar() {
 
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
     isActive
-      ? "sidebar-item-active bg-[#FF6B2C]/15 text-[#FF6B2C] font-semibold border-l-[3px] border-l-[#FF6B2C] pl-3 rounded-none rounded-r-md"
-      : "text-[#94A3B8] hover:bg-[#FF6B2C]/5 hover:text-[#FF6B2C] transition-all duration-200 rounded-md";
+      ? "bg-gray-100 text-gray-900 font-semibold rounded-lg"
+      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-all duration-150 rounded-lg";
 
   const hiddenCount = Object.values(hiddenSections).filter(Boolean).length;
 
   return (
     <Sidebar
       collapsible="icon"
-      className="border-r-0"
-      style={{
-        background: "linear-gradient(180deg, #0A0A0A 0%, #111111 50%, #161616 100%)",
-      }}
+      className="border-r border-gray-200"
     >
       {/* Header with logo */}
-      <SidebarHeader className="p-4 border-b border-[#FF6B2C]/10">
+      <SidebarHeader className="p-4 border-b border-gray-200">
         <div className="flex items-center gap-2.5">
           {open ? (
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-[#FF6B2C] flex items-center justify-center flex-shrink-0">
+              <div className="w-7 h-7 bg-gray-900 flex items-center justify-center flex-shrink-0 rounded">
                 <span className="font-bold font-mono text-white text-sm">C</span>
               </div>
-              <span className="font-bold font-mono text-white text-lg tracking-tight">
+              <span className="font-bold font-mono text-gray-800 text-lg tracking-tight">
                 CONSTRUDATA
               </span>
             </div>
           ) : (
-            <div className="w-7 h-7 bg-[#FF6B2C] flex items-center justify-center mx-auto">
+            <div className="w-7 h-7 bg-gray-900 flex items-center justify-center mx-auto rounded">
               <span className="font-bold font-mono text-white text-sm">C</span>
             </div>
           )}
@@ -182,11 +179,11 @@ export function AppSidebar() {
                   className="flex items-center gap-1.5 flex-1 min-w-0"
                 >
                   <ChevronDown
-                    className={`h-3 w-3 text-[#FF6B2C]/40 transition-transform duration-200 flex-shrink-0 ${
+                    className={`h-3 w-3 text-gray-400 transition-transform duration-200 flex-shrink-0 ${
                       isExpanded ? "" : "-rotate-90"
                     }`}
                   />
-                  <SidebarGroupLabel className="uppercase text-[11px] tracking-[1.5px] font-bold font-mono text-[#FF6B2C]/50 p-0 m-0 cursor-pointer hover:text-[#FF6B2C]/80 transition-colors">
+                  <SidebarGroupLabel className="uppercase text-[11px] tracking-[1.5px] font-bold font-mono text-gray-400 p-0 m-0 cursor-pointer hover:text-gray-600 transition-colors">
                     {section.label}
                   </SidebarGroupLabel>
                 </button>
@@ -196,10 +193,10 @@ export function AppSidebar() {
                       e.stopPropagation();
                       toggleHidden(section.key);
                     }}
-                    className="opacity-0 group-hover/header:opacity-100 transition-opacity duration-150 p-1 hover:bg-[#FF6B2C]/10 rounded"
+                    className="opacity-0 group-hover/header:opacity-100 transition-opacity duration-150 p-1 hover:bg-gray-100 rounded"
                     title={`Ocultar ${section.label}`}
                   >
-                    <EyeOff className="h-3 w-3 text-[#555] hover:text-[#FF6B2C]" />
+                    <EyeOff className="h-3 w-3 text-gray-400 hover:text-gray-600" />
                   </button>
                 )}
               </div>
@@ -232,8 +229,8 @@ export function AppSidebar() {
         {/* Show hidden sections panel */}
         {hiddenCount > 0 && open && (
           <div className="px-3 py-2 mt-1">
-            <div className="border border-dashed border-[#FF6B2C]/15 rounded-md p-2.5 bg-[#FF6B2C]/[0.02]">
-              <p className="text-[10px] font-mono text-[#FF6B2C]/40 uppercase tracking-wider mb-2 font-bold">
+            <div className="border border-dashed border-gray-200 rounded-lg p-2.5 bg-gray-50">
+              <p className="text-[10px] font-mono text-gray-400 uppercase tracking-wider mb-2 font-bold">
                 Módulos ocultos ({hiddenCount})
               </p>
               <div className="flex flex-wrap gap-1">
@@ -243,7 +240,7 @@ export function AppSidebar() {
                     <button
                       key={s.key}
                       onClick={() => toggleHidden(s.key)}
-                      className="flex items-center gap-1 text-[10px] font-mono text-[#666] hover:text-[#FF6B2C] bg-white/[0.03] hover:bg-[#FF6B2C]/10 px-2 py-1 rounded transition-colors"
+                      className="flex items-center gap-1 text-[10px] font-mono text-gray-500 hover:text-gray-700 bg-white hover:bg-gray-100 px-2 py-1 rounded-md border border-gray-200 transition-colors"
                       title={`Mostrar ${s.label}`}
                     >
                       <Eye className="h-2.5 w-2.5" />
@@ -256,28 +253,28 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      {/* Footer with contact buttons - orange themed */}
-      <SidebarFooter className="p-3 border-t border-[#FF6B2C]/10">
+      {/* Footer */}
+      <SidebarFooter className="p-3 border-t border-gray-200">
         <div className="flex items-center gap-1.5 justify-center">
           <a
             href="mailto:construdata.contato@gmail.com"
-            className="p-2 hover:bg-[#FF6B2C]/10 rounded transition-colors group"
+            className="p-2 hover:bg-gray-50 rounded-lg transition-colors group"
             title="Email: construdata.contato@gmail.com"
           >
-            <Mail className="w-4 h-4 text-[#555] group-hover:text-[#FF6B2C] transition-colors" />
+            <Mail className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
           </a>
           <a
             href="https://www.linkedin.com/company/construdatasoftware"
             target="_blank"
             rel="noopener noreferrer"
-            className="p-2 hover:bg-[#FF6B2C]/10 rounded transition-colors group"
+            className="p-2 hover:bg-gray-50 rounded-lg transition-colors group"
             title="LinkedIn"
           >
-            <Linkedin className="w-4 h-4 text-[#555] group-hover:text-[#FF6B2C] transition-colors" />
+            <Linkedin className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
           </a>
         </div>
         {open && (
-          <p className="text-[9px] font-mono text-[#444] text-center mt-1">
+          <p className="text-[9px] font-mono text-gray-400 text-center mt-1">
             construdata.contato@gmail.com
           </p>
         )}
