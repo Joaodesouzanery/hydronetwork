@@ -2,9 +2,17 @@
  * TrechoEditModule — Dedicated module for inline editing of quantities,
  * unit costs, and schedule parameters per network segment (trecho).
  * Supports trecho subdivision by length.
+ *
+ * Performance optimizations:
+ * - EditCell extracted as React.memo component (avoids remount on parent render)
+ * - Row components wrapped in React.memo (only changed rows re-render)
+ * - Handlers stabilized with useCallback (stable references for memo)
+ * - quantRowsRef avoids stale state in cross-table recalculations
+ * - Table virtualization via @tanstack/react-virtual (DOM-efficient for 100+ rows)
  */
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, memo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,12 +68,10 @@ interface EditableQuantRow {
   botafora: number;
   pavimento: number;
   escoramento: number;
-  // Track if this is a sub-trecho
   isSubdivided: boolean;
   parentId?: string;
   subIndex?: number;
   subCount?: number;
-  // Original trecho reference for subdivision
   originalTrecho: Trecho;
 }
 
@@ -99,6 +105,9 @@ interface EditableScheduleRow {
 }
 
 const STORAGE_KEY = "hydronetwork_trecho_edits";
+const ROW_HEIGHT = 40;
+const TABLE_MAX_HEIGHT = 520;
+const VIRTUALIZER_OVERSCAN = 10;
 
 // ── Props ──
 
@@ -172,7 +181,114 @@ function addDays(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-// ── Component ──
+// ── Extracted Components (outside render — stable references) ──
+
+interface EditCellProps {
+  value: number | string;
+  onChange: (v: number | string) => void;
+  type?: string;
+  className?: string;
+}
+
+const EditCell = memo(function EditCell({ value, onChange, type = "number", className = "" }: EditCellProps) {
+  return (
+    <Input
+      type={type}
+      value={value}
+      onChange={e => {
+        const v = type === "number" ? parseFloat(e.target.value) || 0 : e.target.value;
+        onChange(v);
+      }}
+      className={`h-7 text-xs w-20 ${className}`}
+    />
+  );
+});
+
+// ── Memoized Row Components ──
+
+interface QuantRowProps {
+  row: EditableQuantRow;
+  onFieldChange: (id: string, field: keyof EditableQuantRow, value: number) => void;
+  onSubdivide: (id: string) => void;
+  onReunify: (parentId: string) => void;
+}
+
+const MemoQuantRow = memo(function MemoQuantRow({ row, onFieldChange, onSubdivide, onReunify }: QuantRowProps) {
+  return (
+    <TableRow className={row.isSubdivided ? "bg-orange-50/30" : ""}>
+      <TableCell className="text-xs font-mono">
+        {row.id}
+        {row.isSubdivided && <Badge variant="outline" className="ml-1 text-[10px]">Sub</Badge>}
+      </TableCell>
+      <TableCell className="text-xs max-w-[140px] truncate" title={row.nomeTrecho}>{row.nomeTrecho}</TableCell>
+      <TableCell><EditCell value={row.comp} onChange={v => onFieldChange(row.id, "comp", v as number)} /></TableCell>
+      <TableCell><EditCell value={row.dn} onChange={v => onFieldChange(row.id, "dn", v as number)} /></TableCell>
+      <TableCell><EditCell value={row.prof} onChange={v => onFieldChange(row.id, "prof", v as number)} /></TableCell>
+      <TableCell><EditCell value={row.escavacao} onChange={v => onFieldChange(row.id, "escavacao", v as number)} /></TableCell>
+      <TableCell><EditCell value={row.reaterro} onChange={v => onFieldChange(row.id, "reaterro", v as number)} /></TableCell>
+      <TableCell><EditCell value={row.botafora} onChange={v => onFieldChange(row.id, "botafora", v as number)} /></TableCell>
+      <TableCell><EditCell value={row.pavimento} onChange={v => onFieldChange(row.id, "pavimento", v as number)} /></TableCell>
+      <TableCell><EditCell value={row.escoramento} onChange={v => onFieldChange(row.id, "escoramento", v as number)} /></TableCell>
+      <TableCell>
+        {row.isSubdivided && row.parentId ? (
+          <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => onReunify(row.parentId!)}>
+            <Undo2 className="h-3 w-3" />
+          </Button>
+        ) : (
+          <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => onSubdivide(row.id)}>
+            <Scissors className="h-3 w-3" />
+          </Button>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+});
+
+interface CostRowProps {
+  row: EditableCostRow;
+  onFieldChange: (id: string, field: keyof EditableCostRow, value: number) => void;
+}
+
+const MemoCostRow = memo(function MemoCostRow({ row, onFieldChange }: CostRowProps) {
+  return (
+    <TableRow>
+      <TableCell className="text-xs max-w-[120px] truncate" title={row.nomeTrecho}>{row.nomeTrecho}</TableCell>
+      <TableCell className="text-xs">{fmt(row.comp)}</TableCell>
+      <TableCell><EditCell value={row.custoEscavacao} onChange={v => onFieldChange(row.id, "custoEscavacao", v as number)} /></TableCell>
+      <TableCell><EditCell value={row.custoTubo} onChange={v => onFieldChange(row.id, "custoTubo", v as number)} /></TableCell>
+      <TableCell><EditCell value={row.custoReaterro} onChange={v => onFieldChange(row.id, "custoReaterro", v as number)} /></TableCell>
+      <TableCell><EditCell value={row.custoPV} onChange={v => onFieldChange(row.id, "custoPV", v as number)} /></TableCell>
+      <TableCell><EditCell value={row.bdiPct} onChange={v => onFieldChange(row.id, "bdiPct", v as number)} /></TableCell>
+      <TableCell>
+        <Badge variant={row.fonte === "SINAPI" ? "secondary" : "default"} className="text-[10px]">{row.fonte}</Badge>
+      </TableCell>
+      <TableCell className="text-xs font-medium">{fmtC(row.subtotal)}</TableCell>
+      <TableCell className="text-xs font-bold">{fmtC(row.total)}</TableCell>
+    </TableRow>
+  );
+});
+
+interface ScheduleRowProps {
+  row: EditableScheduleRow;
+  onFieldChange: (id: string, field: keyof EditableScheduleRow, value: number | string) => void;
+}
+
+const MemoScheduleRow = memo(function MemoScheduleRow({ row, onFieldChange }: ScheduleRowProps) {
+  return (
+    <TableRow>
+      <TableCell className="text-xs max-w-[140px] truncate" title={row.nomeTrecho}>{row.nomeTrecho}</TableCell>
+      <TableCell className="text-xs">{fmt(row.comp)}</TableCell>
+      <TableCell><EditCell value={row.equipe} onChange={v => onFieldChange(row.id, "equipe", v as number)} /></TableCell>
+      <TableCell><EditCell value={row.metrosDia} onChange={v => onFieldChange(row.id, "metrosDia", v as number)} /></TableCell>
+      <TableCell className="text-xs font-medium">{row.diasEstimados}</TableCell>
+      <TableCell><EditCell value={row.dataInicio} onChange={v => onFieldChange(row.id, "dataInicio", v)} type="date" className="w-32" /></TableCell>
+      <TableCell className="text-xs">{row.dataFim}</TableCell>
+      <TableCell><EditCell value={row.prioridade} onChange={v => onFieldChange(row.id, "prioridade", v as number)} /></TableCell>
+    </TableRow>
+  );
+});
+
+// ── Main Component ──
 
 export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams, onTrechosChange }: TrechoEditModuleProps) {
   const [activeTab, setActiveTab] = useState("quantitativos");
@@ -189,6 +305,19 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
   const [subdivideTarget, setSubdivideTarget] = useState<string | null>(null);
   const [subdivideLength, setSubdivideLength] = useState("50");
 
+  // ── Refs for stable callback access (avoids stale state) ──
+  const quantRowsRef = useRef(quantRows);
+  quantRowsRef.current = quantRows;
+  const costRowsRef = useRef(costRows);
+  costRowsRef.current = costRows;
+  const scheduleRowsRef = useRef(scheduleRows);
+  scheduleRowsRef.current = scheduleRows;
+
+  // ── Virtualization scroll refs ──
+  const quantScrollRef = useRef<HTMLDivElement>(null);
+  const costScrollRef = useRef<HTMLDivElement>(null);
+  const scheduleScrollRef = useRef<HTMLDivElement>(null);
+
   // ── Initialize rows from trechos ──
 
   const initializeRows = useCallback(() => {
@@ -199,12 +328,10 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
 
     const baseProfMin = 1.20;
 
-    // Quantity rows
     const qRows: EditableQuantRow[] = trechos.map((t, idx) => {
       const prof = Math.max(baseProfMin, 1.0 + t.diametroMm / 1000);
       const quant = computeQuantities(t, prof);
 
-      // If we have pre-calculated quantities from QuantitiesModule, use them
       const existingQ = quantityRows?.find(q => q.trecho === `${t.idInicio}→${t.idFim}` || q.id === `T-${String(idx + 1).padStart(2, "0")}`);
 
       return {
@@ -225,7 +352,6 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     });
     setQuantRows(qRows);
 
-    // Cost rows
     const cRows: EditableCostRow[] = qRows.map(q => {
       const custoEsc = getEscavacaoCusto(q.prof);
       const custoTubo = getTuboCusto(q.dn);
@@ -251,7 +377,6 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     });
     setCostRows(cRows);
 
-    // Schedule rows
     const today = new Date().toISOString().slice(0, 10);
     const sRows: EditableScheduleRow[] = qRows.map((q, idx) => {
       const metrosDia = 12;
@@ -287,18 +412,18 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
   const filteredCostRows = useMemo(() => costRows.filter(r => filterRow(r.nomeTrecho, r.comp)), [costRows, filterRow]);
   const filteredScheduleRows = useMemo(() => scheduleRows.filter(r => filterRow(r.nomeTrecho, r.comp)), [scheduleRows, filterRow]);
 
-  // ── Inline editing handlers ──
+  // ── Stable inline editing handlers (useCallback with [] deps) ──
 
-  const updateQuantField = (id: string, field: keyof EditableQuantRow, value: number) => {
+  const updateQuantField = useCallback((id: string, field: keyof EditableQuantRow, value: number) => {
     setQuantRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
-  };
+  }, []);
 
-  const updateCostField = (id: string, field: keyof EditableCostRow, value: number) => {
+  const updateCostField = useCallback((id: string, field: keyof EditableCostRow, value: number) => {
     setCostRows(prev => prev.map(r => {
       if (r.id !== id) return r;
       const updated = { ...r, [field]: value, fonte: "Manual" as const };
-      // Recalc totals
-      const qRow = quantRows.find(q => q.id === id);
+      // Use ref to get current quantRows (avoids stale state)
+      const qRow = quantRowsRef.current.find(q => q.id === id);
       if (qRow) {
         updated.subtotal = round2(
           qRow.escavacao * updated.custoEscavacao +
@@ -310,13 +435,12 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
       }
       return updated;
     }));
-  };
+  }, []);
 
-  const updateScheduleField = (id: string, field: keyof EditableScheduleRow, value: number | string) => {
+  const updateScheduleField = useCallback((id: string, field: keyof EditableScheduleRow, value: number | string) => {
     setScheduleRows(prev => prev.map(r => {
       if (r.id !== id) return r;
       const updated = { ...r, [field]: value };
-      // Recalc dias if metros/dia or comp changed
       if (field === "metrosDia" || field === "comp") {
         updated.diasEstimados = Math.ceil(updated.comp / updated.metrosDia);
         updated.dataFim = addDays(updated.dataInicio, updated.diasEstimados);
@@ -326,27 +450,27 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
       }
       return updated;
     }));
-  };
+  }, []);
 
   // ── Recalculate quantities from comp/dn/prof ──
 
-  const recalculateQuantities = () => {
+  const recalculateQuantities = useCallback(() => {
     setQuantRows(prev => prev.map(r => {
       const mockTrecho = { ...r.originalTrecho, comprimento: r.comp, diametroMm: r.dn };
       const quant = computeQuantities(mockTrecho, r.prof);
       return { ...r, ...quant };
     }));
     toast.success("Quantitativos recalculados.");
-  };
+  }, []);
 
   // ── Subdivision ──
 
-  const handleSubdivide = (rowId: string) => {
+  const handleSubdivide = useCallback((rowId: string) => {
     setSubdivideTarget(rowId);
     setSubdivideLength("50");
-  };
+  }, []);
 
-  const confirmSubdivide = () => {
+  const confirmSubdivide = useCallback(() => {
     if (!subdivideTarget) return;
     const len = parseFloat(subdivideLength);
     if (isNaN(len) || len <= 0) {
@@ -354,7 +478,11 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
       return;
     }
 
-    const targetRow = quantRows.find(r => r.id === subdivideTarget);
+    const currentQuantRows = quantRowsRef.current;
+    const currentCostRows = costRowsRef.current;
+    const currentScheduleRows = scheduleRowsRef.current;
+
+    const targetRow = currentQuantRows.find(r => r.id === subdivideTarget);
     if (!targetRow) return;
 
     if (len >= targetRow.comp) {
@@ -364,22 +492,20 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
 
     const subTrechos = subdivideTrecho(targetRow.originalTrecho, len);
 
-    // Replace the target row with sub-rows in all tables
     const newQuantRows: EditableQuantRow[] = [];
     const newCostRows: EditableCostRow[] = [];
     const newScheduleRows: EditableScheduleRow[] = [];
 
-    for (const r of quantRows) {
+    for (const r of currentQuantRows) {
       if (r.id !== subdivideTarget) {
         newQuantRows.push(r);
-        const cRow = costRows.find(c => c.id === r.id);
+        const cRow = currentCostRows.find(c => c.id === r.id);
         if (cRow) newCostRows.push(cRow);
-        const sRow = scheduleRows.find(s => s.id === r.id);
+        const sRow = currentScheduleRows.find(s => s.id === r.id);
         if (sRow) newScheduleRows.push(sRow);
         continue;
       }
 
-      // Add sub-trechos
       subTrechos.forEach((st, idx) => {
         const subId = `${r.id}_S${idx + 1}`;
         const prof = r.prof;
@@ -403,9 +529,9 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
         const custoEsc = getEscavacaoCusto(prof);
         const custoTubo = getTuboCusto(st.diametroMm);
         const custoReat = SINAPI_UNIT_COSTS.reaterro;
-        const custoPV = idx === 0 ? getPVCusto(prof) : 0; // PV only on first sub-trecho
+        const custoPV = idx === 0 ? getPVCusto(prof) : 0;
         const subtotal = quant.escavacao * custoEsc + st.comprimento * custoTubo + quant.reaterro * custoReat + custoPV;
-        const bdiPct = costRows.find(c => c.id === r.id)?.bdiPct ?? 25;
+        const bdiPct = currentCostRows.find(c => c.id === r.id)?.bdiPct ?? 25;
         newCostRows.push({
           id: subId,
           trechoKey: `${st.idInicio}-${st.idFim}`,
@@ -422,7 +548,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
           total: round2(subtotal * (1 + bdiPct / 100)),
         });
 
-        const metrosDia = scheduleRows.find(s => s.id === r.id)?.metrosDia ?? 12;
+        const metrosDia = currentScheduleRows.find(s => s.id === r.id)?.metrosDia ?? 12;
         const dias = Math.ceil(st.comprimento / metrosDia);
         const today = new Date().toISOString().slice(0, 10);
         newScheduleRows.push({
@@ -430,7 +556,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
           trechoKey: `${st.idInicio}-${st.idFim}`,
           nomeTrecho: st.nomeTrecho || `${st.idInicio}→${st.idFim}`,
           comp: round2(st.comprimento),
-          equipe: scheduleRows.find(s => s.id === r.id)?.equipe ?? 1,
+          equipe: currentScheduleRows.find(s => s.id === r.id)?.equipe ?? 1,
           metrosDia,
           diasEstimados: dias,
           dataInicio: today,
@@ -445,28 +571,28 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     setScheduleRows(newScheduleRows);
     setSubdivideTarget(null);
     toast.success(`Trecho subdividido em ${subTrechos.length} sub-trechos.`);
-  };
+  }, [subdivideTarget, subdivideLength]);
 
-  const handleReunify = (parentId: string) => {
-    // Find all sub-rows with this parentId
-    const subQuantRows = quantRows.filter(r => r.parentId === parentId);
+  const handleReunify = useCallback((parentId: string) => {
+    const currentQuantRows = quantRowsRef.current;
+    const currentCostRows = costRowsRef.current;
+    const currentScheduleRows = scheduleRowsRef.current;
+
+    const subQuantRows = currentQuantRows.filter(r => r.parentId === parentId);
     if (subQuantRows.length === 0) return;
 
-    // Reunify the original trecho
     const subTrechos = subQuantRows.map(r => r.originalTrecho).filter(isSubTrecho);
     if (subTrechos.length === 0) return;
 
     const original = reunifySubTrechos(subTrechos);
     const subIds = new Set(subQuantRows.map(r => r.id));
 
-    // Rebuild quantity rows
     const prof = subQuantRows[0].prof;
     const quant = computeQuantities(original, prof);
     const reunifiedId = subQuantRows[0].id.replace(/_S\d+$/, "");
 
-    const newQuantRows = quantRows.filter(r => !subIds.has(r.id));
-    // Insert the reunified row at the position of the first sub-row
-    const insertIdx = quantRows.findIndex(r => subIds.has(r.id));
+    const newQuantRows = currentQuantRows.filter(r => !subIds.has(r.id));
+    const insertIdx = currentQuantRows.findIndex(r => subIds.has(r.id));
     newQuantRows.splice(insertIdx, 0, {
       id: reunifiedId,
       trechoKey: `${original.idInicio}-${original.idFim}`,
@@ -480,15 +606,14 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     });
     setQuantRows(newQuantRows);
 
-    // Rebuild cost rows
     const custoEsc = getEscavacaoCusto(prof);
     const custoTubo = getTuboCusto(original.diametroMm);
     const custoReat = SINAPI_UNIT_COSTS.reaterro;
     const custoPV = getPVCusto(prof);
     const subtotal = quant.escavacao * custoEsc + original.comprimento * custoTubo + quant.reaterro * custoReat + custoPV;
     const bdiPct = 25;
-    const newCostRows = costRows.filter(r => !subIds.has(r.id));
-    const costInsertIdx = costRows.findIndex(r => subIds.has(r.id));
+    const newCostRows = currentCostRows.filter(r => !subIds.has(r.id));
+    const costInsertIdx = currentCostRows.findIndex(r => subIds.has(r.id));
     newCostRows.splice(costInsertIdx, 0, {
       id: reunifiedId,
       trechoKey: `${original.idInicio}-${original.idFim}`,
@@ -506,12 +631,11 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     });
     setCostRows(newCostRows);
 
-    // Rebuild schedule rows
     const metrosDia = 12;
     const dias = Math.ceil(original.comprimento / metrosDia);
     const today = new Date().toISOString().slice(0, 10);
-    const newScheduleRows = scheduleRows.filter(r => !subIds.has(r.id));
-    const schedInsertIdx = scheduleRows.findIndex(r => subIds.has(r.id));
+    const newScheduleRows = currentScheduleRows.filter(r => !subIds.has(r.id));
+    const schedInsertIdx = currentScheduleRows.findIndex(r => subIds.has(r.id));
     newScheduleRows.splice(schedInsertIdx, 0, {
       id: reunifiedId,
       trechoKey: `${original.idInicio}-${original.idFim}`,
@@ -527,20 +651,24 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     setScheduleRows(newScheduleRows);
 
     toast.success("Sub-trechos reunificados.");
-  };
+  }, []);
 
   // ── Persistence ──
 
-  const saveEdits = () => {
+  const saveEdits = useCallback(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ quantRows, costRows, scheduleRows }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        quantRows: quantRowsRef.current,
+        costRows: costRowsRef.current,
+        scheduleRows: scheduleRowsRef.current,
+      }));
       toast.success("Edições salvas localmente.");
     } catch {
       toast.error("Erro ao salvar edições.");
     }
-  };
+  }, []);
 
-  const loadEdits = () => {
+  const loadEdits = useCallback(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) { toast.info("Nenhuma edição salva encontrada."); return; }
@@ -552,16 +680,19 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     } catch {
       toast.error("Erro ao carregar edições.");
     }
-  };
+  }, []);
 
   // ── Export XLSX ──
 
-  const exportExcel = () => {
-    if (quantRows.length === 0) { toast.error("Sem dados para exportar."); return; }
+  const exportExcel = useCallback(() => {
+    const currentQuantRows = quantRowsRef.current;
+    const currentCostRows = costRowsRef.current;
+    const currentScheduleRows = scheduleRowsRef.current;
+
+    if (currentQuantRows.length === 0) { toast.error("Sem dados para exportar."); return; }
     const wb = XLSX.utils.book_new();
 
-    // Quantitativos sheet
-    const qData = quantRows.map(r => ({
+    const qData = currentQuantRows.map(r => ({
       ID: r.id, Trecho: r.nomeTrecho, "Comp (m)": r.comp, "DN (mm)": r.dn,
       "Prof (m)": r.prof, "Escavação (m³)": r.escavacao, "Reaterro (m³)": r.reaterro,
       "Bota-fora (m³)": r.botafora, "Pavimento (m²)": r.pavimento,
@@ -569,8 +700,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(qData), "Quantitativos");
 
-    // Custos sheet
-    const cData = costRows.map(r => ({
+    const cData = currentCostRows.map(r => ({
       ID: r.id, Trecho: r.nomeTrecho, "Comp (m)": r.comp,
       "Escavação (R$/m³)": r.custoEscavacao, "Tubo (R$/m)": r.custoTubo,
       "Reaterro (R$/m³)": r.custoReaterro, "PV (R$/un)": r.custoPV,
@@ -578,8 +708,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cData), "Valores e Custos");
 
-    // Cronograma sheet
-    const sData = scheduleRows.map(r => ({
+    const sData = currentScheduleRows.map(r => ({
       ID: r.id, Trecho: r.nomeTrecho, "Comp (m)": r.comp, Equipe: r.equipe,
       "Metros/dia": r.metrosDia, "Dias Estimados": r.diasEstimados,
       "Data Início": r.dataInicio, "Data Fim": r.dataFim, Prioridade: r.prioridade,
@@ -588,7 +717,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
 
     XLSX.writeFile(wb, "edicao_por_trecho.xlsx");
     toast.success("Planilha exportada.");
-  };
+  }, []);
 
   // ── Summaries ──
 
@@ -610,21 +739,41 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     totalMetros: scheduleRows.reduce((s, r) => s + r.comp, 0),
   }), [scheduleRows]);
 
-  // ── Editable cell component ──
+  // ── Virtualizers ──
 
-  const EditCell = ({ value, onChange, type = "number", className = "" }: {
-    value: number | string; onChange: (v: number | string) => void; type?: string; className?: string;
-  }) => (
-    <Input
-      type={type}
-      value={value}
-      onChange={e => {
-        const v = type === "number" ? parseFloat(e.target.value) || 0 : e.target.value;
-        onChange(v);
-      }}
-      className={`h-7 text-xs w-20 ${className}`}
-    />
-  );
+  const quantVirtualizer = useVirtualizer({
+    count: filteredQuantRows.length,
+    getScrollElement: () => quantScrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: VIRTUALIZER_OVERSCAN,
+  });
+
+  const costVirtualizer = useVirtualizer({
+    count: filteredCostRows.length,
+    getScrollElement: () => costScrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: VIRTUALIZER_OVERSCAN,
+  });
+
+  const scheduleVirtualizer = useVirtualizer({
+    count: filteredScheduleRows.length,
+    getScrollElement: () => scheduleScrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: VIRTUALIZER_OVERSCAN,
+  });
+
+  // Virtualizer spacer helpers
+  const quantVirtualItems = quantVirtualizer.getVirtualItems();
+  const quantPaddingTop = quantVirtualItems[0]?.start ?? 0;
+  const quantPaddingBottom = quantVirtualizer.getTotalSize() - (quantVirtualItems.at(-1)?.end ?? 0);
+
+  const costVirtualItems = costVirtualizer.getVirtualItems();
+  const costPaddingTop = costVirtualItems[0]?.start ?? 0;
+  const costPaddingBottom = costVirtualizer.getTotalSize() - (costVirtualItems.at(-1)?.end ?? 0);
+
+  const scheduleVirtualItems = scheduleVirtualizer.getVirtualItems();
+  const schedulePaddingTop = scheduleVirtualItems[0]?.start ?? 0;
+  const schedulePaddingBottom = scheduleVirtualizer.getTotalSize() - (scheduleVirtualItems.at(-1)?.end ?? 0);
 
   // ── Render ──
 
@@ -748,9 +897,9 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                   Clique em "Carregar Trechos" para iniciar a edição.
                 </p>
               ) : (
-                <div className="overflow-x-auto">
+                <div ref={quantScrollRef} className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT }}>
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
                         <TableHead className="text-xs w-8">ID</TableHead>
                         <TableHead className="text-xs">Trecho</TableHead>
@@ -766,34 +915,21 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredQuantRows.map(r => (
-                        <TableRow key={r.id} className={r.isSubdivided ? "bg-orange-50/30" : ""}>
-                          <TableCell className="text-xs font-mono">
-                            {r.id}
-                            {r.isSubdivided && <Badge variant="outline" className="ml-1 text-[10px]">Sub</Badge>}
-                          </TableCell>
-                          <TableCell className="text-xs max-w-[140px] truncate" title={r.nomeTrecho}>{r.nomeTrecho}</TableCell>
-                          <TableCell><EditCell value={r.comp} onChange={v => updateQuantField(r.id, "comp", v as number)} /></TableCell>
-                          <TableCell><EditCell value={r.dn} onChange={v => updateQuantField(r.id, "dn", v as number)} /></TableCell>
-                          <TableCell><EditCell value={r.prof} onChange={v => updateQuantField(r.id, "prof", v as number)} /></TableCell>
-                          <TableCell><EditCell value={r.escavacao} onChange={v => updateQuantField(r.id, "escavacao", v as number)} /></TableCell>
-                          <TableCell><EditCell value={r.reaterro} onChange={v => updateQuantField(r.id, "reaterro", v as number)} /></TableCell>
-                          <TableCell><EditCell value={r.botafora} onChange={v => updateQuantField(r.id, "botafora", v as number)} /></TableCell>
-                          <TableCell><EditCell value={r.pavimento} onChange={v => updateQuantField(r.id, "pavimento", v as number)} /></TableCell>
-                          <TableCell><EditCell value={r.escoramento} onChange={v => updateQuantField(r.id, "escoramento", v as number)} /></TableCell>
-                          <TableCell>
-                            {r.isSubdivided && r.parentId ? (
-                              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => handleReunify(r.parentId!)}>
-                                <Undo2 className="h-3 w-3" />
-                              </Button>
-                            ) : (
-                              <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => handleSubdivide(r.id)}>
-                                <Scissors className="h-3 w-3" />
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
+                      {quantPaddingTop > 0 && (
+                        <tr><td colSpan={11} style={{ height: quantPaddingTop, padding: 0, border: "none" }} /></tr>
+                      )}
+                      {quantVirtualItems.map(vi => (
+                        <MemoQuantRow
+                          key={filteredQuantRows[vi.index].id}
+                          row={filteredQuantRows[vi.index]}
+                          onFieldChange={updateQuantField}
+                          onSubdivide={handleSubdivide}
+                          onReunify={handleReunify}
+                        />
                       ))}
+                      {quantPaddingBottom > 0 && (
+                        <tr><td colSpan={11} style={{ height: quantPaddingBottom, padding: 0, border: "none" }} /></tr>
+                      )}
                     </TableBody>
                   </Table>
                 </div>
@@ -839,9 +975,9 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                   Clique em "Carregar Trechos" para iniciar.
                 </p>
               ) : (
-                <div className="overflow-x-auto">
+                <div ref={costScrollRef} className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT }}>
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
                         <TableHead className="text-xs">Trecho</TableHead>
                         <TableHead className="text-xs">Comp (m)</TableHead>
@@ -856,22 +992,19 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredCostRows.map(r => (
-                        <TableRow key={r.id}>
-                          <TableCell className="text-xs max-w-[120px] truncate" title={r.nomeTrecho}>{r.nomeTrecho}</TableCell>
-                          <TableCell className="text-xs">{fmt(r.comp)}</TableCell>
-                          <TableCell><EditCell value={r.custoEscavacao} onChange={v => updateCostField(r.id, "custoEscavacao", v as number)} /></TableCell>
-                          <TableCell><EditCell value={r.custoTubo} onChange={v => updateCostField(r.id, "custoTubo", v as number)} /></TableCell>
-                          <TableCell><EditCell value={r.custoReaterro} onChange={v => updateCostField(r.id, "custoReaterro", v as number)} /></TableCell>
-                          <TableCell><EditCell value={r.custoPV} onChange={v => updateCostField(r.id, "custoPV", v as number)} /></TableCell>
-                          <TableCell><EditCell value={r.bdiPct} onChange={v => updateCostField(r.id, "bdiPct", v as number)} /></TableCell>
-                          <TableCell>
-                            <Badge variant={r.fonte === "SINAPI" ? "secondary" : "default"} className="text-[10px]">{r.fonte}</Badge>
-                          </TableCell>
-                          <TableCell className="text-xs font-medium">{fmtC(r.subtotal)}</TableCell>
-                          <TableCell className="text-xs font-bold">{fmtC(r.total)}</TableCell>
-                        </TableRow>
+                      {costPaddingTop > 0 && (
+                        <tr><td colSpan={10} style={{ height: costPaddingTop, padding: 0, border: "none" }} /></tr>
+                      )}
+                      {costVirtualItems.map(vi => (
+                        <MemoCostRow
+                          key={filteredCostRows[vi.index].id}
+                          row={filteredCostRows[vi.index]}
+                          onFieldChange={updateCostField}
+                        />
                       ))}
+                      {costPaddingBottom > 0 && (
+                        <tr><td colSpan={10} style={{ height: costPaddingBottom, padding: 0, border: "none" }} /></tr>
+                      )}
                     </TableBody>
                   </Table>
                 </div>
@@ -909,9 +1042,9 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                   Clique em "Carregar Trechos" para iniciar.
                 </p>
               ) : (
-                <div className="overflow-x-auto">
+                <div ref={scheduleScrollRef} className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT }}>
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
                         <TableHead className="text-xs">Trecho</TableHead>
                         <TableHead className="text-xs">Comp (m)</TableHead>
@@ -924,18 +1057,19 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredScheduleRows.map(r => (
-                        <TableRow key={r.id}>
-                          <TableCell className="text-xs max-w-[140px] truncate" title={r.nomeTrecho}>{r.nomeTrecho}</TableCell>
-                          <TableCell className="text-xs">{fmt(r.comp)}</TableCell>
-                          <TableCell><EditCell value={r.equipe} onChange={v => updateScheduleField(r.id, "equipe", v as number)} /></TableCell>
-                          <TableCell><EditCell value={r.metrosDia} onChange={v => updateScheduleField(r.id, "metrosDia", v as number)} /></TableCell>
-                          <TableCell className="text-xs font-medium">{r.diasEstimados}</TableCell>
-                          <TableCell><EditCell value={r.dataInicio} onChange={v => updateScheduleField(r.id, "dataInicio", v)} type="date" className="w-32" /></TableCell>
-                          <TableCell className="text-xs">{r.dataFim}</TableCell>
-                          <TableCell><EditCell value={r.prioridade} onChange={v => updateScheduleField(r.id, "prioridade", v as number)} /></TableCell>
-                        </TableRow>
+                      {schedulePaddingTop > 0 && (
+                        <tr><td colSpan={8} style={{ height: schedulePaddingTop, padding: 0, border: "none" }} /></tr>
+                      )}
+                      {scheduleVirtualItems.map(vi => (
+                        <MemoScheduleRow
+                          key={filteredScheduleRows[vi.index].id}
+                          row={filteredScheduleRows[vi.index]}
+                          onFieldChange={updateScheduleField}
+                        />
                       ))}
+                      {schedulePaddingBottom > 0 && (
+                        <tr><td colSpan={8} style={{ height: schedulePaddingBottom, padding: 0, border: "none" }} /></tr>
+                      )}
                     </TableBody>
                   </Table>
                 </div>
