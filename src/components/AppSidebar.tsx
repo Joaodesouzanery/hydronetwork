@@ -77,6 +77,7 @@ const sections: SidebarSection[] = [
       { title: "Recalque / Booster", url: "/hydronetwork/recalque", icon: Activity },
       { title: "Transientes Hidráulicos", url: "/hydronetwork/transientes", icon: Activity },
       { title: "CAESB / SABESP", url: "/hydronetwork/caesb", icon: Shield },
+      { title: "CAESB Pré-Projeto", url: "/hydronetwork/caesb-preprojeto", icon: ClipboardCheck },
     ],
   },
   {

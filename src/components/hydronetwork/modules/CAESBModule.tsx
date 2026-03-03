@@ -323,10 +323,10 @@ export const CAESBModule = () => {
       </Card>
 
       <Tabs defaultValue="check" className="w-full">
-        <TabsList className="w-full grid grid-cols-3">
-          <TabsTrigger value="check">Verificação</TabsTrigger>
-          <TabsTrigger value="report" disabled={!report}>Relatório</TabsTrigger>
-          <TabsTrigger value="checklist" disabled={checklist.length === 0}>Checklist Documental</TabsTrigger>
+        <TabsList className="w-full grid grid-cols-3 text-[10px] sm:text-sm">
+          <TabsTrigger value="check" className="px-1 sm:px-3">Verificação</TabsTrigger>
+          <TabsTrigger value="report" disabled={!report} className="px-1 sm:px-3">Relatório</TabsTrigger>
+          <TabsTrigger value="checklist" disabled={checklist.length === 0} className="px-1 sm:px-3">Checklist</TabsTrigger>
         </TabsList>
 
         {/* ─── Tab: Verificação ─── */}
@@ -334,7 +334,7 @@ export const CAESBModule = () => {
           {/* Network Type Selector */}
           <Card>
             <CardContent className="pt-4 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Tipo de Rede / Sistema</Label>
                   <Select value={networkType} onValueChange={(v) => setNetworkType(v as NetworkType)}>
@@ -365,7 +365,7 @@ export const CAESBModule = () => {
           {networkType === "agua" && (
             <Card>
               <CardHeader><CardTitle className="text-base flex items-center gap-2"><Droplets className="w-4 h-4" /> Dados da Rede de Água</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <Label className="text-xs">Diâmetros DN (mm) — separados por vírgula</Label>
                   <Input value={wDiameters} onChange={e => setWDiameters(e.target.value)} placeholder="100, 150, 200" />
@@ -430,7 +430,7 @@ export const CAESBModule = () => {
           {networkType === "esgoto" && (
             <Card>
               <CardHeader><CardTitle className="text-base flex items-center gap-2"><Waves className="w-4 h-4" /> Dados da Rede de Esgoto</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <Label className="text-xs">Diâmetros DN (mm)</Label>
                   <Input value={sDiameters} onChange={e => setSDiameters(e.target.value)} />
@@ -483,7 +483,7 @@ export const CAESBModule = () => {
           {networkType === "adutora" && (
             <Card>
               <CardHeader><CardTitle className="text-base flex items-center gap-2"><Activity className="w-4 h-4" /> Dados da Adutora / Transientes</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <Label className="text-xs">Diâmetro DN (mm)</Label>
                   <Input type="number" value={tDiameter} onChange={e => setTDiameter(+e.target.value)} />
@@ -548,7 +548,7 @@ export const CAESBModule = () => {
           {networkType === "elevatoria" && (
             <Card>
               <CardHeader><CardTitle className="text-base flex items-center gap-2"><Building2 className="w-4 h-4" /> Dados da Elevatória</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <Label className="text-xs">Tipo de Rede</Label>
                   <Select value={eNetType} onValueChange={(v) => setENetType(v as "agua" | "esgoto")}>
@@ -630,7 +630,7 @@ export const CAESBModule = () => {
                     <OverallStatusBadge status={report.overallStatus} />
                   </div>
 
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                     <div className="text-center p-3 rounded bg-muted">
                       <p className="text-2xl font-bold">{report.totalChecks}</p>
                       <p className="text-xs text-muted-foreground">Total</p>
@@ -654,10 +654,10 @@ export const CAESBModule = () => {
               {/* Detail table */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Detalhamento das Verificações</CardTitle>
+                  <CardTitle className="text-sm sm:text-base">Detalhamento das Verificações</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <Table>
+                <CardContent className="overflow-x-auto -mx-6 px-6">
+                  <Table className="min-w-[700px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-20">Status</TableHead>

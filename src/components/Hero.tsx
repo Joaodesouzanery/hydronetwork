@@ -798,7 +798,7 @@ const Hero = () => {
           </div>
           <div className="mt-6 sm:mt-8 pt-6 sm:pt-8 border-t border-border text-center">
             <p className="text-[10px] sm:text-xs text-muted-foreground font-mono">
-              © 2025 ConstruData. Todos os direitos reservados.
+              © 2026 ConstruData — construdata.software — Todos os direitos reservados.
             </p>
           </div>
         </div>
