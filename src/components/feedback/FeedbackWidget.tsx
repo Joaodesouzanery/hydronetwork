@@ -17,7 +17,7 @@ export function FeedbackWidget() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         // Fallback: send via email
-        window.open(`mailto:construdata.contato@gmail.com?subject=Feedback: ${feedbackType}&body=${encodeURIComponent(text)}`, '_blank');
+        window.open(`mailto:construdata.contato@gmail.com?subject=${encodeURIComponent("Feedback: " + feedbackType)}&body=${encodeURIComponent(text)}`, '_blank');
         toast.success("Redirecionando para envio por email...");
       } else {
         const { error } = await supabase.from("user_feedback").insert({

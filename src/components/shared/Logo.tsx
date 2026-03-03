@@ -15,9 +15,9 @@ export function LogoText({ className = "", textColor = "text-foreground" }: { cl
 
 export function Logo({ size = "md", showText = true, variant = "auto", className = "" }: LogoProps) {
   const sizeClasses = {
-    sm: "h-6 w-6",
-    md: "h-8 w-8",
-    lg: "h-10 w-10",
+    sm: "h-6",
+    md: "h-8",
+    lg: "h-10",
   };
 
   const textClasses = {
@@ -28,12 +28,14 @@ export function Logo({ size = "md", showText = true, variant = "auto", className
 
   const isDark = variant === "dark" || (variant === "auto" && typeof document !== "undefined" && document.documentElement.classList.contains("dark"));
 
+  const logoSrc = isDark ? "/logo-white.svg" : "/logo.svg";
+
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <img
-        src="/favicon.svg"
+        src={logoSrc}
         alt="ConstruData"
-        className={sizeClasses[size]}
+        className={`${sizeClasses[size]} object-contain`}
       />
       {showText && (
         <LogoText

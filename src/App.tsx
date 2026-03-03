@@ -46,6 +46,7 @@ const LeanConstraints = lazy(() => import("./pages/LeanConstraints"));
 const LeanDashboard = lazy(() => import("./pages/LeanDashboard"));
 const QADiagnostics = lazy(() => import("./pages/QADiagnostics"));
 const ApprovalControl = lazy(() => import("./pages/ApprovalControl"));
+const Tutorials = lazy(() => import("./pages/Tutorials"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,7 +62,7 @@ const queryClient = new QueryClient({
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen">
     <div className="text-center">
-      <img src="/favicon.svg" alt="ConstruData" className="w-10 h-10 mx-auto animate-pulse mb-3" />
+      <img src="/logo.svg" alt="ConstruData" className="h-10 mx-auto animate-pulse mb-3" />
       <p className="text-sm font-mono text-muted-foreground">Carregando...</p>
     </div>
   </div>
@@ -110,6 +111,7 @@ const AppContent = () => {
           <Route path="/modules" element={<ProtectedRoute><ModulesCatalog /></ProtectedRoute>} />
           <Route path="/qa" element={<ProtectedRoute><QADiagnostics /></ProtectedRoute>} />
           <Route path="/approval-control" element={<ProtectedRoute><ApprovalControl /></ProtectedRoute>} />
+          <Route path="/tutorials" element={<ProtectedRoute><Tutorials /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

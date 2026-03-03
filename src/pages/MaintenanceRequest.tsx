@@ -38,7 +38,7 @@ export default function MaintenanceRequest() {
   });
 
   useEffect(() => {
-    if (qrParam) {
+    if (qrParam && /^[a-zA-Z0-9_-]+$/.test(qrParam)) {
       fetchQRCodeData();
     } else {
       setIsLoading(false);
@@ -47,7 +47,8 @@ export default function MaintenanceRequest() {
 
   const fetchQRCodeData = async () => {
     try {
-      const qrCodeUrl = `${window.location.origin}/maintenance-request?qr=${qrParam}`;
+      const sanitizedParam = (qrParam || "").replace(/[^a-zA-Z0-9_-]/g, "");
+      const qrCodeUrl = `${window.location.origin}/maintenance-request?qr=${sanitizedParam}`;
       
       const { data, error } = await supabase
         .from("maintenance_qr_codes")
@@ -70,10 +71,23 @@ export default function MaintenanceRequest() {
     }
   };
 
+  const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      setPhotos((prev) => [...prev, ...newFiles].slice(0, 5)); // Max 5 photos
+      const newFiles = Array.from(e.target.files).filter((file) => {
+        if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+          toast.error(`Formato não suportado: ${file.name}. Use JPEG, PNG, WebP ou GIF.`);
+          return false;
+        }
+        if (file.size > MAX_FILE_SIZE) {
+          toast.error(`Arquivo muito grande: ${file.name}. Máximo 10MB.`);
+          return false;
+        }
+        return true;
+      });
+      setPhotos((prev) => [...prev, ...newFiles].slice(0, 5));
     }
   };
 

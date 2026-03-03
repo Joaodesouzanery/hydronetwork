@@ -105,7 +105,7 @@ const HydroNetworkLanding = () => {
       <header className="fixed top-0 left-0 right-0 z-50-lg border-b" style={{ background: "rgba(245,245,245,0.95)", borderColor: "#D4D4D4" }}>
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
+            <img src="/logo.svg" alt="ConstruData" className="h-8" />
             <span className="text-lg font-bold font-mono" style={{ color: "#10367D" }}>
               <LogoText className="text-lg" textColor="text-[#10367D]" /> <span style={{ color: "#FF6B2C" }}>HydroNetwork</span>
             </span>
@@ -375,7 +375,7 @@ const HydroNetworkLanding = () => {
         <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-5 gap-8 text-sm" style={{ color: "#94A3B8" }}>
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <img src="/favicon.svg" alt="ConstruData" className="h-6 w-6" />
+              <img src="/logo-white.svg" alt="ConstruData" className="h-6" />
               <span className="font-bold text-white text-sm">HYDRONETWORK</span>
             </div>
             <p className="text-xs">Plataforma de engenharia de saneamento</p>

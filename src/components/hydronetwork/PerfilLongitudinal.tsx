@@ -196,7 +196,7 @@ export const PerfilLongitudinal = ({ pontos, trechos }: PerfilLongitudinalProps)
       a.click();
       toast.success("Perfil exportado como PNG");
     };
-    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+    img.src = "data:image/svg+xml;base64," + btoa(new TextEncoder().encode(svgData).reduce((s, b) => s + String.fromCharCode(b), ""));
   }, []);
 
   const fmt = (n: number, d = 2) => n.toFixed(d);

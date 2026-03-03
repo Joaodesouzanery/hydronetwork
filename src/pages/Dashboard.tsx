@@ -247,7 +247,7 @@ const Dashboard = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
-          <img src="/favicon.svg" alt="ConstruData" className="w-12 h-12 mx-auto animate-pulse mb-4" />
+          <img src="/logo.svg" alt="ConstruData" className="h-10 mx-auto animate-pulse mb-4" />
           <p className="text-muted-foreground">Carregando...</p>
         </div>
       </div>
@@ -266,7 +266,7 @@ const Dashboard = () => {
               <div className="flex items-center gap-4">
                 <SidebarTrigger />
                 <div className="flex items-center gap-2">
-                  <img src="/favicon.svg" alt="ConstruData" className="w-8 h-8" />
+                  <img src="/logo.svg" alt="ConstruData" className="h-8" />
                   <LogoText className="text-xl" />
                 </div>
               </div>

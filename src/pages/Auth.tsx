@@ -279,7 +279,7 @@ const Auth = () => {
         <Card className="w-full max-w-md border border-border">
           <CardHeader className="space-y-3 sm:space-y-4">
             <div className="flex items-center justify-center gap-2">
-              <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
+              <img src="/logo.svg" alt="ConstruData" className="h-8 sm:h-10" />
               <LogoText className="text-xl sm:text-2xl" />
             </div>
             <div className="text-center">
@@ -344,7 +344,7 @@ const Auth = () => {
         <Card className="w-full max-w-md border border-border">
           <CardHeader className="space-y-3 sm:space-y-4">
             <div className="flex items-center justify-center gap-2">
-              <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
+              <img src="/logo.svg" alt="ConstruData" className="h-8 sm:h-10" />
               <LogoText className="text-xl sm:text-2xl" />
             </div>
             <div className="text-center">
@@ -392,8 +392,8 @@ const Auth = () => {
       <Card className="w-full max-w-md border border-border">
         <CardHeader className="space-y-3 sm:space-y-4">
           <div className="flex items-center justify-center gap-2">
-            <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
-            <span className="text-xl sm:text-2xl font-bold font-mono">CONSTRUDATA</span>
+            <img src="/logo.svg" alt="ConstruData" className="h-8 sm:h-10" />
+            <LogoText className="text-xl sm:text-2xl" />
           </div>
           <div className="text-center">
             <CardTitle className="text-lg sm:text-xl font-mono">
