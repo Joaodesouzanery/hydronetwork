@@ -64,6 +64,8 @@ import {
   StickyNote,
   Download,
   KanbanSquare,
+  Shield,
+  List,
 } from "lucide-react";
 
 // ══════════════════════════════════════════════════════════
@@ -73,6 +75,7 @@ import {
 type KanbanStage = "pedido_inicial" | "formulario" | "demanda_gerada" | "aprovado";
 type NetworkType = "agua" | "esgoto" | "drenagem";
 type Priority = "alta" | "media" | "baixa";
+type TipoSolicitacao = "loteamento" | "condominio" | "edificacao_multifamiliar" | "edificacao_comercial" | "orgao_publico" | "regularizacao" | "ampliacao" | "outro";
 
 interface TechnicalData {
   population: string;
@@ -96,6 +99,13 @@ interface DocumentCheckItem {
   required: boolean;
 }
 
+interface ComplianceIssue {
+  field: string;
+  message: string;
+  severity: "warning" | "critical";
+  ntsRef: string;
+}
+
 interface PreProjectCard {
   id: string;
   projectName: string;
@@ -106,6 +116,8 @@ interface PreProjectCard {
   priority: Priority;
   estimatedExtension: string;
   responsible: string;
+  tipoSolicitacao: TipoSolicitacao;
+  protocoloCAESB: string;
   stage: KanbanStage;
   createdAt: string;
   updatedAt: string;
@@ -113,6 +125,7 @@ interface PreProjectCard {
   technicalData: TechnicalData;
   documents: DocumentCheckItem[];
   observations: string;
+  complianceIssues: ComplianceIssue[];
 }
 
 // ══════════════════════════════════════════════════════════
@@ -166,6 +179,141 @@ const PRIORITY_CONFIG: Record<Priority, { label: string; badgeClass: string }> =
   media: { label: "Media", badgeClass: "bg-yellow-500 text-black" },
   baixa: { label: "Baixa", badgeClass: "bg-gray-400 text-white" },
 };
+
+const TIPO_SOLICITACAO_CONFIG: Record<TipoSolicitacao, string> = {
+  loteamento: "Loteamento",
+  condominio: "Condominio",
+  edificacao_multifamiliar: "Edificacao Multifamiliar",
+  edificacao_comercial: "Edificacao Comercial",
+  orgao_publico: "Orgao Publico",
+  regularizacao: "Regularizacao",
+  ampliacao: "Ampliacao de Rede",
+  outro: "Outro",
+};
+
+const NTS_REFERENCE: Record<NetworkType, { code: string; title: string; keyLimits: string[] }> = {
+  agua: {
+    code: "NTS 181",
+    title: "Redes de Distribuicao de Agua",
+    keyLimits: [
+      "Velocidade: 0,6 — 3,5 m/s",
+      "Pressao estatica: 10 — 50 mca",
+      "DN minimo: 50mm",
+      "Recobrimento minimo: 0,60m",
+      "Demanda: 150 — 300 L/hab.dia",
+    ],
+  },
+  esgoto: {
+    code: "NTS 183",
+    title: "Redes Coletoras de Esgoto",
+    keyLimits: [
+      "Velocidade: 0,6 — 5,0 m/s",
+      "DN minimo: 150mm",
+      "Tensao trativa: >= 1,0 Pa",
+      "Lamina maxima: 75% (Y/D)",
+      "Profundidade minima: 0,90m",
+      "Espacamento PV: <= 80m (DN<400)",
+    ],
+  },
+  drenagem: {
+    code: "NTS 183 / NBR 12266",
+    title: "Drenagem Pluvial",
+    keyLimits: [
+      "Velocidade minima: 0,75 m/s",
+      "Velocidade maxima: 5,0 m/s",
+      "DN minimo: 300mm (galeria)",
+      "Coeficiente de Manning",
+    ],
+  },
+};
+
+const NTS_DEFAULTS: Record<NetworkType, Partial<TechnicalData>> = {
+  agua: {
+    pressureMin: "10",
+    pressureMax: "50",
+    pipeMaterial: "PVC",
+    coverDepth: "0.80",
+    demandPerCapita: "200",
+  },
+  esgoto: {
+    pipeMaterial: "PVC",
+    coverDepth: "0.90",
+    slope: "0.005",
+  },
+  drenagem: {
+    pipeMaterial: "Concreto",
+    coverDepth: "1.00",
+  },
+};
+
+function runQuickComplianceCheck(card: PreProjectCard): ComplianceIssue[] {
+  const issues: ComplianceIssue[] = [];
+  const td = card.technicalData;
+
+  if (card.networkType === "agua") {
+    if (td.pipeDiameter && parseFloat(td.pipeDiameter) < 50) {
+      issues.push({ field: "Diametro", message: `DN ${td.pipeDiameter}mm < minimo 50mm`, severity: "critical", ntsRef: "NTS 181 / NBR 12218" });
+    }
+    if (td.velocity && parseFloat(td.velocity) < 0.6) {
+      issues.push({ field: "Velocidade", message: `${td.velocity} m/s < minimo 0,6 m/s`, severity: "warning", ntsRef: "NTS 181 §5.3" });
+    }
+    if (td.velocity && parseFloat(td.velocity) > 3.5) {
+      issues.push({ field: "Velocidade", message: `${td.velocity} m/s > maximo 3,5 m/s`, severity: "critical", ntsRef: "NTS 181 §5.3" });
+    }
+    if (td.pressureMin && parseFloat(td.pressureMin) < 10) {
+      issues.push({ field: "Pressao Minima", message: `${td.pressureMin} mca < minimo 10 mca`, severity: "critical", ntsRef: "NTS 181 §4.2" });
+    }
+    if (td.pressureMax && parseFloat(td.pressureMax) > 50) {
+      issues.push({ field: "Pressao Maxima", message: `${td.pressureMax} mca > maximo 50 mca`, severity: "critical", ntsRef: "NTS 181 §4.2" });
+    }
+    if (td.coverDepth && parseFloat(td.coverDepth) < 0.6) {
+      issues.push({ field: "Recobrimento", message: `${td.coverDepth}m < minimo 0,60m`, severity: "warning", ntsRef: "NTS 181 §6.1" });
+    }
+    if (td.demandPerCapita) {
+      const d = parseFloat(td.demandPerCapita);
+      if (d < 150 || d > 300) {
+        issues.push({ field: "Demanda Per Capita", message: `${td.demandPerCapita} L/hab.dia fora da faixa 150-300`, severity: "warning", ntsRef: "NTS 181 §3.1" });
+      }
+    }
+  }
+
+  if (card.networkType === "esgoto") {
+    if (td.pipeDiameter && parseFloat(td.pipeDiameter) < 150) {
+      issues.push({ field: "Diametro", message: `DN ${td.pipeDiameter}mm < minimo 150mm`, severity: "critical", ntsRef: "NTS 183 §4.1" });
+    }
+    if (td.velocity && parseFloat(td.velocity) < 0.6) {
+      issues.push({ field: "Velocidade", message: `${td.velocity} m/s < minimo autolimpeza 0,6 m/s`, severity: "warning", ntsRef: "NTS 183 §5.2" });
+    }
+    if (td.velocity && parseFloat(td.velocity) > 4.5) {
+      issues.push({ field: "Velocidade", message: `${td.velocity} m/s > limite pratico CAESB 4,5 m/s`, severity: "critical", ntsRef: "NTS 183 §5.2" });
+    }
+    if (td.coverDepth && parseFloat(td.coverDepth) < 0.9) {
+      issues.push({ field: "Profundidade", message: `${td.coverDepth}m < minimo 0,90m`, severity: "critical", ntsRef: "NTS 183 §6.2" });
+    }
+    if (td.slope) {
+      const sl = parseFloat(td.slope);
+      const dn = td.pipeDiameter ? parseFloat(td.pipeDiameter) : 200;
+      const minSlope = dn <= 150 ? 0.005 : 0.004;
+      if (sl < minSlope) {
+        issues.push({ field: "Declividade", message: `${td.slope} m/m < minimo ${minSlope} m/m para DN${dn}`, severity: "critical", ntsRef: "NTS 183 §5.4" });
+      }
+    }
+  }
+
+  if (card.networkType === "drenagem") {
+    if (td.pipeDiameter && parseFloat(td.pipeDiameter) < 300) {
+      issues.push({ field: "Diametro", message: `DN ${td.pipeDiameter}mm < minimo 300mm (galeria)`, severity: "warning", ntsRef: "NBR 12266" });
+    }
+    if (td.velocity && parseFloat(td.velocity) < 0.75) {
+      issues.push({ field: "Velocidade", message: `${td.velocity} m/s < minimo 0,75 m/s`, severity: "warning", ntsRef: "NBR 12266" });
+    }
+    if (td.velocity && parseFloat(td.velocity) > 5.0) {
+      issues.push({ field: "Velocidade", message: `${td.velocity} m/s > maximo 5,0 m/s`, severity: "critical", ntsRef: "NBR 12266" });
+    }
+  }
+
+  return issues;
+}
 
 const REGIOES_ADMINISTRATIVAS = [
   "Plano Piloto (RA I)",
@@ -287,6 +435,76 @@ function PriorityBadge({ priority }: { priority: Priority }) {
 function StageBadge({ stage }: { stage: KanbanStage }) {
   const config = STAGE_CONFIG[stage];
   return <Badge className={`${config.badgeClass} text-xs`}>{config.label}</Badge>;
+}
+
+function NTSReferenceBanner({ networkType }: { networkType: NetworkType }) {
+  const nts = NTS_REFERENCE[networkType];
+  return (
+    <div className="p-3 rounded-lg border border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <Shield className="w-4 h-4 text-[#10367D]" />
+        <span className="text-xs font-bold text-[#10367D]">
+          CAESB {nts.code} — {nts.title}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {nts.keyLimits.map((limit, i) => (
+          <span key={i} className="text-[10px] text-muted-foreground font-mono">
+            {limit}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ComplianceResultBanner({ issues }: { issues: ComplianceIssue[] }) {
+  if (issues.length === 0) {
+    return (
+      <div className="p-3 rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20">
+        <div className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
+          <CheckCircle2 className="w-4 h-4" />
+          Conformidade CAESB: Nenhuma irregularidade detectada nos dados informados.
+        </div>
+      </div>
+    );
+  }
+  const criticals = issues.filter(i => i.severity === "critical");
+  const warnings = issues.filter(i => i.severity === "warning");
+  return (
+    <div className="space-y-2">
+      {criticals.length > 0 && (
+        <div className="p-3 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/20 space-y-1">
+          <div className="flex items-center gap-2 text-sm font-medium text-red-700 dark:text-red-400">
+            <AlertTriangle className="w-4 h-4" />
+            {criticals.length} nao-conformidade(s) critica(s)
+          </div>
+          {criticals.map((issue, i) => (
+            <div key={i} className="text-xs text-red-600 dark:text-red-400 flex items-start gap-1 ml-6">
+              <span className="font-semibold">{issue.field}:</span>
+              <span>{issue.message}</span>
+              <Badge variant="outline" className="text-[9px] ml-1 flex-shrink-0">{issue.ntsRef}</Badge>
+            </div>
+          ))}
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div className="p-3 rounded-lg border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 space-y-1">
+          <div className="flex items-center gap-2 text-sm font-medium text-yellow-700 dark:text-yellow-400">
+            <AlertTriangle className="w-4 h-4" />
+            {warnings.length} alerta(s)
+          </div>
+          {warnings.map((issue, i) => (
+            <div key={i} className="text-xs text-yellow-700 dark:text-yellow-400 flex items-start gap-1 ml-6">
+              <span className="font-semibold">{issue.field}:</span>
+              <span>{issue.message}</span>
+              <Badge variant="outline" className="text-[9px] ml-1 flex-shrink-0">{issue.ntsRef}</Badge>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ══════════════════════════════════════════════════════════
@@ -471,7 +689,7 @@ function CreateCardDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (card: Omit<PreProjectCard, "id" | "createdAt" | "updatedAt" | "demandNumber" | "technicalData" | "documents" | "observations" | "stage">) => void;
+  onSubmit: (card: Omit<PreProjectCard, "id" | "createdAt" | "updatedAt" | "demandNumber" | "technicalData" | "documents" | "observations" | "stage" | "complianceIssues">) => void;
 }) {
   const [projectName, setProjectName] = useState("");
   const [client, setClient] = useState("");
@@ -481,6 +699,8 @@ function CreateCardDialog({
   const [priority, setPriority] = useState<Priority>("media");
   const [estimatedExtension, setEstimatedExtension] = useState("");
   const [responsible, setResponsible] = useState("");
+  const [tipoSolicitacao, setTipoSolicitacao] = useState<TipoSolicitacao>("loteamento");
+  const [protocoloCAESB, setProtocoloCAESB] = useState("");
 
   const resetForm = () => {
     setProjectName("");
@@ -491,6 +711,8 @@ function CreateCardDialog({
     setPriority("media");
     setEstimatedExtension("");
     setResponsible("");
+    setTipoSolicitacao("loteamento");
+    setProtocoloCAESB("");
   };
 
   const handleSubmit = () => {
@@ -515,6 +737,8 @@ function CreateCardDialog({
       priority,
       estimatedExtension: estimatedExtension.trim(),
       responsible: responsible.trim(),
+      tipoSolicitacao,
+      protocoloCAESB: protocoloCAESB.trim(),
     });
     resetForm();
     onOpenChange(false);
@@ -583,6 +807,31 @@ function CreateCardDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
+              <Label>Tipo de Solicitacao *</Label>
+              <Select value={tipoSolicitacao} onValueChange={(v) => setTipoSolicitacao(v as TipoSolicitacao)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.entries(TIPO_SOLICITACAO_CONFIG) as [TipoSolicitacao, string][]).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-protocolo">Protocolo CAESB</Label>
+              <Input
+                id="create-protocolo"
+                placeholder="Ex: CAESB-2026-000000"
+                value={protocoloCAESB}
+                onChange={(e) => setProtocoloCAESB(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
               <Label>Tipo de Rede *</Label>
               <Select value={networkType} onValueChange={(v) => setNetworkType(v as NetworkType)}>
                 <SelectTrigger>
@@ -622,6 +871,8 @@ function CreateCardDialog({
               </Select>
             </div>
           </div>
+
+          <NTSReferenceBanner networkType={networkType} />
 
           <div className="space-y-2">
             <Label htmlFor="create-extension">Extensao Estimada (m)</Label>
@@ -687,6 +938,21 @@ function TechnicalFormDialog({
     setDocs((prev) => prev.map((d) => (d.id === docId ? { ...d, checked: !d.checked } : d)));
   };
 
+  const handleAutoFillNTS = () => {
+    const defaults = NTS_DEFAULTS[card.networkType];
+    if (!defaults) return;
+    setTechData((prev) => {
+      const updated = { ...prev };
+      Object.entries(defaults).forEach(([key, value]) => {
+        if (!prev[key as keyof TechnicalData]) {
+          updated[key as keyof TechnicalData] = value as string;
+        }
+      });
+      return updated;
+    });
+    toast.success(`Valores padrao CAESB ${NTS_REFERENCE[card.networkType].code} aplicados nos campos vazios.`);
+  };
+
   const docsProgress = useMemo(() => {
     const required = docs.filter((d) => d.required);
     const checkedRequired = required.filter((d) => d.checked);
@@ -712,6 +978,8 @@ function TechnicalFormDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <NTSReferenceBanner networkType={card.networkType} />
+
         <Tabs defaultValue="technical" className="w-full">
           <TabsList className="w-full grid grid-cols-3">
             <TabsTrigger value="technical">Dados Tecnicos</TabsTrigger>
@@ -720,6 +988,12 @@ function TechnicalFormDialog({
           </TabsList>
 
           <TabsContent value="technical" className="space-y-4 mt-4">
+            <div className="flex justify-end">
+              <Button size="sm" variant="outline" onClick={handleAutoFillNTS} className="text-xs gap-1">
+                <Shield className="w-3 h-3" />
+                Preencher padrao {NTS_REFERENCE[card.networkType].code}
+              </Button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="flex items-center gap-1 text-xs">
@@ -964,6 +1238,9 @@ function DemandSummaryDialog({
       `Responsavel: ${card.responsible || "Nao atribuido"}`,
       `Regiao Administrativa: ${card.location}`,
       `Tipo de Rede: ${NETWORK_TYPE_CONFIG[card.networkType].label}`,
+      `Tipo de Solicitacao: ${TIPO_SOLICITACAO_CONFIG[card.tipoSolicitacao]}`,
+      `Protocolo CAESB: ${card.protocoloCAESB || "N/I"}`,
+      `NTS Aplicavel: CAESB ${NTS_REFERENCE[card.networkType].code}`,
       `Prioridade: ${PRIORITY_CONFIG[card.priority].label}`,
       `Extensao Estimada: ${card.estimatedExtension || "N/I"} m`,
       `Descricao: ${card.description || "N/I"}`,
@@ -995,6 +1272,25 @@ function DemandSummaryDialog({
 
     if (card.observations) {
       lines.push("--- OBSERVACOES ---", card.observations, "");
+    }
+
+    if (card.complianceIssues.length > 0) {
+      lines.push("--- VERIFICACAO CONFORMIDADE CAESB ---");
+      const criticals = card.complianceIssues.filter(i => i.severity === "critical");
+      const warnings = card.complianceIssues.filter(i => i.severity === "warning");
+      if (criticals.length > 0) {
+        lines.push(`  NAO-CONFORMIDADES CRITICAS (${criticals.length}):`);
+        criticals.forEach(i => lines.push(`    [!] ${i.field}: ${i.message} (${i.ntsRef})`));
+      }
+      if (warnings.length > 0) {
+        lines.push(`  ALERTAS (${warnings.length}):`);
+        warnings.forEach(i => lines.push(`    [~] ${i.field}: ${i.message} (${i.ntsRef})`));
+      }
+      lines.push("");
+    } else {
+      lines.push("--- VERIFICACAO CONFORMIDADE CAESB ---");
+      lines.push(`  Conformidade CAESB ${NTS_REFERENCE[card.networkType].code}: OK`);
+      lines.push("");
     }
 
     lines.push(
@@ -1074,6 +1370,20 @@ function DemandSummaryDialog({
                   <span className="font-medium">{card.estimatedExtension || "N/I"} m</span>
                 </div>
                 <div>
+                  <span className="text-muted-foreground">Solicitacao:</span>{" "}
+                  <span className="font-medium">{TIPO_SOLICITACAO_CONFIG[card.tipoSolicitacao]}</span>
+                </div>
+                {card.protocoloCAESB && (
+                  <div>
+                    <span className="text-muted-foreground">Protocolo CAESB:</span>{" "}
+                    <span className="font-medium font-mono">{card.protocoloCAESB}</span>
+                  </div>
+                )}
+                <div>
+                  <span className="text-muted-foreground">NTS Aplicavel:</span>{" "}
+                  <span className="font-medium">{NTS_REFERENCE[card.networkType].code}</span>
+                </div>
+                <div>
                   <span className="text-muted-foreground">Criado em:</span>{" "}
                   <span className="font-medium">{formatDate(card.createdAt)}</span>
                 </div>
@@ -1086,6 +1396,29 @@ function DemandSummaryDialog({
               )}
             </CardContent>
           </Card>
+
+          {card.complianceIssues.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-[#10367D]" />
+                  Verificacao de Conformidade CAESB
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ComplianceResultBanner issues={card.complianceIssues} />
+              </CardContent>
+            </Card>
+          )}
+
+          {card.complianceIssues.length === 0 && (card.stage === "demanda_gerada" || card.stage === "aprovado") && (
+            <div className="p-3 rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20">
+              <div className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
+                <CheckCircle2 className="w-4 h-4" />
+                Conformidade CAESB {NTS_REFERENCE[card.networkType].code}: OK
+              </div>
+            </div>
+          )}
 
           <Card>
             <CardHeader className="pb-2">
@@ -1250,6 +1583,20 @@ function CardDetailDialog({
               <span className="font-medium">{card.location}</span>
             </div>
             <div className="flex gap-2">
+              <span className="text-muted-foreground min-w-[100px]">Solicitacao:</span>
+              <span className="font-medium">{TIPO_SOLICITACAO_CONFIG[card.tipoSolicitacao]}</span>
+            </div>
+            {card.protocoloCAESB && (
+              <div className="flex gap-2">
+                <span className="text-muted-foreground min-w-[100px]">Protocolo:</span>
+                <span className="font-medium font-mono">{card.protocoloCAESB}</span>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <span className="text-muted-foreground min-w-[100px]">NTS:</span>
+              <span className="font-medium">{NTS_REFERENCE[card.networkType].code}</span>
+            </div>
+            <div className="flex gap-2">
               <span className="text-muted-foreground min-w-[100px]">Extensao:</span>
               <span className="font-medium">{card.estimatedExtension || "N/I"} m</span>
             </div>
@@ -1260,6 +1607,8 @@ function CardDetailDialog({
               </div>
             )}
           </div>
+
+          {card.complianceIssues.length > 0 && <ComplianceResultBanner issues={card.complianceIssues} />}
 
           {card.stage === "formulario" && (
             <Button
@@ -1338,8 +1687,16 @@ export const CAESBPreProjectModule = () => {
 
   // ── Create card ──
   const handleCreateCard = useCallback(
-    (data: Omit<PreProjectCard, "id" | "createdAt" | "updatedAt" | "demandNumber" | "technicalData" | "documents" | "observations" | "stage">) => {
+    (data: Omit<PreProjectCard, "id" | "createdAt" | "updatedAt" | "demandNumber" | "technicalData" | "documents" | "observations" | "stage" | "complianceIssues">) => {
       const now = new Date().toISOString();
+      // Auto-fill NTS defaults based on network type
+      const defaultTech = createDefaultTechnicalData();
+      const ntsDefaults = NTS_DEFAULTS[data.networkType];
+      if (ntsDefaults) {
+        Object.entries(ntsDefaults).forEach(([key, value]) => {
+          defaultTech[key as keyof TechnicalData] = value as string;
+        });
+      }
       const newCard: PreProjectCard = {
         id: `PP-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         ...data,
@@ -1347,31 +1704,89 @@ export const CAESBPreProjectModule = () => {
         createdAt: now,
         updatedAt: now,
         demandNumber: null,
-        technicalData: createDefaultTechnicalData(),
+        technicalData: defaultTech,
         documents: createDefaultDocuments(),
         observations: "",
+        complianceIssues: [],
       };
       setCards((prev) => [...prev, newCard]);
     },
     []
   );
 
+  // ── Validate stage transition ──
+  const validateTransition = useCallback((card: PreProjectCard, nextStage: KanbanStage): string[] => {
+    const errors: string[] = [];
+
+    if (nextStage === "demanda_gerada") {
+      // Require key technical fields
+      const td = card.technicalData;
+      if (!td.population) errors.push("Populacao atendida nao informada");
+      if (!td.flowRate) errors.push("Vazao nao informada");
+      if (!td.pipeDiameter) errors.push("Diametro da tubulacao nao informado");
+
+      // Require all mandatory documents checked
+      const uncheckedRequired = card.documents.filter(d => d.required && !d.checked);
+      if (uncheckedRequired.length > 0) {
+        errors.push(`${uncheckedRequired.length} documento(s) obrigatorio(s) pendente(s)`);
+      }
+    }
+
+    if (nextStage === "aprovado") {
+      // Must have demand number
+      if (!card.demandNumber) errors.push("Numero de demanda nao gerado");
+      // Check for critical compliance issues
+      const criticals = card.complianceIssues.filter(i => i.severity === "critical");
+      if (criticals.length > 0) {
+        errors.push(`${criticals.length} nao-conformidade(s) critica(s) CAESB nao resolvida(s)`);
+      }
+    }
+
+    return errors;
+  }, []);
+
   // ── Move to next stage ──
   const handleMoveNext = useCallback(
     (id: string) => {
-      setCards((prev) =>
-        prev.map((c) => {
-          if (c.id !== id) return c;
-          const currentIndex = STAGE_ORDER.indexOf(c.stage);
-          if (currentIndex >= STAGE_ORDER.length - 1) return c;
+      setCards((prev) => {
+        const card = prev.find(c => c.id === id);
+        if (!card) return prev;
 
-          const nextStage = STAGE_ORDER[currentIndex + 1];
+        const currentIndex = STAGE_ORDER.indexOf(card.stage);
+        if (currentIndex >= STAGE_ORDER.length - 1) return prev;
+
+        const nextStage = STAGE_ORDER[currentIndex + 1];
+
+        // Validate transition
+        const errors = validateTransition(card, nextStage);
+        if (errors.length > 0) {
+          toast.error(
+            `Nao e possivel mover para "${STAGE_CONFIG[nextStage].label}":\n• ${errors.join("\n• ")}`,
+            { duration: 6000 }
+          );
+          return prev;
+        }
+
+        return prev.map((c) => {
+          if (c.id !== id) return c;
           const now = new Date().toISOString();
 
           let demandNumber = c.demandNumber;
+          let complianceIssues = c.complianceIssues;
+
           if (nextStage === "demanda_gerada" && !c.demandNumber) {
             demandNumber = generateDemandNumber();
-            toast.success(`Demanda gerada: ${demandNumber}`);
+            // Run compliance check on transition to Demanda Gerada
+            complianceIssues = runQuickComplianceCheck(c);
+            const criticals = complianceIssues.filter(i => i.severity === "critical").length;
+            const warnings = complianceIssues.filter(i => i.severity === "warning").length;
+            if (criticals > 0) {
+              toast.warning(`Demanda ${demandNumber} gerada com ${criticals} alerta(s) critico(s) CAESB.`, { duration: 5000 });
+            } else if (warnings > 0) {
+              toast.success(`Demanda ${demandNumber} gerada com ${warnings} ressalva(s).`);
+            } else {
+              toast.success(`Demanda ${demandNumber} gerada — conformidade CAESB OK!`);
+            }
           }
 
           if (nextStage === "aprovado") {
@@ -1383,11 +1798,12 @@ export const CAESBPreProjectModule = () => {
             stage: nextStage,
             updatedAt: now,
             demandNumber,
+            complianceIssues,
           };
-        })
-      );
+        });
+      });
     },
-    []
+    [validateTransition]
   );
 
   // ── Move to previous stage ──
