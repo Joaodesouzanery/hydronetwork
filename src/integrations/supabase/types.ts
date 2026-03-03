@@ -4112,6 +4112,314 @@ export type Database = {
           },
         ]
       }
+      hydro_saved_plans: {
+        Row: {
+          id: string
+          user_id: string | null
+          nome: string
+          descricao: string | null
+          num_equipes: number
+          team_config: Json
+          metros_dia: number
+          horas_trabalho: number
+          work_days: number
+          data_inicio: string | null
+          data_termino: string | null
+          productivity: Json
+          holidays: Json
+          trecho_overrides: Json
+          service_notes: Json
+          trecho_metadata: Json
+          grouping_mode: string
+          schedule_snapshot: Json | null
+          total_metros: number | null
+          total_dias: number | null
+          custo_total: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          nome: string
+          descricao?: string | null
+          num_equipes?: number
+          team_config?: Json
+          metros_dia?: number
+          horas_trabalho?: number
+          work_days?: number
+          data_inicio?: string | null
+          data_termino?: string | null
+          productivity?: Json
+          holidays?: Json
+          trecho_overrides?: Json
+          service_notes?: Json
+          trecho_metadata?: Json
+          grouping_mode?: string
+          schedule_snapshot?: Json | null
+          total_metros?: number | null
+          total_dias?: number | null
+          custo_total?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          nome?: string
+          descricao?: string | null
+          num_equipes?: number
+          team_config?: Json
+          metros_dia?: number
+          horas_trabalho?: number
+          work_days?: number
+          data_inicio?: string | null
+          data_termino?: string | null
+          productivity?: Json
+          holidays?: Json
+          trecho_overrides?: Json
+          service_notes?: Json
+          trecho_metadata?: Json
+          grouping_mode?: string
+          schedule_snapshot?: Json | null
+          total_metros?: number | null
+          total_dias?: number | null
+          custo_total?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      hydro_rdos: {
+        Row: {
+          id: string
+          user_id: string | null
+          project_id: string
+          date: string
+          project_name: string
+          obra_name: string | null
+          status: string
+          services: Json
+          segments: Json
+          notes: string | null
+          occurrences: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          project_id?: string
+          date?: string
+          project_name?: string
+          obra_name?: string | null
+          status?: string
+          services?: Json
+          segments?: Json
+          notes?: string | null
+          occurrences?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          project_id?: string
+          date?: string
+          project_name?: string
+          obra_name?: string | null
+          status?: string
+          services?: Json
+          segments?: Json
+          notes?: string | null
+          occurrences?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      hydro_equipments: {
+        Row: {
+          id: string
+          user_id: string | null
+          nome: string
+          tipo: string
+          placa: string | null
+          proprietario: string | null
+          custo_hora: number
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          nome: string
+          tipo?: string
+          placa?: string | null
+          proprietario?: string | null
+          custo_hora?: number
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          nome?: string
+          tipo?: string
+          placa?: string | null
+          proprietario?: string | null
+          custo_hora?: number
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      hydro_dimensioning_projects: {
+        Row: {
+          id: string
+          user_id: string | null
+          nome: string
+          project_data: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          nome: string
+          project_data?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          nome?: string
+          project_data?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      hydro_bdi_contracts: {
+        Row: {
+          id: string
+          user_id: string | null
+          nome: string
+          contratante: string | null
+          tipo_contrato: string | null
+          numero_edital: string | null
+          status: string | null
+          municipio: string | null
+          estado: string | null
+          data_inicio: string | null
+          data_termino: string | null
+          duracao_meses: number | null
+          custo_direto_total: number | null
+          bdi_percentual: number | null
+          preco_venda: number | null
+          valor_edital: number | null
+          contract_data: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          nome: string
+          contratante?: string | null
+          tipo_contrato?: string | null
+          numero_edital?: string | null
+          status?: string | null
+          municipio?: string | null
+          estado?: string | null
+          data_inicio?: string | null
+          data_termino?: string | null
+          duracao_meses?: number | null
+          custo_direto_total?: number | null
+          bdi_percentual?: number | null
+          preco_venda?: number | null
+          valor_edital?: number | null
+          contract_data?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          nome?: string
+          contratante?: string | null
+          tipo_contrato?: string | null
+          numero_edital?: string | null
+          status?: string | null
+          municipio?: string | null
+          estado?: string | null
+          data_inicio?: string | null
+          data_termino?: string | null
+          duracao_meses?: number | null
+          bdi_percentual?: number | null
+          preco_venda?: number | null
+          valor_edital?: number | null
+          contract_data?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      project_approval_control: {
+        Row: {
+          id: string
+          user_id: string | null
+          project_id: string | null
+          nome_projeto: string
+          etapa: string
+          sub_etapa: string | null
+          emissor: string
+          destinatario: string | null
+          data_envio: string
+          prazo: string | null
+          status: string | null
+          observacoes: string | null
+          updated_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          project_id?: string | null
+          nome_projeto: string
+          etapa: string
+          sub_etapa?: string | null
+          emissor: string
+          destinatario?: string | null
+          data_envio?: string
+          prazo?: string | null
+          status?: string | null
+          observacoes?: string | null
+          updated_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          project_id?: string | null
+          nome_projeto?: string
+          etapa?: string
+          sub_etapa?: string | null
+          emissor?: string
+          destinatario?: string | null
+          data_envio?: string
+          prazo?: string | null
+          status?: string | null
+          observacoes?: string | null
+          updated_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

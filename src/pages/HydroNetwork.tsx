@@ -51,6 +51,7 @@ const QEsgWaterModule = lazy(() => import("@/components/hydronetwork/modules/QEs
 const ElevatorStationModule = lazy(() => import("@/components/hydronetwork/modules/ElevatorStationModule").then(m => ({ default: m.ElevatorStationModule })));
 const RecalqueModule = lazy(() => import("@/components/hydronetwork/modules/RecalqueModule").then(m => ({ default: m.RecalqueModule })));
 const TransientModule = lazy(() => import("@/components/hydronetwork/modules/TransientModule").then(m => ({ default: m.TransientModule })));
+const CAESBModule = lazy(() => import("@/components/hydronetwork/modules/CAESBModule").then(m => ({ default: m.CAESBModule })));
 import { QEsgWaterPanel } from "@/components/hydronetwork/panels/QEsgWaterPanel";
 import { getRasterGrid } from "@/engine/rasterStore";
 import { extractContours, type ContourExtractionResult } from "@/engine/contourExtractor";
@@ -310,6 +311,8 @@ const HydroNetwork = () => {
         return <RecalqueModule />;
       case "transientes":
         return <TransientModule />;
+      case "caesb":
+        return <CAESBModule />;
       case "perfil":
         return <PerfilLongitudinal pontos={pontos} trechos={trechos} />;
       case "mapa":

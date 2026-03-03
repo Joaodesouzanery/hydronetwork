@@ -76,6 +76,7 @@ const sections: SidebarSection[] = [
       { title: "Orçamento de Elevatória", url: "/hydronetwork/elevatoria", icon: Activity },
       { title: "Recalque / Booster", url: "/hydronetwork/recalque", icon: Activity },
       { title: "Transientes Hidráulicos", url: "/hydronetwork/transientes", icon: Activity },
+      { title: "CAESB / SABESP", url: "/hydronetwork/caesb", icon: Shield },
     ],
   },
   {
