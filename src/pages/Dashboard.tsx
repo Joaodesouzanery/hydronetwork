@@ -10,6 +10,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SurveyNotification } from "@/components/shared/SurveyNotification";
+import { LogoText } from "@/components/shared/Logo";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -266,7 +267,7 @@ const Dashboard = () => {
                 <SidebarTrigger />
                 <div className="flex items-center gap-2">
                   <img src="/favicon.svg" alt="ConstruData" className="w-8 h-8" />
-                  <span className="text-xl font-bold font-mono">CONSTRUDATA</span>
+                  <LogoText className="text-xl" />
                 </div>
               </div>
               <div className="flex items-center gap-4">

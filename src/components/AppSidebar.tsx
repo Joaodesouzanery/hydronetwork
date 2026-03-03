@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
+import { LogoText } from "@/components/shared/Logo";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -121,9 +122,7 @@ export function AppSidebar() {
             className="h-10 w-10 flex-shrink-0"
           />
           {open && (
-            <span className="text-lg font-bold font-mono text-white tracking-tight">
-              CONSTRUDATA
-            </span>
+            <LogoText className="text-lg tracking-tight" textColor="text-white" />
           )}
         </div>
       </SidebarHeader>

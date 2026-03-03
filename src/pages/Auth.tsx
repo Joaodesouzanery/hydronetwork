@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Building2, Calendar, Eye, EyeOff, CheckCircle2, ArrowLeft } from "lucide-react";
 import { z } from "zod";
 import { PasswordStrengthIndicator } from "@/components/auth/PasswordStrengthIndicator";
+import { LogoText } from "@/components/shared/Logo";
 
 const signInSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -279,7 +280,7 @@ const Auth = () => {
           <CardHeader className="space-y-3 sm:space-y-4">
             <div className="flex items-center justify-center gap-2">
               <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
-              <span className="text-xl sm:text-2xl font-bold font-mono">CONSTRUDATA</span>
+              <LogoText className="text-xl sm:text-2xl" />
             </div>
             <div className="text-center">
               <CardTitle className="text-lg sm:text-xl">Redefinir Senha</CardTitle>
@@ -344,7 +345,7 @@ const Auth = () => {
           <CardHeader className="space-y-3 sm:space-y-4">
             <div className="flex items-center justify-center gap-2">
               <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
-              <span className="text-xl sm:text-2xl font-bold font-mono">CONSTRUDATA</span>
+              <LogoText className="text-xl sm:text-2xl" />
             </div>
             <div className="text-center">
               <CardTitle className="text-lg sm:text-xl">Esqueci minha senha</CardTitle>

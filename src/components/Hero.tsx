@@ -14,6 +14,7 @@ import { motion, useAnimation, useInView } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { FAQ } from "@/components/FAQ";
+import { LogoText } from "@/components/shared/Logo";
 
 /* ═══════════════════════════════════════════════════
    ConstruData Landing Page — Myna Hero Design System
@@ -141,7 +142,7 @@ const Hero = () => {
             {/* Logo */}
             <a href="#" className="flex items-center gap-2">
               <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
-              <span className="font-mono text-xl font-bold text-foreground">ConstruData</span>
+              <LogoText className="text-xl" textColor="text-foreground" />
             </a>
 
             {/* Desktop Nav */}
@@ -538,7 +539,7 @@ const Hero = () => {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <img src="/favicon.svg" alt="ConstruData" className="h-6 w-6" />
-                <span className="font-bold text-sm">CONSTRUDATA</span>
+                <LogoText className="text-sm" />
               </div>
               <p className="text-xs text-muted-foreground">
                 Plataforma completa de engenharia de saneamento e gestão de obras.

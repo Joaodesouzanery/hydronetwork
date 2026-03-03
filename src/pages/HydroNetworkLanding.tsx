@@ -9,6 +9,7 @@ import {
   Globe, Calculator, Layers, GitBranch, Shield, Eye, Map, DollarSign,
   Palette, AlertTriangle, Building2, Ruler, Newspaper
 } from "lucide-react";
+import { LogoText } from "@/components/shared/Logo";
 
 const CostMapSVG = () => (
   <svg viewBox="0 0 800 450" className="w-full border-2" style={{ background: "#0E1B3D", borderColor: "#1E3A6E" }}>
@@ -106,7 +107,7 @@ const HydroNetworkLanding = () => {
           <div className="flex items-center gap-2">
             <img src="/favicon.svg" alt="ConstruData" className="h-8 w-8" />
             <span className="text-lg font-bold font-mono" style={{ color: "#10367D" }}>
-              CONSTRUDATA <span style={{ color: "#FF6B2C" }}>HydroNetwork</span>
+              <LogoText className="text-lg" textColor="text-[#10367D]" /> <span style={{ color: "#FF6B2C" }}>HydroNetwork</span>
             </span>
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm">
