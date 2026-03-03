@@ -8,11 +8,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Calculator, FileSpreadsheet, Download, Pickaxe, Route, ClipboardList, DollarSign, BarChart3 } from "lucide-react";
+import { Calculator, FileSpreadsheet, Download, Pickaxe, Route, ClipboardList, DollarSign, BarChart3, Upload, MapPin, FileDown } from "lucide-react";
 import { Trecho } from "@/engine/domain";
 import { PontoTopografico } from "@/engine/reader";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
+import { SINAPI_COSTS } from "@/engine/sinapi";
+import { parseCostBaseFile, type CostBase } from "@/engine/budget";
+import { saveModuleData, exportAsCSV, exportAsGeoJSON, exportTrechosWithAttributes } from "@/engine/moduleExchange";
 
 // Minimum pipe slope for self-cleaning velocity (NBR 9649 / NBR 12207)
 const getMinSlope = (dn: number): number => {
@@ -22,46 +25,6 @@ const getMinSlope = (dn: number): number => {
   if (dn <= 300) return 0.002;    // 0.20%
   return 0.0015;                   // 0.15% (DN400+)
 };
-
-// SINAPI reference cost table (Ref: SINAPI 01/2026 - Desonerado - SP — ajustado INCC +8%)
-const SINAPI_COSTS = {
-  escavacao: {
-    "0-1.5": { codigo: "96995", descricao: "Escavação mecanizada 1ª cat. até 1,5m", unit: "m³", custo: 30.78 },
-    "1.5-3": { codigo: "96996", descricao: "Escavação mecanizada 1ª cat. 1,5-3m", unit: "m³", custo: 38.02 },
-    "3-4.5": { codigo: "96997", descricao: "Escavação mecanizada 1ª cat. 3-4,5m", unit: "m³", custo: 46.22 },
-    "rocha": { codigo: "96999", descricao: "Escavação 3ª cat. (rocha)", unit: "m³", custo: 135.54 },
-  },
-  escoramento: {
-    madeira: { codigo: "95241", descricao: "Escoramento contínuo madeira", unit: "m²", custo: 49.46 },
-    metalico: { codigo: "95242", descricao: "Escoramento metálico", unit: "m²", custo: 41.58 },
-    estaca: { codigo: "95243", descricao: "Estaca-prancha", unit: "m²", custo: 92.02 },
-  },
-  tubulacao: {
-    150: { codigo: "89356", descricao: "Tubo PVC DN150 implantado", unit: "m", custo: 135.54 },
-    200: { codigo: "89357", descricao: "Tubo PVC DN200 implantado", unit: "m", custo: 200.12 },
-    250: { codigo: "89358", descricao: "Tubo PVC DN250 implantado", unit: "m", custo: 287.06 },
-    300: { codigo: "89359", descricao: "Tubo PVC DN300 implantado", unit: "m", custo: 383.62 },
-    400: { codigo: "89361", descricao: "Tubo PVC DN400 implantado", unit: "m", custo: 524.45 },
-  },
-  reaterro: {
-    compactado: { codigo: "97914", descricao: "Reaterro compactado", unit: "m³", custo: 19.98 },
-    berco: { codigo: "97905", descricao: "Berço de areia", unit: "m³", custo: 102.92 },
-    envoltoria: { codigo: "97906", descricao: "Envoltória com areia", unit: "m³", custo: 92.34 },
-  },
-  pavimentacao: {
-    subbase: { codigo: "95995", descricao: "Sub-base BGS", unit: "m³", custo: 135.32 },
-    base: { codigo: "95996", descricao: "Base brita graduada", unit: "m³", custo: 157.46 },
-    cbuq: { codigo: "95998", descricao: "CBUQ 5cm (asfalto)", unit: "m²", custo: 30.78 },
-    concreto: { codigo: "96001", descricao: "Pavimento concreto", unit: "m²", custo: 91.80 },
-    bloquete: { codigo: "96003", descricao: "Bloquete intertravado", unit: "m²", custo: 59.40 },
-  },
-  pv: {
-    "0-1.5": { codigo: "89709", descricao: "PV concreto até 1,5m", unit: "un", custo: 3078.00 },
-    "1.5-2.5": { codigo: "89710", descricao: "PV concreto 1,5-2,5m", unit: "un", custo: 4590.00 },
-    "2.5-4": { codigo: "89711", descricao: "PV concreto 2,5-4,0m", unit: "un", custo: 7398.00 },
-  },
-  botafora: { codigo: "97918", descricao: "Carga, transporte e descarga - bota-fora", unit: "m³", custo: 13.50 },
-} as const;
 
 export interface QuantRow {
   id: string;
@@ -127,6 +90,48 @@ export const QuantitiesModule = ({ trechos, pontos, onQuantitiesCalculated }: Qu
   const [tipoEscoramento, setTipoEscoramento] = useState("madeira");
   const [recobrimentoMin, setRecobrimentoMin] = useState(1.0);
   const [rows, setRows] = useState<QuantRow[]>([]);
+  const [customCostBase, setCustomCostBase] = useState<CostBase | null>(null);
+  const costBaseFileRef = useState<HTMLInputElement | null>(null);
+
+  // Custom cost base import handler
+  const handleCustomCostImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const cb = await parseCostBaseFile(file);
+      setCustomCostBase(cb);
+      toast.success(`Base de custos própria carregada: ${cb.size} itens.`);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao importar base de custos.");
+    }
+  };
+
+  // Inter-module export: CSV with attributes
+  const exportCSVWithAttributes = () => {
+    if (rows.length === 0) { toast.error("Calcule primeiro."); return; }
+    const data = exportTrechosWithAttributes(trechos, rows);
+    exportAsCSV(data, "quantitativos_trechos.csv");
+    toast.success("CSV exportado com atributos completos.");
+  };
+
+  // Inter-module export: GeoJSON
+  const exportGeoJSONHandler = () => {
+    if (rows.length === 0) { toast.error("Calcule primeiro."); return; }
+    const props = rows.map(r => ({
+      id: r.id,
+      trecho: r.trecho,
+      comprimento: r.comp,
+      dn: r.dn,
+      prof: r.prof,
+      escavacao: r.escavacao,
+      reaterro: r.reaterro,
+      botafora: r.botafora,
+      pavimento: r.pavimento,
+      custoTotal: r.custoTotal,
+    }));
+    exportAsGeoJSON(trechos, props, "quantitativos.geojson");
+    toast.success("GeoJSON exportado.");
+  };
 
   // Minimum depth fallback when topography has no elevation data
   const baseProfundidadeMin = 1.20;
@@ -223,6 +228,9 @@ export const QuantitiesModule = ({ trechos, pontos, onQuantitiesCalculated }: Qu
       };
     });
     setRows(result);
+    // Save to shared module store for inter-module communication
+    saveModuleData("quantRows", result);
+    saveModuleData("trechos", trechos);
     onQuantitiesCalculated?.(result, { tipoPavimento, tipoEscoramento });
     toast.success(`Quantitativos SINAPI calculados para ${result.length} trechos`);
   };
@@ -485,6 +493,37 @@ export const QuantitiesModule = ({ trechos, pontos, onQuantitiesCalculated }: Qu
                   <DollarSign className="h-4 w-4 mr-1" /> Levar para Orçamento
                 </Button>
               </div>
+              {/* Inter-module export buttons */}
+              <div className="flex gap-2 mt-2">
+                <Button variant="outline" size="sm" onClick={exportCSVWithAttributes} className="flex-1">
+                  <FileDown className="h-4 w-4 mr-1" /> CSV c/ Atributos
+                </Button>
+                <Button variant="outline" size="sm" onClick={exportGeoJSONHandler} className="flex-1">
+                  <MapPin className="h-4 w-4 mr-1" /> GeoJSON
+                </Button>
+                <div className="flex-1">
+                  <input
+                    type="file"
+                    accept=".csv,.txt,.xlsx,.xls"
+                    className="hidden"
+                    id="custom-cost-import"
+                    onChange={handleCustomCostImport}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => document.getElementById("custom-cost-import")?.click()}
+                  >
+                    <Upload className="h-4 w-4 mr-1" /> Importar Base Custos Própria
+                  </Button>
+                </div>
+              </div>
+              {customCostBase && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Base de custos própria carregada: {customCostBase.size} itens
+                </p>
+              )}
             </>
           )}
         </TabsContent>

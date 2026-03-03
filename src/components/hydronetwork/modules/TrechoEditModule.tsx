@@ -24,34 +24,60 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Calculator, Download, Scissors, Undo2, Search, FileSpreadsheet, DollarSign,
-  Calendar, RefreshCw, Filter,
+  Calendar, RefreshCw, Filter, Upload, FileDown, MapPin, BarChart3,
 } from "lucide-react";
 import { Trecho } from "@/engine/domain";
 import { PontoTopografico } from "@/engine/reader";
 import { subdivideTrecho, reunifySubTrechos, isSubTrecho, SubTrecho } from "@/engine/trechoSubdivision";
 import type { QuantRow, QuantityParams } from "./QuantitiesModule";
+import {
+  getEscavacaoCusto as sinapiGetEscCusto,
+  getTuboCusto as sinapiGetTuboCusto,
+  getPVCusto as sinapiGetPVCusto,
+  SINAPI_COSTS,
+} from "@/engine/sinapi";
+import {
+  parseMedicaoFile,
+  calcularMedicaoPorTrecho,
+  calcularResumoMedicao,
+  exportMedicaoExcel,
+  exportMedicaoCSV,
+  saveMedicaoItems,
+  loadMedicaoItems,
+  saveMedicaoTrechos,
+  loadMedicaoTrechos,
+  type MedicaoItem,
+  type TrechoMedicao,
+  type MedicaoSummary,
+} from "@/engine/medicao";
+import {
+  downloadGeoJSON,
+  downloadGISCSV,
+  exportGISExcel,
+} from "@/engine/gisExport";
+import { saveModuleData } from "@/engine/moduleExchange";
 import * as XLSX from "xlsx";
 
-// ── SINAPI reference costs (01/2026 - Desonerado) ──
+// ── SINAPI reference costs (from shared sinapi engine) ──
 const SINAPI_UNIT_COSTS = {
-  escavacao_0_1_5: 30.78,
-  escavacao_1_5_3: 38.02,
-  escavacao_3_4_5: 46.22,
-  escoramento_madeira: 49.46,
-  tubo_150: 135.54,
-  tubo_200: 200.12,
-  tubo_250: 287.06,
-  tubo_300: 383.62,
-  tubo_400: 524.45,
+  escavacao_0_1_5: SINAPI_COSTS.escavacao["0-1.5"].custo,
+  escavacao_1_5_3: SINAPI_COSTS.escavacao["1.5-3"].custo,
+  escavacao_3_4_5: SINAPI_COSTS.escavacao["3-4.5"].custo,
+  escoramento_madeira: SINAPI_COSTS.escoramento.madeira.custo,
+  tubo_150: SINAPI_COSTS.tubulacao[150].custo,
+  tubo_200: SINAPI_COSTS.tubulacao[200].custo,
+  tubo_250: SINAPI_COSTS.tubulacao[250].custo,
+  tubo_300: SINAPI_COSTS.tubulacao[300].custo,
+  tubo_400: SINAPI_COSTS.tubulacao[400].custo,
   tubo_500: 702.86,
   tubo_600: 886.14,
-  reaterro: 19.98,
-  berco: 102.92,
-  envoltoria: 92.34,
-  pv_0_1_5: 3078.00,
-  pv_1_5_2_5: 4590.00,
-  pv_2_5_4: 7398.00,
-  botafora: 13.50,
+  reaterro: SINAPI_COSTS.reaterro.compactado.custo,
+  berco: SINAPI_COSTS.reaterro.berco.custo,
+  envoltoria: SINAPI_COSTS.reaterro.envoltoria.custo,
+  pv_0_1_5: SINAPI_COSTS.pv["0-1.5"].custo,
+  pv_1_5_2_5: SINAPI_COSTS.pv["1.5-2.5"].custo,
+  pv_2_5_4: SINAPI_COSTS.pv["2.5-4"].custo,
+  botafora: SINAPI_COSTS.botafora.custo,
 };
 
 // ── Types ──
@@ -301,6 +327,11 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
   const [costRows, setCostRows] = useState<EditableCostRow[]>([]);
   const [scheduleRows, setScheduleRows] = useState<EditableScheduleRow[]>([]);
 
+  // Measurement (Medição) data
+  const [medicaoItems, setMedicaoItems] = useState<MedicaoItem[]>(() => loadMedicaoItems());
+  const [medicaoTrechos, setMedicaoTrechos] = useState<TrechoMedicao[]>(() => loadMedicaoTrechos());
+  const medicaoFileRef = useRef<HTMLInputElement>(null);
+
   // Subdivision dialog
   const [subdivideTarget, setSubdivideTarget] = useState<string | null>(null);
   const [subdivideLength, setSubdivideLength] = useState("50");
@@ -395,6 +426,10 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
       };
     });
     setScheduleRows(sRows);
+
+    // Save to shared module store for inter-module communication
+    saveModuleData("trechos", trechos);
+    saveModuleData("quantRows", qRows);
 
     toast.success(`${trechos.length} trechos carregados para edição.`);
   }, [trechos, quantityRows]);
@@ -682,6 +717,84 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     }
   }, []);
 
+  // ── Measurement (Medição) handlers ──
+
+  const handleMedicaoImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const items = await parseMedicaoFile(file);
+      setMedicaoItems(items);
+      saveMedicaoItems(items);
+      toast.success(`${items.length} itens de medição importados.`);
+
+      // Auto-calculate if we have trechos loaded
+      if (trechos.length > 0) {
+        const medTrechos = calcularMedicaoPorTrecho(
+          trechos,
+          quantityRows || [],
+          items,
+        );
+        setMedicaoTrechos(medTrechos);
+        saveMedicaoTrechos(medTrechos);
+        saveModuleData("medicaoTrechos", medTrechos);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao importar planilha de medição.");
+    }
+    // Reset input
+    if (medicaoFileRef.current) medicaoFileRef.current.value = "";
+  }, [trechos, quantityRows]);
+
+  const recalcularMedicaoHandler = useCallback(() => {
+    if (trechos.length === 0) {
+      toast.error("Sem trechos carregados.");
+      return;
+    }
+    if (medicaoItems.length === 0) {
+      toast.error("Sem planilha de medição importada.");
+      return;
+    }
+    const medTrechos = calcularMedicaoPorTrecho(
+      trechos,
+      quantityRows || [],
+      medicaoItems,
+    );
+    setMedicaoTrechos(medTrechos);
+    saveMedicaoTrechos(medTrechos);
+    saveModuleData("medicaoTrechos", medTrechos);
+    toast.success("Medição recalculada com sucesso.");
+  }, [trechos, quantityRows, medicaoItems]);
+
+  const exportMedicaoHandler = useCallback(() => {
+    if (medicaoTrechos.length === 0) {
+      toast.error("Sem dados de medição.");
+      return;
+    }
+    exportMedicaoExcel(medicaoTrechos);
+    toast.success("Planilha de medição exportada.");
+  }, [medicaoTrechos]);
+
+  const exportGeoJSONHandler = useCallback(() => {
+    downloadGeoJSON(trechos, quantityRows || [], medicaoTrechos);
+    toast.success("GeoJSON exportado com todos os atributos.");
+  }, [trechos, quantityRows, medicaoTrechos]);
+
+  const exportGISCSVHandler = useCallback(() => {
+    downloadGISCSV(trechos, quantityRows || [], medicaoTrechos);
+    toast.success("CSV GIS exportado.");
+  }, [trechos, quantityRows, medicaoTrechos]);
+
+  const exportGISExcelHandler = useCallback(() => {
+    exportGISExcel(trechos, quantityRows || [], medicaoTrechos);
+    toast.success("XLSX GIS exportado.");
+  }, [trechos, quantityRows, medicaoTrechos]);
+
+  const medicaoSummary = useMemo<MedicaoSummary | null>(() => {
+    if (medicaoTrechos.length === 0) return null;
+    return calcularResumoMedicao(medicaoTrechos);
+  }, [medicaoTrechos]);
+
   // ── Export XLSX ──
 
   const exportExcel = useCallback(() => {
@@ -805,6 +918,12 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
               <Button size="sm" variant="outline" onClick={exportExcel}>
                 <Download className="h-4 w-4 mr-1" /> XLSX
               </Button>
+              <Button size="sm" variant="outline" onClick={exportGeoJSONHandler}>
+                <MapPin className="h-4 w-4 mr-1" /> GeoJSON
+              </Button>
+              <Button size="sm" variant="outline" onClick={exportGISCSVHandler}>
+                <FileDown className="h-4 w-4 mr-1" /> CSV GIS
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -868,12 +987,15 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="quantitativos" className="flex items-center gap-1">
             <Calculator className="h-4 w-4" /> Quantitativos
           </TabsTrigger>
           <TabsTrigger value="valores" className="flex items-center gap-1">
             <DollarSign className="h-4 w-4" /> Valores / Custos
+          </TabsTrigger>
+          <TabsTrigger value="medicao" className="flex items-center gap-1">
+            <BarChart3 className="h-4 w-4" /> Medição
           </TabsTrigger>
           <TabsTrigger value="cronograma" className="flex items-center gap-1">
             <Calendar className="h-4 w-4" /> Cronograma
@@ -1020,6 +1142,161 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                   <div className="bg-primary/10 rounded p-3 text-center">
                     <p className="text-xs text-muted-foreground">Total Geral (com BDI)</p>
                     <p className="font-bold text-lg text-primary">{fmtC(costSummary.totalFinal)}</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Medição Tab ── */}
+        <TabsContent value="medicao">
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Medição por Trecho</CardTitle>
+                  <CardDescription className="text-xs">
+                    Importe sua planilha de medição (CSV/XLSX) para mapear itens automaticamente aos trechos.
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    ref={medicaoFileRef}
+                    type="file"
+                    accept=".csv,.txt,.xlsx,.xls"
+                    className="hidden"
+                    onChange={handleMedicaoImport}
+                  />
+                  <Button size="sm" onClick={() => medicaoFileRef.current?.click()}>
+                    <Upload className="h-4 w-4 mr-1" /> Importar Planilha de Medição
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={recalcularMedicaoHandler}>
+                    <RefreshCw className="h-3.5 w-3.5 mr-1" /> Recalcular Medição
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={exportMedicaoHandler}>
+                    <Download className="h-4 w-4 mr-1" /> Exportar Medição
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* Imported items info */}
+              {medicaoItems.length > 0 && (
+                <div className="mb-4 p-3 bg-muted/50 rounded">
+                  <p className="text-sm font-medium mb-2">Itens de Medição Importados: {medicaoItems.length}</p>
+                  <div className="overflow-auto max-h-40">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs">Item</TableHead>
+                          <TableHead className="text-xs">Descrição</TableHead>
+                          <TableHead className="text-xs">Tipo Rede</TableHead>
+                          <TableHead className="text-xs">DN Faixa</TableHead>
+                          <TableHead className="text-xs">Driver</TableHead>
+                          <TableHead className="text-xs">Regra</TableHead>
+                          <TableHead className="text-xs">Preço Unit.</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {medicaoItems.map((item, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="text-xs font-mono">{item.item_medicao}</TableCell>
+                            <TableCell className="text-xs max-w-[200px] truncate" title={item.descricao}>{item.descricao}</TableCell>
+                            <TableCell className="text-xs">{item.tipo_rede}</TableCell>
+                            <TableCell className="text-xs">{item.dn_min}-{item.dn_max}</TableCell>
+                            <TableCell className="text-xs">{item.driver}</TableCell>
+                            <TableCell className="text-xs">{item.regra_quantidade}</TableCell>
+                            <TableCell className="text-xs">{fmtC(item.preco_unitario)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* Measurement per trecho */}
+              {medicaoTrechos.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">
+                  Importe uma planilha de medição para calcular custo, medição e margem por trecho.
+                </p>
+              ) : (
+                <div className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT }}>
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableRow>
+                        <TableHead className="text-xs">Trecho</TableHead>
+                        <TableHead className="text-xs">Início→Fim</TableHead>
+                        <TableHead className="text-xs">Comp (m)</TableHead>
+                        <TableHead className="text-xs">DN</TableHead>
+                        <TableHead className="text-xs">Tipo</TableHead>
+                        <TableHead className="text-xs">Item Med.</TableHead>
+                        <TableHead className="text-xs">Qtd Med.</TableHead>
+                        <TableHead className="text-xs">Medição (R$)</TableHead>
+                        <TableHead className="text-xs">Custo (R$)</TableHead>
+                        <TableHead className="text-xs">Margem (R$)</TableHead>
+                        <TableHead className="text-xs">Margem (%)</TableHead>
+                        <TableHead className="text-xs">Prazo</TableHead>
+                        <TableHead className="text-xs">% Exec.</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {medicaoTrechos.map(m => (
+                        <TableRow key={m.trecho_id} className={m.margem < 0 ? "bg-red-50/50" : ""}>
+                          <TableCell className="text-xs font-mono">{m.trecho_id}</TableCell>
+                          <TableCell className="text-xs max-w-[120px] truncate" title={`${m.inicio}→${m.fim}`}>
+                            {m.inicio}→{m.fim}
+                          </TableCell>
+                          <TableCell className="text-xs">{fmt(m.comprimento)}</TableCell>
+                          <TableCell className="text-xs">{m.dn}</TableCell>
+                          <TableCell className="text-xs">{m.tipo_rede}</TableCell>
+                          <TableCell className="text-xs font-mono">
+                            {m.itens_medicao.length > 0 ? m.itens_medicao[0].item.item_medicao : "-"}
+                            {m.itens_medicao.length > 1 && (
+                              <Badge variant="outline" className="ml-1 text-[9px]">+{m.itens_medicao.length - 1}</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {m.itens_medicao.length > 0 ? fmt(m.itens_medicao[0].quantidade) : "-"}
+                          </TableCell>
+                          <TableCell className="text-xs font-medium text-blue-700">{fmtC(m.med_total)}</TableCell>
+                          <TableCell className="text-xs font-medium text-orange-700">{fmtC(m.cus_total)}</TableCell>
+                          <TableCell className={`text-xs font-bold ${m.margem >= 0 ? "text-green-700" : "text-red-700"}`}>
+                            {fmtC(m.margem)}
+                          </TableCell>
+                          <TableCell className={`text-xs ${m.margem_pct >= 0 ? "text-green-600" : "text-red-600"}`}>
+                            {m.margem_pct.toFixed(1)}%
+                          </TableCell>
+                          <TableCell className="text-xs">{m.prazo_dias}d</TableCell>
+                          <TableCell className="text-xs">{m.pct_executado.toFixed(0)}%</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {/* Medição Summary */}
+              {medicaoSummary && (
+                <div className="mt-4 grid grid-cols-4 gap-3">
+                  <div className="bg-blue-50 rounded p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Medição Total</p>
+                    <p className="font-bold text-lg text-blue-700">{fmtC(medicaoSummary.medicao_total)}</p>
+                  </div>
+                  <div className="bg-orange-50 rounded p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Custo Total</p>
+                    <p className="font-bold text-lg text-orange-700">{fmtC(medicaoSummary.custo_total)}</p>
+                  </div>
+                  <div className={`rounded p-3 text-center ${medicaoSummary.margem_total >= 0 ? "bg-green-50" : "bg-red-50"}`}>
+                    <p className="text-xs text-muted-foreground">Margem Total</p>
+                    <p className={`font-bold text-lg ${medicaoSummary.margem_total >= 0 ? "text-green-700" : "text-red-700"}`}>
+                      {fmtC(medicaoSummary.margem_total)} ({medicaoSummary.margem_pct.toFixed(1)}%)
+                    </p>
+                  </div>
+                  <div className="bg-muted/50 rounded p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Prazo Total</p>
+                    <p className="font-semibold text-lg">{medicaoSummary.prazo_total_dias} dias</p>
                   </div>
                 </div>
               )}

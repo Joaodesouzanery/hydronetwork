@@ -261,3 +261,102 @@ export function exportRDOsToCSV(rdos: RDO[]): string {
   ]);
   return [headers.join(";"), ...rows.map((row) => row.join(";"))].join("\n");
 }
+
+// ── RDO per-trecho tracking with planned vs realized ──
+
+export interface RDOTrechoDaily {
+  id: string;
+  data: string;
+  trecho_id: string;
+  trecho_nome: string;
+  comprimento_planejado: number;
+  medicao_planejada: number;
+  custo_planejado: number;
+  comprimento_executado: number;
+  medicao_realizada: number;
+  custo_real: number;
+  desvio_comp: number;
+  desvio_medicao: number;
+  desvio_custo: number;
+  observacao?: string;
+}
+
+export interface PlannedVsRealized {
+  trecho_id: string;
+  trecho_nome: string;
+  comp_planejado: number;
+  comp_executado: number;
+  pct_executado: number;
+  med_planejada: number;
+  med_realizada: number;
+  cus_planejado: number;
+  cus_real: number;
+  status: "nao_iniciado" | "em_execucao" | "concluido" | "atrasado";
+}
+
+const RDO_TRECHO_DAILY_KEY = "hydronetwork_rdo_trecho_daily";
+
+export function saveRDOTrechoDailyEntries(entries: RDOTrechoDaily[]): void {
+  localStorage.setItem(RDO_TRECHO_DAILY_KEY, JSON.stringify(entries));
+}
+
+export function loadRDOTrechoDailyEntries(): RDOTrechoDaily[] {
+  const data = localStorage.getItem(RDO_TRECHO_DAILY_KEY);
+  return data ? JSON.parse(data) : [];
+}
+
+export function calcularPlannedVsRealized(
+  dailyEntries: RDOTrechoDaily[],
+): PlannedVsRealized[] {
+  const trechoMap = new Map<string, PlannedVsRealized>();
+
+  for (const entry of dailyEntries) {
+    const existing = trechoMap.get(entry.trecho_id) || {
+      trecho_id: entry.trecho_id,
+      trecho_nome: entry.trecho_nome,
+      comp_planejado: entry.comprimento_planejado,
+      comp_executado: 0,
+      pct_executado: 0,
+      med_planejada: entry.medicao_planejada,
+      med_realizada: 0,
+      cus_planejado: entry.custo_planejado,
+      cus_real: 0,
+      status: "nao_iniciado" as const,
+    };
+
+    existing.comp_executado += entry.comprimento_executado;
+    existing.med_realizada += entry.medicao_realizada;
+    existing.cus_real += entry.custo_real;
+    existing.pct_executado = existing.comp_planejado > 0
+      ? (existing.comp_executado / existing.comp_planejado) * 100
+      : 0;
+
+    if (existing.pct_executado >= 100) existing.status = "concluido";
+    else if (existing.pct_executado > 0) existing.status = "em_execucao";
+    else existing.status = "nao_iniciado";
+
+    trechoMap.set(entry.trecho_id, existing);
+  }
+
+  return Array.from(trechoMap.values());
+}
+
+export function exportRDOTrechoCSV(entries: RDOTrechoDaily[]): string {
+  const headers = [
+    "data", "trecho_id", "trecho_nome",
+    "comp_planejado", "comp_executado",
+    "med_planejada", "med_realizada",
+    "cus_planejado", "cus_real",
+    "desvio_comp", "desvio_medicao", "desvio_custo",
+    "observacao",
+  ];
+  const rows = entries.map(e => [
+    e.data, e.trecho_id, e.trecho_nome,
+    e.comprimento_planejado.toFixed(2), e.comprimento_executado.toFixed(2),
+    e.medicao_planejada.toFixed(2), e.medicao_realizada.toFixed(2),
+    e.custo_planejado.toFixed(2), e.custo_real.toFixed(2),
+    e.desvio_comp.toFixed(2), e.desvio_medicao.toFixed(2), e.desvio_custo.toFixed(2),
+    e.observacao || "",
+  ].join(";"));
+  return [headers.join(";"), ...rows].join("\n");
+}
