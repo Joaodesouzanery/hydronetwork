@@ -128,7 +128,56 @@ const Hero = () => {
     if (isInView) controls.start("visible");
   }, [controls, isInView]);
 
-  const titleWords = ["PARE", "DE", "REFAZER", "DADOS", "ENTRE", "SOFTWARES."];
+  const typewriterPhrases = [
+    "REFAZER DADOS ENTRE SOFTWARES.",
+    "PERDER DINHEIRO COM CÁLCULOS ERRADOS.",
+    "USAR 8 FERRAMENTAS PRA UM PROJETO.",
+    "DIGITAR O MESMO DADO 5 VEZES.",
+    "ORÇAR NO EXCEL E REZAR PRA DAR CERTO.",
+    "PLANEJAR NO WHATSAPP.",
+  ];
+
+  const [phraseIndex, setPhraseIndex] = useState(0);
+  const [displayText, setDisplayText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [cursorVisible, setCursorVisible] = useState(true);
+
+  // Cursor blink effect
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCursorVisible((prev) => !prev);
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Typewriter effect
+  useEffect(() => {
+    const currentPhrase = typewriterPhrases[phraseIndex];
+
+    if (!isDeleting) {
+      if (displayText.length < currentPhrase.length) {
+        const timeout = setTimeout(() => {
+          setDisplayText(currentPhrase.slice(0, displayText.length + 1));
+        }, 40);
+        return () => clearTimeout(timeout);
+      } else {
+        const timeout = setTimeout(() => {
+          setIsDeleting(true);
+        }, 2500);
+        return () => clearTimeout(timeout);
+      }
+    } else {
+      if (displayText.length > 0) {
+        const timeout = setTimeout(() => {
+          setDisplayText(displayText.slice(0, -1));
+        }, 25);
+        return () => clearTimeout(timeout);
+      } else {
+        setIsDeleting(false);
+        setPhraseIndex((prev) => (prev + 1) % typewriterPhrases.length);
+      }
+    }
+  }, [displayText, isDeleting, phraseIndex]);
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -233,24 +282,21 @@ const Hero = () => {
         {/* ═══════════ HERO ═══════════ */}
         <section className="container mx-auto px-4 py-24 pt-32">
           <div className="flex flex-col items-center text-center">
-            {/* Animated headline */}
+            {/* Animated headline — typewriter */}
             <motion.h1
               initial={{ filter: "blur(10px)", opacity: 0, y: 50 }}
               animate={{ filter: "blur(0px)", opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
               className="relative font-mono text-4xl font-bold sm:text-5xl md:text-6xl lg:text-7xl max-w-4xl mx-auto leading-tight"
             >
-              {titleWords.map((text, index) => (
-                <motion.span
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.15, duration: 0.6 }}
-                  className="inline-block mx-2 md:mx-4"
-                >
-                  {text}
-                </motion.span>
-              ))}
+              PARE DE{" "}
+              {displayText}
+              <span
+                className="inline-block w-[0.05em]"
+                style={{ opacity: cursorVisible ? 1 : 0, transition: "opacity 0.1s" }}
+              >
+                |
+              </span>
             </motion.h1>
 
             {/* Sub-headline */}

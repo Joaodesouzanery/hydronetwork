@@ -150,13 +150,10 @@ export function AppSidebar() {
       {/* Header with logo */}
       <SidebarHeader className="p-4 border-b border-white/[0.06]">
         <div className="flex items-center gap-2.5">
-          <img
-            src="/favicon.svg"
-            alt="ConstruData"
-            className="h-9 w-9 flex-shrink-0"
-          />
-          {open && (
-            <LogoText className="text-lg tracking-tight" textColor="text-white" />
+          {open ? (
+            <LogoText className="text-xl tracking-tight" textColor="text-white" />
+          ) : (
+            <span className="font-bold font-mono text-white text-lg mx-auto">C</span>
           )}
         </div>
       </SidebarHeader>
@@ -181,7 +178,7 @@ export function AppSidebar() {
                       isExpanded ? "" : "-rotate-90"
                     }`}
                   />
-                  <SidebarGroupLabel className="uppercase text-[10px] tracking-[1.5px] font-semibold font-mono text-[#555] p-0 m-0 cursor-pointer hover:text-[#888] transition-colors">
+                  <SidebarGroupLabel className="uppercase text-[12px] tracking-[1.2px] font-semibold font-mono text-[#777] p-0 m-0 cursor-pointer hover:text-[#aaa] transition-colors">
                     {section.label}
                   </SidebarGroupLabel>
                 </button>
@@ -209,10 +206,10 @@ export function AppSidebar() {
                   <SidebarMenu className="px-1">
                     {section.items.map((item) => (
                       <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild className="h-8">
+                        <SidebarMenuButton asChild className="h-9">
                           <NavLink to={item.url} end className={getNavCls}>
-                            <item.icon className="h-4 w-4 flex-shrink-0" />
-                            <span className="text-[13px] font-mono truncate">{item.title}</span>
+                            <item.icon className="h-[18px] w-[18px] flex-shrink-0" />
+                            <span className="text-sm font-mono truncate">{item.title}</span>
                           </NavLink>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
