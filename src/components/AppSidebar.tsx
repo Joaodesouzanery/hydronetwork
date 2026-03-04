@@ -61,6 +61,7 @@ const sections: SidebarSection[] = [
       { title: "Drenagem", url: "/hydronetwork/drenagem", icon: CloudRain },
       { title: "Quantitativos", url: "/hydronetwork/quantitativos", icon: FileSpreadsheet },
       { title: "Edição por Trecho", url: "/hydronetwork/edicao-trecho", icon: Edit3 },
+      { title: "Trecho — Base Custom", url: "/hydronetwork/edicao-trecho-custom", icon: ClipboardList },
       { title: "Orçamento", url: "/hydronetwork/orcamento", icon: Calculator },
       { title: "BDI", url: "/hydronetwork/bdi", icon: DollarSign },
       { title: "Planejamento", url: "/hydronetwork/planejamento", icon: Calendar },
