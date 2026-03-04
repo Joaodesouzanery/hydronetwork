@@ -183,9 +183,9 @@ interface TrechoExecState {
 
 const CUSTO_STORAGE_KEY = "hydronetwork_custo_import";
 const STORAGE_KEY = "hydronetwork_trecho_edits";
-const ROW_HEIGHT = 40;
-const TABLE_MAX_HEIGHT = 520;
-const VIRTUALIZER_OVERSCAN = 10;
+const ROW_HEIGHT = 44;
+const TABLE_MAX_HEIGHT = 560;
+const VIRTUALIZER_OVERSCAN = 15;
 
 // ── Props ──
 
@@ -293,21 +293,21 @@ interface QuantRowProps {
 
 const MemoQuantRow = memo(function MemoQuantRow({ row, onFieldChange, onSubdivide, onReunify }: QuantRowProps) {
   return (
-    <TableRow className={row.isSubdivided ? "bg-orange-50/30" : ""}>
-      <TableCell className="text-xs font-mono">
+    <TableRow className={row.isSubdivided ? "bg-orange-50/30" : ""} style={{ height: ROW_HEIGHT }}>
+      <TableCell className="text-xs font-mono py-1">
         {row.id}
         {row.isSubdivided && <Badge variant="outline" className="ml-1 text-[10px]">Sub</Badge>}
       </TableCell>
-      <TableCell className="text-xs max-w-[140px] truncate" title={row.nomeTrecho}>{row.nomeTrecho}</TableCell>
-      <TableCell><EditCell value={row.comp} onChange={v => onFieldChange(row.id, "comp", v as number)} /></TableCell>
-      <TableCell><EditCell value={row.dn} onChange={v => onFieldChange(row.id, "dn", v as number)} /></TableCell>
-      <TableCell><EditCell value={row.prof} onChange={v => onFieldChange(row.id, "prof", v as number)} /></TableCell>
-      <TableCell><EditCell value={row.escavacao} onChange={v => onFieldChange(row.id, "escavacao", v as number)} /></TableCell>
-      <TableCell><EditCell value={row.reaterro} onChange={v => onFieldChange(row.id, "reaterro", v as number)} /></TableCell>
-      <TableCell><EditCell value={row.botafora} onChange={v => onFieldChange(row.id, "botafora", v as number)} /></TableCell>
-      <TableCell><EditCell value={row.pavimento} onChange={v => onFieldChange(row.id, "pavimento", v as number)} /></TableCell>
-      <TableCell><EditCell value={row.escoramento} onChange={v => onFieldChange(row.id, "escoramento", v as number)} /></TableCell>
-      <TableCell>
+      <TableCell className="text-xs max-w-[140px] truncate py-1" title={row.nomeTrecho}>{row.nomeTrecho}</TableCell>
+      <TableCell className="py-1"><EditCell value={row.comp} onChange={v => onFieldChange(row.id, "comp", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.dn} onChange={v => onFieldChange(row.id, "dn", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.prof} onChange={v => onFieldChange(row.id, "prof", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.escavacao} onChange={v => onFieldChange(row.id, "escavacao", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.reaterro} onChange={v => onFieldChange(row.id, "reaterro", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.botafora} onChange={v => onFieldChange(row.id, "botafora", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.pavimento} onChange={v => onFieldChange(row.id, "pavimento", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.escoramento} onChange={v => onFieldChange(row.id, "escoramento", v as number)} /></TableCell>
+      <TableCell className="py-1">
         {row.isSubdivided && row.parentId ? (
           <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => onReunify(row.parentId!)}>
             <Undo2 className="h-3 w-3" />
@@ -329,19 +329,19 @@ interface CostRowProps {
 
 const MemoCostRow = memo(function MemoCostRow({ row, onFieldChange }: CostRowProps) {
   return (
-    <TableRow>
-      <TableCell className="text-xs max-w-[120px] truncate" title={row.nomeTrecho}>{row.nomeTrecho}</TableCell>
-      <TableCell className="text-xs">{fmt(row.comp)}</TableCell>
-      <TableCell><EditCell value={row.custoEscavacao} onChange={v => onFieldChange(row.id, "custoEscavacao", v as number)} /></TableCell>
-      <TableCell><EditCell value={row.custoTubo} onChange={v => onFieldChange(row.id, "custoTubo", v as number)} /></TableCell>
-      <TableCell><EditCell value={row.custoReaterro} onChange={v => onFieldChange(row.id, "custoReaterro", v as number)} /></TableCell>
-      <TableCell><EditCell value={row.custoPV} onChange={v => onFieldChange(row.id, "custoPV", v as number)} /></TableCell>
-      <TableCell><EditCell value={row.bdiPct} onChange={v => onFieldChange(row.id, "bdiPct", v as number)} /></TableCell>
-      <TableCell>
+    <TableRow style={{ height: ROW_HEIGHT }}>
+      <TableCell className="text-xs max-w-[120px] truncate py-1" title={row.nomeTrecho}>{row.nomeTrecho}</TableCell>
+      <TableCell className="text-xs py-1">{fmt(row.comp)}</TableCell>
+      <TableCell className="py-1"><EditCell value={row.custoEscavacao} onChange={v => onFieldChange(row.id, "custoEscavacao", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.custoTubo} onChange={v => onFieldChange(row.id, "custoTubo", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.custoReaterro} onChange={v => onFieldChange(row.id, "custoReaterro", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.custoPV} onChange={v => onFieldChange(row.id, "custoPV", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.bdiPct} onChange={v => onFieldChange(row.id, "bdiPct", v as number)} /></TableCell>
+      <TableCell className="py-1">
         <Badge variant={row.fonte === "SINAPI" ? "secondary" : "default"} className="text-[10px]">{row.fonte}</Badge>
       </TableCell>
-      <TableCell className="text-xs font-medium">{fmtC(row.subtotal)}</TableCell>
-      <TableCell className="text-xs font-bold">{fmtC(row.total)}</TableCell>
+      <TableCell className="text-xs font-medium py-1">{fmtC(row.subtotal)}</TableCell>
+      <TableCell className="text-xs font-bold py-1">{fmtC(row.total)}</TableCell>
     </TableRow>
   );
 });
@@ -353,15 +353,15 @@ interface ScheduleRowProps {
 
 const MemoScheduleRow = memo(function MemoScheduleRow({ row, onFieldChange }: ScheduleRowProps) {
   return (
-    <TableRow>
-      <TableCell className="text-xs max-w-[140px] truncate" title={row.nomeTrecho}>{row.nomeTrecho}</TableCell>
-      <TableCell className="text-xs">{fmt(row.comp)}</TableCell>
-      <TableCell><EditCell value={row.equipe} onChange={v => onFieldChange(row.id, "equipe", v as number)} /></TableCell>
-      <TableCell><EditCell value={row.metrosDia} onChange={v => onFieldChange(row.id, "metrosDia", v as number)} /></TableCell>
-      <TableCell className="text-xs font-medium">{row.diasEstimados}</TableCell>
-      <TableCell><EditCell value={row.dataInicio} onChange={v => onFieldChange(row.id, "dataInicio", v)} type="date" className="w-32" /></TableCell>
-      <TableCell className="text-xs">{row.dataFim}</TableCell>
-      <TableCell><EditCell value={row.prioridade} onChange={v => onFieldChange(row.id, "prioridade", v as number)} /></TableCell>
+    <TableRow style={{ height: ROW_HEIGHT }}>
+      <TableCell className="text-xs max-w-[140px] truncate py-1" title={row.nomeTrecho}>{row.nomeTrecho}</TableCell>
+      <TableCell className="text-xs py-1">{fmt(row.comp)}</TableCell>
+      <TableCell className="py-1"><EditCell value={row.equipe} onChange={v => onFieldChange(row.id, "equipe", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.metrosDia} onChange={v => onFieldChange(row.id, "metrosDia", v as number)} /></TableCell>
+      <TableCell className="text-xs font-medium py-1">{row.diasEstimados}</TableCell>
+      <TableCell className="py-1"><EditCell value={row.dataInicio} onChange={v => onFieldChange(row.id, "dataInicio", v)} type="date" className="w-32" /></TableCell>
+      <TableCell className="text-xs py-1">{row.dataFim}</TableCell>
+      <TableCell className="py-1"><EditCell value={row.prioridade} onChange={v => onFieldChange(row.id, "prioridade", v as number)} /></TableCell>
     </TableRow>
   );
 });
@@ -1694,7 +1694,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
               ) : (
                 <div ref={quantScrollRef} className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT }}>
                   <Table>
-                    <TableHeader className="sticky top-0 bg-background z-10">
+                    <TableHeader className="sticky top-0 bg-background z-10 shadow-[0_1px_0_0_hsl(var(--border))]">
                       <TableRow>
                         <TableHead className="text-xs w-8">ID</TableHead>
                         <TableHead className="text-xs">Trecho</TableHead>
@@ -1772,7 +1772,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
               ) : (
                 <div ref={costScrollRef} className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT }}>
                   <Table>
-                    <TableHeader className="sticky top-0 bg-background z-10">
+                    <TableHeader className="sticky top-0 bg-background z-10 shadow-[0_1px_0_0_hsl(var(--border))]">
                       <TableRow>
                         <TableHead className="text-xs">Trecho</TableHead>
                         <TableHead className="text-xs">Comp (m)</TableHead>
@@ -1892,7 +1892,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                   </div>
                   <div className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT }}>
                     <Table>
-                      <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableHeader className="sticky top-0 bg-background z-10 shadow-[0_1px_0_0_hsl(var(--border))]">
                         <TableRow>
                           <TableHead className="text-xs w-8">Usar</TableHead>
                           <TableHead className="text-xs">Item</TableHead>
@@ -2267,7 +2267,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                   </div>
                   <div className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT + 60 }}>
                     <Table>
-                      <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableHeader className="sticky top-0 bg-background z-10 shadow-[0_1px_0_0_hsl(var(--border))]">
                         <TableRow>
                           <TableHead className="text-xs">Trecho</TableHead>
                           <TableHead className="text-xs">Inicio→Fim</TableHead>
@@ -2411,7 +2411,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                 ) : (
                   <div ref={scheduleScrollRef} className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT }}>
                     <Table>
-                      <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableHeader className="sticky top-0 bg-background z-10 shadow-[0_1px_0_0_hsl(var(--border))]">
                         <TableRow>
                           <TableHead className="text-xs">Trecho</TableHead>
                           <TableHead className="text-xs">Comp (m)</TableHead>

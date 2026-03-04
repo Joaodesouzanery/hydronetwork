@@ -17,7 +17,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import * as XLSX from "xlsx";
 import { Trecho } from "@/engine/domain";
 import type { QuantRow } from "./QuantitiesModule";
-import { loadModuleData } from "@/engine/moduleExchange";
+import { loadModuleData, saveModuleData } from "@/engine/moduleExchange";
 import type { TrechoMedicao, MedicaoItem } from "@/engine/medicao";
 import { calcularResumoMedicao } from "@/engine/medicao";
 
@@ -82,12 +82,32 @@ export const EconomyPanelModule = ({
   const [medicaoTrechos, setMedicaoTrechos] = useState<TrechoMedicao[]>([]);
   const [medicaoItems, setMedicaoItems] = useState<MedicaoItem[]>([]);
 
+  // Loaded review data from PeerReviewModule (persisted via moduleExchange)
+  const [loadedReviewErrors, setLoadedReviewErrors] = useState(0);
+  const [loadedReviewWarnings, setLoadedReviewWarnings] = useState(0);
+
+  // Prediction inputs
+  const [predExtensaoKm, setPredExtensaoKm] = useState(0); // km of network
+  const [predDnMedio, setPredDnMedio] = useState(200); // average diameter mm
+  const [predProfMedia, setPredProfMedia] = useState(1.5); // average depth m
+  const [predTipoProjeto, setPredTipoProjeto] = useState<"esgoto" | "agua" | "drenagem">("esgoto");
+
   useEffect(() => {
     const storedMedicao = loadModuleData<TrechoMedicao[]>("medicaoTrechos");
     if (storedMedicao && storedMedicao.length > 0) setMedicaoTrechos(storedMedicao);
     const storedItems = loadModuleData<MedicaoItem[]>("medicaoItems");
     if (storedItems && storedItems.length > 0) setMedicaoItems(storedItems);
+
+    // Load persisted review results (saved by PeerReviewModule via moduleExchange)
+    const storedErrors = loadModuleData<number>("reviewErrors");
+    const storedWarnings = loadModuleData<number>("reviewWarnings");
+    if (storedErrors != null && storedErrors > 0) setLoadedReviewErrors(storedErrors);
+    if (storedWarnings != null && storedWarnings > 0) setLoadedReviewWarnings(storedWarnings);
   }, []);
+
+  // Use props if available, otherwise fall back to loaded persisted data
+  const effectiveReviewErrors = reviewErrorsCount > 0 ? reviewErrorsCount : loadedReviewErrors;
+  const effectiveReviewWarnings = reviewWarningsCount > 0 ? reviewWarningsCount : loadedReviewWarnings;
 
   const hasTrechos = trechos.length > 0;
   const hasQuantities = (quantityRows?.length ?? 0) > 0;
@@ -143,8 +163,8 @@ export const EconomyPanelModule = ({
     const timeSavingValue = hoursSavedPerYear * engineerRate;
 
     // 2. Rework avoided — use user-defined rework cost
-    const errorsDetected = reviewErrorsCount;
-    const warningsDetected = reviewWarningsCount;
+    const errorsDetected = effectiveReviewErrors;
+    const warningsDetected = effectiveReviewWarnings;
     const reworkCostError = custoRetrabalhoReal > 0 ? custoRetrabalhoReal : BENCHMARKS.reworkCostPerError;
     const reworkFromErrors = errorsDetected * reworkCostError;
     const reworkFromWarnings = Math.round(warningsDetected * BENCHMARKS.warningToReworkRate) * BENCHMARKS.reworkCostPerWarning;
@@ -219,7 +239,7 @@ export const EconomyPanelModule = ({
       totalSavingPerYear,
       totalSavingPerProject,
     };
-  }, [trechos, quantityRows, budgetTotal, reviewErrorsCount, reviewWarningsCount, projectsPerYear, engineerRate, teamSize, platformData.realCostTotal, orcamentoObra, custoManualEstimado, margemErroManual, custoRetrabalhoReal, horasManualProjeto]);
+  }, [trechos, quantityRows, budgetTotal, effectiveReviewErrors, effectiveReviewWarnings, projectsPerYear, engineerRate, teamSize, platformData.realCostTotal, orcamentoObra, custoManualEstimado, margemErroManual, custoRetrabalhoReal, horasManualProjeto]);
 
   // Scenario simulator — show savings for different company sizes
   const scenarios = useMemo(() => {
@@ -269,11 +289,11 @@ export const EconomyPanelModule = ({
       { label: "Quantitativos", active: hasQuantities, detail: hasQuantities ? `${quantityRows!.length} itens calculados` : "Nao calculados" },
       { label: "Orcamento", active: !!budgetTotal || platformData.realCostTotal > 0, detail: budgetTotal ? fmtBRL(budgetTotal) : platformData.realCostTotal > 0 ? fmtBRL(platformData.realCostTotal) : "Nao calculado" },
       { label: "Medicao", active: hasMedicao, detail: hasMedicao ? `${medicaoItems.length} itens / ${fmtBRL(platformData.medicaoSummary?.medicao_total ?? 0)}` : "Nao importada" },
-      { label: "Revisao ABNT", active: reviewErrorsCount > 0 || reviewWarningsCount > 0, detail: reviewErrorsCount > 0 || reviewWarningsCount > 0 ? `${reviewErrorsCount} erros, ${reviewWarningsCount} alertas` : "Nao executada" },
+      { label: "Revisao ABNT", active: effectiveReviewErrors > 0 || effectiveReviewWarnings > 0, detail: effectiveReviewErrors > 0 || effectiveReviewWarnings > 0 ? `${effectiveReviewErrors} erros, ${effectiveReviewWarnings} alertas` : "Nao executada" },
       { label: "Cronograma", active: !!scheduleResult, detail: scheduleResult ? `${scheduleResult.totalDays} dias` : "Nao gerado" },
     ];
     return sources;
-  }, [hasTrechos, hasQuantities, budgetTotal, hasMedicao, reviewErrorsCount, reviewWarningsCount, scheduleResult, trechos, quantityRows, platformData, medicaoItems]);
+  }, [hasTrechos, hasQuantities, budgetTotal, hasMedicao, effectiveReviewErrors, effectiveReviewWarnings, scheduleResult, trechos, quantityRows, platformData, medicaoItems]);
 
   const exportReport = () => {
     const wb = XLSX.utils.book_new();
@@ -634,8 +654,9 @@ export const EconomyPanelModule = ({
       </div>
 
       <Tabs defaultValue="simulador">
-        <TabsList className="grid w-full max-w-5xl grid-cols-7">
+        <TabsList className="grid w-full max-w-6xl grid-cols-8">
           <TabsTrigger value="simulador">Simulador</TabsTrigger>
+          <TabsTrigger value="previsao">Previsao</TabsTrigger>
           <TabsTrigger value="resumo">Resumo Executivo</TabsTrigger>
           <TabsTrigger value="dados-reais">Dados Reais</TabsTrigger>
           <TabsTrigger value="tempo">Tempo</TabsTrigger>
@@ -797,6 +818,266 @@ export const EconomyPanelModule = ({
                   <p className="text-[10px] text-muted-foreground">projetos/ano com o tempo liberado</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Previsao de Economia */}
+        <TabsContent value="previsao" className="space-y-4">
+          <Card className="border-cyan-500/30 bg-gradient-to-r from-cyan-500/5 to-blue-500/5">
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <TrendingDown className="h-4 w-4 text-cyan-600" /> Previsao de Economia para Novos Projetos
+              </CardTitle>
+              <CardDescription>
+                Insira os parametros do projeto que voce esta orcando ou planejando para estimar a economia antes de iniciar.
+                O calculo usa os benchmarks SINAPI e dados reais de projetos anteriores na plataforma.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <Label className="text-xs">Extensao da rede (km)</Label>
+                  <Input type="number" value={predExtensaoKm || ""} onChange={e => setPredExtensaoKm(Number(e.target.value) || 0)} placeholder="Ex: 3.5" min={0} step={0.1} />
+                  <p className="text-[10px] text-muted-foreground mt-1">Comprimento total estimado da rede</p>
+                </div>
+                <div>
+                  <Label className="text-xs">DN medio (mm)</Label>
+                  <Input type="number" value={predDnMedio} onChange={e => setPredDnMedio(Number(e.target.value) || 200)} placeholder="200" />
+                  <p className="text-[10px] text-muted-foreground mt-1">Diametro nominal medio dos tubos</p>
+                </div>
+                <div>
+                  <Label className="text-xs">Profundidade media (m)</Label>
+                  <Input type="number" value={predProfMedia} onChange={e => setPredProfMedia(Number(e.target.value) || 1.5)} placeholder="1.5" step={0.1} />
+                  <p className="text-[10px] text-muted-foreground mt-1">Profundidade media de escavacao</p>
+                </div>
+                <div>
+                  <Label className="text-xs">Tipo de projeto</Label>
+                  <select
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={predTipoProjeto}
+                    onChange={e => setPredTipoProjeto(e.target.value as "esgoto" | "agua" | "drenagem")}
+                  >
+                    <option value="esgoto">Esgoto</option>
+                    <option value="agua">Agua</option>
+                    <option value="drenagem">Drenagem</option>
+                  </select>
+                </div>
+              </div>
+
+              {predExtensaoKm > 0 && (() => {
+                // Prediction calculations based on SINAPI costs and project parameters
+                const extensaoM = predExtensaoKm * 1000;
+                const numTrechos = Math.ceil(extensaoM / 80); // ~80m per trecho average
+                const numPVs = numTrechos + 1;
+
+                // SINAPI-based cost estimation
+                const dnM = predDnMedio / 1000;
+                const lv = Math.max(0.6, dnM + 0.30);
+                const volEscTotal = extensaoM * lv * predProfMedia;
+                const volTubo = extensaoM * Math.PI * (dnM / 2) ** 2;
+                const volBerco = extensaoM * lv * 0.10;
+                const volEnv = extensaoM * lv * 0.30;
+                const volReaterro = Math.max(0, volEscTotal - volTubo - volBerco - volEnv);
+                const volBotafora = (volEscTotal - volReaterro) * 1.25;
+                const areaPavimento = extensaoM * (lv + 0.60);
+
+                // Unit costs (SINAPI reference)
+                const custoEscUnit = predProfMedia <= 1.5 ? 52.47 : predProfMedia <= 3 ? 72.83 : 95.16;
+                const custoTuboUnit = predDnMedio <= 150 ? 67.43 : predDnMedio <= 200 ? 89.74 : predDnMedio <= 300 ? 142.56 : 195.88;
+                const custoReaterroUnit = 18.92;
+                const custoPVUnit = predProfMedia <= 1.5 ? 1850 : predProfMedia <= 2.5 ? 2650 : 3800;
+                const bdiPct = 25;
+
+                const custoEscavacao = volEscTotal * custoEscUnit;
+                const custoTubo = extensaoM * custoTuboUnit;
+                const custoReaterro = volReaterro * custoReaterroUnit;
+                const custoPV = numPVs * custoPVUnit;
+                const subtotal = custoEscavacao + custoTubo + custoReaterro + custoPV;
+                const totalComBDI = subtotal * (1 + bdiPct / 100);
+
+                // Error estimation (manual vs platform)
+                const custoManualEstimadoPred = totalComBDI * (1 + margemErroManual / 100);
+                const economiaPrecisao = custoManualEstimadoPred - totalComBDI;
+
+                // Rework prediction based on project size
+                const errosEstimados = Math.max(1, Math.round(numTrechos * 0.08)); // ~8% of trechos will have issues
+                const alertasEstimados = Math.max(2, Math.round(numTrechos * 0.15)); // ~15% warnings
+                const retrabalhoEvitado = errosEstimados * custoRetrabalhoReal + Math.round(alertasEstimados * 0.35) * 2200;
+
+                // Time saved
+                const tempoEconomizado = economy.hoursSavedPerProject * engineerRate * teamSize;
+
+                // Total projection
+                const economiaTotalProjeto = tempoEconomizado + retrabalhoEvitado + economiaPrecisao + (economy.totalLicenseCost / projectsPerYear);
+
+                return (
+                  <div className="space-y-4 mt-4">
+                    {/* Project estimation summary */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="bg-cyan-50 rounded-lg p-3 text-center border border-cyan-200">
+                        <p className="text-[10px] text-muted-foreground">Orcamento Estimado (SINAPI)</p>
+                        <p className="text-lg font-bold text-cyan-700">{fmtBRL(totalComBDI)}</p>
+                        <p className="text-[10px] text-muted-foreground">com BDI {bdiPct}%</p>
+                      </div>
+                      <div className="bg-red-50 rounded-lg p-3 text-center border border-red-200">
+                        <p className="text-[10px] text-muted-foreground">Estimativa Manual (tipica)</p>
+                        <p className="text-lg font-bold text-red-600">{fmtBRL(custoManualEstimadoPred)}</p>
+                        <p className="text-[10px] text-muted-foreground">+{margemErroManual}% de margem</p>
+                      </div>
+                      <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
+                        <p className="text-[10px] text-muted-foreground">Economia na Precisao</p>
+                        <p className="text-lg font-bold text-green-600">{fmtBRL(economiaPrecisao)}</p>
+                      </div>
+                      <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-200">
+                        <p className="text-[10px] text-muted-foreground">Economia Total Projetada</p>
+                        <p className="text-xl font-bold text-emerald-700">{fmtBRL(economiaTotalProjeto)}</p>
+                      </div>
+                    </div>
+
+                    {/* Detail breakdown */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Detalhamento da Previsao</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Parametro</TableHead>
+                              <TableHead>Quantidade</TableHead>
+                              <TableHead>Valor</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            <TableRow>
+                              <TableCell className="text-xs">Extensao da rede</TableCell>
+                              <TableCell className="text-xs">{fmtNum(extensaoM)} m ({predExtensaoKm} km)</TableCell>
+                              <TableCell className="text-xs">—</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-xs">Trechos estimados (~80m cada)</TableCell>
+                              <TableCell className="text-xs">{numTrechos} trechos</TableCell>
+                              <TableCell className="text-xs">—</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-xs">Pocos de visita</TableCell>
+                              <TableCell className="text-xs">{numPVs} PVs</TableCell>
+                              <TableCell className="text-xs">{fmtBRL(custoPV)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-xs">Escavacao</TableCell>
+                              <TableCell className="text-xs">{fmtNum(volEscTotal)} m3</TableCell>
+                              <TableCell className="text-xs">{fmtBRL(custoEscavacao)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-xs">Tubulacao DN{predDnMedio}</TableCell>
+                              <TableCell className="text-xs">{fmtNum(extensaoM)} m</TableCell>
+                              <TableCell className="text-xs">{fmtBRL(custoTubo)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-xs">Reaterro</TableCell>
+                              <TableCell className="text-xs">{fmtNum(volReaterro)} m3</TableCell>
+                              <TableCell className="text-xs">{fmtBRL(custoReaterro)}</TableCell>
+                            </TableRow>
+                            <TableRow className="bg-muted/50 font-semibold">
+                              <TableCell>Subtotal (sem BDI)</TableCell>
+                              <TableCell>—</TableCell>
+                              <TableCell>{fmtBRL(subtotal)}</TableCell>
+                            </TableRow>
+                            <TableRow className="bg-cyan-50 font-bold">
+                              <TableCell>Total com BDI ({bdiPct}%)</TableCell>
+                              <TableCell>—</TableCell>
+                              <TableCell className="text-cyan-700">{fmtBRL(totalComBDI)}</TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+
+                    {/* Economy projection breakdown */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Projecao de Economia</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Fonte de Economia</TableHead>
+                              <TableHead>Base do Calculo</TableHead>
+                              <TableHead>Valor Projetado</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            <TableRow>
+                              <TableCell className="text-xs font-medium">Tempo de engenharia</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {fmtNum(economy.hoursSavedPerProject)}h x {teamSize} eng. x R$ {engineerRate}/h
+                              </TableCell>
+                              <TableCell className="text-xs font-semibold text-blue-600">{fmtBRL(tempoEconomizado)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-xs font-medium">Retrabalho evitado</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                ~{errosEstimados} erros + ~{alertasEstimados} alertas previstos para {numTrechos} trechos
+                              </TableCell>
+                              <TableCell className="text-xs font-semibold text-orange-600">{fmtBRL(retrabalhoEvitado)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-xs font-medium">Precisao orcamentaria</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {fmtBRL(totalComBDI)} x ({margemErroManual}% - 5%) = diferenca manual vs plataforma
+                              </TableCell>
+                              <TableCell className="text-xs font-semibold text-green-600">{fmtBRL(economiaPrecisao)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell className="text-xs font-medium">Licencas (proporcional)</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {fmtBRL(economy.totalLicenseCost)} / {projectsPerYear} projetos
+                              </TableCell>
+                              <TableCell className="text-xs font-semibold text-purple-600">{fmtBRL(economy.totalLicenseCost / projectsPerYear)}</TableCell>
+                            </TableRow>
+                            <TableRow className="bg-emerald-50 font-bold text-lg">
+                              <TableCell colSpan={2}>ECONOMIA PROJETADA NESTE PROJETO</TableCell>
+                              <TableCell className="text-emerald-700">{fmtBRL(economiaTotalProjeto)}</TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+
+                        <div className="mt-4 grid grid-cols-3 gap-3">
+                          <div className="bg-emerald-50 rounded-lg p-3 text-center border border-emerald-200">
+                            <p className="text-[10px] text-muted-foreground">Economia como % do orcamento</p>
+                            <p className="text-xl font-bold text-emerald-700">
+                              {totalComBDI > 0 ? ((economiaTotalProjeto / totalComBDI) * 100).toFixed(1) : 0}%
+                            </p>
+                          </div>
+                          <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
+                            <p className="text-[10px] text-muted-foreground">Economia anual ({projectsPerYear} proj.)</p>
+                            <p className="text-xl font-bold text-blue-700">{fmtBRL(economiaTotalProjeto * projectsPerYear)}</p>
+                          </div>
+                          <div className="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
+                            <p className="text-[10px] text-muted-foreground">Dias liberados</p>
+                            <p className="text-xl font-bold text-purple-700">{fmtNum(economy.daysSavedPerProject)}</p>
+                            <p className="text-[10px] text-muted-foreground">por projeto</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                );
+              })()}
+
+              {predExtensaoKm === 0 && (
+                <div className="bg-muted/50 rounded-lg p-6 text-center">
+                  <Calculator className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" />
+                  <p className="text-sm text-muted-foreground mb-1">Insira a extensao da rede acima para ver a previsao</p>
+                  <p className="text-xs text-muted-foreground">
+                    O calculo estima custos SINAPI, numero de trechos, pocos de visita, volumes de escavacao/reaterro,
+                    e projeta a economia com base nos parametros da sua empresa.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

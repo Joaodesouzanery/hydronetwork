@@ -66,6 +66,8 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   const [bulkMoveStart, setBulkMoveStart] = useState<L.LatLng | null>(null);
   const [showTransformDialog, setShowTransformDialog] = useState(false);
   const markersRef = useRef<L.CircleMarker[]>([]);
+  const markerMapRef = useRef<Map<string, L.CircleMarker>>(new Map());
+  const polylineMapRef = useRef<Map<number, L.Polyline>>(new Map());
   const polylinesRef = useRef<L.Polyline[]>([]);
   const contourLayersRef = useRef<L.Polyline[]>([]);
   const [tileKey, setTileKey] = useState("osm");
@@ -81,6 +83,22 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   pontosRef.current = pontos;
   const onTrechosChangeRef = useRef(onTrechosChange);
   onTrechosChangeRef.current = onTrechosChange;
+
+  // Stable refs for UI state — prevents handleMarkerClick/handleTrechoClick from triggering draw effect re-runs
+  const drawModeRef = useRef(drawMode);
+  drawModeRef.current = drawMode;
+  const drawOriginRef = useRef(drawOrigin);
+  drawOriginRef.current = drawOrigin;
+  const deleteModeRef = useRef(deleteMode);
+  deleteModeRef.current = deleteMode;
+  const bulkMoveModeRef = useRef(bulkMoveMode);
+  bulkMoveModeRef.current = bulkMoveMode;
+  const draggedNodeIdRef = useRef(draggedNodeId);
+  draggedNodeIdRef.current = draggedNodeId;
+  const structureModeRef = useRef(structureMode);
+  structureModeRef.current = structureMode;
+  const showBatchPanelRef = useRef(showBatchPanel);
+  showBatchPanelRef.current = showBatchPanel;
 
   // Structure mode state
   const [structureMode, setStructureMode] = useState(false);
@@ -232,12 +250,12 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
     toast.success(`Coordenadas transformadas: ${newPontos.length} pontos e ${newTrechos.length} trechos atualizados.`);
   }, [onPontosChange, onTrechosChange]);
 
-  // Handle marker click - draw mode or select mode
+  // Handle marker click - draw mode or select mode (uses refs for stable identity)
   const handleTrechoClick = useCallback((idx: number, event?: any) => {
-    if (structureMode) {
+    if (structureModeRef.current) {
       // Ctrl+click for batch selection
       const isCtrl = event?.originalEvent?.ctrlKey || event?.originalEvent?.metaKey;
-      if (isCtrl || showBatchPanel) {
+      if (isCtrl || showBatchPanelRef.current) {
         setBatchSelectedTrechos(prev => {
           const next = new Set(prev);
           if (next.has(idx)) next.delete(idx); else next.add(idx);
@@ -255,21 +273,21 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       }
       return;
     }
-    if (deleteMode === "trechos") {
+    if (deleteModeRef.current === "trechos") {
       setSelectedTrechosForDelete(prev => {
         const next = new Set(prev);
         if (next.has(idx)) next.delete(idx); else next.add(idx);
         return next;
       });
     }
-  }, [deleteMode, structureMode, showBatchPanel]);
+  }, []);
 
   const handleMarkerClick = useCallback((pointId: string) => {
-    if (bulkMoveMode) {
-      if (draggedNodeId === pointId) {
+    if (bulkMoveModeRef.current) {
+      if (draggedNodeIdRef.current === pointId) {
         setDraggedNodeId(null);
         toast.success(`Ponto ${pointId} reposicionado.`);
-      } else if (draggedNodeId) {
+      } else if (draggedNodeIdRef.current) {
         setDraggedNodeId(pointId);
         toast.info(`Arrastando ponto ${pointId}...`);
       } else {
@@ -278,7 +296,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       }
       return;
     }
-    if (deleteMode === "nodes") {
+    if (deleteModeRef.current === "nodes") {
       setSelectedForDelete(prev => {
         const next = new Set(prev);
         if (next.has(pointId)) next.delete(pointId);
@@ -287,12 +305,13 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       });
       return;
     }
-    if (drawMode) {
-      if (!drawOrigin) {
+    if (drawModeRef.current) {
+      const curDrawOrigin = drawOriginRef.current;
+      if (!curDrawOrigin) {
         setDrawOrigin(pointId);
         toast.info(`Origem: ${pointId} — clique no destino`);
       } else {
-        if (pointId === drawOrigin) {
+        if (pointId === curDrawOrigin) {
           toast.error("Selecione um ponto diferente para o destino.");
           return;
         }
@@ -300,20 +319,20 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         const curTrechos = trechosRef.current;
         const curPontos = pontosRef.current;
         const exists = curTrechos.some(t =>
-          (t.idInicio === drawOrigin && t.idFim === pointId) ||
-          (t.idInicio === pointId && t.idFim === drawOrigin)
+          (t.idInicio === curDrawOrigin && t.idFim === pointId) ||
+          (t.idInicio === pointId && t.idFim === curDrawOrigin)
         );
         if (exists) {
           toast.warning("Trecho já existe entre esses pontos.");
           setDrawOrigin(null);
           return;
         }
-        const pOrigem = curPontos.find(p => p.id === drawOrigin);
+        const pOrigem = curPontos.find(p => p.id === curDrawOrigin);
         const pDestino = curPontos.find(p => p.id === pointId);
         if (pOrigem && pDestino) {
           const novoTrecho = createTrechoFromPoints(pOrigem, pDestino);
           onTrechosChangeRef.current?.([...curTrechos, novoTrecho]);
-          toast.success(`Trecho ${drawOrigin} → ${pointId} criado!`);
+          toast.success(`Trecho ${curDrawOrigin} → ${pointId} criado!`);
         }
         setDrawOrigin(pointId);
         toast.info(`Continuando de ${pointId} — clique no próximo destino ou ESC para parar`);
@@ -321,12 +340,13 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
     } else {
       setSelectedPoint(prev => prev === pointId ? null : pointId);
     }
-  }, [deleteMode, drawMode, drawOrigin, bulkMoveMode, draggedNodeId]);
+  }, []);
 
   // Track last data signature to only fitBounds on actual data changes
   const lastDataSigRef = useRef("");
 
-  // Draw points and segments
+  // Draw points and segments — only depends on data and coordinate system, NOT on UI state
+  // Handlers use refs so they never change identity, preventing unnecessary redraws
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -335,6 +355,8 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
     polylinesRef.current.forEach(p => p.remove());
     markersRef.current = [];
     polylinesRef.current = [];
+    markerMapRef.current.clear();
+    polylineMapRef.current.clear();
 
     if (pontos.length === 0) return;
 
@@ -345,22 +367,119 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
       if (!isFinite(coords[0]) || !isFinite(coords[1])) return;
       bounds.push(coords);
 
+      // Default color — will be updated by the styling effect
       let color = "#3b82f6";
       if (idx === 0) color = "#22c55e";
       else if (idx === pontos.length - 1) color = "#ef4444";
+
+      const marker = L.circleMarker(coords, {
+        radius: 8, fillColor: color, color: "#fff", weight: 2, fillOpacity: 0.9,
+      }).addTo(map);
+
+      // Default: bind popup (styling effect will rebind as needed)
+      marker.bindPopup(`
+        <div style="font-family:sans-serif;min-width:150px;">
+          <strong style="font-size:14px;">${p.id}</strong>
+          <hr style="margin:4px 0;border-color:#e2e8f0;">
+          <div style="font-size:12px;line-height:1.6;">
+            <b>X:</b> ${p.x.toFixed(3)}<br>
+            <b>Y:</b> ${p.y.toFixed(3)}<br>
+            <b>Cota:</b> ${p.cota.toFixed(3)}m
+          </div>
+        </div>
+      `);
+
+      marker.on("click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        handleMarkerClick(p.id);
+      });
+      markersRef.current.push(marker);
+      markerMapRef.current.set(p.id, marker);
+    });
+
+    trechos.forEach((t, idx) => {
+      const pInicio = pontos.find(p => p.id === t.idInicio);
+      const pFim = pontos.find(p => p.id === t.idFim);
+      if (!pInicio || !pFim) return;
+      const isGravity = t.tipoRede === "Esgoto por Gravidade";
+
+      const lineColor = isGravity ? "#22c55e" : "#f59e0b";
+
+      const polyline = L.polyline([getPointCoords(pInicio), getPointCoords(pFim)], {
+        color: lineColor,
+        weight: 4,
+        opacity: 0.8,
+      }).addTo(map);
+
+      const displayName = t.nomeTrecho || `${t.idInicio} → ${t.idFim}`;
+      const redeLabel = t.tipoRedeManual ? ` [${t.tipoRedeManual}]` : "";
+      polyline.bindTooltip(`${displayName}${redeLabel} (${t.comprimento.toFixed(1)}m)`, { sticky: true });
+      polyline.bindPopup(`
+        <div style="font-family:sans-serif;min-width:200px;">
+          <strong>${displayName}</strong>
+          ${t.nomeTrecho ? `<br><span style="font-size:11px;color:#666;">${t.idInicio} → ${t.idFim}</span>` : ""}
+          <hr style="margin:4px 0;">
+          <div style="font-size:12px;line-height:1.6;">
+            <b>Comprimento:</b> ${t.comprimento.toFixed(2)}m<br>
+            <b>Declividade:</b> ${(t.declividade * 100).toFixed(2)}%<br>
+            <b>Tipo:</b> ${isGravity ? "Gravidade" : "Elevatória"}<br>
+            <b>Rede:</b> ${t.tipoRedeManual || "Nao definida"}<br>
+            ${t.frenteServico ? `<b>Frente:</b> ${t.frenteServico}<br>` : ""}
+            ${t.lote ? `<b>Lote:</b> ${t.lote}<br>` : ""}
+            <b>Diâmetro:</b> DN${t.diametroMm}<br>
+            <b>Material:</b> ${t.material}
+          </div>
+        </div>
+      `);
+      polyline.on("click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        handleTrechoClick(idx, e);
+      });
+      polylinesRef.current.push(polyline);
+      polylineMapRef.current.set(idx, polyline);
+    });
+
+    // Only fitBounds when the set of points changes (added/removed), not when connections change
+    const dataSig = pontos.map(p => p.id).join(",");
+    if (bounds.length > 0 && dataSig !== lastDataSigRef.current) {
+      lastDataSigRef.current = dataSig;
+      try {
+        map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30], maxZoom: 18 });
+      } catch {
+        map.setView(bounds[0] as L.LatLngExpression, 15);
+      }
+      setTimeout(() => map.invalidateSize(), 200);
+      setTimeout(() => map.invalidateSize(), 500);
+    }
+  }, [pontos, trechos, getPointCoords, handleMarkerClick, handleTrechoClick]);
+
+  // Lightweight styling effect — updates marker/polyline styles without redrawing the map
+  // This runs on UI state changes (drawMode, selection, etc.) and does NOT trigger fitBounds or map redraws
+  useEffect(() => {
+    const curPontos = pontosRef.current;
+    const curTrechos = trechosRef.current;
+
+    // Update marker styles
+    curPontos.forEach((p, idx) => {
+      const marker = markerMapRef.current.get(p.id);
+      if (!marker) return;
+
+      let color = "#3b82f6";
+      if (idx === 0) color = "#22c55e";
+      else if (idx === curPontos.length - 1) color = "#ef4444";
       if (drawMode && drawOrigin === p.id) color = "#f97316";
       if (!drawMode && !deleteMode && selectedPoint === p.id) color = "#f59e0b";
       if (deleteMode === "nodes" && selectedForDelete.has(p.id)) color = "#dc2626";
-      if (bulkMoveMode) color = "#06b6d4"; // cyan for bulk move mode
-      if (bulkMoveMode && draggedNodeId === p.id) color = "#f97316"; // orange for dragged node
+      if (bulkMoveMode) color = "#06b6d4";
+      if (bulkMoveMode && draggedNodeId === p.id) color = "#f97316";
 
       const radius = (drawMode || deleteMode) ? 11 : bulkMoveMode ? 12 : 8;
 
-      const marker = L.circleMarker(coords, {
-        radius, fillColor: color, color: "#fff", weight: 2, fillOpacity: 0.9,
-      }).addTo(map);
+      marker.setStyle({ fillColor: color, radius });
 
-      // In draw/delete/bulkMove mode, use tooltips (don't block clicks). Otherwise popups.
+      // Rebind tooltip/popup based on mode
+      marker.unbindTooltip();
+      marker.unbindPopup();
       if (drawMode || deleteMode || bulkMoveMode) {
         marker.bindTooltip(p.id, { permanent: false, direction: "top", offset: [0, -10] });
       } else {
@@ -376,79 +495,37 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           </div>
         `);
       }
-
-      marker.on("click", (e) => {
-        L.DomEvent.stopPropagation(e);
-        handleMarkerClick(p.id);
-      });
-      markersRef.current.push(marker);
     });
 
-    trechos.forEach((t, idx) => {
-      const pInicio = pontos.find(p => p.id === t.idInicio);
-      const pFim = pontos.find(p => p.id === t.idFim);
-      if (!pInicio || !pFim) return;
+    // Update polyline styles
+    curTrechos.forEach((t, idx) => {
+      const polyline = polylineMapRef.current.get(idx);
+      if (!polyline) return;
+
       const isGravity = t.tipoRede === "Esgoto por Gravidade";
       const isSelectedForDel = deleteMode === "trechos" && selectedTrechosForDelete.has(idx);
       const isStructureSelected = structureMode && selectedTrechoIdx === idx;
       const isBatchSelected = structureMode && batchSelectedTrechos.has(idx);
 
-      // Color logic: structure mode uses rede colors, otherwise default
       let lineColor = isGravity ? "#22c55e" : "#f59e0b";
       if (isSelectedForDel) lineColor = "#dc2626";
       else if (structureMode && t.tipoRedeManual) lineColor = REDE_COLORS[t.tipoRedeManual as TipoRedeManualMap] || lineColor;
       if (isBatchSelected) lineColor = "#c084fc";
       if (isStructureSelected) lineColor = "#818cf8";
 
-      const polyline = L.polyline([getPointCoords(pInicio), getPointCoords(pFim)], {
+      polyline.setStyle({
         color: lineColor,
         weight: isSelectedForDel ? 6 : isStructureSelected ? 6 : isBatchSelected ? 5 : structureMode ? 5 : 4,
         opacity: isSelectedForDel ? 1 : isStructureSelected ? 1 : isBatchSelected ? 1 : 0.8,
         dashArray: isBatchSelected ? "8 4" : undefined,
-      }).addTo(map);
-
-      const displayName = t.nomeTrecho || `${t.idInicio} → ${t.idFim}`;
-      const redeLabel = t.tipoRedeManual ? ` [${t.tipoRedeManual}]` : "";
-      polyline.bindTooltip(`${displayName}${redeLabel} (${t.comprimento.toFixed(1)}m)`, { sticky: true });
-      if (deleteMode !== "trechos") {
-        polyline.bindPopup(`
-          <div style="font-family:sans-serif;min-width:200px;">
-            <strong>${displayName}</strong>
-            ${t.nomeTrecho ? `<br><span style="font-size:11px;color:#666;">${t.idInicio} → ${t.idFim}</span>` : ""}
-            <hr style="margin:4px 0;">
-            <div style="font-size:12px;line-height:1.6;">
-              <b>Comprimento:</b> ${t.comprimento.toFixed(2)}m<br>
-              <b>Declividade:</b> ${(t.declividade * 100).toFixed(2)}%<br>
-              <b>Tipo:</b> ${isGravity ? "Gravidade" : "Elevatória"}<br>
-              <b>Rede:</b> ${t.tipoRedeManual || "Nao definida"}<br>
-              ${t.frenteServico ? `<b>Frente:</b> ${t.frenteServico}<br>` : ""}
-              ${t.lote ? `<b>Lote:</b> ${t.lote}<br>` : ""}
-              <b>Diâmetro:</b> DN${t.diametroMm}<br>
-              <b>Material:</b> ${t.material}
-            </div>
-          </div>
-        `);
-      }
-      polyline.on("click", (e) => {
-        L.DomEvent.stopPropagation(e);
-        handleTrechoClick(idx, e);
       });
-      polylinesRef.current.push(polyline);
-    });
 
-    // Only fitBounds when the set of points changes (added/removed), not when connections change
-    const dataSig = pontos.map(p => p.id).join(",");
-    if (bounds.length > 0 && dataSig !== lastDataSigRef.current) {
-      lastDataSigRef.current = dataSig;
-      try {
-        map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30], maxZoom: 18 });
-      } catch {
-        map.setView(bounds[0] as L.LatLngExpression, 15);
+      // Toggle popup in delete mode
+      if (deleteMode === "trechos") {
+        polyline.unbindPopup();
       }
-      setTimeout(() => map.invalidateSize(), 200);
-      setTimeout(() => map.invalidateSize(), 500);
-    }
-  }, [pontos, trechos, getPointCoords, handleMarkerClick, handleTrechoClick, drawMode, drawOrigin, selectedPoint, deleteMode, selectedForDelete, selectedTrechosForDelete, bulkMoveMode, draggedNodeId, structureMode, selectedTrechoIdx, batchSelectedTrechos]);
+    });
+  }, [drawMode, drawOrigin, selectedPoint, deleteMode, selectedForDelete, selectedTrechosForDelete, bulkMoveMode, draggedNodeId, structureMode, selectedTrechoIdx, batchSelectedTrechos]);
 
   // Render contour lines
   useEffect(() => {

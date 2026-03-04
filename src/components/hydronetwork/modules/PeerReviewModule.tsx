@@ -10,10 +10,12 @@ import { toast } from "sonner";
 import { Shield, Play, Download, Settings, CheckCircle2, AlertTriangle, XCircle, FileText, RotateCcw } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
+import { saveModuleData } from "@/engine/moduleExchange";
 
 interface PeerReviewModuleProps {
   pontos?: PontoTopografico[];
   trechos?: Trecho[];
+  onReviewComplete?: (errors: number, warnings: number) => void;
 }
 
 interface ReviewRule {
@@ -37,7 +39,7 @@ interface ReviewSession {
   notes: string;
 }
 
-export const PeerReviewModule = ({ pontos = [], trechos = [] }: PeerReviewModuleProps) => {
+export const PeerReviewModule = ({ pontos = [], trechos = [], onReviewComplete }: PeerReviewModuleProps) => {
   const [view, setView] = useState<"rules" | "history" | "config">("rules");
   const [rules, setRules] = useState<ReviewRule[]>([]);
   const [sessions, setSessions] = useState<ReviewSession[]>([]);
@@ -188,6 +190,16 @@ export const PeerReviewModule = ({ pontos = [], trechos = [] }: PeerReviewModule
     setSessions(prev => [session, ...prev]);
 
     setIsRunning(false);
+
+    // Notify parent (HydroNetwork) so Economy module can use the review results
+    onReviewComplete?.(failures, warnings);
+
+    // Also persist to moduleExchange for cross-module access (Economy module reads these)
+    saveModuleData("reviewErrors", failures);
+    saveModuleData("reviewWarnings", warnings);
+    saveModuleData("reviewRules", newRules);
+    saveModuleData("reviewScore", Math.round((passed / newRules.length) * 100));
+
     toast.success(`Revisão concluída: ${passed} OK, ${warnings} alertas, ${failures} falhas.`);
   };
 
