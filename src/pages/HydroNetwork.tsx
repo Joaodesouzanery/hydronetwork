@@ -79,12 +79,15 @@ const useHydroState = () => {
   const [rdos, setRdos] = useState<RDO[]>(loadRDOs());
   const [quantityRows, setQuantityRows] = useState<QuantRow[]>([]);
   const [quantityParams, setQuantityParams] = useState<QuantityParams | null>(null);
+  const [reviewErrorsCount, setReviewErrorsCount] = useState(0);
+  const [reviewWarningsCount, setReviewWarningsCount] = useState(0);
 
   return {
     pontos, setPontos, trechos, setTrechos, networkSummary, setNetworkSummary,
     costBase, setCostBase, budgetRows, setBudgetRows, budgetSummary, setBudgetSummary,
     diametroMm, setDiametroMm, material, setMaterial, scheduleResult, setScheduleResult,
     rdos, setRdos, quantityRows, setQuantityRows, quantityParams, setQuantityParams,
+    reviewErrorsCount, setReviewErrorsCount, reviewWarningsCount, setReviewWarningsCount,
   };
 };
 
@@ -99,6 +102,7 @@ const HydroNetwork = () => {
     costBase, setCostBase, budgetRows, setBudgetRows, budgetSummary, setBudgetSummary,
     diametroMm, setDiametroMm, material, setMaterial, scheduleResult, setScheduleResult,
     rdos, setRdos, quantityRows, setQuantityRows, quantityParams, setQuantityParams,
+    reviewErrorsCount, setReviewErrorsCount, reviewWarningsCount, setReviewWarningsCount,
   } = state;
 
   // ══════════════════════════════════════════════
@@ -299,7 +303,7 @@ const HydroNetwork = () => {
       case "qgis":
         return <QgisModule pontos={pontos} trechos={trechos} />;
       case "revisao":
-        return <PeerReviewModule pontos={pontos} trechos={trechos} />;
+        return <PeerReviewModule pontos={pontos} trechos={trechos} onReviewComplete={(errors, warnings) => { setReviewErrorsCount(errors); setReviewWarningsCount(warnings); }} />;
       case "rdo":
         return <RDOHydroModule pontos={pontos} trechos={trechos} rdos={rdos} setRdos={setRdos} onPontosChange={setPontos} onTrechosChange={setTrechos} />;
       case "rdo-planejamento":
@@ -327,7 +331,7 @@ const HydroNetwork = () => {
       case "exportacao":
         return <ExportacaoGISModule />;
       case "economia":
-        return <EconomyPanelModule trechos={trechos} quantityRows={quantityRows} scheduleResult={scheduleResult} />;
+        return <EconomyPanelModule trechos={trechos} quantityRows={quantityRows} scheduleResult={scheduleResult} budgetTotal={budgetSummary?.totalCost} reviewErrorsCount={reviewErrorsCount} reviewWarningsCount={reviewWarningsCount} />;
       default:
         return <TopografiaModule />;
     }

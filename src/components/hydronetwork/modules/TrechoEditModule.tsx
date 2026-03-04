@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import {
   Calculator, Download, Scissors, Undo2, Search, FileSpreadsheet, DollarSign,
   Calendar, RefreshCw, Filter, Upload, FileDown, MapPin, BarChart3,
+  ArrowRight, Check, Settings2,
 } from "lucide-react";
 import { Trecho } from "@/engine/domain";
 import { PontoTopografico } from "@/engine/reader";
@@ -130,6 +131,35 @@ interface EditableScheduleRow {
   prioridade: number;
 }
 
+// Cost spreadsheet item — imported from user's cost spreadsheet
+interface CustoImportItem {
+  item_custo: string;
+  descricao: string;
+  unidade: string;
+  preco_unitario: number;
+  fonte: string;
+}
+
+// Column mapping state for measurement import
+interface ColumnMapping {
+  spreadsheetHeaders: string[];
+  rawData: Record<string, unknown>[];
+  mappings: Record<string, string>; // field -> spreadsheet column
+  confirmed: boolean;
+}
+
+const MEDICAO_FIELDS = [
+  { key: "item_medicao", label: "Item / Codigo", required: true },
+  { key: "descricao", label: "Descricao", required: false },
+  { key: "tipo_rede", label: "Tipo Rede", required: false },
+  { key: "dn_min", label: "DN Minimo", required: false },
+  { key: "dn_max", label: "DN Maximo", required: false },
+  { key: "driver", label: "Unidade (m, m2, m3, un)", required: false },
+  { key: "regra_quantidade", label: "Regra de Quantidade (campo)", required: true },
+  { key: "preco_unitario", label: "Preco Unitario", required: true },
+] as const;
+
+const CUSTO_STORAGE_KEY = "hydronetwork_custo_import";
 const STORAGE_KEY = "hydronetwork_trecho_edits";
 const ROW_HEIGHT = 40;
 const TABLE_MAX_HEIGHT = 520;
@@ -327,10 +357,19 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
   const [costRows, setCostRows] = useState<EditableCostRow[]>([]);
   const [scheduleRows, setScheduleRows] = useState<EditableScheduleRow[]>([]);
 
+  // Cost import data
+  const [custoImportItems, setCustoImportItems] = useState<CustoImportItem[]>(() => {
+    try { const d = localStorage.getItem(CUSTO_STORAGE_KEY); return d ? JSON.parse(d) : []; } catch { return []; }
+  });
+  const custoFileRef = useRef<HTMLInputElement>(null);
+
   // Measurement (Medição) data
   const [medicaoItems, setMedicaoItems] = useState<MedicaoItem[]>(() => loadMedicaoItems());
   const [medicaoTrechos, setMedicaoTrechos] = useState<TrechoMedicao[]>(() => loadMedicaoTrechos());
   const medicaoFileRef = useRef<HTMLInputElement>(null);
+
+  // Column mapping for measurement import
+  const [columnMapping, setColumnMapping] = useState<ColumnMapping | null>(null);
 
   // Subdivision dialog
   const [subdivideTarget, setSubdivideTarget] = useState<string | null>(null);
@@ -717,34 +756,189 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     }
   }, []);
 
-  // ── Measurement (Medição) handlers ──
+  // ── Cost spreadsheet import handler ──
 
-  const handleMedicaoImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCustoImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const items = await parseMedicaoFile(file);
-      setMedicaoItems(items);
-      saveMedicaoItems(items);
-      toast.success(`${items.length} itens de medição importados.`);
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      let rows: Record<string, unknown>[] = [];
 
-      // Auto-calculate if we have trechos loaded
-      if (trechos.length > 0) {
-        const medTrechos = calcularMedicaoPorTrecho(
-          trechos,
-          quantityRows || [],
-          items,
-        );
-        setMedicaoTrechos(medTrechos);
-        saveMedicaoTrechos(medTrechos);
-        saveModuleData("medicaoTrechos", medTrechos);
+      if (ext === "xlsx" || ext === "xls") {
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+      } else {
+        const text = await file.text();
+        const lines = text.trim().split("\n");
+        let delim = ",";
+        if (lines[0].includes(";")) delim = ";";
+        else if (lines[0].includes("\t")) delim = "\t";
+        const headers = lines[0].split(delim).map(h => h.trim());
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(delim).map(p => p.trim());
+          const row: Record<string, unknown> = {};
+          headers.forEach((h, idx) => { row[h] = parts[idx] || ""; });
+          rows.push(row);
+        }
       }
+
+      if (rows.length === 0) { toast.error("Planilha de custo vazia."); return; }
+
+      const headers = Object.keys(rows[0]);
+      const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "_");
+      const findCol = (names: string[]): string | null => {
+        for (const n of names) {
+          const found = headers.find(h => normalize(h).includes(n));
+          if (found) return found;
+        }
+        return null;
+      };
+
+      const itemCol = findCol(["item", "codigo", "cod"]);
+      const descCol = findCol(["descricao", "desc", "servico"]);
+      const unCol = findCol(["unidade", "un", "driver"]);
+      const precoCol = findCol(["preco", "valor", "custo", "unit"]);
+      const fonteCol = findCol(["fonte", "referencia", "ref"]);
+
+      const items: CustoImportItem[] = rows.map((row, i) => ({
+        item_custo: itemCol ? String(row[itemCol] || `CUSTO${i + 1}`) : `CUSTO${i + 1}`,
+        descricao: descCol ? String(row[descCol] || "") : "",
+        unidade: unCol ? String(row[unCol] || "un") : "un",
+        preco_unitario: precoCol ? Number(String(row[precoCol]).replace(",", ".")) || 0 : 0,
+        fonte: fonteCol ? String(row[fonteCol] || "Importado") : "Importado",
+      })).filter(item => item.preco_unitario > 0);
+
+      setCustoImportItems(items);
+      localStorage.setItem(CUSTO_STORAGE_KEY, JSON.stringify(items));
+      toast.success(`${items.length} itens de custo importados.`);
     } catch (err: any) {
-      toast.error(err.message || "Erro ao importar planilha de medição.");
+      toast.error(err.message || "Erro ao importar planilha de custo.");
     }
-    // Reset input
+    if (custoFileRef.current) custoFileRef.current.value = "";
+  }, []);
+
+  // ── Measurement (Medição) handlers — with column mapping ──
+
+  const handleMedicaoImportStep1 = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      let rows: Record<string, unknown>[] = [];
+
+      if (ext === "xlsx" || ext === "xls") {
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+      } else {
+        const text = await file.text();
+        const lines = text.trim().split("\n");
+        let delim = ",";
+        if (lines[0].includes(";")) delim = ";";
+        else if (lines[0].includes("\t")) delim = "\t";
+        const headers = lines[0].split(delim).map(h => h.trim());
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(delim).map(p => p.trim());
+          const row: Record<string, unknown> = {};
+          headers.forEach((h, idx) => { row[h] = parts[idx] || ""; });
+          rows.push(row);
+        }
+      }
+
+      if (rows.length === 0) { toast.error("Planilha de medicao vazia."); return; }
+
+      const spreadsheetHeaders = Object.keys(rows[0]);
+
+      // Auto-suggest mappings based on common column names
+      const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "_");
+      const suggestMap: Record<string, string> = {};
+
+      const suggestions: Record<string, string[]> = {
+        item_medicao: ["item_medicao", "item", "codigo", "cod"],
+        descricao: ["descricao", "desc", "servico", "nome"],
+        tipo_rede: ["tipo_rede", "tipo", "rede", "sistema"],
+        dn_min: ["dn_min", "diametro_min", "dn_de"],
+        dn_max: ["dn_max", "diametro_max", "dn_ate"],
+        driver: ["driver", "unidade", "un"],
+        regra_quantidade: ["regra_quantidade", "regra", "quantidade_campo", "campo"],
+        preco_unitario: ["preco_unitario", "preco", "valor", "custo"],
+      };
+
+      for (const [field, names] of Object.entries(suggestions)) {
+        for (const n of names) {
+          const found = spreadsheetHeaders.find(h => normalize(h).includes(n));
+          if (found) { suggestMap[field] = found; break; }
+        }
+      }
+
+      setColumnMapping({
+        spreadsheetHeaders,
+        rawData: rows,
+        mappings: suggestMap,
+        confirmed: false,
+      });
+
+      toast.info(`Planilha carregada com ${rows.length} linhas e ${spreadsheetHeaders.length} colunas. Mapeie as colunas abaixo.`);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao ler planilha de medicao.");
+    }
     if (medicaoFileRef.current) medicaoFileRef.current.value = "";
-  }, [trechos, quantityRows]);
+  }, []);
+
+  const handleColumnMappingChange = useCallback((field: string, column: string) => {
+    setColumnMapping(prev => {
+      if (!prev) return prev;
+      return { ...prev, mappings: { ...prev.mappings, [field]: column === "__none__" ? "" : column } };
+    });
+  }, []);
+
+  const confirmColumnMapping = useCallback(() => {
+    if (!columnMapping) return;
+    const { rawData, mappings } = columnMapping;
+
+    if (!mappings.preco_unitario) {
+      toast.error("Coluna de Preco Unitario e obrigatoria.");
+      return;
+    }
+
+    const items: MedicaoItem[] = rawData.map((row, i) => {
+      const preco = Number(String(row[mappings.preco_unitario] || "0").replace(",", "."));
+      if (isNaN(preco) || preco <= 0) return null;
+
+      return {
+        item_medicao: mappings.item_medicao ? String(row[mappings.item_medicao] || `ITEM${i + 1}`) : `ITEM${i + 1}`,
+        descricao: mappings.descricao ? String(row[mappings.descricao] || "") : "",
+        tipo_rede: mappings.tipo_rede ? String(row[mappings.tipo_rede] || "ESGOTO").toUpperCase() : "ESGOTO",
+        dn_min: mappings.dn_min ? Number(row[mappings.dn_min]) || 0 : 0,
+        dn_max: mappings.dn_max ? Number(row[mappings.dn_max]) || 9999 : 9999,
+        driver: mappings.driver ? String(row[mappings.driver] || "m") : "m",
+        regra_quantidade: mappings.regra_quantidade ? String(row[mappings.regra_quantidade] || "comprimento") : "comprimento",
+        preco_unitario: preco,
+      };
+    }).filter(Boolean) as MedicaoItem[];
+
+    setMedicaoItems(items);
+    saveMedicaoItems(items);
+    setColumnMapping(prev => prev ? { ...prev, confirmed: true } : prev);
+
+    // Auto-calculate if we have trechos loaded
+    if (trechos.length > 0) {
+      const medTrechos = calcularMedicaoPorTrecho(trechos, quantityRows || [], items);
+      setMedicaoTrechos(medTrechos);
+      saveMedicaoTrechos(medTrechos);
+      saveModuleData("medicaoTrechos", medTrechos);
+    }
+
+    toast.success(`${items.length} itens de medicao mapeados e importados.`);
+  }, [columnMapping, trechos, quantityRows]);
+
+  const cancelColumnMapping = useCallback(() => {
+    setColumnMapping(null);
+  }, []);
 
   const recalcularMedicaoHandler = useCallback(() => {
     if (trechos.length === 0) {
@@ -987,15 +1181,18 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="quantitativos" className="flex items-center gap-1">
             <Calculator className="h-4 w-4" /> Quantitativos
           </TabsTrigger>
           <TabsTrigger value="valores" className="flex items-center gap-1">
-            <DollarSign className="h-4 w-4" /> Valores / Custos
+            <DollarSign className="h-4 w-4" /> Custos
+          </TabsTrigger>
+          <TabsTrigger value="custo-planilha" className="flex items-center gap-1">
+            <FileSpreadsheet className="h-4 w-4" /> Planilha Custo
           </TabsTrigger>
           <TabsTrigger value="medicao" className="flex items-center gap-1">
-            <BarChart3 className="h-4 w-4" /> Medição
+            <BarChart3 className="h-4 w-4" /> Medicao
           </TabsTrigger>
           <TabsTrigger value="cronograma" className="flex items-center gap-1">
             <Calendar className="h-4 w-4" /> Cronograma
@@ -1149,15 +1346,96 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
           </Card>
         </TabsContent>
 
+        {/* ── Planilha Custo Tab ── */}
+        <TabsContent value="custo-planilha">
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Planilha de Custo</CardTitle>
+                  <CardDescription className="text-xs">
+                    Importe sua planilha de custo (CSV/XLSX) com itens, unidades e precos unitarios.
+                    Os itens importados serao usados como referencia de custo para os trechos.
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    ref={custoFileRef}
+                    type="file"
+                    accept=".csv,.txt,.xlsx,.xls"
+                    className="hidden"
+                    onChange={handleCustoImport}
+                  />
+                  <Button size="sm" onClick={() => custoFileRef.current?.click()}>
+                    <Upload className="h-4 w-4 mr-1" /> Importar Planilha de Custo
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {custoImportItems.length === 0 ? (
+                <div className="py-8 text-center">
+                  <FileSpreadsheet className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    Importe sua planilha de custo para visualizar os itens e precos.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    A planilha deve conter colunas como: item/codigo, descricao, unidade, preco_unitario
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-3 flex items-center gap-2">
+                    <Badge variant="secondary">{custoImportItems.length} itens de custo</Badge>
+                    <Button size="sm" variant="ghost" onClick={() => { setCustoImportItems([]); localStorage.removeItem(CUSTO_STORAGE_KEY); toast.success("Planilha de custo removida."); }}>
+                      Limpar
+                    </Button>
+                  </div>
+                  <div className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT }}>
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-background z-10">
+                        <TableRow>
+                          <TableHead className="text-xs">Item</TableHead>
+                          <TableHead className="text-xs">Descricao</TableHead>
+                          <TableHead className="text-xs">Unidade</TableHead>
+                          <TableHead className="text-xs">Preco Unitario</TableHead>
+                          <TableHead className="text-xs">Fonte</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {custoImportItems.map((item, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="text-xs font-mono">{item.item_custo}</TableCell>
+                            <TableCell className="text-xs max-w-[250px] truncate" title={item.descricao}>{item.descricao}</TableCell>
+                            <TableCell className="text-xs">{item.unidade}</TableCell>
+                            <TableCell className="text-xs font-medium">{fmtC(item.preco_unitario)}</TableCell>
+                            <TableCell className="text-xs">
+                              <Badge variant="outline" className="text-[10px]">{item.fonte}</Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="mt-3 bg-muted/50 rounded p-3 text-center">
+                    <p className="text-xs text-muted-foreground">Total de Itens Importados</p>
+                    <p className="font-semibold text-sm">{custoImportItems.length} itens</p>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* ── Medição Tab ── */}
         <TabsContent value="medicao">
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base">Medição por Trecho</CardTitle>
+                  <CardTitle className="text-base">Medicao por Trecho</CardTitle>
                   <CardDescription className="text-xs">
-                    Importe sua planilha de medição (CSV/XLSX) para mapear itens automaticamente aos trechos.
+                    Importe sua planilha de medicao (CSV/XLSX). Voce vai escolher quais colunas usar para mapear os itens aos trechos.
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
@@ -1166,36 +1444,121 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                     type="file"
                     accept=".csv,.txt,.xlsx,.xls"
                     className="hidden"
-                    onChange={handleMedicaoImport}
+                    onChange={handleMedicaoImportStep1}
                   />
                   <Button size="sm" onClick={() => medicaoFileRef.current?.click()}>
-                    <Upload className="h-4 w-4 mr-1" /> Importar Planilha de Medição
+                    <Upload className="h-4 w-4 mr-1" /> Importar Planilha de Medicao
                   </Button>
-                  <Button size="sm" variant="outline" onClick={recalcularMedicaoHandler}>
-                    <RefreshCw className="h-3.5 w-3.5 mr-1" /> Recalcular Medição
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={exportMedicaoHandler}>
-                    <Download className="h-4 w-4 mr-1" /> Exportar Medição
-                  </Button>
+                  {medicaoItems.length > 0 && (
+                    <>
+                      <Button size="sm" variant="outline" onClick={recalcularMedicaoHandler}>
+                        <RefreshCw className="h-3.5 w-3.5 mr-1" /> Recalcular
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={exportMedicaoHandler}>
+                        <Download className="h-4 w-4 mr-1" /> Exportar
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </CardHeader>
             <CardContent>
+              {/* Column Mapping Dialog */}
+              {columnMapping && !columnMapping.confirmed && (
+                <Card className="mb-4 border-blue-300 bg-blue-50/30">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Settings2 className="h-4 w-4 text-blue-600" />
+                      Mapeamento de Colunas da Planilha
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Selecione qual coluna da sua planilha corresponde a cada campo.
+                      Colunas encontradas: <strong>{columnMapping.spreadsheetHeaders.join(", ")}</strong>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {/* Preview of spreadsheet data */}
+                    <div className="mb-3 p-2 bg-muted/50 rounded text-xs">
+                      <p className="font-medium mb-1">Amostra dos dados ({columnMapping.rawData.length} linhas):</p>
+                      <div className="overflow-auto max-h-24">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              {columnMapping.spreadsheetHeaders.map(h => (
+                                <TableHead key={h} className="text-[10px] py-1">{h}</TableHead>
+                              ))}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {columnMapping.rawData.slice(0, 3).map((row, idx) => (
+                              <TableRow key={idx}>
+                                {columnMapping.spreadsheetHeaders.map(h => (
+                                  <TableCell key={h} className="text-[10px] py-0.5 max-w-[100px] truncate">
+                                    {String(row[h] || "")}
+                                  </TableCell>
+                                ))}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+
+                    {/* Field mapping selectors */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {MEDICAO_FIELDS.map(field => (
+                        <div key={field.key}>
+                          <Label className="text-xs">
+                            {field.label}
+                            {field.required && <span className="text-red-500 ml-0.5">*</span>}
+                          </Label>
+                          <Select
+                            value={columnMapping.mappings[field.key] || "__none__"}
+                            onValueChange={v => handleColumnMappingChange(field.key, v)}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="Selecione coluna..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__" className="text-xs text-muted-foreground">
+                                -- Nao mapear --
+                              </SelectItem>
+                              {columnMapping.spreadsheetHeaders.map(h => (
+                                <SelectItem key={h} value={h} className="text-xs">{h}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <Button size="sm" onClick={confirmColumnMapping}>
+                        <Check className="h-4 w-4 mr-1" /> Confirmar Mapeamento e Importar
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={cancelColumnMapping}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Imported items info */}
               {medicaoItems.length > 0 && (
                 <div className="mb-4 p-3 bg-muted/50 rounded">
-                  <p className="text-sm font-medium mb-2">Itens de Medição Importados: {medicaoItems.length}</p>
+                  <p className="text-sm font-medium mb-2">Itens de Medicao Importados: {medicaoItems.length}</p>
                   <div className="overflow-auto max-h-40">
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead className="text-xs">Item</TableHead>
-                          <TableHead className="text-xs">Descrição</TableHead>
+                          <TableHead className="text-xs">Descricao</TableHead>
                           <TableHead className="text-xs">Tipo Rede</TableHead>
                           <TableHead className="text-xs">DN Faixa</TableHead>
                           <TableHead className="text-xs">Driver</TableHead>
                           <TableHead className="text-xs">Regra</TableHead>
-                          <TableHead className="text-xs">Preço Unit.</TableHead>
+                          <TableHead className="text-xs">Preco Unit.</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1217,23 +1580,29 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
               )}
 
               {/* Measurement per trecho */}
-              {medicaoTrechos.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">
-                  Importe uma planilha de medição para calcular custo, medição e margem por trecho.
-                </p>
-              ) : (
+              {medicaoTrechos.length === 0 && !columnMapping ? (
+                <div className="py-8 text-center">
+                  <BarChart3 className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
+                  <p className="text-sm text-muted-foreground">
+                    Importe uma planilha de medicao para calcular valores por trecho.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Ao importar, voce escolhera quais colunas da planilha usar como premissas de medicao.
+                  </p>
+                </div>
+              ) : medicaoTrechos.length > 0 && (
                 <div className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT }}>
                   <Table>
                     <TableHeader className="sticky top-0 bg-background z-10">
                       <TableRow>
                         <TableHead className="text-xs">Trecho</TableHead>
-                        <TableHead className="text-xs">Início→Fim</TableHead>
+                        <TableHead className="text-xs">Inicio→Fim</TableHead>
                         <TableHead className="text-xs">Comp (m)</TableHead>
                         <TableHead className="text-xs">DN</TableHead>
                         <TableHead className="text-xs">Tipo</TableHead>
                         <TableHead className="text-xs">Item Med.</TableHead>
                         <TableHead className="text-xs">Qtd Med.</TableHead>
-                        <TableHead className="text-xs">Medição (R$)</TableHead>
+                        <TableHead className="text-xs">Medicao (R$)</TableHead>
                         <TableHead className="text-xs">Custo (R$)</TableHead>
                         <TableHead className="text-xs">Margem (R$)</TableHead>
                         <TableHead className="text-xs">Margem (%)</TableHead>
@@ -1281,7 +1650,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
               {medicaoSummary && (
                 <div className="mt-4 grid grid-cols-4 gap-3">
                   <div className="bg-blue-50 rounded p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Medição Total</p>
+                    <p className="text-xs text-muted-foreground">Medicao Total</p>
                     <p className="font-bold text-lg text-blue-700">{fmtC(medicaoSummary.medicao_total)}</p>
                   </div>
                   <div className="bg-orange-50 rounded p-3 text-center">

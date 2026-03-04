@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,12 +10,16 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
   TrendingDown, Clock, ShieldCheck, Target, CreditCard, Download,
-  Calculator, BarChart3, FileText, CheckCircle2, AlertTriangle
+  Calculator, BarChart3, FileText, CheckCircle2, AlertTriangle,
+  Database, Activity
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import * as XLSX from "xlsx";
 import { Trecho } from "@/engine/domain";
 import type { QuantRow } from "./QuantitiesModule";
+import { loadModuleData } from "@/engine/moduleExchange";
+import type { TrechoMedicao, MedicaoItem } from "@/engine/medicao";
+import { calcularResumoMedicao } from "@/engine/medicao";
 
 interface EconomyPanelProps {
   trechos: Trecho[];
@@ -67,8 +71,52 @@ export const EconomyPanelModule = ({
   const [engineerRate, setEngineerRate] = useState(BENCHMARKS.engineerCostPerHour);
   const [teamSize, setTeamSize] = useState(3);
 
+  // Load real platform data from moduleExchange store
+  const [medicaoTrechos, setMedicaoTrechos] = useState<TrechoMedicao[]>([]);
+  const [medicaoItems, setMedicaoItems] = useState<MedicaoItem[]>([]);
+
+  useEffect(() => {
+    const storedMedicao = loadModuleData<TrechoMedicao[]>("medicaoTrechos");
+    if (storedMedicao && storedMedicao.length > 0) setMedicaoTrechos(storedMedicao);
+    const storedItems = loadModuleData<MedicaoItem[]>("medicaoItems");
+    if (storedItems && storedItems.length > 0) setMedicaoItems(storedItems);
+  }, []);
+
   const hasTrechos = trechos.length > 0;
   const hasQuantities = (quantityRows?.length ?? 0) > 0;
+  const hasMedicao = medicaoTrechos.length > 0;
+
+  // Real platform data summary
+  const platformData = useMemo(() => {
+    // Real cost from quantityRows
+    const realCostTotal = quantityRows?.reduce((s, r) => s + (r.custoTotal || 0), 0) ?? 0;
+
+    // Real medicao summary
+    const medicaoSummary = hasMedicao ? calcularResumoMedicao(medicaoTrechos) : null;
+
+    // Real execution tracking
+    const totalExecutado = medicaoTrechos.reduce((s, m) => s + m.qtd_executada, 0);
+    const totalComprimento = medicaoTrechos.reduce((s, m) => s + m.comprimento, 0);
+    const pctExecutado = totalComprimento > 0 ? (totalExecutado / totalComprimento) * 100 : 0;
+    const medicaoRealizada = medicaoTrechos.reduce((s, m) => s + m.med_realizada, 0);
+    const custoReal = medicaoTrechos.reduce((s, m) => s + m.custo_real, 0);
+
+    // Extension from trechos
+    const extensaoTotal = trechos.reduce((s, t) => s + t.comprimento, 0);
+
+    return {
+      realCostTotal,
+      medicaoSummary,
+      totalExecutado,
+      totalComprimento,
+      pctExecutado,
+      medicaoRealizada,
+      custoReal,
+      extensaoTotal,
+      margemReal: medicaoSummary ? medicaoSummary.margem_total : 0,
+      margemPctReal: medicaoSummary ? medicaoSummary.margem_pct : 0,
+    };
+  }, [trechos, quantityRows, medicaoTrechos, hasMedicao]);
 
   const economy = useMemo(() => {
     // 1. Time saved per project
@@ -94,10 +142,10 @@ export const EconomyPanelModule = ({
     const reworkAvoided = reworkFromErrors + reworkFromWarnings;
     const reworkAvoidedPerYear = reworkAvoided * projectsPerYear;
 
-    // 3. Budget accuracy
+    // 3. Budget accuracy — use REAL budget from platform if available
     const manualErrorPct = BENCHMARKS.manualMarginError;
     const platformErrorPct = BENCHMARKS.platformMarginError;
-    const estimatedBudget = budgetTotal || (trechos.length * 85000); // estimate if no budget calculated
+    const estimatedBudget = budgetTotal || platformData.realCostTotal || (trechos.length * 85000);
     const manualOvercost = estimatedBudget * manualErrorPct;
     const platformOvercost = estimatedBudget * platformErrorPct;
     const accuracySaving = manualOvercost - platformOvercost;
@@ -149,7 +197,7 @@ export const EconomyPanelModule = ({
       totalSavingPerYear,
       totalSavingPerProject,
     };
-  }, [trechos, quantityRows, budgetTotal, reviewErrorsCount, reviewWarningsCount, projectsPerYear, engineerRate, teamSize]);
+  }, [trechos, quantityRows, budgetTotal, reviewErrorsCount, reviewWarningsCount, projectsPerYear, engineerRate, teamSize, platformData.realCostTotal]);
 
   const summaryChartData = [
     { name: "Tempo Economizado", valor: economy.timeSavingValue },
@@ -169,6 +217,19 @@ export const EconomyPanelModule = ({
     { etapa: "Cronograma", manual: BENCHMARKS.manualScheduleDays * 8, plataforma: BENCHMARKS.platformScheduleMinutes / 60 },
     { etapa: "Revisao ABNT", manual: BENCHMARKS.manualReviewDays * 8, plataforma: BENCHMARKS.platformReviewMinutes / 60 },
   ];
+
+  // Data source indicators
+  const dataSources = useMemo(() => {
+    const sources: { label: string; active: boolean; detail: string }[] = [
+      { label: "Topografia", active: hasTrechos, detail: hasTrechos ? `${trechos.length} trechos / ${fmtNum(platformData.extensaoTotal)} m` : "Nao importada" },
+      { label: "Quantitativos", active: hasQuantities, detail: hasQuantities ? `${quantityRows!.length} itens calculados` : "Nao calculados" },
+      { label: "Orcamento", active: !!budgetTotal || platformData.realCostTotal > 0, detail: budgetTotal ? fmtBRL(budgetTotal) : platformData.realCostTotal > 0 ? fmtBRL(platformData.realCostTotal) : "Nao calculado" },
+      { label: "Medicao", active: hasMedicao, detail: hasMedicao ? `${medicaoItems.length} itens / ${fmtBRL(platformData.medicaoSummary?.medicao_total ?? 0)}` : "Nao importada" },
+      { label: "Revisao ABNT", active: reviewErrorsCount > 0 || reviewWarningsCount > 0, detail: reviewErrorsCount > 0 || reviewWarningsCount > 0 ? `${reviewErrorsCount} erros, ${reviewWarningsCount} alertas` : "Nao executada" },
+      { label: "Cronograma", active: !!scheduleResult, detail: scheduleResult ? `${scheduleResult.totalDays} dias` : "Nao gerado" },
+    ];
+    return sources;
+  }, [hasTrechos, hasQuantities, budgetTotal, hasMedicao, reviewErrorsCount, reviewWarningsCount, scheduleResult, trechos, quantityRows, platformData, medicaoItems]);
 
   const exportReport = () => {
     const wb = XLSX.utils.book_new();
@@ -215,6 +276,46 @@ export const EconomyPanelModule = ({
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(timeData), "Comparativo de Tempo");
 
+    // Platform data sheet — real data from modules
+    if (hasMedicao && platformData.medicaoSummary) {
+      const ms = platformData.medicaoSummary;
+      const platformSheet = [
+        { "Metrica": "Total de Trechos", "Valor": ms.total_trechos },
+        { "Metrica": "Extensao Total (m)", "Valor": ms.extensao_total.toFixed(2) },
+        { "Metrica": "Medicao Total (R$)", "Valor": ms.medicao_total.toFixed(2) },
+        { "Metrica": "Custo Total (R$)", "Valor": ms.custo_total.toFixed(2) },
+        { "Metrica": "Margem Total (R$)", "Valor": ms.margem_total.toFixed(2) },
+        { "Metrica": "Margem (%)", "Valor": ms.margem_pct.toFixed(1) },
+        { "Metrica": "Prazo Total (dias)", "Valor": ms.prazo_total_dias },
+        { "Metrica": "Itens de Medicao", "Valor": ms.itens_count },
+        { "Metrica": "", "Valor": "" },
+        { "Metrica": "Executado (m)", "Valor": platformData.totalExecutado.toFixed(2) },
+        { "Metrica": "% Executado", "Valor": platformData.pctExecutado.toFixed(1) },
+        { "Metrica": "Medicao Realizada (R$)", "Valor": platformData.medicaoRealizada.toFixed(2) },
+        { "Metrica": "Custo Real (R$)", "Valor": platformData.custoReal.toFixed(2) },
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(platformSheet), "Dados Reais Plataforma");
+    }
+
+    // Per-trecho medicao detail
+    if (hasMedicao) {
+      const trechoData = medicaoTrechos.map(m => ({
+        "Trecho": m.trecho_id,
+        "Inicio": m.inicio,
+        "Fim": m.fim,
+        "Comp (m)": m.comprimento.toFixed(2),
+        "DN": m.dn,
+        "Tipo Rede": m.tipo_rede,
+        "Medicao (R$)": m.med_total.toFixed(2),
+        "Custo (R$)": m.cus_total.toFixed(2),
+        "Margem (R$)": m.margem.toFixed(2),
+        "Margem (%)": m.margem_pct.toFixed(1),
+        "Executado (m)": m.qtd_executada.toFixed(2),
+        "% Exec.": m.pct_executado.toFixed(1),
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trechoData), "Medicao por Trecho");
+    }
+
     XLSX.writeFile(wb, "relatorio_economia_comprovada.xlsx");
     toast.success("Relatorio de Economia Comprovada exportado!");
   };
@@ -229,11 +330,26 @@ export const EconomyPanelModule = ({
             Economia Comprovada
           </CardTitle>
           <CardDescription>
-            Relatorio de economia gerado automaticamente a partir dos dados da plataforma.
+            Relatorio de economia gerado a partir dos dados reais da plataforma.
             Apresente ao gestor/diretor para comprovar o ROI da ferramenta.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Data source indicators */}
+          <div className="flex flex-wrap gap-2">
+            {dataSources.map(src => (
+              <Badge
+                key={src.label}
+                variant={src.active ? "default" : "outline"}
+                className={`text-xs cursor-default ${src.active ? "bg-green-600 hover:bg-green-600" : "text-muted-foreground"}`}
+                title={src.detail}
+              >
+                {src.active ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <Database className="h-3 w-3 mr-1" />}
+                {src.label}
+              </Badge>
+            ))}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>Projetos por ano</Label>
@@ -250,6 +366,46 @@ export const EconomyPanelModule = ({
           </div>
         </CardContent>
       </Card>
+
+      {/* Real Platform Data — only shown when medicao data exists */}
+      {hasMedicao && platformData.medicaoSummary && (
+        <Card className="border-blue-500/30 bg-gradient-to-r from-blue-500/5 to-cyan-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Activity className="h-4 w-4 text-blue-600" /> Dados Reais da Plataforma
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Valores calculados a partir das planilhas de custo e medicao importadas no modulo Edicao por Trecho
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-blue-50 rounded p-2 text-center">
+                <p className="text-[10px] text-muted-foreground">Medicao Total</p>
+                <p className="font-bold text-sm text-blue-700">{fmtBRL(platformData.medicaoSummary.medicao_total)}</p>
+              </div>
+              <div className="bg-orange-50 rounded p-2 text-center">
+                <p className="text-[10px] text-muted-foreground">Custo Total</p>
+                <p className="font-bold text-sm text-orange-700">{fmtBRL(platformData.medicaoSummary.custo_total)}</p>
+              </div>
+              <div className={`rounded p-2 text-center ${platformData.margemReal >= 0 ? "bg-green-50" : "bg-red-50"}`}>
+                <p className="text-[10px] text-muted-foreground">Margem</p>
+                <p className={`font-bold text-sm ${platformData.margemReal >= 0 ? "text-green-700" : "text-red-700"}`}>
+                  {fmtBRL(platformData.margemReal)} ({platformData.margemPctReal.toFixed(1)}%)
+                </p>
+              </div>
+              <div className="bg-muted/50 rounded p-2 text-center">
+                <p className="text-[10px] text-muted-foreground">Extensao</p>
+                <p className="font-semibold text-sm">{fmtNum(platformData.extensaoTotal)} m</p>
+              </div>
+              <div className="bg-muted/50 rounded p-2 text-center">
+                <p className="text-[10px] text-muted-foreground">Execucao</p>
+                <p className="font-semibold text-sm">{platformData.pctExecutado.toFixed(1)}%</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -284,8 +440,9 @@ export const EconomyPanelModule = ({
       </div>
 
       <Tabs defaultValue="resumo">
-        <TabsList className="grid w-full max-w-2xl grid-cols-4">
+        <TabsList className="grid w-full max-w-3xl grid-cols-5">
           <TabsTrigger value="resumo">Resumo Executivo</TabsTrigger>
+          <TabsTrigger value="dados-reais">Dados Reais</TabsTrigger>
           <TabsTrigger value="tempo">Tempo</TabsTrigger>
           <TabsTrigger value="qualidade">Qualidade</TabsTrigger>
           <TabsTrigger value="licencas">Licencas</TabsTrigger>
@@ -417,6 +574,144 @@ export const EconomyPanelModule = ({
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Dados Reais da Plataforma */}
+        <TabsContent value="dados-reais" className="space-y-4">
+          {!hasMedicao && !hasQuantities && !hasTrechos ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Database className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground mb-2">
+                  Nenhum dado real da plataforma disponivel ainda.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Importe topografia, calcule quantitativos e importe planilhas de custo/medicao nos modulos correspondentes para que os dados reais aparecam aqui.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Data sources status */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Database className="h-4 w-4" /> Fontes de Dados Ativas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Modulo</TableHead>
+                        <TableHead className="text-xs">Status</TableHead>
+                        <TableHead className="text-xs">Dados</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dataSources.map(src => (
+                        <TableRow key={src.label}>
+                          <TableCell className="text-xs font-medium">{src.label}</TableCell>
+                          <TableCell>
+                            <Badge variant={src.active ? "default" : "outline"} className={`text-[10px] ${src.active ? "bg-green-600" : ""}`}>
+                              {src.active ? "Ativo" : "Pendente"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{src.detail}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
+              {/* Real quantities cost breakdown */}
+              {hasQuantities && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Calculator className="h-4 w-4" /> Custo Real por Trecho (SINAPI)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-auto" style={{ maxHeight: 400 }}>
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-background z-10">
+                          <TableRow>
+                            <TableHead className="text-xs">ID</TableHead>
+                            <TableHead className="text-xs">Trecho</TableHead>
+                            <TableHead className="text-xs">Comp (m)</TableHead>
+                            <TableHead className="text-xs">DN</TableHead>
+                            <TableHead className="text-xs">Custo Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {quantityRows!.slice(0, 50).map(r => (
+                            <TableRow key={r.id}>
+                              <TableCell className="text-xs font-mono">{r.id}</TableCell>
+                              <TableCell className="text-xs max-w-[180px] truncate" title={r.trecho}>{r.trecho}</TableCell>
+                              <TableCell className="text-xs">{r.comp.toFixed(2)}</TableCell>
+                              <TableCell className="text-xs">{r.dn}</TableCell>
+                              <TableCell className="text-xs font-medium">{fmtBRL(r.custoTotal)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div className="mt-3 bg-primary/10 rounded p-3 text-center">
+                      <p className="text-xs text-muted-foreground">Custo Total Calculado (SINAPI)</p>
+                      <p className="font-bold text-lg text-primary">{fmtBRL(platformData.realCostTotal)}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Real medicao breakdown */}
+              {hasMedicao && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4" /> Medicao Real por Trecho
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-auto" style={{ maxHeight: 400 }}>
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-background z-10">
+                          <TableRow>
+                            <TableHead className="text-xs">Trecho</TableHead>
+                            <TableHead className="text-xs">Tipo</TableHead>
+                            <TableHead className="text-xs">Medicao (R$)</TableHead>
+                            <TableHead className="text-xs">Custo (R$)</TableHead>
+                            <TableHead className="text-xs">Margem (R$)</TableHead>
+                            <TableHead className="text-xs">Margem (%)</TableHead>
+                            <TableHead className="text-xs">% Exec.</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {medicaoTrechos.slice(0, 50).map(m => (
+                            <TableRow key={m.trecho_id} className={m.margem < 0 ? "bg-red-50/50" : ""}>
+                              <TableCell className="text-xs font-mono">{m.trecho_id}</TableCell>
+                              <TableCell className="text-xs">{m.tipo_rede}</TableCell>
+                              <TableCell className="text-xs text-blue-700">{fmtBRL(m.med_total)}</TableCell>
+                              <TableCell className="text-xs text-orange-700">{fmtBRL(m.cus_total)}</TableCell>
+                              <TableCell className={`text-xs font-bold ${m.margem >= 0 ? "text-green-700" : "text-red-700"}`}>
+                                {fmtBRL(m.margem)}
+                              </TableCell>
+                              <TableCell className={`text-xs ${m.margem_pct >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                {m.margem_pct.toFixed(1)}%
+                              </TableCell>
+                              <TableCell className="text-xs">{m.pct_executado.toFixed(0)}%</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
         </TabsContent>
 
         {/* Tempo */}
@@ -554,17 +849,20 @@ export const EconomyPanelModule = ({
                     <Progress value={economy.platformErrorPct * 100} className="h-3 [&>div]:bg-green-500" />
                   </div>
                 </div>
-                {budgetTotal ? (
+                {(budgetTotal || platformData.realCostTotal > 0) ? (
                   <div className="bg-green-500/5 p-3 rounded-lg border border-green-500/20">
                     <div className="text-sm font-medium">Sobre-custo evitado neste projeto:</div>
                     <div className="text-lg font-bold text-green-600">{fmtBRL(economy.accuracySaving)}</div>
                     <div className="text-xs text-muted-foreground">
                       Base: orcamento de {fmtBRL(economy.estimatedBudget)}
+                      {!budgetTotal && platformData.realCostTotal > 0 && (
+                        <Badge variant="outline" className="ml-2 text-[9px]">Custo real da plataforma</Badge>
+                      )}
                     </div>
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground text-center">
-                    Calcule o orcamento no modulo de Orcamento para dados reais do projeto.
+                    Calcule o orcamento no modulo de Orcamento ou importe planilhas de custo para dados reais.
                   </p>
                 )}
               </CardContent>
