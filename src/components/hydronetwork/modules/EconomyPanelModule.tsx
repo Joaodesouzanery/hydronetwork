@@ -71,6 +71,13 @@ export const EconomyPanelModule = ({
   const [engineerRate, setEngineerRate] = useState(BENCHMARKS.engineerCostPerHour);
   const [teamSize, setTeamSize] = useState(3);
 
+  // User-editable real project inputs for accurate savings
+  const [orcamentoObra, setOrcamentoObra] = useState(0); // Real project budget
+  const [custoManualEstimado, setCustoManualEstimado] = useState(0); // What it would cost manually
+  const [margemErroManual, setMargemErroManual] = useState(20); // % error in manual estimates
+  const [custoRetrabalhoReal, setCustoRetrabalhoReal] = useState(8500); // Real rework cost per error
+  const [horasManualProjeto, setHorasManualProjeto] = useState(0); // Manual hours per project (0 = use benchmark)
+
   // Load real platform data from moduleExchange store
   const [medicaoTrechos, setMedicaoTrechos] = useState<TrechoMedicao[]>([]);
   const [medicaoItems, setMedicaoItems] = useState<MedicaoItem[]>([]);
@@ -119,12 +126,13 @@ export const EconomyPanelModule = ({
   }, [trechos, quantityRows, medicaoTrechos, hasMedicao]);
 
   const economy = useMemo(() => {
-    // 1. Time saved per project
-    const manualHoursPerProject =
+    // 1. Time saved per project — use user input if provided, otherwise benchmarks
+    const benchmarkManualHours =
       BENCHMARKS.manualBudgetDays * 8 +
       BENCHMARKS.manualDesignDays * 8 +
       BENCHMARKS.manualScheduleDays * 8 +
       BENCHMARKS.manualReviewDays * 8;
+    const manualHoursPerProject = horasManualProjeto > 0 ? horasManualProjeto : benchmarkManualHours;
     const platformHoursPerProject =
       BENCHMARKS.platformBudgetMinutes / 60 +
       BENCHMARKS.platformDesignHours +
@@ -134,22 +142,31 @@ export const EconomyPanelModule = ({
     const hoursSavedPerYear = hoursSavedPerProject * projectsPerYear * teamSize;
     const timeSavingValue = hoursSavedPerYear * engineerRate;
 
-    // 2. Rework avoided
+    // 2. Rework avoided — use user-defined rework cost
     const errorsDetected = reviewErrorsCount;
     const warningsDetected = reviewWarningsCount;
-    const reworkFromErrors = errorsDetected * BENCHMARKS.reworkCostPerError;
+    const reworkCostError = custoRetrabalhoReal > 0 ? custoRetrabalhoReal : BENCHMARKS.reworkCostPerError;
+    const reworkFromErrors = errorsDetected * reworkCostError;
     const reworkFromWarnings = Math.round(warningsDetected * BENCHMARKS.warningToReworkRate) * BENCHMARKS.reworkCostPerWarning;
     const reworkAvoided = reworkFromErrors + reworkFromWarnings;
     const reworkAvoidedPerYear = reworkAvoided * projectsPerYear;
 
-    // 3. Budget accuracy — use REAL budget from platform if available
-    const manualErrorPct = BENCHMARKS.manualMarginError;
+    // 3. Budget accuracy — prioritize user inputs, then platform data, then benchmarks
+    const manualErrorPct = margemErroManual / 100;
     const platformErrorPct = BENCHMARKS.platformMarginError;
-    const estimatedBudget = budgetTotal || platformData.realCostTotal || (trechos.length * 85000);
+    // Use: user-entered budget > module budget > real cost from quantities > fallback
+    const estimatedBudget = orcamentoObra > 0
+      ? orcamentoObra
+      : budgetTotal || platformData.realCostTotal || (trechos.length * 85000);
     const manualOvercost = estimatedBudget * manualErrorPct;
     const platformOvercost = estimatedBudget * platformErrorPct;
     const accuracySaving = manualOvercost - platformOvercost;
     const accuracySavingPerYear = accuracySaving * projectsPerYear;
+
+    // 3b. Direct comparison: if user provided both manual estimate and real budget
+    const hasDirectComparison = custoManualEstimado > 0 && estimatedBudget > 0;
+    const directSaving = hasDirectComparison ? custoManualEstimado - estimatedBudget : 0;
+    const directSavingPerYear = directSaving * projectsPerYear;
 
     // 4. Eliminated licenses
     const manualLicenses = {
@@ -182,6 +199,7 @@ export const EconomyPanelModule = ({
       warningsDetected,
       reworkAvoided,
       reworkAvoidedPerYear,
+      reworkCostError,
       // Accuracy
       manualErrorPct,
       platformErrorPct,
@@ -190,6 +208,10 @@ export const EconomyPanelModule = ({
       platformOvercost,
       accuracySaving,
       accuracySavingPerYear,
+      // Direct comparison
+      hasDirectComparison,
+      directSaving,
+      directSavingPerYear,
       // Licenses
       manualLicenses,
       totalLicenseCost,
@@ -197,7 +219,29 @@ export const EconomyPanelModule = ({
       totalSavingPerYear,
       totalSavingPerProject,
     };
-  }, [trechos, quantityRows, budgetTotal, reviewErrorsCount, reviewWarningsCount, projectsPerYear, engineerRate, teamSize, platformData.realCostTotal]);
+  }, [trechos, quantityRows, budgetTotal, reviewErrorsCount, reviewWarningsCount, projectsPerYear, engineerRate, teamSize, platformData.realCostTotal, orcamentoObra, custoManualEstimado, margemErroManual, custoRetrabalhoReal, horasManualProjeto]);
+
+  // Scenario simulator — show savings for different company sizes
+  const scenarios = useMemo(() => {
+    const configs = [
+      { label: "Pequena (2 eng, 3 proj/ano)", team: 2, projects: 3 },
+      { label: "Media (5 eng, 8 proj/ano)", team: 5, projects: 8 },
+      { label: "Grande (10 eng, 15 proj/ano)", team: 10, projects: 15 },
+      { label: `Sua empresa (${teamSize} eng, ${projectsPerYear} proj/ano)`, team: teamSize, projects: projectsPerYear },
+    ];
+    return configs.map(c => {
+      const timeSaving = economy.hoursSavedPerProject * c.projects * c.team * engineerRate;
+      const reworkSaving = economy.reworkAvoided * c.projects;
+      const accuracySaving = economy.accuracySaving * c.projects;
+      const licenseSaving =
+        BENCHMARKS.autocadLicenseYear * c.team +
+        BENCHMARKS.excelAdvancedYear * c.team +
+        BENCHMARKS.msProjectYear +
+        BENCHMARKS.projectManagementToolYear;
+      const total = timeSaving + reworkSaving + accuracySaving + licenseSaving;
+      return { ...c, timeSaving, reworkSaving, accuracySaving, licenseSaving, total };
+    });
+  }, [economy, engineerRate, teamSize, projectsPerYear]);
 
   const summaryChartData = [
     { name: "Tempo Economizado", valor: economy.timeSavingValue },
@@ -239,6 +283,9 @@ export const EconomyPanelModule = ({
       { "Indicador": "Projetos/ano", "Valor": projectsPerYear },
       { "Indicador": "Custo/hora engenheiro", "Valor": `R$ ${engineerRate}` },
       { "Indicador": "Tamanho da equipe", "Valor": teamSize },
+      ...(orcamentoObra > 0 ? [{ "Indicador": "Orcamento da obra (informado)", "Valor": fmtBRL(orcamentoObra) }] : []),
+      ...(custoManualEstimado > 0 ? [{ "Indicador": "Custo manual estimado (informado)", "Valor": fmtBRL(custoManualEstimado) }] : []),
+      ...(economy.hasDirectComparison ? [{ "Indicador": "ECONOMIA DIRETA (manual vs plataforma)", "Valor": fmtBRL(economy.directSaving) }] : []),
       { "Indicador": "", "Valor": "" },
       { "Indicador": "ECONOMIA TOTAL/ANO", "Valor": fmtBRL(economy.totalSavingPerYear) },
       { "Indicador": "Economia por projeto", "Valor": fmtBRL(economy.totalSavingPerProject) },
@@ -361,6 +408,7 @@ export const EconomyPanelModule = ({
             ))}
           </div>
 
+          {/* Company parameters */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>Projetos por ano</Label>
@@ -375,8 +423,106 @@ export const EconomyPanelModule = ({
               <Input type="number" value={teamSize} onChange={e => setTeamSize(Math.max(1, Number(e.target.value)))} min={1} />
             </div>
           </div>
+
+          {/* Real project inputs for accurate savings */}
+          <div className="border-t pt-4">
+            <p className="text-sm font-medium mb-3 flex items-center gap-2">
+              <Calculator className="h-4 w-4" /> Dados Reais do Seu Projeto (preencha para ver economia real)
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label className="text-xs">Orcamento da obra (R$)</Label>
+                <Input
+                  type="number"
+                  value={orcamentoObra || ""}
+                  onChange={e => setOrcamentoObra(Number(e.target.value) || 0)}
+                  placeholder={budgetTotal ? fmtBRL(budgetTotal) : "Ex: 500000"}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {budgetTotal ? `Auto: ${fmtBRL(budgetTotal)} do modulo Orcamento` : "Valor total da obra"}
+                </p>
+              </div>
+              <div>
+                <Label className="text-xs">Custo estimado manual (R$)</Label>
+                <Input
+                  type="number"
+                  value={custoManualEstimado || ""}
+                  onChange={e => setCustoManualEstimado(Number(e.target.value) || 0)}
+                  placeholder="Ex: 600000"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Quanto o projeto custaria no metodo manual</p>
+              </div>
+              <div>
+                <Label className="text-xs">Margem de erro manual (%)</Label>
+                <Input
+                  type="number"
+                  value={margemErroManual}
+                  onChange={e => setMargemErroManual(Math.max(0, Math.min(100, Number(e.target.value))))}
+                  min={0}
+                  max={100}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Padrao: 20% (ABES/CBIC)</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+              <div>
+                <Label className="text-xs">Horas manuais por projeto (h)</Label>
+                <Input
+                  type="number"
+                  value={horasManualProjeto || ""}
+                  onChange={e => setHorasManualProjeto(Number(e.target.value) || 0)}
+                  placeholder={`Padrao: ${BENCHMARKS.manualBudgetDays * 8 + BENCHMARKS.manualDesignDays * 8 + BENCHMARKS.manualScheduleDays * 8 + BENCHMARKS.manualReviewDays * 8}h (benchmark)`}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Quantas horas sua equipe gasta por projeto sem a plataforma</p>
+              </div>
+              <div>
+                <Label className="text-xs">Custo medio de retrabalho por erro (R$)</Label>
+                <Input
+                  type="number"
+                  value={custoRetrabalhoReal}
+                  onChange={e => setCustoRetrabalhoReal(Number(e.target.value) || 0)}
+                  min={0}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Padrao: R$ 8.500 (media do setor)</p>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Direct comparison card — shown when user provides manual estimate */}
+      {economy.hasDirectComparison && (
+        <Card className="border-emerald-500/30 bg-gradient-to-r from-emerald-500/5 to-green-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Target className="h-4 w-4 text-emerald-600" /> Economia Direta: Orcamento Manual vs. Plataforma
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                <p className="text-xs text-muted-foreground mb-1">Custo Manual Estimado</p>
+                <p className="text-xl font-bold text-red-600">{fmtBRL(custoManualEstimado)}</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                <p className="text-xs text-muted-foreground mb-1">Custo c/ Plataforma</p>
+                <p className="text-xl font-bold text-green-600">{fmtBRL(economy.estimatedBudget)}</p>
+              </div>
+              <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-200">
+                <p className="text-xs text-muted-foreground mb-1">Economia por Projeto</p>
+                <p className="text-2xl font-bold text-emerald-600">{fmtBRL(economy.directSaving)}</p>
+                <p className="text-xs text-emerald-700 font-medium">
+                  {economy.estimatedBudget > 0 ? `${((economy.directSaving / custoManualEstimado) * 100).toFixed(1)}% de reducao` : ""}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 bg-emerald-500/10 rounded p-3 text-center">
+              <p className="text-xs text-muted-foreground">Economia anual projetada ({projectsPerYear} projetos)</p>
+              <p className="text-2xl font-bold text-emerald-700">{fmtBRL(economy.directSavingPerYear)}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Real Platform Data — only shown when medicao data exists */}
       {hasMedicao && platformData.medicaoSummary && (
@@ -454,15 +600,173 @@ export const EconomyPanelModule = ({
         </Card>
       </div>
 
-      <Tabs defaultValue="como-funciona">
-        <TabsList className="grid w-full max-w-4xl grid-cols-6">
-          <TabsTrigger value="como-funciona">Como Funciona</TabsTrigger>
+      <Tabs defaultValue="simulador">
+        <TabsList className="grid w-full max-w-5xl grid-cols-7">
+          <TabsTrigger value="simulador">Simulador</TabsTrigger>
           <TabsTrigger value="resumo">Resumo Executivo</TabsTrigger>
           <TabsTrigger value="dados-reais">Dados Reais</TabsTrigger>
           <TabsTrigger value="tempo">Tempo</TabsTrigger>
           <TabsTrigger value="qualidade">Qualidade</TabsTrigger>
           <TabsTrigger value="licencas">Licencas</TabsTrigger>
+          <TabsTrigger value="como-funciona">Como Funciona</TabsTrigger>
         </TabsList>
+
+        {/* Simulador de Cenários */}
+        <TabsContent value="simulador" className="space-y-4">
+          {/* Per-project savings breakdown */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Calculator className="h-4 w-4" /> Detalhamento da Economia por Projeto
+              </CardTitle>
+              <CardDescription>Veja exatamente de onde vem cada real economizado</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fonte de Economia</TableHead>
+                    <TableHead>Calculo</TableHead>
+                    <TableHead>Por Projeto</TableHead>
+                    <TableHead>Por Ano ({projectsPerYear} proj.)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-blue-600" /> Tempo de engenharia</div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {fmtNum(economy.hoursSavedPerProject)}h poupadas x {teamSize} eng. x R$ {engineerRate}/h
+                    </TableCell>
+                    <TableCell className="font-semibold">{fmtBRL(economy.hoursSavedPerProject * teamSize * engineerRate)}</TableCell>
+                    <TableCell className="font-bold text-blue-600">{fmtBRL(economy.timeSavingValue)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-orange-600" /> Retrabalho evitado</div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {economy.errorsDetected} erros x R$ {fmtNum(economy.reworkCostError)} + {economy.warningsDetected} alertas x 35% x R$ 2.200
+                    </TableCell>
+                    <TableCell className="font-semibold">{fmtBRL(economy.reworkAvoided)}</TableCell>
+                    <TableCell className="font-bold text-orange-600">{fmtBRL(economy.reworkAvoidedPerYear)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2"><Target className="h-4 w-4 text-green-600" /> Precisao orcamentaria</div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      Orcamento {fmtBRL(economy.estimatedBudget)} x ({(economy.manualErrorPct * 100).toFixed(0)}% - {(economy.platformErrorPct * 100).toFixed(0)}%) erro
+                    </TableCell>
+                    <TableCell className="font-semibold">{fmtBRL(economy.accuracySaving)}</TableCell>
+                    <TableCell className="font-bold text-green-600">{fmtBRL(economy.accuracySavingPerYear)}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-purple-600" /> Licencas eliminadas</div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      AutoCAD + MS Project + Excel + PM ({teamSize} licencas)
+                    </TableCell>
+                    <TableCell className="font-semibold">{fmtBRL(economy.totalLicenseCost / projectsPerYear)}</TableCell>
+                    <TableCell className="font-bold text-purple-600">{fmtBRL(economy.totalLicenseCost)}</TableCell>
+                  </TableRow>
+                  <TableRow className="bg-green-500/10 text-lg">
+                    <TableCell className="font-bold" colSpan={2}>ECONOMIA TOTAL</TableCell>
+                    <TableCell className="font-bold">{fmtBRL(economy.totalSavingPerProject)}</TableCell>
+                    <TableCell className="font-bold text-green-700 text-xl">{fmtBRL(economy.totalSavingPerYear)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Scenario comparison */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" /> Simulador de Cenarios — Comparacao por Porte de Empresa
+              </CardTitle>
+              <CardDescription>Veja quanto cada tipo de empresa economizaria usando a plataforma</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Cenario</TableHead>
+                    <TableHead>Tempo</TableHead>
+                    <TableHead>Retrabalho</TableHead>
+                    <TableHead>Precisao</TableHead>
+                    <TableHead>Licencas</TableHead>
+                    <TableHead>Total / Ano</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {scenarios.map((s, i) => (
+                    <TableRow key={i} className={i === scenarios.length - 1 ? "bg-primary/10 font-bold" : ""}>
+                      <TableCell className="font-medium text-xs">{s.label}</TableCell>
+                      <TableCell className="text-xs">{fmtBRL(s.timeSaving)}</TableCell>
+                      <TableCell className="text-xs">{fmtBRL(s.reworkSaving)}</TableCell>
+                      <TableCell className="text-xs">{fmtBRL(s.accuracySaving)}</TableCell>
+                      <TableCell className="text-xs">{fmtBRL(s.licenseSaving)}</TableCell>
+                      <TableCell className="font-bold text-green-700">{fmtBRL(s.total)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+
+              <div className="mt-4">
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={scenarios}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="label" fontSize={9} angle={-10} textAnchor="end" height={60} />
+                    <YAxis fontSize={10} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
+                    <RechartsTooltip formatter={(v: number) => fmtBRL(v)} />
+                    <Legend />
+                    <Bar dataKey="timeSaving" stackId="a" fill="#2563eb" name="Tempo" />
+                    <Bar dataKey="reworkSaving" stackId="a" fill="#ea580c" name="Retrabalho" />
+                    <Bar dataKey="accuracySaving" stackId="a" fill="#16a34a" name="Precisao" />
+                    <Bar dataKey="licenseSaving" stackId="a" fill="#7c3aed" name="Licencas" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ROI breakdown — what the company invests vs what it saves */}
+          <Card className="border-green-500/30">
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <TrendingDown className="h-4 w-4 text-green-600" /> Retorno sobre Investimento (ROI)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-blue-50 rounded-lg p-4 text-center border border-blue-200">
+                  <p className="text-xs text-muted-foreground mb-1">Economia Mensal</p>
+                  <p className="text-xl font-bold text-blue-700">{fmtBRL(economy.totalSavingPerYear / 12)}</p>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4 text-center border border-green-200">
+                  <p className="text-xs text-muted-foreground mb-1">Economia Anual</p>
+                  <p className="text-xl font-bold text-green-700">{fmtBRL(economy.totalSavingPerYear)}</p>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-4 text-center border border-purple-200">
+                  <p className="text-xs text-muted-foreground mb-1">Dias Liberados / Ano</p>
+                  <p className="text-xl font-bold text-purple-700">{fmtNum(economy.daysSavedPerYear)}</p>
+                  <p className="text-[10px] text-muted-foreground">= {fmtNum(economy.daysSavedPerYear / 22)} meses de trabalho</p>
+                </div>
+                <div className="bg-orange-50 rounded-lg p-4 text-center border border-orange-200">
+                  <p className="text-xs text-muted-foreground mb-1">Projetos Extras Possiveis</p>
+                  <p className="text-xl font-bold text-orange-700">
+                    +{Math.floor(economy.daysSavedPerYear / (economy.manualHoursPerProject / 8))}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">projetos/ano com o tempo liberado</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Como Funciona */}
         <TabsContent value="como-funciona" className="space-y-4">

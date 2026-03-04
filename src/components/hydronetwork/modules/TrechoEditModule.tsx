@@ -26,7 +26,7 @@ import { toast } from "sonner";
 import {
   Calculator, Download, Scissors, Undo2, Search, FileSpreadsheet, DollarSign,
   Calendar, RefreshCw, Filter, Upload, FileDown, MapPin, BarChart3,
-  ArrowRight, Check, Settings2, Trash2, Plus, Edit3, ToggleLeft,
+  ArrowRight, Check, Settings2, Trash2, Plus, Edit3, ToggleLeft, Layers,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -67,6 +67,7 @@ import {
 import type { CostRowExport, CustoImportItemExport } from "@/engine/gisExport";
 import { saveModuleData } from "@/engine/moduleExchange";
 import * as XLSX from "xlsx";
+import { CustomCostTrechoModule } from "./CustomCostTrechoModule";
 
 // ── SINAPI reference costs (from shared sinapi engine) ──
 const SINAPI_UNIT_COSTS = {
@@ -1470,7 +1471,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="quantitativos" className="flex items-center gap-1">
             <Calculator className="h-4 w-4" /> Quantitativos
           </TabsTrigger>
@@ -1485,6 +1486,9 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
           </TabsTrigger>
           <TabsTrigger value="cronograma" className="flex items-center gap-1">
             <Calendar className="h-4 w-4" /> Cronograma
+          </TabsTrigger>
+          <TabsTrigger value="base-personalizada" className="flex items-center gap-1">
+            <Layers className="h-4 w-4" /> Base Custom
           </TabsTrigger>
         </TabsList>
 
@@ -2453,6 +2457,11 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
               );
             })()}
           </div>
+        </TabsContent>
+
+        {/* ── Base Personalizada (Custom Cost) Tab ── */}
+        <TabsContent value="base-personalizada">
+          <CustomCostTrechoModule trechos={trechos} />
         </TabsContent>
       </Tabs>
     </div>

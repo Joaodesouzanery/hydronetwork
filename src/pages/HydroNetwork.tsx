@@ -54,7 +54,6 @@ const TransientModule = lazy(() => import("@/components/hydronetwork/modules/Tra
 const CAESBModule = lazy(() => import("@/components/hydronetwork/modules/CAESBModule").then(m => ({ default: m.CAESBModule })));
 const CAESBPreProjectModule = lazy(() => import("@/components/hydronetwork/modules/CAESBPreProjectModule").then(m => ({ default: m.CAESBPreProjectModule })));
 const TrechoEditModule = lazy(() => import("@/components/hydronetwork/modules/TrechoEditModule").then(m => ({ default: m.TrechoEditModule })));
-const CustomCostTrechoModule = lazy(() => import("@/components/hydronetwork/modules/CustomCostTrechoModule").then(m => ({ default: m.CustomCostTrechoModule })));
 const EconomyPanelModule = lazy(() => import("@/components/hydronetwork/modules/EconomyPanelModule").then(m => ({ default: m.EconomyPanelModule })));
 import { QEsgWaterPanel } from "@/components/hydronetwork/panels/QEsgWaterPanel";
 import { getRasterGrid } from "@/engine/rasterStore";
@@ -325,8 +324,6 @@ const HydroNetwork = () => {
         return <CAESBPreProjectModule />;
       case "edicao-trecho":
         return <TrechoEditModule trechos={trechos} pontos={pontos} quantityRows={quantityRows} quantityParams={quantityParams ?? undefined} onTrechosChange={setTrechos} />;
-      case "edicao-trecho-custom":
-        return <CustomCostTrechoModule trechos={trechos} />;
       case "perfil":
         return <PerfilLongitudinal pontos={pontos} trechos={trechos} />;
       case "mapa":
@@ -849,8 +846,7 @@ const HydroNetwork = () => {
     elevatoria: "Orçamento de Elevatória",
     recalque: "Recalque / Booster — Linhas de Recalque",
     transientes: "Transientes Hidráulicos — Golpe de Aríete",
-    "edicao-trecho": "Edição por Trecho",
-    "edicao-trecho-custom": "Edição por Trecho — Base Personalizada",
+    "edicao-trecho": "Edição por Trechos",
     caesb: "Aprovações de Projetos",
     "caesb-preprojeto": "Projetos Básicos",
     economia: "Economia Comprovada",
