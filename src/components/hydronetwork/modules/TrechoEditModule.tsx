@@ -1548,50 +1548,50 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
       {/* Header */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
               <CardTitle className="flex items-center gap-2">
-                <FileSpreadsheet className="h-5 w-5" />
+                <FileSpreadsheet className="h-5 w-5 flex-shrink-0" />
                 Edição por Trecho
               </CardTitle>
               <CardDescription>
                 Edite quantitativos, valores e cronograma por trecho. Referência SINAPI 01/2026.
               </CardDescription>
             </div>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={initializeRows}>
-                <RefreshCw className="h-4 w-4 mr-1" /> Carregar Trechos
-              </Button>
-              <Button size="sm" variant="outline" onClick={loadEdits}>
-                Restaurar Edições
-              </Button>
-              <Button size="sm" variant="outline" onClick={saveEdits}>
-                Salvar Edições
-              </Button>
-              <Button size="sm" variant="outline" onClick={exportExcel}>
-                <Download className="h-4 w-4 mr-1" /> XLSX
-              </Button>
-              <Button size="sm" variant="outline" onClick={exportGeoJSONHandler}>
-                <MapPin className="h-4 w-4 mr-1" /> GeoJSON
-              </Button>
-              <Button size="sm" variant="outline" onClick={exportGISCSVHandler}>
-                <FileDown className="h-4 w-4 mr-1" /> CSV GIS
-              </Button>
-              <Button size="sm" variant="outline" onClick={exportCustoSpreadsheetHandler}>
-                <DollarSign className="h-4 w-4 mr-1" /> Planilha Custos
-              </Button>
-              <input ref={custoReimportRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleCustoReimport} />
-              <Button size="sm" variant="outline" onClick={() => custoReimportRef.current?.click()} title="Reimportar planilha de custos editada">
-                <Upload className="h-4 w-4 mr-1" /> Reimportar Custos
-              </Button>
-              <input ref={medicaoReimportRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleMedicaoReimport} />
-              <Button size="sm" variant="outline" onClick={() => {
-                if (medicaoTrechos.length === 0) { toast.error("Exporte a medição antes de reimportar."); return; }
-                medicaoReimportRef.current?.click();
-              }} title="Reimportar planilha de medição editada">
-                <Upload className="h-4 w-4 mr-1" /> Reimportar Medição
-              </Button>
-            </div>
+            <Button size="sm" onClick={initializeRows} className="flex-shrink-0">
+              <RefreshCw className="h-4 w-4 mr-1" /> Carregar Trechos
+            </Button>
+          </div>
+          <div className="flex gap-2 flex-wrap pt-2">
+            <Button size="sm" variant="outline" onClick={loadEdits}>
+              Restaurar Edições
+            </Button>
+            <Button size="sm" variant="outline" onClick={saveEdits}>
+              Salvar Edições
+            </Button>
+            <Button size="sm" variant="outline" onClick={exportExcel}>
+              <Download className="h-4 w-4 mr-1" /> XLSX
+            </Button>
+            <Button size="sm" variant="outline" onClick={exportGeoJSONHandler}>
+              <MapPin className="h-4 w-4 mr-1" /> GeoJSON
+            </Button>
+            <Button size="sm" variant="outline" onClick={exportGISCSVHandler}>
+              <FileDown className="h-4 w-4 mr-1" /> CSV GIS
+            </Button>
+            <Button size="sm" variant="outline" onClick={exportCustoSpreadsheetHandler}>
+              <DollarSign className="h-4 w-4 mr-1" /> Planilha Custos
+            </Button>
+            <input ref={custoReimportRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleCustoReimport} />
+            <Button size="sm" variant="outline" onClick={() => custoReimportRef.current?.click()} title="Reimportar planilha de custos editada">
+              <Upload className="h-4 w-4 mr-1" /> Reimportar Custos
+            </Button>
+            <input ref={medicaoReimportRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleMedicaoReimport} />
+            <Button size="sm" variant="outline" onClick={() => {
+              if (medicaoTrechos.length === 0) { toast.error("Exporte a medição antes de reimportar."); return; }
+              medicaoReimportRef.current?.click();
+            }} title="Reimportar planilha de medição editada">
+              <Upload className="h-4 w-4 mr-1" /> Reimportar Medição
+            </Button>
           </div>
         </CardHeader>
         <CardContent>

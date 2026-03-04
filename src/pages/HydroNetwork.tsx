@@ -27,11 +27,11 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from "recharts";
 import { TopographyMap } from "@/components/hydronetwork/TopographyMap";
 import { PerfilLongitudinal } from "@/components/hydronetwork/PerfilLongitudinal";
-import { RDOHydroModule } from "@/components/hydronetwork/RDOHydroModule";
-import { PlanningModule } from "@/components/hydronetwork/PlanningModule";
 import type { QuantRow, QuantityParams } from "@/components/hydronetwork/modules/QuantitiesModule";
 import { downloadDXF } from "@/lib/dxfExporter";
 // Lazy-loaded modules for code splitting — only loaded when navigated to
+const RDOHydroModule = lazy(() => import("@/components/hydronetwork/RDOHydroModule").then(m => ({ default: m.RDOHydroModule })));
+const PlanningModule = lazy(() => import("@/components/hydronetwork/PlanningModule").then(m => ({ default: m.PlanningModule })));
 const SewerModule = lazy(() => import("@/components/hydronetwork/modules/SewerModule").then(m => ({ default: m.SewerModule })));
 const WaterModule = lazy(() => import("@/components/hydronetwork/modules/WaterModule").then(m => ({ default: m.WaterModule })));
 const DrainageModule = lazy(() => import("@/components/hydronetwork/modules/DrainageModule").then(m => ({ default: m.DrainageModule })));
