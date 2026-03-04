@@ -376,7 +376,7 @@ export const BudgetCostModule = ({ trechos, pontos, quantityRows, quantityParams
                   <Select value={mesRef} onValueChange={setMesRef}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {["12/2024","11/2024","10/2024","09/2024","08/2024","07/2024","06/2024","01/2025","02/2025"].map(m => (
+                      {["01/2026","12/2025","11/2025","10/2025","09/2025","08/2025","07/2025","06/2025","05/2025","04/2025","03/2025","02/2025","01/2025"].map(m => (
                         <SelectItem key={m} value={m}>{m}</SelectItem>
                       ))}
                     </SelectContent>

@@ -54,6 +54,7 @@ const TransientModule = lazy(() => import("@/components/hydronetwork/modules/Tra
 const CAESBModule = lazy(() => import("@/components/hydronetwork/modules/CAESBModule").then(m => ({ default: m.CAESBModule })));
 const CAESBPreProjectModule = lazy(() => import("@/components/hydronetwork/modules/CAESBPreProjectModule").then(m => ({ default: m.CAESBPreProjectModule })));
 const TrechoEditModule = lazy(() => import("@/components/hydronetwork/modules/TrechoEditModule").then(m => ({ default: m.TrechoEditModule })));
+const EconomyPanelModule = lazy(() => import("@/components/hydronetwork/modules/EconomyPanelModule").then(m => ({ default: m.EconomyPanelModule })));
 import { QEsgWaterPanel } from "@/components/hydronetwork/panels/QEsgWaterPanel";
 import { getRasterGrid } from "@/engine/rasterStore";
 import { extractContours, type ContourExtractionResult } from "@/engine/contourExtractor";
@@ -325,6 +326,8 @@ const HydroNetwork = () => {
         return <MapaInterativoModule />;
       case "exportacao":
         return <ExportacaoGISModule />;
+      case "economia":
+        return <EconomyPanelModule trechos={trechos} quantityRows={quantityRows} scheduleResult={scheduleResult} />;
       default:
         return <TopografiaModule />;
     }
