@@ -329,9 +329,20 @@ export const EconomyPanelModule = ({
             <TrendingDown className="h-5 w-5 text-green-600" />
             Economia Comprovada
           </CardTitle>
-          <CardDescription>
-            Relatorio de economia gerado a partir dos dados reais da plataforma.
-            Apresente ao gestor/diretor para comprovar o ROI da ferramenta.
+          <CardDescription className="space-y-1">
+            <p>
+              Relatorio de economia gerado a partir dos dados reais da plataforma.
+              Apresente ao gestor/diretor para comprovar o ROI da ferramenta.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              <strong>Como funciona:</strong> Este modulo compara o custo real do seu fluxo de trabalho atual
+              (planilhas, AutoCAD, MS Project, calculo manual) com o tempo e custo usando a plataforma HydroNetwork.
+              Os calculos consideram: (1) <em>tempo economizado</em> em cada etapa do projeto,
+              (2) <em>retrabalho evitado</em> por erros detectados automaticamente,
+              (3) <em>precisao orcamentaria</em> com custos SINAPI vs. estimativa manual, e
+              (4) <em>licencas de software eliminadas</em>. Ajuste os parametros abaixo para refletir a realidade
+              da sua empresa e veja a economia projetada por projeto e por ano.
+            </p>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -407,46 +418,128 @@ export const EconomyPanelModule = ({
         </Card>
       )}
 
-      {/* KPI Cards */}
+      {/* KPI Cards with explanations */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="border-green-500/20">
+        <Card className="border-green-500/20" title="Soma de todas as economias: tempo, retrabalho, precisao e licencas">
           <CardContent className="pt-4 text-center">
             <TrendingDown className="h-6 w-6 text-green-600 mx-auto mb-1" />
             <div className="text-2xl font-bold text-green-600">{fmtBRL(economy.totalSavingPerYear)}</div>
             <div className="text-xs text-muted-foreground">Economia Total / Ano</div>
+            <div className="text-[10px] text-muted-foreground mt-1">{fmtBRL(economy.totalSavingPerProject)} por projeto</div>
           </CardContent>
         </Card>
-        <Card className="border-blue-500/20">
+        <Card className="border-blue-500/20" title="Horas de engenheiro poupadas usando a plataforma vs. metodo manual">
           <CardContent className="pt-4 text-center">
             <Clock className="h-6 w-6 text-blue-600 mx-auto mb-1" />
             <div className="text-2xl font-bold text-blue-600">{fmtNum(economy.daysSavedPerYear)} dias</div>
             <div className="text-xs text-muted-foreground">Tempo Economizado / Ano</div>
+            <div className="text-[10px] text-muted-foreground mt-1">{fmtNum(economy.hoursSavedPerProject)}h por projeto</div>
           </CardContent>
         </Card>
-        <Card className="border-orange-500/20">
+        <Card className="border-orange-500/20" title="Custo de retrabalho em campo evitado pela deteccao automatica de erros ABNT">
           <CardContent className="pt-4 text-center">
             <ShieldCheck className="h-6 w-6 text-orange-600 mx-auto mb-1" />
             <div className="text-2xl font-bold text-orange-600">{fmtBRL(economy.reworkAvoidedPerYear)}</div>
             <div className="text-xs text-muted-foreground">Retrabalho Evitado / Ano</div>
+            <div className="text-[10px] text-muted-foreground mt-1">{economy.errorsDetected} erros + {economy.warningsDetected} alertas</div>
           </CardContent>
         </Card>
-        <Card className="border-purple-500/20">
+        <Card className="border-purple-500/20" title="Licencas de AutoCAD, Excel, MS Project e ferramentas de gestao que a plataforma substitui">
           <CardContent className="pt-4 text-center">
             <CreditCard className="h-6 w-6 text-purple-600 mx-auto mb-1" />
             <div className="text-2xl font-bold text-purple-600">{fmtBRL(economy.totalLicenseCost)}</div>
             <div className="text-xs text-muted-foreground">Licencas Eliminadas / Ano</div>
+            <div className="text-[10px] text-muted-foreground mt-1">AutoCAD + MS Project + Excel + PM</div>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="resumo">
-        <TabsList className="grid w-full max-w-3xl grid-cols-5">
+      <Tabs defaultValue="como-funciona">
+        <TabsList className="grid w-full max-w-4xl grid-cols-6">
+          <TabsTrigger value="como-funciona">Como Funciona</TabsTrigger>
           <TabsTrigger value="resumo">Resumo Executivo</TabsTrigger>
           <TabsTrigger value="dados-reais">Dados Reais</TabsTrigger>
           <TabsTrigger value="tempo">Tempo</TabsTrigger>
           <TabsTrigger value="qualidade">Qualidade</TabsTrigger>
           <TabsTrigger value="licencas">Licencas</TabsTrigger>
         </TabsList>
+
+        {/* Como Funciona */}
+        <TabsContent value="como-funciona" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <FileText className="h-4 w-4" /> O que e o modulo Economia Comprovada?
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm">
+              <p>
+                O modulo <strong>Economia Comprovada</strong> e um relatorio de ROI (Retorno sobre Investimento)
+                que demonstra, com numeros reais, quanto dinheiro e tempo a sua empresa economiza ao usar a
+                plataforma HydroNetwork em vez do fluxo de trabalho tradicional.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <h4 className="font-semibold text-blue-800 flex items-center gap-1 mb-2">
+                    <Clock className="h-4 w-4" /> 1. Tempo Economizado
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Compara o tempo gasto em cada etapa do projeto (orcamento, dimensionamento, cronograma, revisao)
+                    no metodo manual vs. na plataforma. Exemplo: um orcamento manual leva ~5 dias; na plataforma, ~15 minutos.
+                    Multiplica pelo custo/hora do engenheiro, numero de projetos e tamanho da equipe.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                  <h4 className="font-semibold text-orange-800 flex items-center gap-1 mb-2">
+                    <ShieldCheck className="h-4 w-4" /> 2. Retrabalho Evitado
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    A Revisao por Pares automatica detecta erros ABNT que, se nao corrigidos, causam retrabalho em campo.
+                    Cada erro critico custa em media R$ 8.500 em retrabalho. Cada alerta tem 35% de chance de gerar
+                    retrabalho de R$ 2.200. Quanto mais erros a plataforma encontra, maior a economia.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                  <h4 className="font-semibold text-green-800 flex items-center gap-1 mb-2">
+                    <Target className="h-4 w-4" /> 3. Precisao Orcamentaria
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Orcamentos manuais tem margem de erro de ~20% (estimativa alta ou baixa). A plataforma, usando
+                    custos SINAPI automaticos, reduz para ~5%. Essa diferenca, aplicada ao valor do orcamento,
+                    representa economia real — menos sobre-custo ou sub-orcamento.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                  <h4 className="font-semibold text-purple-800 flex items-center gap-1 mb-2">
+                    <CreditCard className="h-4 w-4" /> 4. Licencas Eliminadas
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    A plataforma substitui ferramentas como AutoCAD (~R$ 9.800/ano), MS Project (~R$ 5.400/ano),
+                    Excel avancado e ferramentas de gestao de projetos. O custo acumulado dessas licencas para
+                    toda a equipe e eliminado.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <h4 className="font-semibold mb-2">Como personalizar:</h4>
+                <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
+                  <li><strong>Projetos por ano:</strong> Quantos projetos de saneamento sua equipe executa por ano</li>
+                  <li><strong>Custo/hora engenheiro:</strong> Valor medio do hora-homem de um engenheiro na sua empresa</li>
+                  <li><strong>Tamanho da equipe:</strong> Quantos profissionais usam a plataforma na sua empresa</li>
+                </ul>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Os dados reais (topografia, quantitativos, medicao, revisao ABNT) sao carregados automaticamente
+                  dos outros modulos. Quanto mais modulos voce usar, mais preciso sera o relatorio.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Resumo Executivo */}
         <TabsContent value="resumo" className="space-y-4">
@@ -585,9 +678,17 @@ export const EconomyPanelModule = ({
                 <p className="text-sm text-muted-foreground mb-2">
                   Nenhum dado real da plataforma disponivel ainda.
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground mb-3">
                   Importe topografia, calcule quantitativos e importe planilhas de custo/medicao nos modulos correspondentes para que os dados reais aparecam aqui.
                 </p>
+                <div className="text-xs text-muted-foreground bg-muted/50 rounded p-3 max-w-lg mx-auto text-left space-y-1">
+                  <p className="font-medium">Passos para alimentar os dados reais:</p>
+                  <p>1. <strong>Topografia:</strong> Importe seus pontos topograficos no modulo principal</p>
+                  <p>2. <strong>Quantitativos:</strong> Calcule no modulo Quantitativos (escavacao, reaterro, etc.)</p>
+                  <p>3. <strong>Custos:</strong> Use a tabela de custos SINAPI ou importe planilha propria em Edicao por Trecho</p>
+                  <p>4. <strong>Medicao:</strong> Importe planilha de medicao e configure itens em Edicao por Trecho</p>
+                  <p>5. <strong>Revisao ABNT:</strong> Execute a Revisao por Pares para detectar erros automaticamente</p>
+                </div>
               </CardContent>
             </Card>
           ) : (
