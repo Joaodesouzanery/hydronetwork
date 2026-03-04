@@ -74,6 +74,14 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
 
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
 
+  // Stable refs to avoid re-creating callbacks when data changes (prevents map re-draw on every connection)
+  const trechosRef = useRef(trechos);
+  trechosRef.current = trechos;
+  const pontosRef = useRef(pontos);
+  pontosRef.current = pontos;
+  const onTrechosChangeRef = useRef(onTrechosChange);
+  onTrechosChangeRef.current = onTrechosChange;
+
   // Structure mode state
   const [structureMode, setStructureMode] = useState(false);
   const [selectedTrechoIdx, setSelectedTrechoIdx] = useState<number | null>(null);
@@ -238,7 +246,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         return;
       }
       setSelectedTrechoIdx(idx);
-      const t = trechos[idx];
+      const t = trechosRef.current[idx];
       if (t) {
         setEditingTrechoName(t.nomeTrecho || "");
         setEditingTrechoRede((t.tipoRedeManual || "esgoto") as TipoRedeManualMap);
@@ -254,20 +262,17 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
         return next;
       });
     }
-  }, [deleteMode, structureMode, trechos, showBatchPanel]);
+  }, [deleteMode, structureMode, showBatchPanel]);
 
   const handleMarkerClick = useCallback((pointId: string) => {
     if (bulkMoveMode) {
       if (draggedNodeId === pointId) {
-        // Drop the node
         setDraggedNodeId(null);
         toast.success(`Ponto ${pointId} reposicionado.`);
       } else if (draggedNodeId) {
-        // Already dragging another, drop it and pick this one
         setDraggedNodeId(pointId);
         toast.info(`Arrastando ponto ${pointId}...`);
       } else {
-        // Start dragging
         setDraggedNodeId(pointId);
         toast.info(`Arrastando ponto ${pointId}... Clique para soltar.`);
       }
@@ -291,7 +296,10 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           toast.error("Selecione um ponto diferente para o destino.");
           return;
         }
-        const exists = trechos.some(t =>
+        // Use refs for stable access — avoids re-creating this callback when trechos/pontos change
+        const curTrechos = trechosRef.current;
+        const curPontos = pontosRef.current;
+        const exists = curTrechos.some(t =>
           (t.idInicio === drawOrigin && t.idFim === pointId) ||
           (t.idInicio === pointId && t.idFim === drawOrigin)
         );
@@ -300,11 +308,11 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
           setDrawOrigin(null);
           return;
         }
-        const pOrigem = pontos.find(p => p.id === drawOrigin);
-        const pDestino = pontos.find(p => p.id === pointId);
+        const pOrigem = curPontos.find(p => p.id === drawOrigin);
+        const pDestino = curPontos.find(p => p.id === pointId);
         if (pOrigem && pDestino) {
           const novoTrecho = createTrechoFromPoints(pOrigem, pDestino);
-          onTrechosChange?.([...trechos, novoTrecho]);
+          onTrechosChangeRef.current?.([...curTrechos, novoTrecho]);
           toast.success(`Trecho ${drawOrigin} → ${pointId} criado!`);
         }
         setDrawOrigin(pointId);
@@ -313,7 +321,7 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
     } else {
       setSelectedPoint(prev => prev === pointId ? null : pointId);
     }
-  }, [deleteMode, drawMode, drawOrigin, pontos, trechos, onTrechosChange]);
+  }, [deleteMode, drawMode, drawOrigin, bulkMoveMode, draggedNodeId]);
 
   // Track last data signature to only fitBounds on actual data changes
   const lastDataSigRef = useRef("");
@@ -322,7 +330,6 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    map.invalidateSize();
 
     markersRef.current.forEach(m => m.remove());
     polylinesRef.current.forEach(p => p.remove());

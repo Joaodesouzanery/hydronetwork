@@ -872,6 +872,178 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     if (custoFileRef.current) custoFileRef.current.value = "";
   }, []);
 
+  // ── Re-import exported cost spreadsheet (updates per-trecho costs) ──
+  const custoReimportRef = useRef<HTMLInputElement>(null);
+
+  const handleCustoReimport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: "array" });
+
+      // Try "Custos por Trecho" sheet first, then "Valores e Custos", then first sheet
+      const sheetName = wb.SheetNames.find(n =>
+        n.toLowerCase().includes("custo") && n.toLowerCase().includes("trecho")
+      ) || wb.SheetNames.find(n =>
+        n.toLowerCase().includes("valores") || n.toLowerCase().includes("custo")
+      ) || wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      if (!sheet) { toast.error("Planilha sem aba de custos."); return; }
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+      if (rows.length === 0) { toast.error("Planilha de custos vazia."); return; }
+
+      const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "_");
+      const headers = Object.keys(rows[0]);
+      const findCol = (names: string[]): string | null => {
+        for (const n of names) {
+          const found = headers.find(h => normalize(h).includes(n));
+          if (found) return found;
+        }
+        return null;
+      };
+
+      const idCol = findCol(["id"]);
+      const trechoCol = findCol(["trecho", "nome"]);
+      const escCol = findCol(["escavacao"]);
+      const tuboCol = findCol(["tubo"]);
+      const reaterroCol = findCol(["reaterro"]);
+      const pvCol = findCol(["pv"]);
+      const bdiCol = findCol(["bdi"]);
+      const fonteCol = findCol(["fonte"]);
+
+      let updated = 0;
+      setCostRows(prev => prev.map(row => {
+        const matchRow = rows.find(r => {
+          if (idCol && String(r[idCol]).trim() === row.id) return true;
+          if (trechoCol && String(r[trechoCol]).trim() === row.nomeTrecho) return true;
+          return false;
+        });
+        if (!matchRow) return row;
+        updated++;
+        const toNum = (v: unknown) => v != null ? Number(String(v).replace(",", ".")) : undefined;
+        const newRow = { ...row };
+        const esc = escCol ? toNum(matchRow[escCol]) : undefined;
+        const tubo = tuboCol ? toNum(matchRow[tuboCol]) : undefined;
+        const reat = reaterroCol ? toNum(matchRow[reaterroCol]) : undefined;
+        const pv = pvCol ? toNum(matchRow[pvCol]) : undefined;
+        const bdi = bdiCol ? toNum(matchRow[bdiCol]) : undefined;
+        const fonte = fonteCol ? String(matchRow[fonteCol]).trim() : undefined;
+
+        if (esc != null && !isNaN(esc)) newRow.custoEscavacao = esc;
+        if (tubo != null && !isNaN(tubo)) newRow.custoTubo = tubo;
+        if (reat != null && !isNaN(reat)) newRow.custoReaterro = reat;
+        if (pv != null && !isNaN(pv)) newRow.custoPV = pv;
+        if (bdi != null && !isNaN(bdi)) newRow.bdiPct = bdi;
+        if (fonte === "SINAPI" || fonte === "Manual") newRow.fonte = fonte;
+
+        // Recalculate subtotal and total
+        newRow.subtotal = newRow.custoEscavacao + newRow.custoTubo + newRow.custoReaterro + newRow.custoPV;
+        newRow.total = newRow.subtotal * (1 + newRow.bdiPct / 100);
+        return newRow;
+      }));
+
+      // Also try to import "Itens de Custo" sheet
+      const itemsSheet = wb.Sheets["Itens de Custo"];
+      if (itemsSheet) {
+        const itemRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(itemsSheet);
+        if (itemRows.length > 0) {
+          const itemHeaders = Object.keys(itemRows[0]);
+          const itemFindCol = (names: string[]): string | null => {
+            for (const n of names) {
+              const found = itemHeaders.find(h => normalize(h).includes(n));
+              if (found) return found;
+            }
+            return null;
+          };
+          const iItemCol = itemFindCol(["item", "codigo"]);
+          const iDescCol = itemFindCol(["descricao", "desc"]);
+          const iUnCol = itemFindCol(["unidade", "un"]);
+          const iPrecoCol = itemFindCol(["preco", "valor", "custo"]);
+          const iFonteCol = itemFindCol(["fonte"]);
+          const iAtivoCol = itemFindCol(["ativo"]);
+
+          const items: CustoImportItem[] = itemRows.map((row, i) => ({
+            item_custo: iItemCol ? String(row[iItemCol] || `CUSTO${i + 1}`) : `CUSTO${i + 1}`,
+            descricao: iDescCol ? String(row[iDescCol] || "") : "",
+            unidade: iUnCol ? String(row[iUnCol] || "un") : "un",
+            preco_unitario: iPrecoCol ? Number(String(row[iPrecoCol]).replace(",", ".")) || 0 : 0,
+            fonte: iFonteCol ? String(row[iFonteCol] || "Importado") : "Importado",
+            enabled: iAtivoCol ? String(row[iAtivoCol]).toLowerCase() !== "não" && String(row[iAtivoCol]).toLowerCase() !== "nao" : true,
+          })).filter(item => item.preco_unitario > 0 || item.descricao);
+          if (items.length > 0) {
+            setCustoImportItems(items);
+            localStorage.setItem(CUSTO_STORAGE_KEY, JSON.stringify(items));
+          }
+        }
+      }
+
+      toast.success(`${updated} trechos com custos atualizados da planilha reimportada.`);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao reimportar planilha de custos.");
+    }
+    if (custoReimportRef.current) custoReimportRef.current.value = "";
+  }, []);
+
+  // ── Re-import exported measurement spreadsheet ──
+  const medicaoReimportRef = useRef<HTMLInputElement>(null);
+
+  const handleMedicaoReimport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      if (!sheet) { toast.error("Planilha vazia."); return; }
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+      if (rows.length === 0) { toast.error("Planilha de medição vazia."); return; }
+
+      const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "_");
+      const headers = Object.keys(rows[0]);
+      const findCol = (names: string[]): string | null => {
+        for (const n of names) {
+          const found = headers.find(h => normalize(h).includes(n));
+          if (found) return found;
+        }
+        return null;
+      };
+
+      const trechoCol = findCol(["trecho", "id"]);
+      const execCol = findCol(["executado", "exec", "qtd_exec"]);
+      const medRealCol = findCol(["med_realiz", "medicao_real"]);
+      const custoRealCol = findCol(["custo_real"]);
+
+      let updated = 0;
+      setMedicaoTrechos(prev => prev.map(mt => {
+        const matchRow = rows.find(r => {
+          if (trechoCol && String(r[trechoCol]).trim() === mt.trecho_id) return true;
+          return false;
+        });
+        if (!matchRow) return mt;
+        updated++;
+        const toNum = (v: unknown) => v != null ? Number(String(v).replace(",", ".")) : undefined;
+        const newMt = { ...mt };
+        const exec = execCol ? toNum(matchRow[execCol]) : undefined;
+        const medReal = medRealCol ? toNum(matchRow[medRealCol]) : undefined;
+        const custoReal = custoRealCol ? toNum(matchRow[custoRealCol]) : undefined;
+
+        if (exec != null && !isNaN(exec)) {
+          newMt.qtd_executada = exec;
+          newMt.pct_executado = mt.comprimento > 0 ? (exec / mt.comprimento) * 100 : 0;
+        }
+        if (medReal != null && !isNaN(medReal)) newMt.med_realizada = medReal;
+        if (custoReal != null && !isNaN(custoReal)) newMt.custo_real = custoReal;
+        return newMt;
+      }));
+
+      toast.success(`${updated} trechos de medição atualizados da planilha reimportada.`);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao reimportar planilha de medição.");
+    }
+    if (medicaoReimportRef.current) medicaoReimportRef.current.value = "";
+  }, []);
+
   // ── Measurement (Medição) handlers — with column mapping ──
 
   const handleMedicaoImportStep1 = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1408,6 +1580,17 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
               <Button size="sm" variant="outline" onClick={exportCustoSpreadsheetHandler}>
                 <DollarSign className="h-4 w-4 mr-1" /> Planilha Custos
               </Button>
+              <input ref={custoReimportRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleCustoReimport} />
+              <Button size="sm" variant="outline" onClick={() => custoReimportRef.current?.click()} title="Reimportar planilha de custos editada">
+                <Upload className="h-4 w-4 mr-1" /> Reimportar Custos
+              </Button>
+              <input ref={medicaoReimportRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleMedicaoReimport} />
+              <Button size="sm" variant="outline" onClick={() => {
+                if (medicaoTrechos.length === 0) { toast.error("Exporte a medição antes de reimportar."); return; }
+                medicaoReimportRef.current?.click();
+              }} title="Reimportar planilha de medição editada">
+                <Upload className="h-4 w-4 mr-1" /> Reimportar Medição
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -1671,6 +1854,9 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                       </Button>
                       <Button size="sm" variant="outline" onClick={exportCustoSpreadsheetHandler}>
                         <Download className="h-4 w-4 mr-1" /> Exportar XLSX
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => custoReimportRef.current?.click()}>
+                        <Upload className="h-4 w-4 mr-1" /> Reimportar XLSX
                       </Button>
                     </>
                   )}

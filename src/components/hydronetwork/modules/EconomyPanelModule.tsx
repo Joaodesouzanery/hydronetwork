@@ -424,10 +424,25 @@ export const EconomyPanelModule = ({
             </div>
           </div>
 
+          {/* Auto-calculation status */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-xs font-medium text-blue-800 mb-1">Calculo automatico ativado</p>
+            <p className="text-[11px] text-blue-700">
+              Este modulo calcula a economia automaticamente a partir dos dados dos outros modulos
+              (topografia, quantitativos, orcamento, medicao, revisao ABNT, cronograma).
+              Quanto mais modulos voce preencher, mais preciso sera o calculo.
+              Os campos abaixo permitem ajustar com dados reais da sua empresa para um resultado ainda mais fiel.
+            </p>
+          </div>
+
           {/* Real project inputs for accurate savings */}
           <div className="border-t pt-4">
-            <p className="text-sm font-medium mb-3 flex items-center gap-2">
-              <Calculator className="h-4 w-4" /> Dados Reais do Seu Projeto (preencha para ver economia real)
+            <p className="text-sm font-medium mb-1 flex items-center gap-2">
+              <Calculator className="h-4 w-4" /> Dados Reais do Seu Projeto
+            </p>
+            <p className="text-[11px] text-muted-foreground mb-3">
+              Preencha com os valores reais da sua empresa para ver a economia exata.
+              Deixe em branco para usar os benchmarks do setor (ABES/CBIC).
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -439,21 +454,30 @@ export const EconomyPanelModule = ({
                   placeholder={budgetTotal ? fmtBRL(budgetTotal) : "Ex: 500000"}
                 />
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  {budgetTotal ? `Auto: ${fmtBRL(budgetTotal)} do modulo Orcamento` : "Valor total da obra"}
+                  {budgetTotal
+                    ? `Detectado automaticamente: ${fmtBRL(budgetTotal)} (modulo Orcamento)`
+                    : platformData.realCostTotal > 0
+                      ? `Detectado automaticamente: ${fmtBRL(platformData.realCostTotal)} (modulo Custos)`
+                      : "Preencha ou use o modulo Orcamento/Custos para capturar automaticamente"}
                 </p>
               </div>
               <div>
-                <Label className="text-xs">Custo estimado manual (R$)</Label>
+                <Label className="text-xs">Custo atual do projeto (metodo manual) (R$)</Label>
                 <Input
                   type="number"
                   value={custoManualEstimado || ""}
                   onChange={e => setCustoManualEstimado(Number(e.target.value) || 0)}
                   placeholder="Ex: 600000"
                 />
-                <p className="text-[10px] text-muted-foreground mt-1">Quanto o projeto custaria no metodo manual</p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  O orcamento que voce faria usando planilhas Excel e calculo manual.
+                  <br />
+                  <strong>Dica:</strong> Use o ultimo orcamento que voce fez manualmente para uma obra similar.
+                  Normalmente sera 15-25% maior que o valor calculado pela plataforma com SINAPI.
+                </p>
               </div>
               <div>
-                <Label className="text-xs">Margem de erro manual (%)</Label>
+                <Label className="text-xs">Margem de erro tipica no metodo manual (%)</Label>
                 <Input
                   type="number"
                   value={margemErroManual}
@@ -461,7 +485,10 @@ export const EconomyPanelModule = ({
                   min={0}
                   max={100}
                 />
-                <p className="text-[10px] text-muted-foreground mt-1">Padrao: 20% (ABES/CBIC)</p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Diferenca media entre orcamento manual e custo real de obras anteriores.
+                  Padrao: 20% (pesquisa ABES/CBIC).
+                </p>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
@@ -473,7 +500,10 @@ export const EconomyPanelModule = ({
                   onChange={e => setHorasManualProjeto(Number(e.target.value) || 0)}
                   placeholder={`Padrao: ${BENCHMARKS.manualBudgetDays * 8 + BENCHMARKS.manualDesignDays * 8 + BENCHMARKS.manualScheduleDays * 8 + BENCHMARKS.manualReviewDays * 8}h (benchmark)`}
                 />
-                <p className="text-[10px] text-muted-foreground mt-1">Quantas horas sua equipe gasta por projeto sem a plataforma</p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Some as horas do ultimo projeto: orcamento + projeto + cronograma + revisao.
+                  Padrao: {BENCHMARKS.manualBudgetDays + BENCHMARKS.manualDesignDays + BENCHMARKS.manualScheduleDays + BENCHMARKS.manualReviewDays} dias uteis ({(BENCHMARKS.manualBudgetDays + BENCHMARKS.manualDesignDays + BENCHMARKS.manualScheduleDays + BENCHMARKS.manualReviewDays) * 8}h).
+                </p>
               </div>
               <div>
                 <Label className="text-xs">Custo medio de retrabalho por erro (R$)</Label>
@@ -483,7 +513,10 @@ export const EconomyPanelModule = ({
                   onChange={e => setCustoRetrabalhoReal(Number(e.target.value) || 0)}
                   min={0}
                 />
-                <p className="text-[10px] text-muted-foreground mt-1">Padrao: R$ 8.500 (media do setor)</p>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Custo para corrigir cada erro encontrado em campo (retrabalho, material perdido, atraso).
+                  Padrao: R$ 8.500 (media do setor de saneamento).
+                </p>
               </div>
             </div>
           </div>
