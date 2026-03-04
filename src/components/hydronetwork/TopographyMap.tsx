@@ -95,12 +95,8 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   bulkMoveModeRef.current = bulkMoveMode;
   const draggedNodeIdRef = useRef(draggedNodeId);
   draggedNodeIdRef.current = draggedNodeId;
-  const structureModeRef = useRef(structureMode);
-  structureModeRef.current = structureMode;
-  const showBatchPanelRef = useRef(showBatchPanel);
-  showBatchPanelRef.current = showBatchPanel;
 
-  // Structure mode state
+  // Structure mode state — must be declared before refs that reference them
   const [structureMode, setStructureMode] = useState(false);
   const [selectedTrechoIdx, setSelectedTrechoIdx] = useState<number | null>(null);
   const [editingTrechoName, setEditingTrechoName] = useState("");
@@ -114,6 +110,11 @@ export const TopographyMap = ({ pontos, trechos, onTrechosChange, onClearAll, on
   const [batchFrente, setBatchFrente] = useState("");
   const [batchLote, setBatchLote] = useState("");
   const [showBatchPanel, setShowBatchPanel] = useState(false);
+
+  const structureModeRef = useRef(structureMode);
+  structureModeRef.current = structureMode;
+  const showBatchPanelRef = useRef(showBatchPanel);
+  showBatchPanelRef.current = showBatchPanel;
 
   // Batch CRS detection: analyze ALL points together for consistent conversion
   // eslint-disable-next-line react-hooks/exhaustive-deps
