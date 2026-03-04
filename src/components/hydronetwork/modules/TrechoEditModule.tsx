@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,7 +26,7 @@ import { toast } from "sonner";
 import {
   Calculator, Download, Scissors, Undo2, Search, FileSpreadsheet, DollarSign,
   Calendar, RefreshCw, Filter, Upload, FileDown, MapPin, BarChart3,
-  ArrowRight, Check, Settings2,
+  ArrowRight, Check, Settings2, Trash2, Plus, Edit3, ToggleLeft,
 } from "lucide-react";
 import { Trecho } from "@/engine/domain";
 import { PontoTopografico } from "@/engine/reader";
@@ -138,6 +139,7 @@ interface CustoImportItem {
   unidade: string;
   preco_unitario: number;
   fonte: string;
+  enabled: boolean;
 }
 
 // Column mapping state for measurement import
@@ -359,7 +361,12 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
 
   // Cost import data
   const [custoImportItems, setCustoImportItems] = useState<CustoImportItem[]>(() => {
-    try { const d = localStorage.getItem(CUSTO_STORAGE_KEY); return d ? JSON.parse(d) : []; } catch { return []; }
+    try {
+      const d = localStorage.getItem(CUSTO_STORAGE_KEY);
+      if (!d) return [];
+      const parsed = JSON.parse(d) as CustoImportItem[];
+      return parsed.map(item => ({ ...item, enabled: item.enabled ?? true }));
+    } catch { return []; }
   });
   const custoFileRef = useRef<HTMLInputElement>(null);
 
@@ -371,6 +378,15 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     try { return loadMedicaoTrechos(); } catch { return []; }
   });
   const medicaoFileRef = useRef<HTMLInputElement>(null);
+
+  // Track which items are enabled (selected) for use
+  const [medicaoEnabled, setMedicaoEnabled] = useState<Record<string, boolean>>({});
+  const [custoEditIdx, setCustoEditIdx] = useState<number | null>(null);
+  const [medicaoEditIdx, setMedicaoEditIdx] = useState<number | null>(null);
+  // Schedule global params
+  const [schedGlobalProdutividade, setSchedGlobalProdutividade] = useState(12);
+  const [schedGlobalEquipes, setSchedGlobalEquipes] = useState(1);
+  const [schedGlobalDataInicio, setSchedGlobalDataInicio] = useState(new Date().toISOString().slice(0, 10));
 
   // Column mapping for measurement import
   const [columnMapping, setColumnMapping] = useState<ColumnMapping | null>(null);
@@ -813,6 +829,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
         unidade: unCol ? String(row[unCol] || "un") : "un",
         preco_unitario: precoCol ? Number(String(row[precoCol]).replace(",", ".")) || 0 : 0,
         fonte: fonteCol ? String(row[fonteCol] || "Importado") : "Importado",
+        enabled: true,
       })).filter(item => item.preco_unitario > 0);
 
       setCustoImportItems(items);
@@ -927,6 +944,10 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
 
     setMedicaoItems(items);
     saveMedicaoItems(items);
+    // Initialize all items as enabled
+    const enabledMap: Record<string, boolean> = {};
+    items.forEach((_, idx) => { enabledMap[String(idx)] = true; });
+    setMedicaoEnabled(enabledMap);
     setColumnMapping(prev => prev ? { ...prev, confirmed: true } : prev);
 
     // Auto-calculate if we have trechos loaded
@@ -944,6 +965,108 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     setColumnMapping(null);
   }, []);
 
+  // ── Cost item management handlers ──
+
+  const toggleCustoItem = useCallback((idx: number) => {
+    setCustoImportItems(prev => prev.map((item, i) => i === idx ? { ...item, enabled: !item.enabled } : item));
+  }, []);
+
+  const toggleAllCustoItems = useCallback((enabled: boolean) => {
+    setCustoImportItems(prev => prev.map(item => ({ ...item, enabled })));
+  }, []);
+
+  const updateCustoItem = useCallback((idx: number, field: keyof CustoImportItem, value: string | number) => {
+    setCustoImportItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  }, []);
+
+  const removeCustoItem = useCallback((idx: number) => {
+    setCustoImportItems(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const addCustoItemManual = useCallback(() => {
+    setCustoImportItems(prev => [...prev, {
+      item_custo: `MANUAL${prev.length + 1}`,
+      descricao: "Novo item",
+      unidade: "un",
+      preco_unitario: 0,
+      fonte: "Manual",
+      enabled: true,
+    }]);
+  }, []);
+
+  const saveCustoToStorage = useCallback(() => {
+    localStorage.setItem(CUSTO_STORAGE_KEY, JSON.stringify(custoImportItems));
+    toast.success("Planilha de custo salva.");
+  }, [custoImportItems]);
+
+  // ── Measurement item management handlers ──
+
+  const toggleMedicaoItem = useCallback((idx: number) => {
+    setMedicaoEnabled(prev => {
+      const key = String(idx);
+      return { ...prev, [key]: !(prev[key] ?? true) };
+    });
+  }, []);
+
+  const toggleAllMedicaoItems = useCallback((enabled: boolean) => {
+    setMedicaoEnabled(prev => {
+      const next = { ...prev };
+      medicaoItems.forEach((_, idx) => { next[String(idx)] = enabled; });
+      return next;
+    });
+  }, [medicaoItems]);
+
+  const updateMedicaoItem = useCallback((idx: number, field: keyof MedicaoItem, value: string | number) => {
+    setMedicaoItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  }, []);
+
+  const removeMedicaoItem = useCallback((idx: number) => {
+    setMedicaoItems(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const addMedicaoItemManual = useCallback(() => {
+    setMedicaoItems(prev => [...prev, {
+      item_medicao: `MED${prev.length + 1}`,
+      descricao: "Novo item de medição",
+      tipo_rede: "ESGOTO",
+      dn_min: 0,
+      dn_max: 9999,
+      driver: "m",
+      regra_quantidade: "comprimento",
+      preco_unitario: 0,
+    }]);
+  }, []);
+
+  const saveMedicaoToStorage = useCallback(() => {
+    saveMedicaoItems(medicaoItems);
+    toast.success("Itens de medição salvos.");
+  }, [medicaoItems]);
+
+  // ── Schedule bulk update ──
+
+  const applyScheduleGlobal = useCallback(() => {
+    setScheduleRows(prev => {
+      let diaAcum = 0;
+      return prev.map(r => {
+        const dias = Math.ceil(r.comp / (schedGlobalProdutividade * schedGlobalEquipes));
+        const inicio = new Date(schedGlobalDataInicio);
+        inicio.setDate(inicio.getDate() + diaAcum);
+        const fim = new Date(inicio);
+        fim.setDate(fim.getDate() + dias);
+        diaAcum += dias;
+        return {
+          ...r,
+          equipe: schedGlobalEquipes,
+          metrosDia: schedGlobalProdutividade,
+          diasEstimados: dias,
+          dataInicio: inicio.toISOString().slice(0, 10),
+          dataFim: fim.toISOString().slice(0, 10),
+        };
+      });
+    });
+    toast.success("Cronograma recalculado com novos parâmetros.");
+  }, [schedGlobalProdutividade, schedGlobalEquipes, schedGlobalDataInicio]);
+
   const recalcularMedicaoHandler = useCallback(() => {
     if (trechos.length === 0) {
       toast.error("Sem trechos carregados.");
@@ -953,16 +1076,22 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
       toast.error("Sem planilha de medição importada.");
       return;
     }
+    // Filter only enabled items
+    const enabledItems = medicaoItems.filter((_, idx) => medicaoEnabled[String(idx)] ?? true);
+    if (enabledItems.length === 0) {
+      toast.error("Nenhum item de medição habilitado. Ative pelo menos um item.");
+      return;
+    }
     const medTrechos = calcularMedicaoPorTrecho(
       trechos,
       quantityRows || [],
-      medicaoItems,
+      enabledItems,
     );
     setMedicaoTrechos(medTrechos);
     saveMedicaoTrechos(medTrechos);
     saveModuleData("medicaoTrechos", medTrechos);
-    toast.success("Medição recalculada com sucesso.");
-  }, [trechos, quantityRows, medicaoItems]);
+    toast.success(`Medição recalculada com ${enabledItems.length} itens ativos.`);
+  }, [trechos, quantityRows, medicaoItems, medicaoEnabled]);
 
   const exportMedicaoHandler = useCallback(() => {
     if (medicaoTrechos.length === 0) {
@@ -1358,8 +1487,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                 <div>
                   <CardTitle className="text-base">Planilha de Custo</CardTitle>
                   <CardDescription className="text-xs">
-                    Importe sua planilha de custo (CSV/XLSX) com itens, unidades e precos unitarios.
-                    Os itens importados serao usados como referencia de custo para os trechos.
+                    Importe ou crie manualmente itens de custo. Selecione quais itens usar e edite valores diretamente.
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
@@ -1371,8 +1499,16 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                     onChange={handleCustoImport}
                   />
                   <Button size="sm" onClick={() => custoFileRef.current?.click()}>
-                    <Upload className="h-4 w-4 mr-1" /> Importar Planilha de Custo
+                    <Upload className="h-4 w-4 mr-1" /> Importar
                   </Button>
+                  <Button size="sm" variant="outline" onClick={addCustoItemManual}>
+                    <Plus className="h-4 w-4 mr-1" /> Adicionar Item
+                  </Button>
+                  {custoImportItems.length > 0 && (
+                    <Button size="sm" variant="outline" onClick={saveCustoToStorage}>
+                      Salvar
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -1381,7 +1517,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                 <div className="py-8 text-center">
                   <FileSpreadsheet className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">
-                    Importe sua planilha de custo para visualizar os itens e precos.
+                    Importe uma planilha ou adicione itens manualmente.
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     A planilha deve conter colunas como: item/codigo, descricao, unidade, preco_unitario
@@ -1389,41 +1525,87 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                 </div>
               ) : (
                 <>
-                  <div className="mb-3 flex items-center gap-2">
-                    <Badge variant="secondary">{custoImportItems.length} itens de custo</Badge>
-                    <Button size="sm" variant="ghost" onClick={() => { setCustoImportItems([]); localStorage.removeItem(CUSTO_STORAGE_KEY); toast.success("Planilha de custo removida."); }}>
-                      Limpar
+                  <div className="mb-3 flex items-center gap-2 flex-wrap">
+                    <Badge variant="secondary">{custoImportItems.filter(i => i.enabled).length}/{custoImportItems.length} ativos</Badge>
+                    <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => toggleAllCustoItems(true)}>
+                      <ToggleLeft className="h-3 w-3 mr-1" /> Ativar todos
                     </Button>
+                    <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => toggleAllCustoItems(false)}>
+                      Desativar todos
+                    </Button>
+                    <div className="ml-auto">
+                      <Button size="sm" variant="ghost" className="text-xs h-7 text-red-600" onClick={() => { setCustoImportItems([]); localStorage.removeItem(CUSTO_STORAGE_KEY); toast.success("Planilha de custo removida."); }}>
+                        <Trash2 className="h-3 w-3 mr-1" /> Limpar tudo
+                      </Button>
+                    </div>
                   </div>
                   <div className="overflow-auto" style={{ maxHeight: TABLE_MAX_HEIGHT }}>
                     <Table>
                       <TableHeader className="sticky top-0 bg-background z-10">
                         <TableRow>
+                          <TableHead className="text-xs w-8">Usar</TableHead>
                           <TableHead className="text-xs">Item</TableHead>
                           <TableHead className="text-xs">Descricao</TableHead>
                           <TableHead className="text-xs">Unidade</TableHead>
                           <TableHead className="text-xs">Preco Unitario</TableHead>
                           <TableHead className="text-xs">Fonte</TableHead>
+                          <TableHead className="text-xs w-16">Ações</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {custoImportItems.map((item, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell className="text-xs font-mono">{item.item_custo}</TableCell>
-                            <TableCell className="text-xs max-w-[250px] truncate" title={item.descricao}>{item.descricao}</TableCell>
-                            <TableCell className="text-xs">{item.unidade}</TableCell>
-                            <TableCell className="text-xs font-medium">{fmtC(item.preco_unitario)}</TableCell>
-                            <TableCell className="text-xs">
-                              <Badge variant="outline" className="text-[10px]">{item.fonte}</Badge>
+                          <TableRow key={idx} className={!item.enabled ? "opacity-40" : ""}>
+                            <TableCell>
+                              <Checkbox checked={item.enabled} onCheckedChange={() => toggleCustoItem(idx)} />
                             </TableCell>
+                            {custoEditIdx === idx ? (
+                              <>
+                                <TableCell><Input value={item.item_custo} onChange={e => updateCustoItem(idx, "item_custo", e.target.value)} className="h-7 text-xs w-24" /></TableCell>
+                                <TableCell><Input value={item.descricao} onChange={e => updateCustoItem(idx, "descricao", e.target.value)} className="h-7 text-xs w-40" /></TableCell>
+                                <TableCell><Input value={item.unidade} onChange={e => updateCustoItem(idx, "unidade", e.target.value)} className="h-7 text-xs w-16" /></TableCell>
+                                <TableCell><Input type="number" value={item.preco_unitario} onChange={e => updateCustoItem(idx, "preco_unitario", parseFloat(e.target.value) || 0)} className="h-7 text-xs w-24" /></TableCell>
+                                <TableCell><Input value={item.fonte} onChange={e => updateCustoItem(idx, "fonte", e.target.value)} className="h-7 text-xs w-20" /></TableCell>
+                                <TableCell>
+                                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setCustoEditIdx(null)}>
+                                    <Check className="h-3 w-3 text-green-600" />
+                                  </Button>
+                                </TableCell>
+                              </>
+                            ) : (
+                              <>
+                                <TableCell className="text-xs font-mono">{item.item_custo}</TableCell>
+                                <TableCell className="text-xs max-w-[250px] truncate" title={item.descricao}>{item.descricao}</TableCell>
+                                <TableCell className="text-xs">{item.unidade}</TableCell>
+                                <TableCell className="text-xs font-medium">{fmtC(item.preco_unitario)}</TableCell>
+                                <TableCell className="text-xs">
+                                  <Badge variant="outline" className="text-[10px]">{item.fonte}</Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex gap-1">
+                                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setCustoEditIdx(idx)}>
+                                      <Edit3 className="h-3 w-3" />
+                                    </Button>
+                                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500" onClick={() => removeCustoItem(idx)}>
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </>
+                            )}
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </div>
-                  <div className="mt-3 bg-muted/50 rounded p-3 text-center">
-                    <p className="text-xs text-muted-foreground">Total de Itens Importados</p>
-                    <p className="font-semibold text-sm">{custoImportItems.length} itens</p>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div className="bg-muted/50 rounded p-3 text-center">
+                      <p className="text-xs text-muted-foreground">Itens Ativos</p>
+                      <p className="font-semibold text-sm">{custoImportItems.filter(i => i.enabled).length} de {custoImportItems.length}</p>
+                    </div>
+                    <div className="bg-muted/50 rounded p-3 text-center">
+                      <p className="text-xs text-muted-foreground">Valor Total (ativos)</p>
+                      <p className="font-semibold text-sm">{fmtC(custoImportItems.filter(i => i.enabled).reduce((s, i) => s + i.preco_unitario, 0))}</p>
+                    </div>
                   </div>
                 </>
               )}
@@ -1439,10 +1621,10 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                 <div>
                   <CardTitle className="text-base">Medicao por Trecho</CardTitle>
                   <CardDescription className="text-xs">
-                    Importe sua planilha de medicao (CSV/XLSX). Voce vai escolher quais colunas usar para mapear os itens aos trechos.
+                    Importe ou crie itens de medição. Selecione quais itens usar e edite valores. Recalcule para aplicar.
                   </CardDescription>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <input
                     ref={medicaoFileRef}
                     type="file"
@@ -1451,11 +1633,17 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                     onChange={handleMedicaoImportStep1}
                   />
                   <Button size="sm" onClick={() => medicaoFileRef.current?.click()}>
-                    <Upload className="h-4 w-4 mr-1" /> Importar Planilha de Medicao
+                    <Upload className="h-4 w-4 mr-1" /> Importar
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={addMedicaoItemManual}>
+                    <Plus className="h-4 w-4 mr-1" /> Adicionar Item
                   </Button>
                   {medicaoItems.length > 0 && (
                     <>
-                      <Button size="sm" variant="outline" onClick={recalcularMedicaoHandler}>
+                      <Button size="sm" variant="outline" onClick={saveMedicaoToStorage}>
+                        Salvar Itens
+                      </Button>
+                      <Button size="sm" onClick={recalcularMedicaoHandler}>
                         <RefreshCw className="h-3.5 w-3.5 mr-1" /> Recalcular
                       </Button>
                       <Button size="sm" variant="outline" onClick={exportMedicaoHandler}>
@@ -1548,35 +1736,125 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                 </Card>
               )}
 
-              {/* Imported items info */}
+              {/* Imported items with selection and editing */}
               {medicaoItems.length > 0 && (
                 <div className="mb-4 p-3 bg-muted/50 rounded">
-                  <p className="text-sm font-medium mb-2">Itens de Medicao Importados: {medicaoItems.length}</p>
-                  <div className="overflow-auto max-h-40">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <p className="text-sm font-medium">Itens de Medicao: {medicaoItems.filter((_, i) => medicaoEnabled[String(i)] ?? true).length}/{medicaoItems.length} ativos</p>
+                    <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => toggleAllMedicaoItems(true)}>
+                      <ToggleLeft className="h-3 w-3 mr-1" /> Ativar todos
+                    </Button>
+                    <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => toggleAllMedicaoItems(false)}>
+                      Desativar todos
+                    </Button>
+                    <Button size="sm" variant="ghost" className="text-xs h-7 text-red-600 ml-auto" onClick={() => { setMedicaoItems([]); setMedicaoEnabled({}); setMedicaoTrechos([]); toast.success("Itens removidos."); }}>
+                      <Trash2 className="h-3 w-3 mr-1" /> Limpar
+                    </Button>
+                  </div>
+                  <div className="overflow-auto" style={{ maxHeight: 280 }}>
                     <Table>
-                      <TableHeader>
+                      <TableHeader className="sticky top-0 bg-muted/80 z-10">
                         <TableRow>
+                          <TableHead className="text-xs w-8">Usar</TableHead>
                           <TableHead className="text-xs">Item</TableHead>
                           <TableHead className="text-xs">Descricao</TableHead>
                           <TableHead className="text-xs">Tipo Rede</TableHead>
                           <TableHead className="text-xs">DN Faixa</TableHead>
-                          <TableHead className="text-xs">Driver</TableHead>
-                          <TableHead className="text-xs">Regra</TableHead>
+                          <TableHead className="text-xs">Unidade</TableHead>
+                          <TableHead className="text-xs">Regra Qtd.</TableHead>
                           <TableHead className="text-xs">Preco Unit.</TableHead>
+                          <TableHead className="text-xs w-16">Ações</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {medicaoItems.map((item, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell className="text-xs font-mono">{item.item_medicao}</TableCell>
-                            <TableCell className="text-xs max-w-[200px] truncate" title={item.descricao}>{item.descricao}</TableCell>
-                            <TableCell className="text-xs">{item.tipo_rede}</TableCell>
-                            <TableCell className="text-xs">{item.dn_min}-{item.dn_max}</TableCell>
-                            <TableCell className="text-xs">{item.driver}</TableCell>
-                            <TableCell className="text-xs">{item.regra_quantidade}</TableCell>
-                            <TableCell className="text-xs">{fmtC(item.preco_unitario)}</TableCell>
-                          </TableRow>
-                        ))}
+                        {medicaoItems.map((item, idx) => {
+                          const isEnabled = medicaoEnabled[String(idx)] ?? true;
+                          const isEditing = medicaoEditIdx === idx;
+                          return (
+                            <TableRow key={idx} className={!isEnabled ? "opacity-40" : ""}>
+                              <TableCell>
+                                <Checkbox checked={isEnabled} onCheckedChange={() => toggleMedicaoItem(idx)} />
+                              </TableCell>
+                              {isEditing ? (
+                                <>
+                                  <TableCell><Input value={item.item_medicao} onChange={e => updateMedicaoItem(idx, "item_medicao", e.target.value)} className="h-7 text-xs w-20" /></TableCell>
+                                  <TableCell><Input value={item.descricao} onChange={e => updateMedicaoItem(idx, "descricao", e.target.value)} className="h-7 text-xs w-32" /></TableCell>
+                                  <TableCell>
+                                    <Select value={item.tipo_rede} onValueChange={v => updateMedicaoItem(idx, "tipo_rede", v)}>
+                                      <SelectTrigger className="h-7 text-xs w-24"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="ESGOTO" className="text-xs">ESGOTO</SelectItem>
+                                        <SelectItem value="AGUA" className="text-xs">AGUA</SelectItem>
+                                        <SelectItem value="DRENAGEM" className="text-xs">DRENAGEM</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex gap-1">
+                                      <Input type="number" value={item.dn_min} onChange={e => updateMedicaoItem(idx, "dn_min", parseFloat(e.target.value) || 0)} className="h-7 text-xs w-14" />
+                                      <Input type="number" value={item.dn_max} onChange={e => updateMedicaoItem(idx, "dn_max", parseFloat(e.target.value) || 9999)} className="h-7 text-xs w-14" />
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Select value={item.driver} onValueChange={v => updateMedicaoItem(idx, "driver", v)}>
+                                      <SelectTrigger className="h-7 text-xs w-16"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="m" className="text-xs">m</SelectItem>
+                                        <SelectItem value="m2" className="text-xs">m²</SelectItem>
+                                        <SelectItem value="m3" className="text-xs">m³</SelectItem>
+                                        <SelectItem value="un" className="text-xs">un</SelectItem>
+                                        <SelectItem value="dia" className="text-xs">dia</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Select value={item.regra_quantidade} onValueChange={v => updateMedicaoItem(idx, "regra_quantidade", v)}>
+                                      <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="comprimento" className="text-xs">comprimento</SelectItem>
+                                        <SelectItem value="escavacao_m3" className="text-xs">escavacao (m³)</SelectItem>
+                                        <SelectItem value="reaterro_m3" className="text-xs">reaterro (m³)</SelectItem>
+                                        <SelectItem value="bota_fora_m3" className="text-xs">bota-fora (m³)</SelectItem>
+                                        <SelectItem value="pavimento_m2" className="text-xs">pavimento (m²)</SelectItem>
+                                        <SelectItem value="escoramento_m2" className="text-xs">escoramento (m²)</SelectItem>
+                                        <SelectItem value="numero_pvs" className="text-xs">PV (un)</SelectItem>
+                                        <SelectItem value="berco" className="text-xs">berço (m³)</SelectItem>
+                                        <SelectItem value="envoltoria" className="text-xs">envoltória (m³)</SelectItem>
+                                        <SelectItem value="ligacao" className="text-xs">ligação (un)</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                  <TableCell><Input type="number" value={item.preco_unitario} onChange={e => updateMedicaoItem(idx, "preco_unitario", parseFloat(e.target.value) || 0)} className="h-7 text-xs w-24" /></TableCell>
+                                  <TableCell>
+                                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setMedicaoEditIdx(null)}>
+                                      <Check className="h-3 w-3 text-green-600" />
+                                    </Button>
+                                  </TableCell>
+                                </>
+                              ) : (
+                                <>
+                                  <TableCell className="text-xs font-mono">{item.item_medicao}</TableCell>
+                                  <TableCell className="text-xs max-w-[180px] truncate" title={item.descricao}>{item.descricao}</TableCell>
+                                  <TableCell className="text-xs">{item.tipo_rede}</TableCell>
+                                  <TableCell className="text-xs">{item.dn_min}-{item.dn_max}</TableCell>
+                                  <TableCell className="text-xs">{item.driver}</TableCell>
+                                  <TableCell className="text-xs">{item.regra_quantidade}</TableCell>
+                                  <TableCell className="text-xs font-medium">{fmtC(item.preco_unitario)}</TableCell>
+                                  <TableCell>
+                                    <div className="flex gap-1">
+                                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setMedicaoEditIdx(idx)}>
+                                        <Edit3 className="h-3 w-3" />
+                                      </Button>
+                                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500" onClick={() => removeMedicaoItem(idx)}>
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </>
+                              )}
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
@@ -1681,10 +1959,32 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
         <TabsContent value="cronograma">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Cronograma por Trecho</CardTitle>
-              <CardDescription className="text-xs">
-                Edite equipe, produtividade e prioridade por trecho.
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Cronograma por Trecho</CardTitle>
+                  <CardDescription className="text-xs">
+                    Edite equipe, produtividade e prioridade por trecho, ou aplique parâmetros globais.
+                  </CardDescription>
+                </div>
+              </div>
+              {/* Global schedule parameters */}
+              <div className="mt-3 flex gap-3 items-end flex-wrap p-3 bg-muted/30 rounded">
+                <div>
+                  <Label className="text-xs">Produtividade (m/dia)</Label>
+                  <Input type="number" value={schedGlobalProdutividade} onChange={e => setSchedGlobalProdutividade(parseFloat(e.target.value) || 12)} className="h-8 w-24 text-xs" />
+                </div>
+                <div>
+                  <Label className="text-xs">Equipes</Label>
+                  <Input type="number" value={schedGlobalEquipes} onChange={e => setSchedGlobalEquipes(parseInt(e.target.value) || 1)} className="h-8 w-20 text-xs" />
+                </div>
+                <div>
+                  <Label className="text-xs">Data Início</Label>
+                  <Input type="date" value={schedGlobalDataInicio} onChange={e => setSchedGlobalDataInicio(e.target.value)} className="h-8 w-36 text-xs" />
+                </div>
+                <Button size="sm" onClick={applyScheduleGlobal}>
+                  <RefreshCw className="h-3.5 w-3.5 mr-1" /> Aplicar a Todos
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {filteredScheduleRows.length === 0 ? (
