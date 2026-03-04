@@ -49,6 +49,9 @@ const sections: SidebarSection[] = [
       { title: "Atrasos de Projeto", url: "/project-delays", icon: Clock },
       { title: "LPS / Lean", url: "/hydronetwork/lps", icon: ClipboardCheck },
       { title: "Controle de Aprovação", url: "/approval-control", icon: FileCheck2 },
+      { title: "Economia Comprovada", url: "/hydronetwork/economia", icon: DollarSign },
+      { title: "Aprovações de Projetos", url: "/hydronetwork/caesb", icon: Shield },
+      { title: "Projetos Básicos", url: "/hydronetwork/caesb-preprojeto", icon: ClipboardCheck },
     ],
   },
   {
@@ -77,9 +80,6 @@ const sections: SidebarSection[] = [
       { title: "Orçamento de Elevatória", url: "/hydronetwork/elevatoria", icon: Activity },
       { title: "Recalque / Booster", url: "/hydronetwork/recalque", icon: Activity },
       { title: "Transientes Hidráulicos", url: "/hydronetwork/transientes", icon: Activity },
-      { title: "Aprovações de Projetos", url: "/hydronetwork/caesb", icon: Shield },
-      { title: "Projetos Básicos", url: "/hydronetwork/caesb-preprojeto", icon: ClipboardCheck },
-      { title: "Economia Comprovada", url: "/hydronetwork/economia", icon: DollarSign },
     ],
   },
   {
