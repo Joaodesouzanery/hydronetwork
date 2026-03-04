@@ -756,5 +756,3 @@ export const CAESBModule = () => {
     </div>
   );
 };
-
-export default CAESBModule;

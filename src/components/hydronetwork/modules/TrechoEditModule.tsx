@@ -13,6 +13,7 @@
 
 import { useState, useMemo, useCallback, useRef, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -222,16 +223,18 @@ function getPVCusto(prof: number): number {
 }
 
 function computeQuantities(t: Trecho, prof: number): { escavacao: number; reaterro: number; botafora: number; pavimento: number; escoramento: number } {
-  const dnM = t.diametroMm / 1000;
+  const comp = t.comprimento || 0;
+  const dnM = (t.diametroMm || 150) / 1000;
+  const p = prof || 1.2;
   const lv = Math.max(0.6, dnM + 0.30);
-  const volEsc = t.comprimento * lv * prof;
-  const volTubo = t.comprimento * Math.PI * (dnM / 2) ** 2;
-  const volBerco = t.comprimento * lv * 0.10;
-  const volEnv = t.comprimento * lv * 0.30;
+  const volEsc = comp * lv * p;
+  const volTubo = comp * Math.PI * (dnM / 2) ** 2;
+  const volBerco = comp * lv * 0.10;
+  const volEnv = comp * lv * 0.30;
   const reaterro = Math.max(0, volEsc - volTubo - volBerco - volEnv);
   const botafora = (volEsc - reaterro) * 1.25;
-  const pavimento = t.comprimento * (lv + 0.60);
-  const escoramento = prof > 1.25 ? t.comprimento * prof * 2 : 0;
+  const pavimento = comp * (lv + 0.60);
+  const escoramento = p > 1.25 ? comp * p * 2 : 0;
   return {
     escavacao: round2(volEsc),
     reaterro: round2(reaterro),
@@ -242,20 +245,24 @@ function computeQuantities(t: Trecho, prof: number): { escavacao: number; reater
 }
 
 function round2(n: number): number {
+  if (n == null || isNaN(n)) return 0;
   return Math.round(n * 100) / 100;
 }
 
 function fmt(n: number): string {
+  if (n == null || isNaN(n)) return "0,00";
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function fmtC(n: number): string {
+  if (n == null || isNaN(n)) return "R$ 0,00";
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 function addDays(dateStr: string, days: number): string {
+  if (!dateStr) return new Date().toISOString().slice(0, 10);
   const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
+  d.setDate(d.getDate() + (isNaN(days) ? 0 : days));
   return d.toISOString().slice(0, 10);
 }
 
@@ -2324,9 +2331,9 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                                 />
                               </TableCell>
                               <TableCell className="text-xs font-mono">
-                                {(m.itens_medicao || []).length > 0 ? m.itens_medicao[0].item.item_medicao : "-"}
+                                {(m.itens_medicao || []).length > 0 ? m.itens_medicao?.[0]?.item?.item_medicao ?? "-" : "-"}
                                 {(m.itens_medicao || []).length > 1 && (
-                                  <Badge variant="outline" className="ml-1 text-[9px]">+{m.itens_medicao.length - 1}</Badge>
+                                  <Badge variant="outline" className="ml-1 text-[9px]">+{(m.itens_medicao?.length ?? 1) - 1}</Badge>
                                 )}
                               </TableCell>
                               <TableCell className="text-xs font-medium text-blue-700">{fmtC(m.med_total)}</TableCell>
@@ -2647,11 +2654,11 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
 
         {/* ── Base Personalizada (Custom Cost) Tab ── */}
         <TabsContent value="base-personalizada">
-          <CustomCostTrechoModule trechos={trechos} />
+          <ErrorBoundary moduleName="Base Personalizada">
+            <CustomCostTrechoModule trechos={trechos} />
+          </ErrorBoundary>
         </TabsContent>
       </Tabs>
     </div>
   );
 }
-
-export default TrechoEditModule;

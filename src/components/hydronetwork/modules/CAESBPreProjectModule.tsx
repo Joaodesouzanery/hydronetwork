@@ -2142,5 +2142,3 @@ export const CAESBPreProjectModule = () => {
     </div>
   );
 };
-
-export default CAESBPreProjectModule;

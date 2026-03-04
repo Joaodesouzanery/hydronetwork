@@ -1460,5 +1460,3 @@ function GanttChartView({ items, scheduleItems }: GanttChartViewProps) {
     </div>
   );
 }
-
-export default CustomCostTrechoModule;
