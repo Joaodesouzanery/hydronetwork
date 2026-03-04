@@ -364,8 +364,12 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
   const custoFileRef = useRef<HTMLInputElement>(null);
 
   // Measurement (Medição) data
-  const [medicaoItems, setMedicaoItems] = useState<MedicaoItem[]>(() => loadMedicaoItems());
-  const [medicaoTrechos, setMedicaoTrechos] = useState<TrechoMedicao[]>(() => loadMedicaoTrechos());
+  const [medicaoItems, setMedicaoItems] = useState<MedicaoItem[]>(() => {
+    try { return loadMedicaoItems(); } catch { return []; }
+  });
+  const [medicaoTrechos, setMedicaoTrechos] = useState<TrechoMedicao[]>(() => {
+    try { return loadMedicaoTrechos(); } catch { return []; }
+  });
   const medicaoFileRef = useRef<HTMLInputElement>(null);
 
   // Column mapping for measurement import
@@ -986,7 +990,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
 
   const medicaoSummary = useMemo<MedicaoSummary | null>(() => {
     if (medicaoTrechos.length === 0) return null;
-    return calcularResumoMedicao(medicaoTrechos);
+    try { return calcularResumoMedicao(medicaoTrechos); } catch { return null; }
   }, [medicaoTrechos]);
 
   // ── Export XLSX ──
@@ -1621,13 +1625,13 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                           <TableCell className="text-xs">{m.dn}</TableCell>
                           <TableCell className="text-xs">{m.tipo_rede}</TableCell>
                           <TableCell className="text-xs font-mono">
-                            {m.itens_medicao.length > 0 ? m.itens_medicao[0].item.item_medicao : "-"}
-                            {m.itens_medicao.length > 1 && (
+                            {(m.itens_medicao || []).length > 0 ? m.itens_medicao[0].item.item_medicao : "-"}
+                            {(m.itens_medicao || []).length > 1 && (
                               <Badge variant="outline" className="ml-1 text-[9px]">+{m.itens_medicao.length - 1}</Badge>
                             )}
                           </TableCell>
                           <TableCell className="text-xs">
-                            {m.itens_medicao.length > 0 ? fmt(m.itens_medicao[0].quantidade) : "-"}
+                            {(m.itens_medicao || []).length > 0 ? fmt(m.itens_medicao[0].quantidade) : "-"}
                           </TableCell>
                           <TableCell className="text-xs font-medium text-blue-700">{fmtC(m.med_total)}</TableCell>
                           <TableCell className="text-xs font-medium text-orange-700">{fmtC(m.cus_total)}</TableCell>

@@ -383,7 +383,7 @@ export function calcularResumoMedicao(medicoes: TrechoMedicao[]): MedicaoSummary
     : 0;
 
   const allItems = new Set<string>();
-  medicoes.forEach(m => m.itens_medicao.forEach(i => allItems.add(i.item.item_medicao)));
+  medicoes.forEach(m => (m.itens_medicao || []).forEach(i => allItems.add(i.item.item_medicao)));
 
   return {
     total_trechos: medicoes.length,
@@ -669,8 +669,10 @@ export function saveMedicaoItems(items: MedicaoItem[]): void {
 }
 
 export function loadMedicaoItems(): MedicaoItem[] {
-  const data = localStorage.getItem(MEDICAO_ITEMS_KEY);
-  return data ? JSON.parse(data) : [];
+  try {
+    const data = localStorage.getItem(MEDICAO_ITEMS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch { return []; }
 }
 
 export function saveMedicaoTrechos(medicoes: TrechoMedicao[]): void {
@@ -678,8 +680,10 @@ export function saveMedicaoTrechos(medicoes: TrechoMedicao[]): void {
 }
 
 export function loadMedicaoTrechos(): TrechoMedicao[] {
-  const data = localStorage.getItem(MEDICAO_TRECHOS_KEY);
-  return data ? JSON.parse(data) : [];
+  try {
+    const data = localStorage.getItem(MEDICAO_TRECHOS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch { return []; }
 }
 
 export function saveRDOTrechoEntries(entries: RDOTrechoEntry[]): void {

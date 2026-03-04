@@ -847,6 +847,9 @@ const HydroNetwork = () => {
     recalque: "Recalque / Booster — Linhas de Recalque",
     transientes: "Transientes Hidráulicos — Golpe de Aríete",
     "edicao-trecho": "Edição por Trecho",
+    caesb: "Aprovações de Projetos",
+    "caesb-preprojeto": "Projetos Básicos",
+    economia: "Economia Comprovada",
   };
 
   return (
