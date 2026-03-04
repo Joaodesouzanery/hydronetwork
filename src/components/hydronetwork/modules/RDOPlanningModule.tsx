@@ -2,14 +2,15 @@
  * RDO Hydro + Planning Integration Module
  * Combines RDO execution data with planning schedule for dashboards and exports
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Download, BarChart3, Calendar, AlertTriangle, TrendingUp, FileText, CheckCircle2 } from "lucide-react";
+import { Download, BarChart3, Calendar, AlertTriangle, TrendingUp, FileText, CheckCircle2, Pencil, RotateCcw, Save } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line
@@ -18,6 +19,7 @@ import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
 import { RDO, calculateDashboardMetrics } from "@/engine/rdo";
 import { ScheduleResult } from "@/engine/planning";
+import { saveModuleData, loadModuleData } from "@/engine/moduleExchange";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -33,12 +35,76 @@ const fmt = (n: number, d = 1) => n.toLocaleString("pt-BR", { minimumFractionDig
 
 export const RDOPlanningModule = ({ pontos, trechos, rdos, scheduleResult }: RDOPlanningModuleProps) => {
   const [view, setView] = useState<"dashboard" | "comparison" | "delays">("dashboard");
+  const [editMode, setEditMode] = useState(false);
+  const [manualOverrides, setManualOverrides] = useState<Record<string, number>>(() => {
+    return loadModuleData<Record<string, number>>("executedOverrides") || {};
+  });
+  const [editingValues, setEditingValues] = useState<Record<string, string>>({});
+
+  const saveOverrides = useCallback((overrides: Record<string, number>) => {
+    setManualOverrides(overrides);
+    saveModuleData("executedOverrides", overrides);
+  }, []);
+
+  const handleEditValue = (id: string, value: string) => {
+    setEditingValues(prev => ({ ...prev, [id]: value }));
+  };
+
+  const handleCommitEdit = (id: string, rdoExecuted: number) => {
+    const raw = editingValues[id];
+    if (raw === undefined) return;
+    const num = parseFloat(raw.replace(",", "."));
+    if (isNaN(num) || num < 0) {
+      toast.error("Valor invalido");
+      return;
+    }
+    if (num === rdoExecuted) {
+      // Same as RDO value, remove override
+      const next = { ...manualOverrides };
+      delete next[id];
+      saveOverrides(next);
+    } else {
+      saveOverrides({ ...manualOverrides, [id]: num });
+    }
+    setEditingValues(prev => { const n = { ...prev }; delete n[id]; return n; });
+    toast.success(`Executado de ${id} atualizado para ${fmt(num, 2)} m`);
+  };
+
+  const handleResetOverride = (id: string) => {
+    const next = { ...manualOverrides };
+    delete next[id];
+    saveOverrides(next);
+    setEditingValues(prev => { const n = { ...prev }; delete n[id]; return n; });
+    toast.info(`${id} resetado para valor do RDO`);
+  };
+
+  const handleResetAllOverrides = () => {
+    saveOverrides({});
+    setEditingValues({});
+    toast.info("Todos os overrides removidos");
+  };
 
   const totalPlanned = useMemo(() => trechos.reduce((s, t) => s + t.comprimento, 0), [trechos]);
   const totalExecuted = useMemo(() => {
     const allSegs = rdos.flatMap(r => r.segments);
-    return allSegs.reduce((s, seg) => s + seg.executedBefore + seg.executedToday, 0);
-  }, [rdos]);
+    const rdoTotal = allSegs.reduce((s, seg) => s + seg.executedBefore + seg.executedToday, 0);
+    // Include manual overrides
+    if (Object.keys(manualOverrides).length === 0) return rdoTotal;
+    // Recalculate considering overrides per trecho
+    let total = 0;
+    for (const t of trechos) {
+      const id = `${t.idInicio}-${t.idFim}`;
+      if (manualOverrides[id] !== undefined) {
+        total += manualOverrides[id];
+      } else {
+        const matching = allSegs.filter(s =>
+          s.segmentName === id || s.segmentName === t.idInicio
+        );
+        total += matching.reduce((sum, s) => sum + s.executedBefore + s.executedToday, 0);
+      }
+    }
+    return total;
+  }, [rdos, manualOverrides, trechos]);
   const progressPercent = totalPlanned > 0 ? (totalExecuted / totalPlanned) * 100 : 0;
 
   const plannedDays = scheduleResult?.totalDays || 0;
@@ -61,17 +127,20 @@ export const RDOPlanningModule = ({ pontos, trechos, rdos, scheduleResult }: RDO
   // Segment-level analysis
   const segmentAnalysis = useMemo(() => {
     return trechos.map((t, i) => {
+      const id = `${t.idInicio}-${t.idFim}`;
       const allSegs = rdos.flatMap(r => r.segments);
       const matching = allSegs.filter(s =>
-        s.segmentName === `${t.idInicio}-${t.idFim}` || s.segmentName === t.idInicio
+        s.segmentName === id || s.segmentName === t.idInicio
       );
-      const executed = matching.reduce((sum, s) => sum + s.executedBefore + s.executedToday, 0);
+      const rdoExecuted = matching.reduce((sum, s) => sum + s.executedBefore + s.executedToday, 0);
+      const isOverridden = manualOverrides[id] !== undefined;
+      const executed = isOverridden ? manualOverrides[id] : rdoExecuted;
       const planned = t.comprimento;
       const pct = planned > 0 ? (executed / planned) * 100 : 0;
-      const status = pct >= 100 ? "Concluído" : pct > 0 ? "Em Execução" : "Não Iniciado";
-      return { id: `${t.idInicio}-${t.idFim}`, planned, executed, pct, status, trecho: t };
+      const status = pct >= 100 ? "Concluido" : pct > 0 ? "Em Execucao" : "Nao Iniciado";
+      return { id, planned, executed, rdoExecuted, isOverridden, pct, status, trecho: t };
     });
-  }, [trechos, rdos]);
+  }, [trechos, rdos, manualOverrides]);
 
   const handleExportPDF = () => {
     const doc = new jsPDF();
@@ -251,19 +320,62 @@ export const RDOPlanningModule = ({ pontos, trechos, rdos, scheduleResult }: RDO
 
           {/* Segment table */}
           <Card>
-            <CardHeader><CardTitle>Detalhamento por Trecho</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Detalhamento por Trecho</CardTitle>
+                <div className="flex gap-2">
+                  {Object.keys(manualOverrides).length > 0 && (
+                    <Button variant="ghost" size="sm" onClick={handleResetAllOverrides}>
+                      <RotateCcw className="h-3.5 w-3.5 mr-1" /> Resetar Todos
+                    </Button>
+                  )}
+                  <Button
+                    variant={editMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setEditMode(!editMode)}
+                  >
+                    <Pencil className="h-3.5 w-3.5 mr-1" />
+                    {editMode ? "Fechar Edicao" : "Editar Executado"}
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
             <CardContent>
               <div className="max-h-[400px] overflow-auto">
                 <Table>
                   <TableHeader><TableRow>
-                    <TableHead>Trecho</TableHead><TableHead>Planejado</TableHead><TableHead>Executado</TableHead><TableHead>Progresso</TableHead><TableHead>Status</TableHead>
+                    <TableHead>Trecho</TableHead>
+                    <TableHead>Planejado</TableHead>
+                    <TableHead>Executado</TableHead>
+                    <TableHead>Fonte</TableHead>
+                    <TableHead>Progresso</TableHead>
+                    <TableHead>Status</TableHead>
+                    {editMode && <TableHead className="w-10"></TableHead>}
                   </TableRow></TableHeader>
                   <TableBody>
                     {segmentAnalysis.map(s => (
                       <TableRow key={s.id}>
                         <TableCell className="font-medium">{s.id}</TableCell>
                         <TableCell>{fmt(s.planned, 2)} m</TableCell>
-                        <TableCell>{fmt(s.executed, 2)} m</TableCell>
+                        <TableCell>
+                          {editMode ? (
+                            <Input
+                              type="text"
+                              className="w-24 h-7 text-xs"
+                              value={editingValues[s.id] ?? fmt(s.executed, 2)}
+                              onChange={e => handleEditValue(s.id, e.target.value)}
+                              onBlur={() => handleCommitEdit(s.id, s.rdoExecuted)}
+                              onKeyDown={e => e.key === "Enter" && handleCommitEdit(s.id, s.rdoExecuted)}
+                            />
+                          ) : (
+                            <span>{fmt(s.executed, 2)} m</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={s.isOverridden ? "default" : "secondary"} className={`text-[10px] ${s.isOverridden ? "bg-amber-500 text-white" : ""}`}>
+                            {s.isOverridden ? "Manual" : "RDO"}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Progress value={Math.min(s.pct, 100)} className="w-20 h-2" />
@@ -271,10 +383,19 @@ export const RDOPlanningModule = ({ pontos, trechos, rdos, scheduleResult }: RDO
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge className={s.status === "Concluído" ? "bg-green-500 text-white" : s.status === "Em Execução" ? "bg-orange-500 text-white" : "bg-red-500 text-white"}>
+                          <Badge className={s.status === "Concluido" ? "bg-green-500 text-white" : s.status === "Em Execucao" ? "bg-orange-500 text-white" : "bg-red-500 text-white"}>
                             {s.status}
                           </Badge>
                         </TableCell>
+                        {editMode && (
+                          <TableCell>
+                            {s.isOverridden && (
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => handleResetOverride(s.id)} title="Resetar para valor RDO">
+                                <RotateCcw className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>

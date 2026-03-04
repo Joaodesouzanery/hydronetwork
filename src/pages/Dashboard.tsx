@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, ClipboardList, FileText, LogOut, Plus, Settings, Bell, Package, TrendingDown, History, Users, Image, Target, TrendingUp, AlertCircle, Warehouse, Wrench, Droplets, BarChart3, Package2, Activity, Archive, Gauge, QrCode, ClipboardX, DollarSign, Box } from "lucide-react";
+import { Building2, ClipboardList, FileText, LogOut, Plus, Settings, Bell, Package, TrendingDown, History, Users, Image, Target, TrendingUp, AlertCircle, Warehouse, Wrench, Droplets, BarChart3, Package2, Activity, Archive, Gauge, QrCode, ClipboardX, DollarSign, Box, Newspaper, Link2, MapPin } from "lucide-react";
+import { loadAllModuleData } from "@/engine/moduleExchange";
 import { toast } from "sonner";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -21,6 +22,9 @@ const Dashboard = () => {
   const [projectStats, setProjectStats] = useState<any>(null);
   const [productionStats, setProductionStats] = useState<any>(null);
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  const [hydroData, setHydroData] = useState<any>(null);
+  const [hubNoticias, setHubNoticias] = useState<any[]>([]);
+  const [hubLicitacoes, setHubLicitacoes] = useState<any[]>([]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -32,7 +36,7 @@ const Dashboard = () => {
       }
       
       setUser(session.user);
-      await Promise.all([loadProjects(), loadProductionStats(), loadRecentActivities()]);
+      await Promise.all([loadProjects(), loadProductionStats(), loadRecentActivities(), loadHydroAndHubData()]);
       setIsLoading(false);
     };
 
@@ -228,6 +232,34 @@ const Dashboard = () => {
       setRecentActivities(activities.slice(0, 10));
     } catch (error) {
       console.error('Error loading recent activities:', error);
+    }
+  };
+
+  const loadHydroAndHubData = async () => {
+    try {
+      // Load HydroNetwork module data from localStorage
+      const moduleData = loadAllModuleData();
+      if (moduleData.trechos.length > 0) {
+        const totalPlanned = moduleData.trechos.reduce((s, t) => s + t.comprimento, 0);
+        const overrides = JSON.parse(localStorage.getItem("hydronetwork_executed_overrides") || "{}");
+        setHydroData({ totalTrechos: moduleData.trechos.length, totalPlanned, hasSchedule: !!moduleData.schedule, overrides });
+      }
+
+      // Load Hub news data
+      const [notRes, licRes] = await Promise.all([
+        fetch("/hub/noticias.json").catch(() => null),
+        fetch("/hub/licitacoes.json").catch(() => null),
+      ]);
+      if (notRes?.ok) {
+        const notData = await notRes.json();
+        setHubNoticias((notData.noticias || []).slice(0, 5));
+      }
+      if (licRes?.ok) {
+        const licData = await licRes.json();
+        setHubLicitacoes((licData.licitacoes || []).slice(0, 3));
+      }
+    } catch (err) {
+      console.error("Error loading hydro/hub data:", err);
     }
   };
 
@@ -429,6 +461,86 @@ const Dashboard = () => {
             </CardHeader>
           </Card>
         </div>
+
+            {/* Integrated Modules Section */}
+            <div className="space-y-3 sm:space-y-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="h-6 sm:h-8 w-1 bg-gradient-to-b from-blue-500 to-purple-500" />
+                <h2 className="text-lg sm:text-xl md:text-2xl font-bold font-mono">Integracao entre Modulos</h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                {/* HydroNetwork Progress */}
+                {hydroData && (
+                  <Card className="border-purple-500/20 cursor-pointer hover:border-purple-500/50 transition-colors" onClick={() => navigate('/hydronetwork')}>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Droplets className="w-4 h-4 text-purple-500" />
+                        HydroNetwork
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-xl font-bold text-purple-600">
+                        {hydroData.totalTrechos} trechos
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {hydroData.totalPlanned.toFixed(1)} m planejados
+                      </p>
+                      {hydroData.hasSchedule && (
+                        <p className="text-[10px] text-green-600 mt-1">Cronograma gerado</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Hub Noticias */}
+                <Card className="border-orange-500/20 cursor-pointer hover:border-orange-500/50 transition-colors" onClick={() => navigate('/hub-noticias')}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Newspaper className="w-4 h-4 text-orange-500" />
+                      Hub de Noticias
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {hubNoticias.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {hubNoticias.slice(0, 3).map((n, i) => (
+                          <p key={i} className="text-xs text-muted-foreground truncate leading-tight">
+                            {n.titulo}
+                          </p>
+                        ))}
+                        <p className="text-[10px] text-orange-500 mt-1">{hubNoticias.length}+ noticias</p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Nenhuma noticia carregada</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Licitacoes */}
+                <Card className="border-blue-500/20 cursor-pointer hover:border-blue-500/50 transition-colors" onClick={() => navigate('/hub-noticias?tab=licitacoes')}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-blue-500" />
+                      Licitacoes
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {hubLicitacoes.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {hubLicitacoes.map((l, i) => (
+                          <p key={i} className="text-xs text-muted-foreground truncate leading-tight">
+                            {l.titulo}
+                          </p>
+                        ))}
+                        <p className="text-[10px] text-blue-500 mt-1">{hubLicitacoes.length}+ licitacoes monitoradas</p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Nenhuma licitacao carregada</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </TabsContent>
 
           {/* Dashboard de Produção */}

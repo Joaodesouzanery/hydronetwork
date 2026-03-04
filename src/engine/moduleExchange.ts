@@ -29,6 +29,7 @@ const KEYS = {
   schedule: "hydronetwork_schedule",
   costBase: "hydronetwork_cost_base",
   snapshot: "hydroImportSnapshot",
+  executedOverrides: "hydronetwork_executed_overrides",
 } as const;
 
 export interface ModuleData {
@@ -41,9 +42,10 @@ export interface ModuleData {
   schedule: ScheduleResult | null;
 }
 
-/** Save data from a module to shared store. */
+/** Save data from a module to shared store and notify other modules. */
 export function saveModuleData(key: keyof typeof KEYS, data: unknown): void {
   localStorage.setItem(KEYS[key], JSON.stringify(data));
+  window.dispatchEvent(new CustomEvent("hydronetwork:data-changed", { detail: { key } }));
 }
 
 /** Load data from shared store for a module. */
