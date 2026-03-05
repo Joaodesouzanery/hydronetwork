@@ -7,6 +7,7 @@ import {
   Construction, Search, Filter, Shield, ArrowRightLeft,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface Noticia {
   titulo: string;
@@ -230,6 +231,7 @@ export default function HubNoticias() {
 
         {/* Content */}
         <div className="p-3 sm:p-6">
+          <PullDataPanel currentModule="hub_noticias" />
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">

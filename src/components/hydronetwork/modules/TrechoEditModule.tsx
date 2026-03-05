@@ -68,6 +68,8 @@ import {
 import type { CostRowExport, CustoImportItemExport } from "@/engine/gisExport";
 import { saveModuleData } from "@/engine/moduleExchange";
 import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 import { CustomCostTrechoModule } from "./CustomCostTrechoModule";
 
 // ── SINAPI reference costs (from shared sinapi engine) ──
@@ -1492,6 +1494,123 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     toast.success("Planilha exportada.");
   }, []);
 
+  const exportPDF = useCallback(() => {
+    const currentQuantRows = quantRowsRef.current;
+    const currentCostRows = costRowsRef.current;
+    const currentScheduleRows = scheduleRowsRef.current;
+
+    if (currentQuantRows.length === 0) { toast.error("Sem dados para exportar."); return; }
+
+    const doc = new jsPDF({ orientation: "landscape" });
+    const fmt = (n: number, d = 2) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+    // ── Page 1: Cover + Summary ──
+    doc.setFontSize(18);
+    doc.text("Relatório Completo — Edição por Trecho", 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}`, 14, 28);
+
+    const totalComp = currentQuantRows.reduce((s, r) => s + r.comp, 0);
+    const totalEscavacao = currentQuantRows.reduce((s, r) => s + r.escavacao, 0);
+    const totalReaterro = currentQuantRows.reduce((s, r) => s + r.reaterro, 0);
+    const totalPavimento = currentQuantRows.reduce((s, r) => s + r.pavimento, 0);
+    const totalCusto = currentCostRows.reduce((s, r) => s + r.total, 0);
+    const totalSubtotal = currentCostRows.reduce((s, r) => s + r.subtotal, 0);
+
+    doc.setFontSize(13);
+    doc.text("Resumo Geral", 14, 40);
+    (doc as any).autoTable({
+      startY: 45,
+      head: [["Indicador", "Valor"]],
+      body: [
+        ["Trechos", String(currentQuantRows.length)],
+        ["Extensão Total", `${fmt(totalComp)} m`],
+        ["Escavação Total", `${fmt(totalEscavacao)} m³`],
+        ["Reaterro Total", `${fmt(totalReaterro)} m³`],
+        ["Pavimento Total", `${fmt(totalPavimento)} m²`],
+        ["Subtotal (s/ BDI)", `R$ ${fmt(totalSubtotal)}`],
+        ["Total com BDI", `R$ ${fmt(totalCusto)}`],
+      ],
+      theme: "grid",
+      headStyles: { fillColor: [41, 128, 185] },
+    });
+
+    // ── Page 2: Quantitativos ──
+    doc.addPage("landscape");
+    doc.setFontSize(13);
+    doc.text("Quantitativos por Trecho", 14, 15);
+    (doc as any).autoTable({
+      startY: 20,
+      head: [["Trecho", "Comp (m)", "DN (mm)", "Prof (m)", "Escavação (m³)", "Reaterro (m³)", "Bota-fora (m³)", "Pavimento (m²)", "Escoramento (m²)"]],
+      body: currentQuantRows.map(r => [
+        r.nomeTrecho, fmt(r.comp), String(r.dn), fmt(r.prof),
+        fmt(r.escavacao), fmt(r.reaterro), fmt(r.botafora),
+        fmt(r.pavimento), fmt(r.escoramento),
+      ]),
+      theme: "striped",
+      headStyles: { fillColor: [41, 128, 185], fontSize: 7 },
+      styles: { fontSize: 7 },
+    });
+
+    // ── Page 3: Custos ──
+    doc.addPage("landscape");
+    doc.setFontSize(13);
+    doc.text("Valores e Custos por Trecho", 14, 15);
+    (doc as any).autoTable({
+      startY: 20,
+      head: [["Trecho", "Comp (m)", "Escav. (R$/m³)", "Tubo (R$/m)", "Reat. (R$/m³)", "PV (R$/un)", "BDI (%)", "Fonte", "Subtotal", "Total"]],
+      body: currentCostRows.map(r => [
+        r.nomeTrecho, fmt(r.comp), fmt(r.custoEscavacao), fmt(r.custoTubo),
+        fmt(r.custoReaterro), fmt(r.custoPV), fmt(r.bdiPct, 1),
+        r.fonte, `R$ ${fmt(r.subtotal)}`, `R$ ${fmt(r.total)}`,
+      ]),
+      theme: "striped",
+      headStyles: { fillColor: [39, 174, 96], fontSize: 7 },
+      styles: { fontSize: 7 },
+    });
+
+    // ── Page 4: Cronograma ──
+    if (currentScheduleRows.length > 0) {
+      doc.addPage("landscape");
+      doc.setFontSize(13);
+      doc.text("Cronograma por Trecho", 14, 15);
+      (doc as any).autoTable({
+        startY: 20,
+        head: [["Trecho", "Comp (m)", "Equipe", "Metros/dia", "Dias Est.", "Data Início", "Data Fim", "Prioridade"]],
+        body: currentScheduleRows.map(r => [
+          r.nomeTrecho, fmt(r.comp), r.equipe, fmt(r.metrosDia, 1),
+          String(r.diasEstimados), r.dataInicio, r.dataFim, r.prioridade,
+        ]),
+        theme: "striped",
+        headStyles: { fillColor: [142, 68, 173], fontSize: 7 },
+        styles: { fontSize: 7 },
+      });
+    }
+
+    // ── Page 5: Medição (if available) ──
+    const medTrechos = loadMedicaoTrechos();
+    if (medTrechos && medTrechos.length > 0) {
+      doc.addPage("landscape");
+      doc.setFontSize(13);
+      doc.text("Medição por Trecho", 14, 15);
+      (doc as any).autoTable({
+        startY: 20,
+        head: [["Trecho", "Extensão (m)", "Executado (m)", "% Exec.", "Status"]],
+        body: medTrechos.map((t: any) => {
+          const pct = t.extensao > 0 ? (t.executado / t.extensao) * 100 : 0;
+          const status = pct >= 100 ? "Concluído" : pct > 0 ? "Em andamento" : "Pendente";
+          return [t.trecho || t.id, fmt(t.extensao), fmt(t.executado), `${fmt(pct, 1)}%`, status];
+        }),
+        theme: "striped",
+        headStyles: { fillColor: [230, 126, 34], fontSize: 7 },
+        styles: { fontSize: 7 },
+      });
+    }
+
+    doc.save("edicao_por_trecho_completo.pdf");
+    toast.success("PDF completo exportado com sucesso.");
+  }, []);
+
   // ── Summaries ──
 
   const quantSummary = useMemo(() => ({
@@ -1578,6 +1697,9 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
             </Button>
             <Button size="sm" variant="outline" onClick={exportExcel}>
               <Download className="h-4 w-4 mr-1" /> XLSX
+            </Button>
+            <Button size="sm" variant="outline" onClick={exportPDF}>
+              <Download className="h-4 w-4 mr-1" /> PDF
             </Button>
             <Button size="sm" variant="outline" onClick={exportGeoJSONHandler}>
               <MapPin className="h-4 w-4 mr-1" /> GeoJSON
