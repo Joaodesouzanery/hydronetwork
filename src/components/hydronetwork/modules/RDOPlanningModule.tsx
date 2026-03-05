@@ -232,16 +232,38 @@ export const RDOPlanningModule = ({ pontos, trechos, rdos, scheduleResult }: RDO
   const estimatedRemainingDays = avgDailyProduction > 0 ? (totalPlanned - totalExecuted) / avgDailyProduction : Infinity;
   const delayDays = plannedDays > 0 ? Math.max(0, (rdoDays + estimatedRemainingDays) - plannedDays) : 0;
 
-  // Build comparison data
+  // Build comparison data - using real cumulative execution from RDOs
   const comparisonData = useMemo(() => {
-    if (!scheduleResult) return [];
-    const days = scheduleResult.totalDays;
-    return Array.from({ length: Math.max(days, rdoDays) }, (_, i) => ({
-      dia: `D${i + 1}`,
-      planejado: Math.min(totalPlanned, (totalPlanned / days) * (i + 1)),
-      executado: i < rdoDays ? Math.min(totalExecuted, (totalExecuted / rdoDays) * (i + 1)) : null,
-    }));
-  }, [scheduleResult, rdos, totalPlanned, totalExecuted, rdoDays]);
+    if (!scheduleResult && rdos.length === 0) return [];
+    const days = scheduleResult?.totalDays || rdoDays;
+    if (days === 0) return [];
+
+    // Build real cumulative execution from RDO dates
+    const rdoByDay = new Map<number, number>();
+    const sortedRdos = [...rdos].sort((a, b) => a.date.localeCompare(b.date));
+    if (sortedRdos.length > 0) {
+      const firstDate = new Date(sortedRdos[0].date);
+      for (const rdo of sortedRdos) {
+        const rdoDate = new Date(rdo.date);
+        const dayIndex = Math.floor((rdoDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+        const execToday = rdo.segments.reduce((s, seg) => s + seg.executedToday, 0);
+        rdoByDay.set(dayIndex, (rdoByDay.get(dayIndex) || 0) + execToday);
+      }
+    }
+
+    const maxDay = Math.max(days, ...(rdoByDay.size > 0 ? Array.from(rdoByDay.keys()) : [0]));
+    let cumExecuted = 0;
+    return Array.from({ length: maxDay + 1 }, (_, i) => {
+      if (rdoByDay.has(i)) {
+        cumExecuted += rdoByDay.get(i)!;
+      }
+      return {
+        dia: `D${i + 1}`,
+        planejado: days > 0 ? Math.min(totalPlanned, (totalPlanned / days) * (i + 1)) : null,
+        executado: i <= Math.max(...(rdoByDay.size > 0 ? Array.from(rdoByDay.keys()) : [-1])) ? cumExecuted : null,
+      };
+    });
+  }, [scheduleResult, rdos, totalPlanned, rdoDays]);
 
   // Segment-level analysis
   const segmentAnalysis = useMemo(() => {

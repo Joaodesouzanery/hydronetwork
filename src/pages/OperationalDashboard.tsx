@@ -3,8 +3,8 @@ import { supabase } from "@/lib/supabase";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
 import { PullDataPanel } from "@/components/shared/PullDataPanel";
+import {
   TrendingUp,
   Clock,
   AlertCircle,

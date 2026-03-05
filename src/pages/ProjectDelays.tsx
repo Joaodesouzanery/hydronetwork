@@ -15,8 +15,8 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { calculateProjectDelays, summarizeDelays, getDelayStatusColor, type ProjectDelay } from "@/utils/projectDelays";
 import { DELAY_THRESHOLDS, isValidEmail } from "@/config/defaults";
-import {
 import { PullDataPanel } from "@/components/shared/PullDataPanel";
+import {
   Clock, AlertTriangle, CheckCircle, XCircle, Building2,
   Bell, Mail, TrendingDown, BarChart3, Calendar, ArrowRight
 } from "lucide-react";

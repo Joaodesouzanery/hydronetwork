@@ -88,9 +88,9 @@ const sections: SidebarSection[] = [
     items: [
       { title: "RDO Hydro", url: "/hydronetwork/rdo", icon: ClipboardList },
       { title: "RDO × Planejamento", url: "/hydronetwork/rdo-planejamento", icon: BarChart3 },
+      { title: "Histórico RDO Hydro", url: "/hydronetwork/rdo-historico", icon: History },
+      { title: "Fotos de Validação", url: "/hydronetwork/fotos-validacao", icon: Image },
       { title: "Novo RDO", url: "/rdo-new", icon: Plus },
-      { title: "Histórico RDO", url: "/rdo-history", icon: History },
-      { title: "Fotos de Validação", url: "/rdo-photos", icon: Image },
       { title: "Controle de Produção", url: "/production-control", icon: ClipboardList },
       { title: "Relatório de Ligações", url: "/connection-reports", icon: FileText },
       { title: "Ocorrências", url: "/occurrences", icon: AlertCircle },

@@ -250,8 +250,6 @@ export default function Admin() {
           </CardContent>
         </Card>
       </div>
-
-    <PullDataPanel currentModule="admin" />
     );
   }
 

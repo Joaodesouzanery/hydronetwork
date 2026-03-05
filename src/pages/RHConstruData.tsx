@@ -8,8 +8,8 @@ import { Funcionarios } from "@/components/rh/Funcionarios";
 import { Unidades } from "@/components/rh/Unidades";
 import { DashboardPrimeCost } from "@/components/rh/DashboardPrimeCost";
 import { FeriodosFaltas } from "@/components/rh/FeriodosFaltas";
-import { 
 import { PullDataPanel } from "@/components/shared/PullDataPanel";
+import {
   LayoutDashboard, 
   Calendar, 
   Users, 

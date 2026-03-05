@@ -9,8 +9,8 @@ import { Plus, Users, Clock, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { AddLaborTrackingDialog } from "@/components/labor/AddLaborTrackingDialog";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
-import {
 import { PullDataPanel } from "@/components/shared/PullDataPanel";
+import {
   Table,
   TableBody,
   TableCell,

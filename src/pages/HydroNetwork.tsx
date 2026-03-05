@@ -9,8 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import {
 import { PullDataPanel } from "@/components/shared/PullDataPanel";
+import {
   Download, MapPin, Droplets, Calculator,
   AlertTriangle, Settings2, X, Map
 } from "lucide-react";
@@ -56,6 +56,8 @@ const CAESBModule = lazy(() => import("@/components/hydronetwork/modules/CAESBMo
 const CAESBPreProjectModule = lazy(() => import("@/components/hydronetwork/modules/CAESBPreProjectModule").then(m => ({ default: m.CAESBPreProjectModule })));
 const TrechoEditModule = lazy(() => import("@/components/hydronetwork/modules/TrechoEditModule").then(m => ({ default: m.TrechoEditModule })));
 const EconomyPanelModule = lazy(() => import("@/components/hydronetwork/modules/EconomyPanelModule").then(m => ({ default: m.EconomyPanelModule })));
+const RDOHydroHistoryModule = lazy(() => import("@/components/hydronetwork/modules/RDOHydroHistoryModule").then(m => ({ default: m.RDOHydroHistoryModule })));
+const FotosValidacaoModule = lazy(() => import("@/components/hydronetwork/modules/FotosValidacaoModule").then(m => ({ default: m.FotosValidacaoModule })));
 import { QEsgWaterPanel } from "@/components/hydronetwork/panels/QEsgWaterPanel";
 import { getRasterGrid } from "@/engine/rasterStore";
 import { extractContours, type ContourExtractionResult } from "@/engine/contourExtractor";
@@ -309,6 +311,10 @@ const HydroNetwork = () => {
         return <RDOHydroModule pontos={pontos} trechos={trechos} rdos={rdos} setRdos={setRdos} onPontosChange={setPontos} onTrechosChange={setTrechos} />;
       case "rdo-planejamento":
         return <RDOPlanningModule pontos={pontos} trechos={trechos} rdos={rdos} scheduleResult={scheduleResult} />;
+      case "rdo-historico":
+        return <RDOHydroHistoryModule rdos={rdos} />;
+      case "fotos-validacao":
+        return <FotosValidacaoModule rdos={rdos} />;
       case "lps":
         return <LPSModule pontos={pontos} trechos={trechos} />;
       case "qesg-qwater":
@@ -842,7 +848,8 @@ const HydroNetwork = () => {
     drenagem: "Drenagem Pluvial", quantitativos: "Quantitativos", orcamento: "Orcamento e Custos",
     bdi: "BDI - Beneficios e Despesas Indiretas", planejamento: "Planejamento", epanet: "EPANET", "epanet-pro": "EPANET PRO",
     swmm: "SWMM", openproject: "OpenProject", projectlibre: "ProjectLibre", qgis: "QGIS",
-    revisao: "Revisao por Pares", rdo: "RDO", "rdo-planejamento": "RDO Ã-- Planejamento",
+    revisao: "Revisao por Pares", rdo: "RDO", "rdo-planejamento": "RDO x Planejamento",
+    "rdo-historico": "Historico de RDO Hydro", "fotos-validacao": "Fotos de Validacao",
     perfil: "Perfil Longitudinal", mapa: "Mapa Interativo", exportacao: "Exportacao GIS",
     lps: "LPS — Last Planner System",
     "qesg-qwater": "QEsg / QWater — Dimensionamento Hidráulico",

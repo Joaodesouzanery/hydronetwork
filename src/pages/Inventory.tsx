@@ -11,8 +11,8 @@ import { toast } from "sonner";
 import { AddInventoryItemDialog } from "@/components/inventory/AddInventoryItemDialog";
 import { InventoryMovementDialog } from "@/components/inventory/InventoryMovementDialog";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
-import {
 import { PullDataPanel } from "@/components/shared/PullDataPanel";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
