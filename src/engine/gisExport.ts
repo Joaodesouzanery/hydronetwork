@@ -23,6 +23,11 @@ export interface CostRowExport {
   custoEscavacao: number;
   custoTubo: number;
   custoReaterro: number;
+  custoBerco?: number;
+  custoEnvoltoria?: number;
+  custoEscoramento?: number;
+  custoBotafora?: number;
+  custoPavimentacao?: number;
   custoPV: number;
   bdiPct: number;
   fonte: string;

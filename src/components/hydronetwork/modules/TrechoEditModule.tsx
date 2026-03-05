@@ -124,6 +124,11 @@ interface EditableCostRow {
   custoEscavacao: number;
   custoTubo: number;
   custoReaterro: number;
+  custoBerco: number;
+  custoEnvoltoria: number;
+  custoEscoramento: number;
+  custoBotafora: number;
+  custoPavimentacao: number;
   custoPV: number;
   bdiPct: number;
   fonte: "SINAPI" | "Manual";
@@ -261,6 +266,63 @@ function fmtC(n: number): string {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+/** Compute full cost subtotal from a cost row + quant row. */
+function computeSubtotal(c: EditableCostRow, q: { escavacao: number; comp: number; reaterro: number; botafora: number; pavimento: number; escoramento: number }): number {
+  return round2(
+    q.escavacao * c.custoEscavacao +
+    q.comp * c.custoTubo +
+    q.reaterro * c.custoReaterro +
+    q.botafora * c.custoBotafora +
+    q.pavimento * c.custoPavimentacao +
+    q.escoramento * c.custoEscoramento +
+    c.custoBerco + // berco is per-trecho (already volume * unit cost)
+    c.custoEnvoltoria + // envoltoria is per-trecho
+    c.custoPV
+  );
+}
+
+/** Build a full cost row for a trecho given its quantities. */
+function buildCostRow(
+  id: string, trechoKey: string, nomeTrecho: string,
+  comp: number, dn: number, prof: number,
+  quant: { escavacao: number; reaterro: number; botafora: number; pavimento: number; escoramento: number },
+  bdiPct: number, includePV: boolean = true
+): EditableCostRow {
+  const custoEsc = getEscavacaoCusto(prof);
+  const custoTubo = getTuboCusto(dn);
+  const custoReat = SINAPI_UNIT_COSTS.reaterro;
+  const custoPV = includePV ? getPVCusto(prof) : 0;
+  const dnM = dn / 1000;
+  const lv = Math.max(0.6, dnM + 0.30);
+  const volBerco = comp * lv * 0.10;
+  const volEnv = comp * lv * 0.30;
+  const custoBerco = round2(volBerco * SINAPI_UNIT_COSTS.berco);
+  const custoEnvoltoria = round2(volEnv * SINAPI_UNIT_COSTS.envoltoria);
+  const custoEscoramento = SINAPI_COSTS.escoramento.madeira.custo;
+  const custoBotafora = SINAPI_COSTS.botafora.custo;
+  const custoPavimentacao = SINAPI_COSTS.pavimentacao.cbuq.custo;
+
+  const row: EditableCostRow = {
+    id, trechoKey, nomeTrecho, comp, dn,
+    custoEscavacao: custoEsc,
+    custoTubo,
+    custoReaterro: custoReat,
+    custoBerco,
+    custoEnvoltoria,
+    custoEscoramento,
+    custoBotafora,
+    custoPavimentacao,
+    custoPV,
+    bdiPct,
+    fonte: "SINAPI",
+    subtotal: 0,
+    total: 0,
+  };
+  row.subtotal = computeSubtotal(row, { escavacao: quant.escavacao, comp, reaterro: quant.reaterro, botafora: quant.botafora, pavimento: quant.pavimento, escoramento: quant.escoramento });
+  row.total = round2(row.subtotal * (1 + bdiPct / 100));
+  return row;
+}
+
 function addDays(dateStr: string, days: number): string {
   if (!dateStr) return new Date().toISOString().slice(0, 10);
   const d = new Date(dateStr);
@@ -344,6 +406,11 @@ const MemoCostRow = memo(function MemoCostRow({ row, onFieldChange }: CostRowPro
       <TableCell className="py-1"><EditCell value={row.custoEscavacao} onChange={v => onFieldChange(row.id, "custoEscavacao", v as number)} /></TableCell>
       <TableCell className="py-1"><EditCell value={row.custoTubo} onChange={v => onFieldChange(row.id, "custoTubo", v as number)} /></TableCell>
       <TableCell className="py-1"><EditCell value={row.custoReaterro} onChange={v => onFieldChange(row.id, "custoReaterro", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.custoBerco} onChange={v => onFieldChange(row.id, "custoBerco", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.custoEnvoltoria} onChange={v => onFieldChange(row.id, "custoEnvoltoria", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.custoEscoramento} onChange={v => onFieldChange(row.id, "custoEscoramento", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.custoBotafora} onChange={v => onFieldChange(row.id, "custoBotafora", v as number)} /></TableCell>
+      <TableCell className="py-1"><EditCell value={row.custoPavimentacao} onChange={v => onFieldChange(row.id, "custoPavimentacao", v as number)} /></TableCell>
       <TableCell className="py-1"><EditCell value={row.custoPV} onChange={v => onFieldChange(row.id, "custoPV", v as number)} /></TableCell>
       <TableCell className="py-1"><EditCell value={row.bdiPct} onChange={v => onFieldChange(row.id, "bdiPct", v as number)} /></TableCell>
       <TableCell className="py-1">
@@ -482,29 +549,9 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     });
     setQuantRows(qRows);
 
-    const cRows: EditableCostRow[] = qRows.map(q => {
-      const custoEsc = getEscavacaoCusto(q.prof);
-      const custoTubo = getTuboCusto(q.dn);
-      const custoReat = SINAPI_UNIT_COSTS.reaterro;
-      const custoPV = getPVCusto(q.prof);
-      const subtotal = q.escavacao * custoEsc + q.comp * custoTubo + q.reaterro * custoReat + custoPV;
-      const bdi = 25;
-      return {
-        id: q.id,
-        trechoKey: q.trechoKey,
-        nomeTrecho: q.nomeTrecho,
-        comp: q.comp,
-        dn: q.dn,
-        custoEscavacao: custoEsc,
-        custoTubo,
-        custoReaterro: custoReat,
-        custoPV,
-        bdiPct: bdi,
-        fonte: "SINAPI" as const,
-        subtotal: round2(subtotal),
-        total: round2(subtotal * (1 + bdi / 100)),
-      };
-    });
+    const cRows: EditableCostRow[] = qRows.map(q =>
+      buildCostRow(q.id, q.trechoKey, q.nomeTrecho, q.comp, q.dn, q.prof, q, 25)
+    );
     setCostRows(cRows);
 
     const today = new Date().toISOString().slice(0, 10);
@@ -556,15 +603,9 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     setCostRows(prev => prev.map(r => {
       if (r.id !== id) return r;
       const updated = { ...r, [field]: value, fonte: "Manual" as const };
-      // Use ref to get current quantRows (avoids stale state)
       const qRow = quantRowsRef.current.find(q => q.id === id);
       if (qRow) {
-        updated.subtotal = round2(
-          qRow.escavacao * updated.custoEscavacao +
-          qRow.comp * updated.custoTubo +
-          qRow.reaterro * updated.custoReaterro +
-          updated.custoPV
-        );
+        updated.subtotal = computeSubtotal(updated, qRow);
         updated.total = round2(updated.subtotal * (1 + updated.bdiPct / 100));
       }
       return updated;
@@ -660,27 +701,12 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
           originalTrecho: st,
         });
 
-        const custoEsc = getEscavacaoCusto(prof);
-        const custoTubo = getTuboCusto(st.diametroMm);
-        const custoReat = SINAPI_UNIT_COSTS.reaterro;
-        const custoPV = idx === 0 ? getPVCusto(prof) : 0;
-        const subtotal = quant.escavacao * custoEsc + st.comprimento * custoTubo + quant.reaterro * custoReat + custoPV;
         const bdiPct = currentCostRows.find(c => c.id === r.id)?.bdiPct ?? 25;
-        newCostRows.push({
-          id: subId,
-          trechoKey: `${st.idInicio}-${st.idFim}`,
-          nomeTrecho: st.nomeTrecho || `${st.idInicio}→${st.idFim}`,
-          comp: round2(st.comprimento),
-          dn: st.diametroMm,
-          custoEscavacao: custoEsc,
-          custoTubo,
-          custoReaterro: custoReat,
-          custoPV,
-          bdiPct,
-          fonte: "SINAPI",
-          subtotal: round2(subtotal),
-          total: round2(subtotal * (1 + bdiPct / 100)),
-        });
+        newCostRows.push(buildCostRow(
+          subId, `${st.idInicio}-${st.idFim}`,
+          st.nomeTrecho || `${st.idInicio}→${st.idFim}`,
+          round2(st.comprimento), st.diametroMm, prof, quant, bdiPct, idx === 0
+        ));
 
         const metrosDia = currentScheduleRows.find(s => s.id === r.id)?.metrosDia ?? 12;
         const dias = Math.ceil(st.comprimento / metrosDia);
@@ -740,29 +766,13 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     });
     setQuantRows(newQuantRows);
 
-    const custoEsc = getEscavacaoCusto(prof);
-    const custoTubo = getTuboCusto(original.diametroMm);
-    const custoReat = SINAPI_UNIT_COSTS.reaterro;
-    const custoPV = getPVCusto(prof);
-    const subtotal = quant.escavacao * custoEsc + original.comprimento * custoTubo + quant.reaterro * custoReat + custoPV;
-    const bdiPct = 25;
     const newCostRows = currentCostRows.filter(r => !subIds.has(r.id));
     const costInsertIdx = currentCostRows.findIndex(r => subIds.has(r.id));
-    newCostRows.splice(costInsertIdx, 0, {
-      id: reunifiedId,
-      trechoKey: `${original.idInicio}-${original.idFim}`,
-      nomeTrecho: original.nomeTrecho || `${original.idInicio}→${original.idFim}`,
-      comp: round2(original.comprimento),
-      dn: original.diametroMm,
-      custoEscavacao: custoEsc,
-      custoTubo,
-      custoReaterro: custoReat,
-      custoPV,
-      bdiPct,
-      fonte: "SINAPI",
-      subtotal: round2(subtotal),
-      total: round2(subtotal * (1 + bdiPct / 100)),
-    });
+    newCostRows.splice(costInsertIdx, 0, buildCostRow(
+      reunifiedId, `${original.idInicio}-${original.idFim}`,
+      original.nomeTrecho || `${original.idInicio}→${original.idFim}`,
+      round2(original.comprimento), original.diametroMm, prof, quant, 25
+    ));
     setCostRows(newCostRows);
 
     const metrosDia = 12;
@@ -947,7 +957,12 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
         if (fonte === "SINAPI" || fonte === "Manual") newRow.fonte = fonte;
 
         // Recalculate subtotal and total
-        newRow.subtotal = newRow.custoEscavacao + newRow.custoTubo + newRow.custoReaterro + newRow.custoPV;
+        const qRow = quantRowsRef.current.find(q => q.id === newRow.id);
+        if (qRow) {
+          newRow.subtotal = computeSubtotal(newRow, qRow);
+        } else {
+          newRow.subtotal = newRow.custoEscavacao + newRow.custoTubo + newRow.custoReaterro + newRow.custoBerco + newRow.custoEnvoltoria + newRow.custoBotafora + newRow.custoPavimentacao + newRow.custoEscoramento + newRow.custoPV;
+        }
         newRow.total = newRow.subtotal * (1 + newRow.bdiPct / 100);
         return newRow;
       }));
@@ -1411,6 +1426,11 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
       custoEscavacao: r.custoEscavacao,
       custoTubo: r.custoTubo,
       custoReaterro: r.custoReaterro,
+      custoBerco: r.custoBerco,
+      custoEnvoltoria: r.custoEnvoltoria,
+      custoEscoramento: r.custoEscoramento,
+      custoBotafora: r.custoBotafora,
+      custoPavimentacao: r.custoPavimentacao,
       custoPV: r.custoPV,
       bdiPct: r.bdiPct,
       fonte: r.fonte,
@@ -1478,7 +1498,10 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     const cData = currentCostRows.map(r => ({
       ID: r.id, Trecho: r.nomeTrecho, "Comp (m)": r.comp,
       "Escavação (R$/m³)": r.custoEscavacao, "Tubo (R$/m)": r.custoTubo,
-      "Reaterro (R$/m³)": r.custoReaterro, "PV (R$/un)": r.custoPV,
+      "Reaterro (R$/m³)": r.custoReaterro, "Berço (R$)": r.custoBerco,
+      "Envoltória (R$)": r.custoEnvoltoria, "Escoramento (R$/m²)": r.custoEscoramento,
+      "Bota-fora (R$/m³)": r.custoBotafora, "Pavimentação (R$/m²)": r.custoPavimentacao,
+      "PV (R$/un)": r.custoPV,
       "BDI (%)": r.bdiPct, Fonte: r.fonte, "Subtotal (R$)": r.subtotal, "Total (R$)": r.total,
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cData), "Valores e Custos");
@@ -1558,10 +1581,12 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     doc.text("Valores e Custos por Trecho", 14, 15);
     (doc as any).autoTable({
       startY: 20,
-      head: [["Trecho", "Comp (m)", "Escav. (R$/m³)", "Tubo (R$/m)", "Reat. (R$/m³)", "PV (R$/un)", "BDI (%)", "Fonte", "Subtotal", "Total"]],
+      head: [["Trecho", "Comp", "Escav.", "Tubo", "Reat.", "Berço", "Envolt.", "Escor.", "B.fora", "Pavim.", "PV", "BDI%", "Fonte", "Subtotal", "Total"]],
       body: currentCostRows.map(r => [
         r.nomeTrecho, fmt(r.comp), fmt(r.custoEscavacao), fmt(r.custoTubo),
-        fmt(r.custoReaterro), fmt(r.custoPV), fmt(r.bdiPct, 1),
+        fmt(r.custoReaterro), fmt(r.custoBerco), fmt(r.custoEnvoltoria),
+        fmt(r.custoEscoramento), fmt(r.custoBotafora), fmt(r.custoPavimentacao),
+        fmt(r.custoPV), fmt(r.bdiPct, 1),
         r.fonte, `R$ ${fmt(r.subtotal)}`, `R$ ${fmt(r.total)}`,
       ]),
       theme: "striped",
@@ -1907,7 +1932,12 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                         <TableHead className="text-xs">Comp (m)</TableHead>
                         <TableHead className="text-xs">Escav. (R$/m³)</TableHead>
                         <TableHead className="text-xs">Tubo (R$/m)</TableHead>
-                        <TableHead className="text-xs">Reaterro (R$/m³)</TableHead>
+                        <TableHead className="text-xs">Reat. (R$/m³)</TableHead>
+                        <TableHead className="text-xs">Berço (R$)</TableHead>
+                        <TableHead className="text-xs">Envolt. (R$)</TableHead>
+                        <TableHead className="text-xs">Escor. (R$/m²)</TableHead>
+                        <TableHead className="text-xs">Bota-fora (R$/m³)</TableHead>
+                        <TableHead className="text-xs">Pavim. (R$/m²)</TableHead>
                         <TableHead className="text-xs">PV (R$/un)</TableHead>
                         <TableHead className="text-xs">BDI (%)</TableHead>
                         <TableHead className="text-xs">Fonte</TableHead>
@@ -1917,7 +1947,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                     </TableHeader>
                     <TableBody>
                       {costPaddingTop > 0 && (
-                        <tr><td colSpan={10} style={{ height: costPaddingTop, padding: 0, border: "none" }} /></tr>
+                        <tr><td colSpan={15} style={{ height: costPaddingTop, padding: 0, border: "none" }} /></tr>
                       )}
                       {costVirtualItems.map(vi => (
                         <MemoCostRow
@@ -1927,7 +1957,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                         />
                       ))}
                       {costPaddingBottom > 0 && (
-                        <tr><td colSpan={10} style={{ height: costPaddingBottom, padding: 0, border: "none" }} /></tr>
+                        <tr><td colSpan={15} style={{ height: costPaddingBottom, padding: 0, border: "none" }} /></tr>
                       )}
                     </TableBody>
                   </Table>

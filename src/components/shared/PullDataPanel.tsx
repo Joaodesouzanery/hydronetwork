@@ -1,11 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
-  Download, ChevronDown, ChevronUp, Check, X, Loader2,
+  Download, ChevronDown, ChevronUp, Check, Loader2, Search,
   Droplets, ClipboardList, Building2, FileText, BarChart3,
   DollarSign, Calendar, Map, Shield, Bell, Layers, Activity,
   Package, Users, Wrench, FileSpreadsheet, Newspaper,
   CheckSquare, Warehouse, HardHat, TrendingUp, Gauge,
-  QrCode, Hammer, MessageSquare, UserCheck, LayoutDashboard
+  Hammer, MessageSquare, UserCheck, Home, Palette,
+  Upload, Waves, CloudRain, Calculator, Beaker, Edit3,
+  Image, Plus, History, AlertCircle, Clock, ClipboardCheck,
+  FileCheck2, GraduationCap, HelpCircle, Archive, Settings,
+  Smile, HeadphonesIcon, Database
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
@@ -22,79 +26,68 @@ interface ModuleSource {
   label: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
+  section: string;
   table?: string;
   fetchFn?: () => Promise<any[]>;
 }
 
 const MODULE_SOURCES: ModuleSource[] = [
+  // ── Menu Principal ──
+  { key: "projetos", label: "Projetos", description: "Obras e projetos cadastrados", icon: Building2, section: "Menu Principal", table: "obras" },
+  { key: "dashboard_custom", label: "Dashboard Personalizado", description: "Dashboards criados pelo usuario", icon: Palette, section: "Menu Principal", table: "custom_dashboards" },
+
+  // ── Monitoramento ──
+  { key: "alertas", label: "Alertas", description: "Alertas e notificacoes ativas", icon: Bell, section: "Monitoramento", table: "alertas_config" },
+  { key: "atrasos", label: "Atrasos de Projeto", description: "Analise de atrasos e desvios", icon: Clock, section: "Monitoramento", table: "project_delays" },
+  { key: "lps_lean", label: "LPS / Lean", description: "Restricoes e planejamento Lean", icon: ClipboardCheck, section: "Monitoramento", table: "lean_constraints" },
+  { key: "aprovacao", label: "Controle de Aprovacao", description: "Fluxo de aprovacao de documentos", icon: FileCheck2, section: "Monitoramento", table: "pending_actions" },
+  { key: "economia", label: "Economia Comprovada", description: "Economia gerada pela plataforma", icon: DollarSign, section: "Monitoramento", table: "economy_records" },
+  { key: "aprovacoes_projetos", label: "Aprovacoes de Projetos", description: "Status de aprovacao de projetos", icon: Shield, section: "Monitoramento", table: "project_approvals" },
+  { key: "projetos_basicos", label: "Projetos Basicos", description: "Pre-projetos e projetos basicos", icon: ClipboardCheck, section: "Monitoramento", table: "basic_projects" },
+
+  // ── HydroNetwork ──
+  { key: "topografia", label: "Topografia", description: "Pontos topograficos e coordenadas", icon: Upload, section: "HydroNetwork", table: "topographic_points" },
+  { key: "esgoto", label: "Esgoto", description: "Rede de esgotamento sanitario", icon: Waves, section: "HydroNetwork", table: "sewer_networks" },
+  { key: "agua", label: "Agua", description: "Rede de abastecimento de agua", icon: Droplets, section: "HydroNetwork", table: "water_networks" },
+  { key: "drenagem", label: "Drenagem", description: "Rede de drenagem pluvial", icon: CloudRain, section: "HydroNetwork", table: "drainage_networks" },
+  { key: "quantitativos", label: "Quantitativos", description: "Quantitativos calculados da rede", icon: FileSpreadsheet, section: "HydroNetwork", table: "quantity_rows" },
+  { key: "edicao_trecho", label: "Edicao por Trechos", description: "Dados editados de trechos", icon: Edit3, section: "HydroNetwork", table: "trecho_edits" },
+  { key: "orcamento", label: "Orcamento", description: "Orcamento detalhado por servico", icon: Calculator, section: "HydroNetwork", table: "budgets" },
+  { key: "bdi", label: "BDI", description: "Bonificacao e despesas indiretas", icon: DollarSign, section: "HydroNetwork", table: "bdi_configs" },
+  { key: "planejamento", label: "Planejamento", description: "Cronograma e planejamento de obras", icon: Calendar, section: "HydroNetwork", table: "planning_schedules" },
+  { key: "epanet", label: "EPANET", description: "Simulacao hidraulica de agua", icon: Beaker, section: "HydroNetwork", table: "epanet_results" },
+  { key: "swmm", label: "SWMM", description: "Simulacao hidrologica de drenagem", icon: Waves, section: "HydroNetwork", table: "swmm_results" },
+  { key: "openproject", label: "OpenProject", description: "Integracao com OpenProject", icon: Layers, section: "HydroNetwork", table: "openproject_tasks" },
+  { key: "qgis", label: "QGIS", description: "Dados geoespaciais e camadas GIS", icon: Map, section: "HydroNetwork", table: "gis_layers" },
+  { key: "revisao_pares", label: "Revisao por Pares", description: "Revisoes tecnicas e pareceres", icon: Shield, section: "HydroNetwork", table: "peer_reviews" },
+  { key: "perfil_longitudinal", label: "Perfil Longitudinal", description: "Perfis de rede calculados", icon: Activity, section: "HydroNetwork", table: "longitudinal_profiles" },
+
+  // ── Diario de Obra ──
+  { key: "rdo_hydro", label: "RDO Hydro", description: "Diarios de obra Hydro", icon: ClipboardList, section: "Diario de Obra", table: "rdos" },
+  { key: "rdo_planejamento", label: "RDO x Planejamento", description: "Comparativo RDO vs planejado", icon: BarChart3, section: "Diario de Obra", table: "rdos" },
+  { key: "rdo_historico", label: "Historico RDO Hydro", description: "Historico completo de RDOs", icon: History, section: "Diario de Obra", table: "rdos" },
+  { key: "fotos_validacao", label: "Fotos de Validacao", description: "Fotos de progresso e validacao", icon: Image, section: "Diario de Obra", table: "rdo_photos" },
+  { key: "rdo_novo", label: "Novo RDO", description: "Registros diarios de obra", icon: Plus, section: "Diario de Obra", table: "rdos" },
+  { key: "producao", label: "Controle de Producao", description: "Metas e medicoes de producao", icon: ClipboardList, section: "Diario de Obra", table: "producao_metas" },
+  { key: "ligacoes", label: "Relatorio de Ligacoes", description: "Ligacoes prediais executadas", icon: FileText, section: "Diario de Obra", table: "connection_reports" },
+  { key: "ocorrencias", label: "Ocorrencias", description: "Registros de ocorrencias em campo", icon: AlertCircle, section: "Diario de Obra", table: "ocorrencias" },
+
+  // ── Módulos de Dados (páginas extras) ──
+  { key: "materiais", label: "Materiais / Almoxarifado", description: "Estoque e movimentacao de materiais", icon: Package, section: "Materiais e Insumos", table: "materiais" },
+  { key: "inventario", label: "Inventario", description: "Controle de estoque e movimentacoes", icon: Warehouse, section: "Materiais e Insumos", table: "inventory_items" },
+  { key: "consumo", label: "Controle de Consumo", description: "Consumo de agua e energia nas obras", icon: TrendingUp, section: "Materiais e Insumos", table: "consumption_records" },
+  { key: "funcionarios", label: "Funcionarios / Equipes", description: "Dados de funcionarios e equipes", icon: Users, section: "Equipes e RH", table: "funcionarios" },
+  { key: "mao_de_obra", label: "Apontamento de Mao de Obra", description: "Horas e alocacao de equipes", icon: HardHat, section: "Equipes e RH", table: "labor_tracking" },
+  { key: "crm", label: "CRM - Clientes", description: "Contatos, contas e pipeline comercial", icon: Users, section: "Comercial", table: "crm_contacts" },
+  { key: "checklists", label: "Checklists de Verificacao", description: "Checklists e verificacoes de qualidade", icon: CheckSquare, section: "Qualidade", table: "checklists" },
+  { key: "manutencao", label: "Manutencao Predial", description: "Solicitacoes e tarefas de manutencao", icon: Wrench, section: "Operacional", table: "maintenance_requests" },
+  { key: "predial", label: "Laudos Prediais", description: "Relatorios de vistoria e laudos", icon: FileText, section: "Operacional", table: "facility_reports" },
+  { key: "pesquisa", label: "Pesquisa de Satisfacao", description: "Feedback e NPS de usuarios", icon: MessageSquare, section: "Qualidade", table: "satisfaction_surveys" },
+  { key: "sentimento", label: "Analise de Sentimento", description: "Analise de sentimento dos registros", icon: Smile, section: "Sistema", table: "sentiment_records" },
+
+  // ── Hub de Noticias ──
   {
-    key: "obras",
-    label: "Projetos / Obras",
-    description: "Dados de obras e projetos cadastrados",
-    icon: Building2,
-    table: "obras",
-  },
-  {
-    key: "rdo",
-    label: "Diario de Obra (RDO)",
-    description: "Registros diarios de obra",
-    icon: ClipboardList,
-    table: "rdos",
-  },
-  {
-    key: "producao",
-    label: "Controle de Producao",
-    description: "Metas e medicoes de producao",
-    icon: BarChart3,
-    table: "producao_metas",
-  },
-  {
-    key: "materiais",
-    label: "Materiais / Almoxarifado",
-    description: "Estoque e movimentacao de materiais",
-    icon: Package,
-    table: "materiais",
-  },
-  {
-    key: "funcionarios",
-    label: "Funcionarios / Equipes",
-    description: "Dados de funcionarios e equipes",
-    icon: Users,
-    table: "funcionarios",
-  },
-  {
-    key: "orcamento",
-    label: "Orcamentos",
-    description: "Orcamentos e precos unitarios",
-    icon: DollarSign,
-    table: "budgets",
-  },
-  {
-    key: "alertas",
-    label: "Alertas Configurados",
-    description: "Alertas e notificacoes ativas",
-    icon: Bell,
-    table: "alertas_config",
-  },
-  {
-    key: "ocorrencias",
-    label: "Ocorrencias",
-    description: "Registros de ocorrencias em campo",
-    icon: Shield,
-    table: "ocorrencias",
-  },
-  {
-    key: "ligacoes",
-    label: "Relatorio de Ligacoes",
-    description: "Dados de ligacoes prediais",
-    icon: Activity,
-    table: "connection_reports",
-  },
-  {
-    key: "licitacoes",
-    label: "Licitacoes (Hub)",
-    description: "Licitacoes do PNCP coletadas pelo Hub",
-    icon: FileText,
+    key: "licitacoes", label: "Licitacoes (Hub)", description: "Licitacoes do PNCP coletadas pelo Hub", icon: FileText, section: "Hub",
     fetchFn: async () => {
       const res = await fetch("/hub/licitacoes.json");
       const data = await res.json();
@@ -102,10 +95,7 @@ const MODULE_SOURCES: ModuleSource[] = [
     },
   },
   {
-    key: "noticias",
-    label: "Noticias do Setor (Hub)",
-    description: "Noticias de engenharia e saneamento",
-    icon: Newspaper,
+    key: "noticias", label: "Noticias do Setor (Hub)", description: "Noticias de engenharia e saneamento", icon: Newspaper, section: "Hub",
     fetchFn: async () => {
       const res = await fetch("/hub/noticias.json");
       const data = await res.json();
@@ -113,88 +103,12 @@ const MODULE_SOURCES: ModuleSource[] = [
     },
   },
   {
-    key: "vinculos",
-    label: "Dossies / Vinculos (Hub)",
-    description: "Empresas monitoradas e vinculos",
-    icon: Layers,
+    key: "vinculos", label: "Dossies / Vinculos (Hub)", description: "Empresas monitoradas e vinculos", icon: Layers, section: "Hub",
     fetchFn: async () => {
       const res = await fetch("/hub/vinculos.json");
       const data = await res.json();
-      return [
-        ...(data.empresas_monitoradas || []),
-        ...(data.vinculos_verificados || []),
-      ];
+      return [...(data.empresas_monitoradas || []), ...(data.vinculos_verificados || [])];
     },
-  },
-  {
-    key: "checklists",
-    label: "Checklists de Verificacao",
-    description: "Checklists e verificacoes de qualidade",
-    icon: CheckSquare,
-    table: "checklists",
-  },
-  {
-    key: "inventario",
-    label: "Inventario / Almoxarifado",
-    description: "Controle de estoque e movimentacoes",
-    icon: Warehouse,
-    table: "inventory_items",
-  },
-  {
-    key: "manutencao",
-    label: "Manutencao Predial",
-    description: "Solicitacoes e tarefas de manutencao",
-    icon: Wrench,
-    table: "maintenance_requests",
-  },
-  {
-    key: "lean",
-    label: "Lean / Restricoes",
-    description: "Restricoes e planejamento lean",
-    icon: Gauge,
-    table: "lean_constraints",
-  },
-  {
-    key: "crm",
-    label: "CRM - Clientes",
-    description: "Contatos, contas e pipeline comercial",
-    icon: Users,
-    table: "crm_contacts",
-  },
-  {
-    key: "consumo",
-    label: "Controle de Consumo",
-    description: "Consumo de agua e energia nas obras",
-    icon: TrendingUp,
-    table: "consumption_records",
-  },
-  {
-    key: "aprovacoes",
-    label: "Aprovacoes Pendentes",
-    description: "Solicitacoes e fluxo de aprovacao",
-    icon: UserCheck,
-    table: "pending_actions",
-  },
-  {
-    key: "mao_de_obra",
-    label: "Apontamento de Mao de Obra",
-    description: "Horas e alocacao de equipes",
-    icon: HardHat,
-    table: "labor_tracking",
-  },
-  {
-    key: "predial",
-    label: "Laudos Prediais",
-    description: "Relatorios de vistoria e laudos",
-    icon: FileText,
-    table: "facility_reports",
-  },
-  {
-    key: "pesquisa",
-    label: "Pesquisa de Satisfacao",
-    description: "Feedback e NPS de usuarios",
-    icon: MessageSquare,
-    table: "satisfaction_surveys",
   },
 ];
 
@@ -209,27 +123,59 @@ export function PullDataPanel({ currentModule, onDataPulled, excludeModules = []
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [pulledData, setPulledData] = useState<PulledData[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const availableSources = MODULE_SOURCES.filter(
-    (m) => m.key !== currentModule && !excludeModules.includes(m.key)
+  const availableSources = useMemo(() =>
+    MODULE_SOURCES.filter(m => m.key !== currentModule && !excludeModules.includes(m.key)),
+    [currentModule, excludeModules]
   );
 
-  const toggleSelect = (key: string) => {
-    setSelected((prev) => {
+  const filteredSources = useMemo(() => {
+    if (!searchTerm.trim()) return availableSources;
+    const term = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return availableSources.filter(m =>
+      m.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(term) ||
+      m.description.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(term) ||
+      m.section.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(term)
+    );
+  }, [availableSources, searchTerm]);
+
+  // Group by section
+  const groupedSources = useMemo(() => {
+    const groups: Record<string, ModuleSource[]> = {};
+    for (const src of filteredSources) {
+      if (!groups[src.section]) groups[src.section] = [];
+      groups[src.section].push(src);
+    }
+    return groups;
+  }, [filteredSources]);
+
+  const toggleSelect = useCallback((key: string) => {
+    setSelected(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
-  };
+  }, []);
 
-  const selectAll = () => {
-    if (selected.size === availableSources.length) {
+  const selectAll = useCallback(() => {
+    if (selected.size === filteredSources.length) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(availableSources.map((m) => m.key)));
+      setSelected(new Set(filteredSources.map(m => m.key)));
     }
-  };
+  }, [selected.size, filteredSources]);
+
+  const selectSection = useCallback((section: string) => {
+    const sectionKeys = (groupedSources[section] || []).map(m => m.key);
+    const allSelected = sectionKeys.every(k => selected.has(k));
+    setSelected(prev => {
+      const next = new Set(prev);
+      sectionKeys.forEach(k => allSelected ? next.delete(k) : next.add(k));
+      return next;
+    });
+  }, [groupedSources, selected]);
 
   const handlePullData = async () => {
     if (selected.size === 0) {
@@ -239,14 +185,12 @@ export function PullDataPanel({ currentModule, onDataPulled, excludeModules = []
 
     setLoading(true);
     const results: PulledData[] = [];
+    const selectedSources = MODULE_SOURCES.filter(m => selected.has(m.key));
 
-    for (const key of selected) {
-      const source = MODULE_SOURCES.find((m) => m.key === key);
-      if (!source) continue;
-
+    // Parallel fetching
+    const promises = selectedSources.map(async (source) => {
       try {
         let data: any[] = [];
-
         if (source.fetchFn) {
           data = await source.fetchFn();
         } else if (source.table) {
@@ -254,21 +198,22 @@ export function PullDataPanel({ currentModule, onDataPulled, excludeModules = []
             .from(source.table)
             .select("*")
             .order("created_at", { ascending: false })
-            .limit(100);
-
+            .limit(200);
           if (error) throw error;
           data = rows || [];
         }
-
-        results.push({
-          moduleKey: source.key,
-          moduleName: source.label,
-          data,
-          pulledAt: new Date().toISOString(),
-        });
+        return { moduleKey: source.key, moduleName: source.label, data, pulledAt: new Date().toISOString() } as PulledData;
       } catch (err: any) {
         console.error(`Erro ao puxar dados de ${source.label}:`, err);
-        toast.error(`Erro ao puxar ${source.label}: ${err.message || "falha"}`);
+        toast.error(`Erro: ${source.label} - ${err.message || "falha"}`);
+        return null;
+      }
+    });
+
+    const settled = await Promise.allSettled(promises);
+    for (const result of settled) {
+      if (result.status === "fulfilled" && result.value) {
+        results.push(result.value);
       }
     }
 
@@ -276,146 +221,199 @@ export function PullDataPanel({ currentModule, onDataPulled, excludeModules = []
     onDataPulled?.(results);
 
     const totalItems = results.reduce((sum, r) => sum + r.data.length, 0);
-    toast.success(
-      `Dados importados: ${results.length} modulo(s), ${totalItems} registro(s)`
-    );
-
+    toast.success(`Importados: ${results.length} modulo(s), ${totalItems} registro(s)`);
     setLoading(false);
   };
+
+  const totalPulledItems = pulledData.reduce((s, p) => s + p.data.length, 0);
 
   return (
     <div className="mb-4">
       {/* Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 text-xs font-mono bg-[#162044] border border-[#1E3A6E] text-white hover:border-[#FF6B2C]/50 transition-all w-full sm:w-auto"
+        className="group flex items-center gap-2.5 px-4 py-2.5 text-xs font-mono bg-gradient-to-r from-[#0F1A38] to-[#162044] border border-[#1E3A6E]/60 text-white hover:border-[#FF6B2C]/60 hover:shadow-lg hover:shadow-[#FF6B2C]/5 transition-all duration-200 w-full sm:w-auto rounded-lg"
       >
-        <Download className="w-3.5 h-3.5 text-[#FF6B2C]" />
-        <span>Puxar Dados de Outros Modulos</span>
+        <div className="w-6 h-6 rounded-md bg-[#FF6B2C]/15 flex items-center justify-center group-hover:bg-[#FF6B2C]/25 transition-colors">
+          <Database className="w-3.5 h-3.5 text-[#FF6B2C]" />
+        </div>
+        <span className="font-semibold tracking-wide">Puxar Dados de Outros Modulos</span>
         {pulledData.length > 0 && (
-          <span className="text-[10px] bg-[#22C55E]/15 text-[#22C55E] px-1.5 py-0.5">
-            {pulledData.length} importado(s)
+          <span className="text-[10px] bg-[#22C55E]/15 text-[#22C55E] px-2 py-0.5 rounded-full font-bold">
+            {pulledData.length} modulo(s) | {totalPulledItems} itens
           </span>
         )}
-        {isOpen ? (
-          <ChevronUp className="w-3 h-3 ml-auto text-[#64748B]" />
-        ) : (
-          <ChevronDown className="w-3 h-3 ml-auto text-[#64748B]" />
-        )}
+        <div className="ml-auto pl-3">
+          {isOpen ? (
+            <ChevronUp className="w-3.5 h-3.5 text-[#64748B] group-hover:text-white transition-colors" />
+          ) : (
+            <ChevronDown className="w-3.5 h-3.5 text-[#64748B] group-hover:text-white transition-colors" />
+          )}
+        </div>
       </button>
 
       {/* Panel */}
       {isOpen && (
-        <div
-          className="mt-2 border border-[#1E3A6E] p-4"
-          style={{ background: "#0E1B3D" }}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-mono text-[#94A3B8]">
-              Selecione os modulos de onde deseja importar dados:
-            </p>
-            <button
-              onClick={selectAll}
-              className="text-[10px] font-mono text-[#FF6B2C] hover:text-[#FF6B2C]/80"
-            >
-              {selected.size === availableSources.length
-                ? "Desmarcar Todos"
-                : "Selecionar Todos"}
-            </button>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {availableSources.map((source) => {
-              const Icon = source.icon;
-              const isSelected = selected.has(source.key);
-              const pulled = pulledData.find((p) => p.moduleKey === source.key);
-
-              return (
+        <div className="mt-2 border border-[#1E3A6E]/60 rounded-lg overflow-hidden" style={{ background: "linear-gradient(180deg, #0E1B3D 0%, #0A1530 100%)" }}>
+          {/* Panel Header */}
+          <div className="px-4 pt-4 pb-3 border-b border-[#1E3A6E]/40">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-mono text-[#94A3B8] font-medium">
+                  Selecione os modulos ({availableSources.length} disponiveis)
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
                 <button
-                  key={source.key}
-                  onClick={() => toggleSelect(source.key)}
-                  className={`flex items-start gap-2.5 p-3 border text-left transition-all ${
-                    isSelected
-                      ? "border-[#FF6B2C]/60 bg-[#FF6B2C]/5"
-                      : "border-[#1E3A6E] hover:border-[#1E3A6E]/80"
-                  }`}
-                  style={{ background: isSelected ? undefined : "#162044" }}
+                  onClick={selectAll}
+                  className="text-[10px] font-mono font-bold text-[#FF6B2C] hover:text-[#FF6B2C]/80 px-2 py-1 rounded hover:bg-[#FF6B2C]/10 transition-colors"
                 >
-                  <div className="flex-shrink-0 mt-0.5">
-                    {isSelected ? (
-                      <div className="w-4 h-4 bg-[#FF6B2C] flex items-center justify-center">
-                        <Check className="w-3 h-3 text-white" />
-                      </div>
-                    ) : (
-                      <div className="w-4 h-4 border border-[#1E3A6E]" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <Icon className="w-3.5 h-3.5 text-[#FF6B2C] flex-shrink-0" />
-                      <span className="text-xs font-mono font-semibold text-white truncate">
-                        {source.label}
-                      </span>
-                    </div>
-                    <p className="text-[10px] font-mono text-[#64748B] mt-0.5 leading-relaxed">
-                      {source.description}
-                    </p>
-                    {pulled && (
-                      <p className="text-[10px] font-mono text-[#22C55E] mt-1">
-                        {pulled.data.length} registro(s) importados
-                      </p>
-                    )}
-                  </div>
+                  {selected.size === filteredSources.length ? "Desmarcar Todos" : "Selecionar Todos"}
                 </button>
-              );
-            })}
+              </div>
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#64748B]" />
+              <input
+                type="text"
+                placeholder="Buscar modulo..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs font-mono bg-[#162044] border border-[#1E3A6E]/50 text-white placeholder-[#475569] rounded-md focus:outline-none focus:border-[#FF6B2C]/50 transition-colors"
+              />
+            </div>
           </div>
 
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#1E3A6E]">
-            <span className="text-[10px] font-mono text-[#64748B]">
-              {selected.size} modulo(s) selecionado(s)
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setSelected(new Set());
-                  setIsOpen(false);
-                }}
-                className="px-3 py-1.5 text-xs font-mono text-[#64748B] hover:text-white transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handlePullData}
-                disabled={loading || selected.size === 0}
-                className="px-4 py-1.5 text-xs font-mono font-semibold bg-[#FF6B2C] text-white hover:bg-[#FF6B2C]/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Importando...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-3 h-3" />
-                    Puxar Dados
-                  </>
-                )}
-              </button>
+          {/* Modules Grid grouped by section */}
+          <div className="px-4 py-3 max-h-[500px] overflow-y-auto scrollbar-thin">
+            {Object.entries(groupedSources).map(([section, sources]) => (
+              <div key={section} className="mb-4 last:mb-0">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[10px] font-mono font-bold text-[#FF6B2C]/80 uppercase tracking-[1.5px]">
+                    {section}
+                  </h4>
+                  <button
+                    onClick={() => selectSection(section)}
+                    className="text-[9px] font-mono text-[#64748B] hover:text-[#FF6B2C] transition-colors"
+                  >
+                    {sources.every(s => selected.has(s.key)) ? "desmarcar" : "selecionar"} secao
+                  </button>
+                </div>
+                <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {sources.map((source) => {
+                    const Icon = source.icon;
+                    const isSelected = selected.has(source.key);
+                    const pulled = pulledData.find(p => p.moduleKey === source.key);
+
+                    return (
+                      <button
+                        key={source.key}
+                        onClick={() => toggleSelect(source.key)}
+                        className={`group/card flex items-center gap-2.5 p-2.5 border text-left transition-all duration-150 rounded-md ${
+                          isSelected
+                            ? "border-[#FF6B2C]/50 bg-[#FF6B2C]/8 shadow-sm shadow-[#FF6B2C]/10"
+                            : "border-[#1E3A6E]/40 hover:border-[#1E3A6E]/70 hover:bg-[#162044]/80"
+                        }`}
+                        style={{ background: isSelected ? undefined : "rgba(22, 32, 68, 0.4)" }}
+                      >
+                        {/* Checkbox */}
+                        <div className="flex-shrink-0">
+                          {isSelected ? (
+                            <div className="w-4 h-4 rounded bg-[#FF6B2C] flex items-center justify-center">
+                              <Check className="w-2.5 h-2.5 text-white" />
+                            </div>
+                          ) : (
+                            <div className="w-4 h-4 rounded border border-[#1E3A6E]/60 group-hover/card:border-[#475569]" />
+                          )}
+                        </div>
+
+                        {/* Icon */}
+                        <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 transition-colors ${
+                          isSelected ? "bg-[#FF6B2C]/20" : "bg-[#1E3A6E]/30 group-hover/card:bg-[#1E3A6E]/50"
+                        }`}>
+                          <Icon className={`w-3.5 h-3.5 ${isSelected ? "text-[#FF6B2C]" : "text-[#64748B] group-hover/card:text-[#94A3B8]"}`} />
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <span className={`text-[11px] font-mono font-semibold truncate block ${
+                            isSelected ? "text-white" : "text-[#CBD5E1] group-hover/card:text-white"
+                          }`}>
+                            {source.label}
+                          </span>
+                          <p className="text-[9px] font-mono text-[#475569] leading-tight truncate">
+                            {source.description}
+                          </p>
+                          {pulled && (
+                            <span className="text-[9px] font-mono text-[#22C55E] font-bold">
+                              {pulled.data.length} importados
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {filteredSources.length === 0 && (
+              <div className="text-center py-8">
+                <Search className="w-5 h-5 text-[#475569] mx-auto mb-2" />
+                <p className="text-xs font-mono text-[#475569]">Nenhum modulo encontrado</p>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-4 py-3 border-t border-[#1E3A6E]/40 bg-[#0A1530]/80">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-mono text-[#64748B]">
+                  <span className="text-white font-bold">{selected.size}</span> de {availableSources.length} selecionado(s)
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setSelected(new Set()); setIsOpen(false); setSearchTerm(""); }}
+                  className="px-4 py-2 text-xs font-mono text-[#64748B] hover:text-white rounded-md hover:bg-[#1E3A6E]/30 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handlePullData}
+                  disabled={loading || selected.size === 0}
+                  className="px-5 py-2 text-xs font-mono font-bold bg-gradient-to-r from-[#FF6B2C] to-[#E85D1C] text-white rounded-md hover:from-[#FF7B3C] hover:to-[#FF6B2C] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-md shadow-[#FF6B2C]/20 disabled:shadow-none"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Importando...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5" />
+                      Puxar Dados
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Summary of pulled data */}
           {pulledData.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-[#1E3A6E]">
-              <p className="text-[10px] font-mono text-[#94A3B8] mb-2 uppercase tracking-wider">
-                Dados importados nesta sessao:
+            <div className="px-4 py-3 border-t border-[#1E3A6E]/30 bg-[#0A1530]/50">
+              <p className="text-[10px] font-mono text-[#94A3B8] mb-2 uppercase tracking-[1.5px] font-bold">
+                Dados importados nesta sessao
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {pulledData.map((p) => (
                   <span
                     key={p.moduleKey}
-                    className="text-[10px] font-mono bg-[#22C55E]/10 text-[#22C55E] px-2 py-1 flex items-center gap-1"
+                    className="text-[10px] font-mono bg-[#22C55E]/10 text-[#22C55E] px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-[#22C55E]/20"
                   >
                     <Check className="w-2.5 h-2.5" />
                     {p.moduleName}: {p.data.length} itens
