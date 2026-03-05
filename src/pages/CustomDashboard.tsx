@@ -22,6 +22,7 @@ import { WidgetCard } from '@/components/custom-dashboard/WidgetCard';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 export default function CustomDashboard() {
   const navigate = useNavigate();
@@ -138,6 +139,8 @@ export default function CustomDashboard() {
                 Monte seu próprio painel de controle
               </p>
             </div>
+
+            <PullDataPanel currentModule="dashboard_custom" />
 
             <div className="flex items-center gap-2 flex-wrap">
               {/* Dashboard Selector */}

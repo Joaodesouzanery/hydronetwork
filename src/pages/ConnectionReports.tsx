@@ -11,6 +11,7 @@ import { AddConnectionReportDialog } from "@/components/connection-reports/AddCo
 import { ConnectionReportsTable } from "@/components/connection-reports/ConnectionReportsTable";
 import { TutorialDialog } from "@/components/shared/TutorialDialog";
 import { UnifiedExportDialog } from "@/components/rdo/UnifiedExportDialog";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 export default function ConnectionReports() {
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -83,6 +84,8 @@ export default function ConnectionReports() {
                   Gerencie os relatórios de ligações de água
                 </p>
               </div>
+
+              <PullDataPanel currentModule="ligacoes" />
               <div className="flex gap-2">
               <Button
                 variant="outline"

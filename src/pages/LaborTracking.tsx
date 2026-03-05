@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { AddLaborTrackingDialog } from "@/components/labor/AddLaborTrackingDialog";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
 import {
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
   Table,
   TableBody,
   TableCell,
@@ -95,6 +96,8 @@ export default function LaborTracking() {
                 Controle de horas trabalhadas e custos de mão de obra
               </p>
             </div>
+
+            <PullDataPanel currentModule="mao_de_obra" />
             <div className="flex gap-2">
               <PageTutorialButton pageKey="labor-tracking" />
               <Button onClick={() => setIsAddDialogOpen(true)}>

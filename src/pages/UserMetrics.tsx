@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Building2, Users, Package, FileText, TrendingUp, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { useUserRole } from "@/hooks/useUserRole";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface UserMetrics {
   user_id: string;
@@ -156,6 +157,8 @@ const UserMetrics = () => {
               </CardContent>
             </Card>
           </div>
+
+          <PullDataPanel currentModule="metricas" />
 
           {/* Detailed Metrics Table */}
           <Card>

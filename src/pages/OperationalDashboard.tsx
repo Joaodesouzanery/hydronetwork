@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
   TrendingUp,
   Clock,
   AlertCircle,
@@ -97,6 +98,8 @@ export default function OperationalDashboard() {
               Visão consolidada do status das obras
             </p>
           </div>
+
+          <PullDataPanel currentModule="dashboard_operacional" />
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
             <Card>

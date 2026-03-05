@@ -12,6 +12,7 @@ import { AddInventoryItemDialog } from "@/components/inventory/AddInventoryItemD
 import { InventoryMovementDialog } from "@/components/inventory/InventoryMovementDialog";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
 import {
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -409,6 +410,8 @@ const Inventory = () => {
           <Package className="w-12 h-12 mx-auto text-primary animate-pulse mb-4" />
           <p className="text-muted-foreground">Carregando...</p>
         </div>
+
+      <PullDataPanel currentModule="inventario" />
       </div>
     );
   }

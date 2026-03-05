@@ -10,6 +10,7 @@ import { Building2, Plus, Trash2, ArrowLeft, CheckCircle2, Circle, XCircle } fro
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const Checklists = () => {
   const navigate = useNavigate();
@@ -318,6 +319,8 @@ const Checklists = () => {
             </Card>
           )}
         </div>
+
+      <PullDataPanel currentModule="checklists" />
       </main>
 
       {/* Dialog para criar checklist */}

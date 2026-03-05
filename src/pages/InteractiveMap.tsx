@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import {
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
   Upload,
   MapPin,
   Plus,
@@ -850,6 +851,8 @@ export default function InteractiveMap() {
               {project?.name || "Projeto"} - Importe mapas do QGIS e gerencie anotações
             </p>
           </div>
+
+          <PullDataPanel currentModule="mapa" />
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList>

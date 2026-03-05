@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { 
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
   ArrowLeft, 
   Download, 
   Filter, 
@@ -392,6 +393,8 @@ export default function ProjectHistory() {
                   <h1 className="text-2xl font-bold font-mono">Histórico da Obra</h1>
                   <p className="text-muted-foreground">{project?.name}</p>
                 </div>
+
+              <PullDataPanel currentModule="obras" />
               </div>
               <div className="flex gap-2">
                 <Button 

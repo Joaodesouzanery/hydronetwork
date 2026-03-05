@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { useUserRole } from "@/hooks/useUserRole";
 import { toast } from "sonner";
 import { CheckCircle2, XCircle, Clock, FileText } from "lucide-react";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface PendingAction {
   id: string;
@@ -205,6 +206,8 @@ const Approvals = () => {
                 Gerencie solicitações de colaboradores que requerem aprovação de 2 administradores
               </p>
             </div>
+
+            <PullDataPanel currentModule="aprovacoes" />
 
             <Tabs defaultValue="pending" className="w-full">
               <TabsList className="grid w-full max-w-md grid-cols-2">

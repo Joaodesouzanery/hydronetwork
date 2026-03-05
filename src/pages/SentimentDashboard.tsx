@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Smile, Frown, Meh, TrendingUp, MessageSquare, Star, Users, FileText } from "lucide-react";
 import { format, subDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const emojiMap: Record<string, { emoji: string; value: number; label: string }> = {
   very_happy: { emoji: "🤩", value: 5, label: "Muito Satisfeito" },
@@ -75,6 +76,8 @@ const SentimentDashboard = () => {
                 </button>
               ))}
             </div>
+
+          <PullDataPanel currentModule="sentimento" />
           </div>
 
           <main className="flex-1 p-6">

@@ -8,6 +8,7 @@ import { Building2, LogOut, ArrowLeft, History } from "lucide-react";
 import { toast } from "sonner";
 import { RDOHistoryView } from "@/components/rdo/RDOHistoryView";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const RDOHistory = () => {
   const navigate = useNavigate();
@@ -78,6 +79,8 @@ const RDOHistory = () => {
           <Building2 className="w-12 h-12 mx-auto text-primary animate-pulse mb-4" />
           <p className="text-muted-foreground">Carregando...</p>
         </div>
+
+      <PullDataPanel currentModule="rdo" />
       </div>
     );
   }

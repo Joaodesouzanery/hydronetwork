@@ -4,6 +4,7 @@ import { ArrowLeft, TrendingUp, AlertCircle, Calendar, DollarSign } from "lucide
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const Dashboard360 = () => {
   const navigate = useNavigate();
@@ -58,6 +59,8 @@ const Dashboard360 = () => {
             <h1 className="text-3xl font-bold font-mono text-foreground">Dashboard 360º</h1>
             <p className="text-muted-foreground">Visão completa do seu negócio</p>
           </div>
+
+        <PullDataPanel currentModule="dashboard360" />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

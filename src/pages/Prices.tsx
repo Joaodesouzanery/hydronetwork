@@ -6,6 +6,7 @@ import { PriceManagementTable } from "@/components/budgets/PriceManagementTable"
 import { PriceHistoryChart } from "@/components/budgets/PriceHistoryChart";
 import { MaterialImportDialog } from "@/components/materials/MaterialImportDialog";
 import { TutorialDialog } from "@/components/shared/TutorialDialog";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 const Prices = () => {
   const navigate = useNavigate();
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -41,6 +42,8 @@ const Prices = () => {
               <h1 className="text-3xl font-bold font-mono text-foreground">Preços</h1>
               <p className="text-muted-foreground">Gerencie os preços de materiais e serviços</p>
             </div>
+
+          <PullDataPanel currentModule="orcamento" />
           </div>
           
           <div className="flex items-center gap-2">

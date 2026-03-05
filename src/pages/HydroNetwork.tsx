@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
   Download, MapPin, Droplets, Calculator,
   AlertTriangle, Settings2, X, Map
 } from "lucide-react";
@@ -381,6 +382,8 @@ const HydroNetwork = () => {
                   </>
                 )}
               </div>
+
+            <PullDataPanel currentModule="hydronetwork" />
             </div>
           </CardHeader>
           <CardContent className="space-y-4">

@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { QrCode, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface QRCodeData {
   id: string;
@@ -234,6 +235,8 @@ export default function MaintenanceRequest() {
           <QrCode className="h-12 w-12 mx-auto mb-4 animate-pulse" />
           <p className="text-muted-foreground">Carregando...</p>
         </div>
+
+      <PullDataPanel currentModule="manutencao" />
       </div>
     );
   }

@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { AddOccurrenceDialog } from "@/components/occurrences/AddOccurrenceDialog";
 import { OccurrenceDetailsDialog } from "@/components/occurrences/OccurrenceDetailsDialog";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 export default function Occurrences() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -122,6 +123,8 @@ export default function Occurrences() {
                 Registro e acompanhamento de problemas identificados
               </p>
             </div>
+
+            <PullDataPanel currentModule="ocorrencias" />
             <div className="flex gap-2">
               <PageTutorialButton pageKey="occurrences" />
               <Button onClick={() => setIsAddDialogOpen(true)}>

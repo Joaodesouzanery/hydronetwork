@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, Search, Package, Edit, Trash2, ArrowLeft, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
   Table,
   TableBody,
   TableCell,
@@ -199,6 +200,8 @@ const AssetsCatalog = () => {
                 Gerencie locais e equipamentos
               </p>
             </div>
+
+          <PullDataPanel currentModule="ativos" />
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setShowTutorial(true)}>

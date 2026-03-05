@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Upload, Download, Calculator, MapPin, Droplets, ArrowDown, ArrowUp, FileSpreadsheet, Settings2, Users } from "lucide-react";
 import {
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
   parseTopographyFile,
   validateTopographySequence,
   PontoTopografico,
@@ -155,6 +156,8 @@ const SanitationEngine = () => {
                 Pré-dimensionamento e orçamento de redes de saneamento
               </p>
             </div>
+
+            <PullDataPanel currentModule="saneamento" />
 
             <Tabs defaultValue="topography" className="space-y-4">
               <TabsList className="grid grid-cols-4 w-full max-w-2xl">

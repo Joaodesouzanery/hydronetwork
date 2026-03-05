@@ -18,6 +18,7 @@ import { RDOHistoryView } from "@/components/rdo/RDOHistoryView";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CONSTRAINT_TYPES, type ConstraintType } from "@/types/lean-constraints";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 interface ExecutedService {
   service_id: string;
   quantity: string;
@@ -862,6 +863,8 @@ const RDONew = () => {
                         className="pl-8"
                       />
                     </div>
+
+                    <PullDataPanel currentModule="rdo" />
                     <div className="border rounded-none p-2 max-h-40 overflow-y-auto space-y-2">
                       {serviceFronts.length === 0 ? (
                         <p className="text-sm text-muted-foreground">Nenhuma frente disponível</p>

@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { ArrowLeft, ArrowRight, Check, X, Star, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const TOTAL_SECTIONS = 11;
 
@@ -304,6 +305,8 @@ const SatisfactionSurvey = () => {
                 Sua resposta melhora o ConstruData.
               </p>
             </div>
+
+            <PullDataPanel currentModule="pesquisa" />
             <Button onClick={() => navigate("/dashboard")} className="w-full">
               Voltar ao Dashboard
             </Button>

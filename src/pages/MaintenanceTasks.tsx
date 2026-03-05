@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AddTaskDialog } from "@/components/facility/AddTaskDialog";
 import { TaskKanbanBoard } from "@/components/facility/TaskKanbanBoard";
 import { TutorialDialog } from "@/components/shared/TutorialDialog";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface Task {
   id: string;
@@ -107,6 +108,8 @@ const MaintenanceTasks = () => {
                 Gerencie manutenções preventivas e corretivas
               </p>
             </div>
+
+          <PullDataPanel currentModule="manutencao" />
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setShowTutorial(true)}>

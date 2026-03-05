@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { TutorialDialog } from "@/components/shared/TutorialDialog";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 export default function FacilityReports() {
   const navigate = useNavigate();
@@ -175,6 +176,8 @@ export default function FacilityReports() {
                     Relatórios automáticos consolidados
                   </p>
                 </div>
+
+              <PullDataPanel currentModule="predial" />
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setShowTutorial(true)}>

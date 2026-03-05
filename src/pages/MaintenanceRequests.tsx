@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { QrCode, Eye, AlertCircle, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface MaintenanceRequestItem {
   id: string;
@@ -75,6 +76,8 @@ export default function MaintenanceRequests() {
               <h1 className="text-3xl font-bold font-mono">Solicitações de Manutenção</h1>
               <p className="text-muted-foreground">Recebidas via QR Code</p>
             </div>
+
+          <PullDataPanel currentModule="manutencao" />
           </div>
           <Button variant="outline" onClick={() => navigate('/maintenance-qr-codes')}>
             Gerenciar QR Codes

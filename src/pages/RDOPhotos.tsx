@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Building2, Image, Calendar, MapPin, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -187,6 +188,8 @@ const RDOPhotos = () => {
           <Building2 className="w-12 h-12 mx-auto text-primary animate-pulse mb-4" />
           <p className="text-muted-foreground">Carregando...</p>
         </div>
+
+      <PullDataPanel currentModule="rdo" />
       </div>
     );
   }
