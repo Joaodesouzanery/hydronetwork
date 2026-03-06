@@ -5,8 +5,10 @@ import {
   Newspaper, FileText, Link2, ExternalLink, Calendar,
   MapPin, DollarSign, AlertTriangle, RefreshCw, ArrowLeft,
   Construction, Search, Filter, Shield, ArrowRightLeft,
+  Download, Database, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface Noticia {
@@ -93,33 +95,138 @@ export default function HubNoticias() {
   const [licSearchTerm, setLicSearchTerm] = useState("");
   const [selectedCategoria, setSelectedCategoria] = useState<string>("");
   const [selectedEstado, setSelectedEstado] = useState<string>("");
+  const [coletando, setColetando] = useState(false);
+  const [ultimaColeta, setUltimaColeta] = useState<string | null>(null);
+  const [totalNaBase, setTotalNaBase] = useState(0);
+
+  const fetchLicitacoesSupabase = async (): Promise<Licitacao[]> => {
+    const { data, error } = await supabase
+      .from("hub_licitacoes")
+      .select("*")
+      .order("data_abertura", { ascending: false })
+      .limit(500);
+
+    if (error) throw error;
+    if (!data || data.length === 0) return [];
+
+    return data.map((item: Record<string, unknown>, idx: number) => ({
+      id: String(item.id || idx + 1),
+      titulo: String(item.titulo || ""),
+      orgao: String(item.orgao || ""),
+      estado: String(item.estado || "BR"),
+      categoria: String(item.categoria || "Engenharia"),
+      data_abertura: String(item.data_abertura || ""),
+      valor_estimado: Number(item.valor_estimado) || 0,
+      valor_estimado_fmt: String(item.valor_estimado_fmt || ""),
+      link: String(item.link || ""),
+      modalidade: String(item.modalidade || ""),
+      numero_controle: String(item.numero_controle || ""),
+      verificado: Boolean(item.verificado),
+    }));
+  };
+
+  const fetchUltimaColeta = async () => {
+    const { data } = await supabase
+      .from("hub_coleta_meta")
+      .select("*")
+      .eq("tipo", "licitacoes")
+      .eq("status", "ok")
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (data && data.length > 0) {
+      setUltimaColeta(data[0].ultima_coleta);
+    }
+
+    const { count } = await supabase
+      .from("hub_licitacoes")
+      .select("*", { count: "exact", head: true });
+    setTotalNaBase(count || 0);
+  };
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [notRes, licRes, vincRes] = await Promise.all([
+      // Fetch notícias e vínculos via JSON estático
+      const [notRes, vincRes] = await Promise.all([
         fetch("/hub/noticias.json"),
-        fetch("/hub/licitacoes.json"),
         fetch("/hub/vinculos.json"),
       ]);
-      if (!notRes.ok || !licRes.ok || !vincRes.ok) {
-        throw new Error("Falha ao carregar dados do hub");
-      }
-      const notData = await notRes.json();
-      const licData = await licRes.json();
-      const vincData = await vincRes.json();
 
-      setNoticias(notData.noticias || []);
-      setLicitacoes(licData.licitacoes || []);
-      setEmpresas(vincData.empresas_monitoradas || []);
-      setVinculos(vincData.vinculos_verificados || []);
-      if (notData._meta) setMeta(notData._meta);
-      if (licData._meta) setMeta(prev => prev || licData._meta);
+      if (notRes.ok) {
+        const notData = await notRes.json();
+        setNoticias(notData.noticias || []);
+        if (notData._meta) setMeta(notData._meta);
+      }
+
+      if (vincRes.ok) {
+        const vincData = await vincRes.json();
+        setEmpresas(vincData.empresas_monitoradas || []);
+        setVinculos(vincData.vinculos_verificados || []);
+      }
+
+      // Licitações: tentar Supabase primeiro, fallback para JSON
+      try {
+        const licSupabase = await fetchLicitacoesSupabase();
+        if (licSupabase.length > 0) {
+          setLicitacoes(licSupabase);
+          setMeta(prev => prev ? { ...prev, fonte_dados: "supabase" } : { fonte_dados: "supabase", gerado_em: new Date().toISOString(), total: licSupabase.length });
+          await fetchUltimaColeta();
+        } else {
+          // Fallback: JSON estático
+          const licRes = await fetch("/hub/licitacoes.json");
+          if (licRes.ok) {
+            const licData = await licRes.json();
+            setLicitacoes(licData.licitacoes || []);
+            if (licData._meta) setMeta(prev => prev || licData._meta);
+          }
+        }
+      } catch {
+        // Supabase falhou, usar JSON estático
+        const licRes = await fetch("/hub/licitacoes.json");
+        if (licRes.ok) {
+          const licData = await licRes.json();
+          setLicitacoes(licData.licitacoes || []);
+          if (licData._meta) setMeta(prev => prev || licData._meta);
+        }
+      }
     } catch (err) {
       console.error("Erro ao carregar dados do hub:", err);
       toast.error("Erro ao carregar dados do hub. Verifique sua conexao.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleColetarLicitacoes = async (dias = 15) => {
+    setColetando(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        toast.error("Voce precisa estar logado para coletar licitacoes.");
+        return;
+      }
+
+      toast.info(`Coletando licitacoes dos ultimos ${dias} dias do PNCP...`);
+
+      const { data, error } = await supabase.functions.invoke(
+        "hub-coletar-licitacoes",
+        { body: { dias } }
+      );
+
+      if (error) throw error;
+
+      toast.success(
+        `Coleta concluida! ${data.total_unicos} licitacoes processadas (${data.total_na_base} total na base)`
+      );
+
+      // Recarregar dados
+      await fetchData();
+    } catch (err) {
+      console.error("Erro na coleta:", err);
+      toast.error("Erro ao coletar licitacoes. Tente novamente.");
+    } finally {
+      setColetando(false);
     }
   };
 
@@ -360,12 +467,63 @@ export default function HubNoticias() {
               {/* Tab: Licitações */}
               {tab === "licitacoes" && (
                 <div>
-                  <div className="flex items-center gap-2 mb-4">
+                  <div className="flex items-center gap-2 mb-4 flex-wrap">
                     <FileText className="w-5 h-5 text-[#FF6B2C]" />
                     <h2 className="text-xl font-bold font-mono text-white">Licitacoes</h2>
                     <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
                       {filteredLicitacoes.length}/{licitacoes.length} itens
                     </span>
+                    {totalNaBase > 0 && (
+                      <span className="text-xs font-mono text-[#22C55E] bg-[#22C55E]/10 px-2 py-0.5 flex items-center gap-1">
+                        <Database className="w-3 h-3" />
+                        {totalNaBase} na base
+                      </span>
+                    )}
+                    {meta?.fonte_dados === "supabase" && (
+                      <span className="text-xs font-mono text-[#3B82F6] bg-[#3B82F6]/10 px-2 py-0.5">
+                        Dados ao vivo
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Painel de Coleta */}
+                  <div
+                    className="flex flex-wrap items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 border border-[#3B82F6]/30 mb-4"
+                    style={{ background: "rgba(59, 130, 246, 0.06)" }}
+                  >
+                    <Download className="w-4 h-4 text-[#3B82F6] flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs sm:text-sm font-mono font-semibold text-[#3B82F6]">
+                        Coletor PNCP
+                      </p>
+                      {ultimaColeta && (
+                        <p className="text-[10px] font-mono text-[#3B82F6]/60 flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5" />
+                          Ultima coleta: {new Date(ultimaColeta).toLocaleString("pt-BR")}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleColetarLicitacoes(7)}
+                      disabled={coletando}
+                      className="text-[10px] sm:text-xs font-mono px-2 sm:px-3 py-1.5 bg-[#3B82F6]/20 text-[#3B82F6] hover:bg-[#3B82F6]/30 border border-[#3B82F6]/30 transition-colors disabled:opacity-50"
+                    >
+                      {coletando ? "Coletando..." : "7 dias"}
+                    </button>
+                    <button
+                      onClick={() => handleColetarLicitacoes(15)}
+                      disabled={coletando}
+                      className="text-[10px] sm:text-xs font-mono px-2 sm:px-3 py-1.5 bg-[#3B82F6]/20 text-[#3B82F6] hover:bg-[#3B82F6]/30 border border-[#3B82F6]/30 transition-colors disabled:opacity-50"
+                    >
+                      {coletando ? "Coletando..." : "15 dias"}
+                    </button>
+                    <button
+                      onClick={() => handleColetarLicitacoes(30)}
+                      disabled={coletando}
+                      className="text-[10px] sm:text-xs font-mono px-2 sm:px-3 py-1.5 bg-[#FF6B2C]/20 text-[#FF6B2C] hover:bg-[#FF6B2C]/30 border border-[#FF6B2C]/30 transition-colors disabled:opacity-50"
+                    >
+                      {coletando ? "Coletando..." : "30 dias"}
+                    </button>
                   </div>
 
                   {/* Filtros de Licitações */}
@@ -600,8 +758,10 @@ export default function HubNoticias() {
                     </div>
                     <div className="border border-[#1E3A6E] p-4" style={{ background: "#162044" }}>
                       <p className="text-xs font-mono text-[#64748B] uppercase tracking-wider">Licitações</p>
-                      <p className="text-3xl font-bold font-mono text-[#3B82F6] mt-1">{licitacoes.length}</p>
-                      <p className="text-[10px] font-mono text-[#64748B] mt-1">do PNCP</p>
+                      <p className="text-3xl font-bold font-mono text-[#3B82F6] mt-1">{totalNaBase || licitacoes.length}</p>
+                      <p className="text-[10px] font-mono text-[#64748B] mt-1">
+                        {meta?.fonte_dados === "supabase" ? "Supabase (ao vivo)" : "do PNCP"}
+                      </p>
                     </div>
                     <div className="border border-[#1E3A6E] p-4" style={{ background: "#162044" }}>
                       <p className="text-xs font-mono text-[#64748B] uppercase tracking-wider">Empresas</p>

@@ -4304,6 +4304,108 @@ export type Database = {
         }
         Relationships: []
       }
+      hub_coleta_meta: {
+        Row: {
+          id: string
+          tipo: string
+          ultima_coleta: string
+          total_coletado: number
+          total_novos: number
+          fonte: string | null
+          status: string
+          erro: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          tipo: string
+          ultima_coleta?: string
+          total_coletado?: number
+          total_novos?: number
+          fonte?: string | null
+          status?: string
+          erro?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          tipo?: string
+          ultima_coleta?: string
+          total_coletado?: number
+          total_novos?: number
+          fonte?: string | null
+          status?: string
+          erro?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      hub_licitacoes: {
+        Row: {
+          id: string
+          numero_controle: string
+          titulo: string
+          orgao: string
+          estado: string
+          categoria: string
+          data_abertura: string | null
+          valor_estimado: number
+          valor_estimado_fmt: string | null
+          link: string
+          modalidade: string | null
+          modalidade_id: number | null
+          cnpj_orgao: string | null
+          ano_compra: number | null
+          sequencial_compra: number | null
+          fonte: string
+          verificado: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          numero_controle: string
+          titulo: string
+          orgao: string
+          estado?: string
+          categoria?: string
+          data_abertura?: string | null
+          valor_estimado?: number
+          valor_estimado_fmt?: string | null
+          link: string
+          modalidade?: string | null
+          modalidade_id?: number | null
+          cnpj_orgao?: string | null
+          ano_compra?: number | null
+          sequencial_compra?: number | null
+          fonte?: string
+          verificado?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          numero_controle?: string
+          titulo?: string
+          orgao?: string
+          estado?: string
+          categoria?: string
+          data_abertura?: string | null
+          valor_estimado?: number
+          valor_estimado_fmt?: string | null
+          link?: string
+          modalidade?: string | null
+          modalidade_id?: number | null
+          cnpj_orgao?: string | null
+          ano_compra?: number | null
+          sequencial_compra?: number | null
+          fonte?: string
+          verificado?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       hydro_bdi_contracts: {
         Row: {
           id: string
