@@ -12,3 +12,8 @@ Allow: /
 
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /settings
+Disallow: /backup
+
+Sitemap: https://construdata.software/sitemap.xml
