@@ -69,14 +69,14 @@ const isRecent = (dateStr: string, hoursThreshold = 48) => {
 
 const RISCO_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   alto: { bg: "bg-red-500/15", text: "text-red-400", label: "Alto" },
-  medio: { bg: "bg-orange-500/15", text: "text-orange-400", label: "Medio" },
+  medio: { bg: "bg-orange-500/15", text: "text-orange-400", label: "Médio" },
   baixo: { bg: "bg-yellow-500/15", text: "text-yellow-400", label: "Baixo" },
 };
 
 const VINCULO_LABELS: Record<string, string> = {
-  socio_comum: "Socio Comum",
+  socio_comum: "Sócio Comum",
   parentesco: "Parentesco",
-  diretor_multiplo: "Diretor Multiplo",
+  diretor_multiplo: "Diretor Múltiplo",
 };
 
 export default function HubNoticias() {
@@ -192,7 +192,7 @@ export default function HubNoticias() {
       }
     } catch (err) {
       console.error("Erro ao carregar dados do hub:", err);
-      toast.error("Erro ao carregar dados do hub. Verifique sua conexao.");
+      toast.error("Erro ao carregar dados do hub. Verifique sua conexão.");
     } finally {
       setLoading(false);
     }
@@ -203,11 +203,11 @@ export default function HubNoticias() {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData?.session?.access_token) {
-        toast.error("Voce precisa estar logado para coletar licitacoes.");
+        toast.error("Você precisa estar logado para coletar licitações.");
         return;
       }
 
-      toast.info(`Coletando licitacoes dos ultimos ${dias} dias do PNCP...`);
+      toast.info(`Coletando licitações dos últimos ${dias} dias do PNCP...`);
 
       const { data, error } = await supabase.functions.invoke(
         "hub-coletar-licitacoes",
@@ -217,14 +217,14 @@ export default function HubNoticias() {
       if (error) throw error;
 
       toast.success(
-        `Coleta concluida! ${data.total_unicos} licitacoes processadas (${data.total_na_base} total na base)`
+        `Coleta concluída! ${data.total_unicos} licitações processadas (${data.total_na_base} total na base)`
       );
 
       // Recarregar dados
       await fetchData();
     } catch (err) {
       console.error("Erro na coleta:", err);
-      toast.error("Erro ao coletar licitacoes. Tente novamente.");
+      toast.error("Erro ao coletar licitações. Tente novamente.");
     } finally {
       setColetando(false);
     }
@@ -300,10 +300,10 @@ export default function HubNoticias() {
             </NavLink>
             <div className="min-w-0">
               <h1 className="text-base sm:text-lg font-bold font-mono text-white tracking-tight truncate">
-                Hub de Noticias
+                Hub de Notícias
               </h1>
               <p className="text-[10px] sm:text-xs font-mono text-[#64748B] hidden sm:block">
-                Inteligencia para engenharia e saneamento
+                Inteligência para engenharia e saneamento
               </p>
             </div>
           </div>
@@ -344,10 +344,10 @@ export default function HubNoticias() {
             <Construction className="w-4 h-4 sm:w-5 sm:h-5 text-[#F59E0B] flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-xs sm:text-sm font-mono font-semibold text-[#F59E0B]">
-                Modulo em Desenvolvimento
+                Módulo em Desenvolvimento
               </p>
               <p className="text-[10px] sm:text-xs font-mono text-[#F59E0B]/70 mt-0.5 leading-relaxed">
-                Este hub esta sendo construido. Dados e funcionalidades podem mudar a qualquer momento.
+                Este hub está sendo construído. Dados e funcionalidades podem mudar a qualquer momento.
               </p>
             </div>
           </div>
@@ -370,7 +370,7 @@ export default function HubNoticias() {
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <Newspaper className="w-5 h-5 text-[#FF6B2C]" />
-                    <h2 className="text-xl font-bold font-mono text-white">Noticias do Setor</h2>
+                    <h2 className="text-xl font-bold font-mono text-white">Notícias do Setor</h2>
                     <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
                       {filteredNoticias.length}/{noticias.length} itens
                     </span>
@@ -382,7 +382,7 @@ export default function HubNoticias() {
                       <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" />
                       <input
                         type="text"
-                        placeholder="Buscar noticias..."
+                        placeholder="Buscar notícias..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                         className="w-full pl-9 pr-3 py-2 text-xs font-mono bg-[#162044] border border-[#1E3A6E] text-white placeholder-[#64748B] focus:border-[#FF6B2C]/50 outline-none"
@@ -457,7 +457,7 @@ export default function HubNoticias() {
                     ))}
                     {filteredNoticias.length === 0 && (
                       <div className="text-center py-12 text-sm font-mono text-[#64748B]">
-                        Nenhuma noticia encontrada para os filtros selecionados.
+                        Nenhuma notícia encontrada para os filtros selecionados.
                       </div>
                     )}
                   </div>
@@ -469,7 +469,7 @@ export default function HubNoticias() {
                 <div>
                   <div className="flex items-center gap-2 mb-4 flex-wrap">
                     <FileText className="w-5 h-5 text-[#FF6B2C]" />
-                    <h2 className="text-xl font-bold font-mono text-white">Licitacoes</h2>
+                    <h2 className="text-xl font-bold font-mono text-white">Licitações</h2>
                     <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
                       {filteredLicitacoes.length}/{licitacoes.length} itens
                     </span>
@@ -499,7 +499,7 @@ export default function HubNoticias() {
                       {ultimaColeta && (
                         <p className="text-[10px] font-mono text-[#3B82F6]/60 flex items-center gap-1">
                           <Clock className="w-2.5 h-2.5" />
-                          Ultima coleta: {new Date(ultimaColeta).toLocaleString("pt-BR")}
+                          Última coleta: {new Date(ultimaColeta).toLocaleString("pt-BR")}
                         </p>
                       )}
                     </div>
@@ -532,7 +532,7 @@ export default function HubNoticias() {
                       <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" />
                       <input
                         type="text"
-                        placeholder="Buscar licitacoes por titulo ou orgao..."
+                        placeholder="Buscar licitações por título ou órgão..."
                         value={licSearchTerm}
                         onChange={e => setLicSearchTerm(e.target.value)}
                         className="w-full pl-9 pr-3 py-2 text-xs font-mono bg-[#162044] border border-[#1E3A6E] text-white placeholder-[#64748B] focus:border-[#FF6B2C]/50 outline-none"
@@ -611,7 +611,7 @@ export default function HubNoticias() {
                     ))}
                     {filteredLicitacoes.length === 0 && (
                       <div className="text-center py-12 text-sm font-mono text-[#64748B]">
-                        Nenhuma licitacao encontrada para os filtros selecionados.
+                        Nenhuma licitação encontrada para os filtros selecionados.
                       </div>
                     )}
                   </div>
@@ -623,12 +623,12 @@ export default function HubNoticias() {
                 <div>
                   <div className="flex items-center gap-2 mb-6">
                     <Link2 className="w-5 h-5 text-[#FF6B2C]" />
-                    <h2 className="text-xl font-bold font-mono text-white">Grafo de Vinculos</h2>
+                    <h2 className="text-xl font-bold font-mono text-white">Grafo de Vínculos</h2>
                     <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
                       {empresas.length} empresas
                     </span>
                     <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
-                      {vinculos.length} vinculos verificados
+                      {vinculos.length} vínculos verificados
                     </span>
                   </div>
 
@@ -637,7 +637,7 @@ export default function HubNoticias() {
                     <div className="mb-6">
                       <div className="flex items-center gap-2 mb-3">
                         <ArrowRightLeft className="w-4 h-4 text-[#FF6B2C]" />
-                        <h3 className="text-sm font-bold font-mono text-white">Vinculos Verificados</h3>
+                        <h3 className="text-sm font-bold font-mono text-white">Vínculos Verificados</h3>
                       </div>
                       <div className="grid gap-3 md:grid-cols-2">
                         {vinculos.map((vinculo, idx) => {
