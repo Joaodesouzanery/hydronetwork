@@ -15,6 +15,7 @@ import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { format } from "date-fns";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface MaterialRequest {
   id: string;
@@ -185,6 +186,8 @@ export default function MaterialRequests() {
               <h2 className="text-xl sm:text-2xl font-bold font-mono">Gerencie as solicitações de materiais</h2>
               <p className="text-sm text-muted-foreground">Acompanhe e aprove pedidos</p>
             </div>
+
+          <PullDataPanel currentModule="materiais" />
           </div>
           <div className="flex gap-2">
             <PageTutorialButton pageKey="material-requests" />

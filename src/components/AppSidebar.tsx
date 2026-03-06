@@ -5,7 +5,7 @@ import {
   Plus, History, Image, AlertCircle, Archive, HeadphonesIcon, Settings,
   BarChart3, ClipboardCheck, Activity, DollarSign, Building2, Bell, Clock,
   BookOpen, Smile, Mail, Linkedin, FileCheck2, GraduationCap, HelpCircle,
-  ChevronDown, EyeOff, Eye, Compass
+  ChevronDown, EyeOff, Eye, Compass, Edit3
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -49,6 +49,9 @@ const sections: SidebarSection[] = [
       { title: "Atrasos de Projeto", url: "/project-delays", icon: Clock },
       { title: "LPS / Lean", url: "/hydronetwork/lps", icon: ClipboardCheck },
       { title: "Controle de Aprovação", url: "/approval-control", icon: FileCheck2 },
+      { title: "Economia Comprovada", url: "/hydronetwork/economia", icon: DollarSign },
+      { title: "Aprovações de Projetos", url: "/hydronetwork/caesb", icon: Shield },
+      { title: "Projetos Básicos", url: "/hydronetwork/caesb-preprojeto", icon: ClipboardCheck },
     ],
   },
   {
@@ -60,6 +63,7 @@ const sections: SidebarSection[] = [
       { title: "Água", url: "/hydronetwork/agua", icon: Droplets },
       { title: "Drenagem", url: "/hydronetwork/drenagem", icon: CloudRain },
       { title: "Quantitativos", url: "/hydronetwork/quantitativos", icon: FileSpreadsheet },
+      { title: "Edição por Trechos", url: "/hydronetwork/edicao-trecho", icon: Edit3 },
       { title: "Orçamento", url: "/hydronetwork/orcamento", icon: Calculator },
       { title: "BDI", url: "/hydronetwork/bdi", icon: DollarSign },
       { title: "Planejamento", url: "/hydronetwork/planejamento", icon: Calendar },
@@ -76,8 +80,6 @@ const sections: SidebarSection[] = [
       { title: "Orçamento de Elevatória", url: "/hydronetwork/elevatoria", icon: Activity },
       { title: "Recalque / Booster", url: "/hydronetwork/recalque", icon: Activity },
       { title: "Transientes Hidráulicos", url: "/hydronetwork/transientes", icon: Activity },
-      { title: "CAESB / SABESP", url: "/hydronetwork/caesb", icon: Shield },
-      { title: "CAESB Pré-Projeto", url: "/hydronetwork/caesb-preprojeto", icon: ClipboardCheck },
     ],
   },
   {
@@ -86,9 +88,9 @@ const sections: SidebarSection[] = [
     items: [
       { title: "RDO Hydro", url: "/hydronetwork/rdo", icon: ClipboardList },
       { title: "RDO × Planejamento", url: "/hydronetwork/rdo-planejamento", icon: BarChart3 },
+      { title: "Histórico RDO Hydro", url: "/hydronetwork/rdo-historico", icon: History },
+      { title: "Fotos de Validação", url: "/hydronetwork/fotos-validacao", icon: Image },
       { title: "Novo RDO", url: "/rdo-new", icon: Plus },
-      { title: "Histórico RDO", url: "/rdo-history", icon: History },
-      { title: "Fotos de Validação", url: "/rdo-photos", icon: Image },
       { title: "Controle de Produção", url: "/production-control", icon: ClipboardList },
       { title: "Relatório de Ligações", url: "/connection-reports", icon: FileText },
       { title: "Ocorrências", url: "/occurrences", icon: AlertCircle },

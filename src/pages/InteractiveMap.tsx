@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   Upload,
   MapPin,
@@ -104,7 +105,7 @@ async function clearTileCache(): Promise<void> {
   } catch { /* ignore */ }
 }
 
-// Annotation marker colors based on type
+// Annotation marker colors and SVG icons based on type
 function getAnnotationColor(tipo: string): string {
   switch (tipo) {
     case "ponto": return "#3B82F6";
@@ -113,6 +114,36 @@ function getAnnotationColor(tipo: string): string {
     case "inspecao": return "#EF4444";
     default: return "#6366f1";
   }
+}
+
+function getAnnotationSvgIcon(tipo: string, porcentagem: number): L.DivIcon {
+  const color = getAnnotationColor(tipo);
+  const size = 28;
+  const iconMap: Record<string, string> = {
+    ponto: `<circle cx="14" cy="14" r="6" fill="${color}" stroke="white" stroke-width="2"/>`,
+    area: `<rect x="7" y="7" width="14" height="14" rx="2" fill="${color}" stroke="white" stroke-width="2"/>`,
+    setor: `<polygon points="14,5 23,23 5,23" fill="${color}" stroke="white" stroke-width="2"/>`,
+    inspecao: `<circle cx="14" cy="14" r="7" fill="none" stroke="${color}" stroke-width="3"/><circle cx="14" cy="14" r="2" fill="${color}"/>`,
+  };
+  const shape = iconMap[tipo] || iconMap.ponto;
+  const pctArc = porcentagem > 0 && porcentagem < 100 ? (() => {
+    const r = 13;
+    const angle = (porcentagem / 100) * 360;
+    const rad = (angle - 90) * Math.PI / 180;
+    const x = 14 + r * Math.cos(rad);
+    const y = 14 + r * Math.sin(rad);
+    const large = angle > 180 ? 1 : 0;
+    return `<path d="M14,1 A${r},${r} 0 ${large},1 ${x.toFixed(1)},${y.toFixed(1)}" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.5"/>`;
+  })() : "";
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${pctArc}${shape}</svg>`;
+  return L.divIcon({
+    html: svg,
+    className: "custom-svg-marker",
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
+  });
 }
 
 interface MapAnnotation {
@@ -666,15 +697,8 @@ export default function InteractiveMap() {
       : annotations.filter(a => a.tipo === annotationFilter);
 
     filtered.forEach((annotation) => {
-      const color = getAnnotationColor(annotation.tipo);
-      const marker = L.circleMarker([annotation.latitude, annotation.longitude], {
-        radius: 10,
-        fillColor: color,
-        color: "#fff",
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 0.85,
-      }).addTo(markersLayerRef.current!);
+      const icon = getAnnotationSvgIcon(annotation.tipo, annotation.porcentagem);
+      const marker = L.marker([annotation.latitude, annotation.longitude], { icon }).addTo(markersLayerRef.current!);
 
       marker.bindPopup(`
         <div style="min-width:180px">
@@ -827,6 +851,8 @@ export default function InteractiveMap() {
               {project?.name || "Projeto"} - Importe mapas do QGIS e gerencie anotações
             </p>
           </div>
+
+          <PullDataPanel currentModule="mapa" />
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
             <TabsList>

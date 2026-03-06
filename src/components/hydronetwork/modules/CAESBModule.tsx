@@ -313,7 +313,7 @@ export const CAESBModule = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="w-5 h-5 text-blue-600" />
-            Módulo CAESB / SABESP — Conformidade Normativa
+            Aprovações de Projetos — Conformidade Normativa
           </CardTitle>
           <CardDescription>
             Verificação automática de conformidade com normas técnicas CAESB, SABESP, ABNT e TCU.
@@ -756,5 +756,3 @@ export const CAESBModule = () => {
     </div>
   );
 };
-
-export default CAESBModule;

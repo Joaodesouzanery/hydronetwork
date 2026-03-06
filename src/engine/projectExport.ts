@@ -33,6 +33,11 @@ const LOCAL_STORAGE_KEYS: Record<string, string> = {
   pointTypes: "point_types",
   equipment: "hydro_rdos_equipment",
   trechos: "hydronetwork_trechos",
+  medicaoItems: "hydronetwork_medicao_items",
+  medicaoTrechos: "hydronetwork_medicao_trechos",
+  rdoTrechos: "hydronetwork_rdo_trechos",
+  rdoTrechoDaily: "hydronetwork_rdo_trecho_daily",
+  quantRows: "hydronetwork_quant_rows",
 };
 
 // ── Export ──
@@ -113,6 +118,38 @@ export async function exportProjectAsZip(projectName?: string): Promise<void> {
     zip.file("trechos.json", trechosRaw);
     if (!modules.includes("topography")) modules.push("trechos");
     try { counts.trechosStandalone = JSON.parse(trechosRaw).length; } catch { /* ignore */ }
+  }
+
+  // 10. Measurement items (Medição)
+  const medicaoItemsRaw = localStorage.getItem(LOCAL_STORAGE_KEYS.medicaoItems);
+  if (medicaoItemsRaw && medicaoItemsRaw !== "[]") {
+    zip.file("medicao_items.json", medicaoItemsRaw);
+    modules.push("medicaoItems");
+    try { counts.medicaoItems = JSON.parse(medicaoItemsRaw).length; } catch { /* ignore */ }
+  }
+
+  // 11. Measurement per-trecho data
+  const medicaoTrechosRaw = localStorage.getItem(LOCAL_STORAGE_KEYS.medicaoTrechos);
+  if (medicaoTrechosRaw && medicaoTrechosRaw !== "[]") {
+    zip.file("medicao_trechos.json", medicaoTrechosRaw);
+    modules.push("medicaoTrechos");
+    try { counts.medicaoTrechos = JSON.parse(medicaoTrechosRaw).length; } catch { /* ignore */ }
+  }
+
+  // 12. RDO per-trecho daily entries
+  const rdoTrechoDailyRaw = localStorage.getItem(LOCAL_STORAGE_KEYS.rdoTrechoDaily);
+  if (rdoTrechoDailyRaw && rdoTrechoDailyRaw !== "[]") {
+    zip.file("rdo_trecho_daily.json", rdoTrechoDailyRaw);
+    modules.push("rdoTrechoDaily");
+    try { counts.rdoTrechoDaily = JSON.parse(rdoTrechoDailyRaw).length; } catch { /* ignore */ }
+  }
+
+  // 13. Quantity rows
+  const quantRowsRaw = localStorage.getItem(LOCAL_STORAGE_KEYS.quantRows);
+  if (quantRowsRaw && quantRowsRaw !== "[]") {
+    zip.file("quant_rows.json", quantRowsRaw);
+    modules.push("quantRows");
+    try { counts.quantRows = JSON.parse(quantRowsRaw).length; } catch { /* ignore */ }
   }
 
   // Manifest
@@ -289,6 +326,58 @@ export async function importProjectFromZip(file: File): Promise<ImportResult> {
         result.counts.trechosStandalone = JSON.parse(content).length;
       } catch (e) {
         result.errors.push(`Erro ao importar trechos: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    // 11. Import measurement items
+    const medicaoItemsFile = zip.file("medicao_items.json");
+    if (medicaoItemsFile) {
+      try {
+        const content = await medicaoItemsFile.async("string");
+        localStorage.setItem(LOCAL_STORAGE_KEYS.medicaoItems, content);
+        result.imported.push("medicaoItems");
+        result.counts.medicaoItems = JSON.parse(content).length;
+      } catch (e) {
+        result.errors.push(`Erro ao importar itens de medição: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    // 12. Import measurement per-trecho data
+    const medicaoTrechosFile = zip.file("medicao_trechos.json");
+    if (medicaoTrechosFile) {
+      try {
+        const content = await medicaoTrechosFile.async("string");
+        localStorage.setItem(LOCAL_STORAGE_KEYS.medicaoTrechos, content);
+        result.imported.push("medicaoTrechos");
+        result.counts.medicaoTrechos = JSON.parse(content).length;
+      } catch (e) {
+        result.errors.push(`Erro ao importar medição por trecho: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    // 13. Import RDO per-trecho daily entries
+    const rdoDailyFile = zip.file("rdo_trecho_daily.json");
+    if (rdoDailyFile) {
+      try {
+        const content = await rdoDailyFile.async("string");
+        localStorage.setItem(LOCAL_STORAGE_KEYS.rdoTrechoDaily, content);
+        result.imported.push("rdoTrechoDaily");
+        result.counts.rdoTrechoDaily = JSON.parse(content).length;
+      } catch (e) {
+        result.errors.push(`Erro ao importar RDO diário: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    // 14. Import quantity rows
+    const quantRowsFile = zip.file("quant_rows.json");
+    if (quantRowsFile) {
+      try {
+        const content = await quantRowsFile.async("string");
+        localStorage.setItem(LOCAL_STORAGE_KEYS.quantRows, content);
+        result.imported.push("quantRows");
+        result.counts.quantRows = JSON.parse(content).length;
+      } catch (e) {
+        result.errors.push(`Erro ao importar quantitativos: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 

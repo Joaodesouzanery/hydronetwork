@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   Plus, ClipboardCheck, Clock, CheckCircle, XCircle, AlertTriangle,
   Search, Trash2, Edit, RotateCcw, Send, FileText, Calendar
@@ -242,6 +243,8 @@ const ApprovalControl = () => {
               </h1>
               <p className="text-sm text-muted-foreground">Gerencie submissões, prazos e aprovações de documentos</p>
             </div>
+
+          <PullDataPanel currentModule="aprovacoes" />
           </div>
 
           {/* Stats Cards */}

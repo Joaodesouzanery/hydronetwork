@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { AddEmployeeDialog } from "@/components/employees/AddEmployeeDialog";
 import { ImportEmployeesDialog } from "@/components/employees/ImportEmployeesDialog";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface Employee {
   id: string;
@@ -139,6 +140,8 @@ export default function Employees() {
               <h1 className="text-2xl sm:text-3xl font-bold font-mono">Funcionários</h1>
               <p className="text-sm text-muted-foreground">Gerencie todos os funcionários do sistema</p>
             </div>
+
+          <PullDataPanel currentModule="funcionarios" />
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <PageTutorialButton pageKey="employees" />

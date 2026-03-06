@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as XLSX from 'xlsx';
 import { extractPdfText } from "@/lib/pdfTextExtractor";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   Table,
   TableBody,
@@ -1123,6 +1124,8 @@ const BudgetPricing = () => {
               <h1 className="text-3xl font-bold font-mono text-foreground">Precificação Privada</h1>
               <p className="text-muted-foreground">Importe uma planilha (Excel ou PDF) e busque preços na sua base privada</p>
             </div>
+
+          <PullDataPanel currentModule="orcamento" />
           </div>
 
           <Button variant="outline" onClick={() => setShowTutorial(true)}>

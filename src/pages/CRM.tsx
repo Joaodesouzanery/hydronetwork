@@ -9,7 +9,8 @@ import { CRMPipeline } from "@/components/crm/CRMPipeline";
 import { CRMActivities } from "@/components/crm/CRMActivities";
 import { CRMCalendar } from "@/components/crm/CRMCalendar";
 import { CRMReports } from "@/components/crm/CRMReports";
-import { 
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
+import {
   LayoutDashboard, 
   Users, 
   Building2, 
@@ -36,6 +37,8 @@ const CRM = () => {
                 Gestão completa de relacionamento com clientes
               </p>
             </div>
+
+            <PullDataPanel currentModule="crm" />
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
               {/* Mobile-friendly tabs with horizontal scroll */}

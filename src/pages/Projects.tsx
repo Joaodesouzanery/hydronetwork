@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ImportDataDialog } from "@/components/projects/ImportDataDialog";
 import { TutorialDialog } from "@/components/shared/TutorialDialog";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const Projects = () => {
   const navigate = useNavigate();
@@ -442,6 +443,8 @@ const Projects = () => {
             </Card>
           )}
         </div>
+
+      <PullDataPanel currentModule="obras" />
       </main>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>

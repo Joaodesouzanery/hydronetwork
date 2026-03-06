@@ -29,3 +29,12 @@ supabase/.temp/
 
 # External skills/tools
 skills/
+
+# Large media files (use external CDN instead)
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Build/preview artifacts
+preview*.html

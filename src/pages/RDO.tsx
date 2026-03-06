@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeatherData } from "@/hooks/useWeatherData";
 import { AddProjectDialog } from "@/components/rdo/AddProjectDialog";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const RDO = () => {
   const navigate = useNavigate();
@@ -142,6 +143,8 @@ const RDO = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        <PullDataPanel currentModule="rdo" />
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Formulário Principal */}
           <div className="lg:col-span-2">

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { GlobalFilters } from './useCustomDashboard';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
@@ -39,6 +39,14 @@ interface MaterialData {
   service_front_name: string;
 }
 
+/**
+ * Stable serialization of filters + projectIds so we can use it as a
+ * dependency that only changes when the actual filter values change.
+ */
+function filtersKey(filters: GlobalFilters, projectIds?: string[]): string {
+  return JSON.stringify({ ...filters, projectIds: projectIds ?? [] });
+}
+
 export function useDashboardData(filters: GlobalFilters, projectIds?: string[]) {
   const [productionData, setProductionData] = useState<ProductionData[]>([]);
   const [kpiData, setKpiData] = useState<KPIData | null>(null);
@@ -46,7 +54,12 @@ export function useDashboardData(filters: GlobalFilters, projectIds?: string[]) 
   const [materialData, setMaterialData] = useState<MaterialData[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const getDateRange = useCallback(() => {
+  // Keep a ref for latest production data so KPI calc doesn't depend on state
+  const productionRef = useRef<ProductionData[]>([]);
+  // Monotonic counter to discard stale fetches
+  const fetchIdRef = useRef(0);
+
+  const dateRange = useMemo(() => {
     const today = new Date();
     let startDate: Date;
     let endDate: Date = today;
@@ -75,71 +88,68 @@ export function useDashboardData(filters: GlobalFilters, projectIds?: string[]) 
       start: format(startDate, 'yyyy-MM-dd'),
       end: format(endDate, 'yyyy-MM-dd')
     };
-  }, [filters]);
+  }, [filters.period, filters.startDate, filters.endDate]);
 
-  const fetchProductionData = useCallback(async () => {
+  const refreshData = useCallback(async () => {
+    const id = ++fetchIdRef.current;
+    setLoading(true);
+
     try {
-      const { start, end } = getDateRange();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch executed services with related data
-      let query = supabase
-        .from('executed_services')
-        .select(`
-          id,
-          quantity,
-          unit,
-          created_at,
-          service_id,
-          employee_id,
-          daily_report_id,
-          services_catalog (id, name),
-          employees (id, name),
-          daily_reports (
-            id,
-            report_date,
-            service_front_id,
-            project_id,
-            service_fronts (id, name),
-            projects (id, name, created_by_user_id)
-          )
-        `)
-        .gte('daily_reports.report_date', start)
-        .lte('daily_reports.report_date', end);
+      const { start, end } = dateRange;
 
-      if (projectIds && projectIds.length > 0) {
-        query = query.in('daily_reports.project_id', projectIds);
-      }
+      // ── Fetch production + targets + team + material in parallel ──
+      const [execRes, targetsRes, laborRes, materialsRes, projectCountRes, employeeCountRes, pendingRes, occRes] = await Promise.all([
+        supabase
+          .from('executed_services')
+          .select(`
+            id, quantity, unit, created_at, service_id, employee_id, daily_report_id,
+            services_catalog (id, name),
+            employees (id, name),
+            daily_reports (
+              id, report_date, service_front_id, project_id,
+              service_fronts (id, name),
+              projects (id, name, created_by_user_id)
+            )
+          `)
+          .gte('daily_reports.report_date', start)
+          .lte('daily_reports.report_date', end),
+        supabase
+          .from('production_targets')
+          .select(`id, target_quantity, target_date, service_id, employee_id, service_front_id, services_catalog (id, name)`)
+          .gte('target_date', start)
+          .lte('target_date', end),
+        supabase
+          .from('labor_tracking')
+          .select(`*, projects!inner(id, name, created_by_user_id), employees (id, name, role)`)
+          .eq('projects.created_by_user_id', user.id)
+          .gte('work_date', start)
+          .lte('work_date', end),
+        supabase
+          .from('material_control')
+          .select(`*, projects!inner(id, name, created_by_user_id), service_fronts (id, name)`)
+          .eq('projects.created_by_user_id', user.id)
+          .gte('usage_date', start)
+          .lte('usage_date', end),
+        supabase.from('projects').select('*', { count: 'exact', head: true }).eq('created_by_user_id', user.id).eq('status', 'active'),
+        supabase.from('employees').select('*', { count: 'exact', head: true }).eq('created_by_user_id', user.id).eq('status', 'active'),
+        supabase.from('material_requests').select('*, projects!inner(created_by_user_id)', { count: 'exact', head: true }).eq('projects.created_by_user_id', user.id).eq('status', 'pendente'),
+        supabase.from('occurrences').select('*, projects!inner(created_by_user_id)', { count: 'exact', head: true }).eq('projects.created_by_user_id', user.id).eq('status', 'aberta'),
+      ]);
 
-      const { data: execServices, error } = await query;
-      
-      if (error) {
-        console.error('Error fetching production data:', error);
-        return;
-      }
+      // Discard if a newer fetch was started
+      if (id !== fetchIdRef.current) return;
 
-      // Fetch production targets
-      const { data: targets } = await supabase
-        .from('production_targets')
-        .select(`
-          id,
-          target_quantity,
-          target_date,
-          service_id,
-          employee_id,
-          service_front_id,
-          services_catalog (id, name)
-        `)
-        .gte('target_date', start)
-        .lte('target_date', end);
-
-      // Map the data
+      // ── Production data ──
       const productionMap = new Map<string, ProductionData>();
+      const pIds = projectIds && projectIds.length > 0 ? new Set(projectIds) : null;
 
-      execServices?.forEach((service: any) => {
+      execRes.data?.forEach((service: any) => {
         if (!service.daily_reports?.projects?.created_by_user_id) return;
         if (service.daily_reports.projects.created_by_user_id !== user.id) return;
+        if (pIds && !pIds.has(service.daily_reports.project_id)) return;
 
         const date = service.daily_reports?.report_date;
         const serviceName = service.services_catalog?.name || 'Serviço';
@@ -154,15 +164,13 @@ export function useDashboardData(filters: GlobalFilters, projectIds?: string[]) 
           employee_name: service.employees?.name,
           service_front_name: service.daily_reports?.service_fronts?.name
         };
-
         existing.actual += Number(service.quantity) || 0;
         productionMap.set(key, existing);
       });
 
-      targets?.forEach((target: any) => {
+      targetsRes.data?.forEach((target: any) => {
         const serviceName = target.services_catalog?.name || 'Serviço';
         const key = `${target.target_date}-${serviceName}`;
-
         const existing = productionMap.get(key);
         if (existing) {
           existing.planned += Number(target.target_quantity) || 0;
@@ -177,94 +185,13 @@ export function useDashboardData(filters: GlobalFilters, projectIds?: string[]) 
         }
       });
 
-      setProductionData(Array.from(productionMap.values()));
-    } catch (error) {
-      console.error('Error fetching production data:', error);
-    }
-  }, [getDateRange, projectIds]);
+      const newProductionData = Array.from(productionMap.values());
+      productionRef.current = newProductionData;
+      setProductionData(newProductionData);
 
-  const fetchKPIData = useCallback(async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { start, end } = getDateRange();
-
-      // Fetch projects count
-      const { count: projectCount } = await supabase
-        .from('projects')
-        .select('*', { count: 'exact', head: true })
-        .eq('created_by_user_id', user.id)
-        .eq('status', 'active');
-
-      // Fetch employees count
-      const { count: employeeCount } = await supabase
-        .from('employees')
-        .select('*', { count: 'exact', head: true })
-        .eq('created_by_user_id', user.id)
-        .eq('status', 'active');
-
-      // Fetch pending material requests
-      const { count: pendingRequests } = await supabase
-        .from('material_requests')
-        .select('*, projects!inner(created_by_user_id)', { count: 'exact', head: true })
-        .eq('projects.created_by_user_id', user.id)
-        .eq('status', 'pendente');
-
-      // Fetch open occurrences
-      const { count: openOccurrences } = await supabase
-        .from('occurrences')
-        .select('*, projects!inner(created_by_user_id)', { count: 'exact', head: true })
-        .eq('projects.created_by_user_id', user.id)
-        .eq('status', 'aberta');
-
-      // Calculate production totals
-      let totalProduction = 0;
-      let totalPlanned = 0;
-
-      productionData.forEach(item => {
-        totalProduction += item.actual;
-        totalPlanned += item.planned;
-      });
-
-      setKpiData({
-        total_production: totalProduction,
-        total_planned: totalPlanned,
-        completion_rate: totalPlanned > 0 ? (totalProduction / totalPlanned) * 100 : 0,
-        active_employees: employeeCount || 0,
-        active_projects: projectCount || 0,
-        material_requests_pending: pendingRequests || 0,
-        occurrences_open: openOccurrences || 0
-      });
-    } catch (error) {
-      console.error('Error fetching KPI data:', error);
-    }
-  }, [getDateRange, productionData]);
-
-  const fetchTeamData = useCallback(async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { start, end } = getDateRange();
-
-      const { data: laborData, error } = await supabase
-        .from('labor_tracking')
-        .select(`
-          *,
-          projects!inner(id, name, created_by_user_id),
-          employees (id, name, role)
-        `)
-        .eq('projects.created_by_user_id', user.id)
-        .gte('work_date', start)
-        .lte('work_date', end);
-
-      if (error) throw error;
-
-      // Aggregate by employee
+      // ── Team data ──
       const employeeMap = new Map<string, TeamData>();
-
-      laborData?.forEach((record: any) => {
+      laborRes.data?.forEach((record: any) => {
         const employeeId = record.employee_id || record.id;
         const existing = employeeMap.get(employeeId) || {
           employee_id: employeeId,
@@ -274,48 +201,18 @@ export function useDashboardData(filters: GlobalFilters, projectIds?: string[]) 
           days_worked: 0,
           average_production: 0
         };
-
         existing.days_worked += 1;
         existing.total_production += Number(record.hours_worked) || 0;
         employeeMap.set(employeeId, existing);
       });
-
-      // Calculate averages
-      const teamDataArray = Array.from(employeeMap.values()).map(emp => ({
+      setTeamData(Array.from(employeeMap.values()).map(emp => ({
         ...emp,
         average_production: emp.days_worked > 0 ? emp.total_production / emp.days_worked : 0
-      }));
+      })));
 
-      setTeamData(teamDataArray);
-    } catch (error) {
-      console.error('Error fetching team data:', error);
-    }
-  }, [getDateRange]);
-
-  const fetchMaterialData = useCallback(async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { start, end } = getDateRange();
-
-      const { data: materials, error } = await supabase
-        .from('material_control')
-        .select(`
-          *,
-          projects!inner(id, name, created_by_user_id),
-          service_fronts (id, name)
-        `)
-        .eq('projects.created_by_user_id', user.id)
-        .gte('usage_date', start)
-        .lte('usage_date', end);
-
-      if (error) throw error;
-
-      // Aggregate by material
+      // ── Material data ──
       const materialMap = new Map<string, MaterialData>();
-
-      materials?.forEach((record: any) => {
+      materialsRes.data?.forEach((record: any) => {
         const key = `${record.material_name}-${record.service_fronts?.id || 'geral'}`;
         const existing = materialMap.get(key) || {
           material_name: record.material_name,
@@ -323,34 +220,44 @@ export function useDashboardData(filters: GlobalFilters, projectIds?: string[]) 
           unit: record.unit,
           service_front_name: record.service_fronts?.name || 'Geral'
         };
-
         existing.total_quantity += Number(record.quantity_used) || 0;
         materialMap.set(key, existing);
       });
-
       setMaterialData(Array.from(materialMap.values()));
+
+      // ── KPI (uses production data from this fetch, not stale state) ──
+      let totalProduction = 0;
+      let totalPlanned = 0;
+      newProductionData.forEach(item => {
+        totalProduction += item.actual;
+        totalPlanned += item.planned;
+      });
+
+      setKpiData({
+        total_production: totalProduction,
+        total_planned: totalPlanned,
+        completion_rate: totalPlanned > 0 ? (totalProduction / totalPlanned) * 100 : 0,
+        active_employees: employeeCountRes.count || 0,
+        active_projects: projectCountRes.count || 0,
+        material_requests_pending: pendingRes.count || 0,
+        occurrences_open: occRes.count || 0
+      });
     } catch (error) {
-      console.error('Error fetching material data:', error);
-    }
-  }, [getDateRange]);
-
-  const refreshData = useCallback(async () => {
-    setLoading(true);
-    try {
-      await Promise.all([
-        fetchProductionData(),
-        fetchTeamData(),
-        fetchMaterialData()
-      ]);
-      await fetchKPIData();
+      console.error('Error fetching dashboard data:', error);
     } finally {
-      setLoading(false);
+      if (id === fetchIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [fetchProductionData, fetchTeamData, fetchMaterialData, fetchKPIData]);
+  }, [dateRange, projectIds]);
 
+  // Stable key that only changes when filters/projectIds actually change
+  const key = useMemo(() => filtersKey(filters, projectIds), [filters, projectIds]);
+
+  // Re-fetch whenever the filter key changes
   useEffect(() => {
     refreshData();
-  }, [refreshData]);
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     productionData,
@@ -359,6 +266,6 @@ export function useDashboardData(filters: GlobalFilters, projectIds?: string[]) 
     materialData,
     loading,
     refreshData,
-    dateRange: getDateRange()
+    dateRange
   };
 }

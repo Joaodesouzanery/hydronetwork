@@ -15,44 +15,44 @@ import { QuantRow, QuantityParams } from "./QuantitiesModule";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line, ComposedChart, Area } from "recharts";
 import * as XLSX from "xlsx";
 
-// ─── Cost Databases ───
+// ─── Cost Databases (Ref: SINAPI 01/2026 - ajustado INCC +8%) ───
 const SINAPI_DESONERADO = {
   label: "SINAPI (Caixa/IBGE) - Desonerado",
   escavacao: [
-    { codigo: "96995", desc: "Escav. 1ª cat. (0-1,5m)", unit: "m³", custo: 28.50 },
-    { codigo: "96996", desc: "Escav. 1ª cat. (1,5-3m)", unit: "m³", custo: 35.20 },
-    { codigo: "96997", desc: "Escav. 1ª cat. (3-4,5m)", unit: "m³", custo: 42.80 },
-    { codigo: "96998", desc: "Escav. 2ª cat.", unit: "m³", custo: 65.30 },
-    { codigo: "96999", desc: "Escav. 3ª cat.", unit: "m³", custo: 125.50 },
+    { codigo: "96995", desc: "Escav. 1ª cat. (0-1,5m)", unit: "m³", custo: 30.78 },
+    { codigo: "96996", desc: "Escav. 1ª cat. (1,5-3m)", unit: "m³", custo: 38.02 },
+    { codigo: "96997", desc: "Escav. 1ª cat. (3-4,5m)", unit: "m³", custo: 46.22 },
+    { codigo: "96998", desc: "Escav. 2ª cat.", unit: "m³", custo: 70.52 },
+    { codigo: "96999", desc: "Escav. 3ª cat.", unit: "m³", custo: 135.54 },
   ],
   escoramento: [
-    { codigo: "95241", desc: "Escoramento madeira", unit: "m²", custo: 45.80 },
-    { codigo: "95242", desc: "Escoramento metálico", unit: "m²", custo: 38.50 },
-    { codigo: "95243", desc: "Estaca-prancha", unit: "m²", custo: 85.20 },
+    { codigo: "95241", desc: "Escoramento madeira", unit: "m²", custo: 49.46 },
+    { codigo: "95242", desc: "Escoramento metálico", unit: "m²", custo: 41.58 },
+    { codigo: "95243", desc: "Estaca-prancha", unit: "m²", custo: 92.02 },
   ],
   tubulacao: [
-    { codigo: "89356", desc: "PVC DN150 implantado", unit: "m", custo: 125.50, dn: 150 },
-    { codigo: "89357", desc: "PVC DN200 implantado", unit: "m", custo: 185.30, dn: 200 },
-    { codigo: "89358", desc: "PVC DN250 implantado", unit: "m", custo: 265.80, dn: 250 },
-    { codigo: "89359", desc: "PVC DN300 implantado", unit: "m", custo: 355.20, dn: 300 },
-    { codigo: "89361", desc: "PVC DN400 implantado", unit: "m", custo: 485.60, dn: 400 },
-    { codigo: "89363", desc: "PEAD DN500 implantado", unit: "m", custo: 650.80, dn: 500 },
-    { codigo: "89365", desc: "Concreto DN600 implantado", unit: "m", custo: 820.50, dn: 600 },
+    { codigo: "89356", desc: "PVC DN150 implantado", unit: "m", custo: 135.54, dn: 150 },
+    { codigo: "89357", desc: "PVC DN200 implantado", unit: "m", custo: 200.12, dn: 200 },
+    { codigo: "89358", desc: "PVC DN250 implantado", unit: "m", custo: 287.06, dn: 250 },
+    { codigo: "89359", desc: "PVC DN300 implantado", unit: "m", custo: 383.62, dn: 300 },
+    { codigo: "89361", desc: "PVC DN400 implantado", unit: "m", custo: 524.45, dn: 400 },
+    { codigo: "89363", desc: "PEAD DN500 implantado", unit: "m", custo: 702.86, dn: 500 },
+    { codigo: "89365", desc: "Concreto DN600 implantado", unit: "m", custo: 886.14, dn: 600 },
   ],
   reaterro: [
-    { codigo: "97914", desc: "Reaterro compactado", unit: "m³", custo: 18.50 },
-    { codigo: "97905", desc: "Berço de areia", unit: "m³", custo: 95.30 },
-    { codigo: "97906", desc: "Envoltória c/ areia", unit: "m³", custo: 85.50 },
+    { codigo: "97914", desc: "Reaterro compactado", unit: "m³", custo: 19.98 },
+    { codigo: "97905", desc: "Berço de areia", unit: "m³", custo: 102.92 },
+    { codigo: "97906", desc: "Envoltória c/ areia", unit: "m³", custo: 92.34 },
   ],
   pavimentacao: [
-    { codigo: "95995", desc: "Sub-base BGS", unit: "m³", custo: 125.30 },
-    { codigo: "95996", desc: "Base brita grad.", unit: "m³", custo: 145.80 },
-    { codigo: "95998", desc: "CBUQ 5cm", unit: "m²", custo: 28.50 },
+    { codigo: "95995", desc: "Sub-base BGS", unit: "m³", custo: 135.32 },
+    { codigo: "95996", desc: "Base brita grad.", unit: "m³", custo: 157.46 },
+    { codigo: "95998", desc: "CBUQ 5cm", unit: "m²", custo: 30.78 },
   ],
   pv: [
-    { codigo: "89709", desc: "PV concreto até 1,5m", unit: "un", custo: 2850.00 },
-    { codigo: "89710", desc: "PV concreto 1,5-2,5m", unit: "un", custo: 4250.00 },
-    { codigo: "89711", desc: "PV concreto 2,5-4,0m", unit: "un", custo: 6850.00 },
+    { codigo: "89709", desc: "PV concreto até 1,5m", unit: "un", custo: 3078.00 },
+    { codigo: "89710", desc: "PV concreto 1,5-2,5m", unit: "un", custo: 4590.00 },
+    { codigo: "89711", desc: "PV concreto 2,5-4,0m", unit: "un", custo: 7398.00 },
   ],
 };
 
@@ -98,7 +98,7 @@ export const BudgetCostModule = ({ trechos, pontos, quantityRows, quantityParams
   const hasQuantities = quantityRows && quantityRows.length > 0;
   const [baseCustos, setBaseCustos] = useState("sinapi_des");
   const [uf, setUf] = useState("SP");
-  const [mesRef, setMesRef] = useState("12/2024");
+  const [mesRef, setMesRef] = useState("01/2026");
   const [bdiPct, setBdiPct] = useState(25);
   const [tipoPavimento, setTipoPavimento] = useState(quantityParams?.tipoPavimento ?? "terra");
   const [customCosts, setCustomCosts] = useState<any[] | null>(null);
@@ -376,7 +376,7 @@ export const BudgetCostModule = ({ trechos, pontos, quantityRows, quantityParams
                   <Select value={mesRef} onValueChange={setMesRef}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {["12/2024","11/2024","10/2024","09/2024","08/2024","07/2024","06/2024","01/2025","02/2025"].map(m => (
+                      {["01/2026","12/2025","11/2025","10/2025","09/2025","08/2025","07/2025","06/2025","05/2025","04/2025","03/2025","02/2025","01/2025"].map(m => (
                         <SelectItem key={m} value={m}>{m}</SelectItem>
                       ))}
                     </SelectContent>

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/lib/supabase";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   CheckCircle, XCircle, Loader2, Play, Database, User, Shield,
   FileText, Wrench, FolderOpen, ArrowLeft, ClipboardList,
@@ -356,6 +357,8 @@ export default function QADiagnostics() {
                 Verifica conexao Supabase, autenticacao e CRUD em todas as tabelas
               </p>
             </div>
+
+          <PullDataPanel currentModule="qa" />
           </div>
           <Button onClick={runAllTests} disabled={running} size="lg">
             {running ? (

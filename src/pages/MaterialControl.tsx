@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { AddMaterialControlDialog } from "@/components/materials/AddMaterialControlDialog";
 import { MaterialComparisonDashboard } from "@/components/materials/MaterialComparisonDashboard";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface MaterialControl {
   id: string;
@@ -143,6 +144,8 @@ export default function MaterialControl() {
             <h2 className="text-2xl font-bold font-mono">Registre e monitore o consumo de materiais</h2>
             <p className="text-muted-foreground">Acompanhe o uso de materiais</p>
           </div>
+
+          <PullDataPanel currentModule="materiais" />
           <div className="flex gap-2">
             <PageTutorialButton pageKey="material-control" />
             <Button onClick={() => setShowAddDialog(true)}>

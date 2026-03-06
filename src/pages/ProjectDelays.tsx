@@ -15,6 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { calculateProjectDelays, summarizeDelays, getDelayStatusColor, type ProjectDelay } from "@/utils/projectDelays";
 import { DELAY_THRESHOLDS, isValidEmail } from "@/config/defaults";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   Clock, AlertTriangle, CheckCircle, XCircle, Building2,
   Bell, Mail, TrendingDown, BarChart3, Calendar, ArrowRight
@@ -107,6 +108,8 @@ const ProjectDelays = () => {
             <Clock className="h-12 w-12 animate-pulse text-muted-foreground" />
           </main>
         </div>
+
+      <PullDataPanel currentModule="obras" />
       </SidebarProvider>
     );
   }

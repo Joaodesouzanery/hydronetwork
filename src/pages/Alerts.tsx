@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { AlertHistoryDialog } from "@/components/alerts/AlertHistoryDialog";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import { ALERT_TYPES, isValidEmail, type AlertType } from "@/config/defaults";
 
 interface Alert {
@@ -225,6 +226,8 @@ const Alerts = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        <PullDataPanel currentModule="alerts" />
+
         {showForm && (
           <Card className="mb-8">
             <CardHeader>

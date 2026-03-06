@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   Download, MapPin, Droplets, Calculator,
   AlertTriangle, Settings2, X, Map
@@ -27,11 +28,11 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from "recharts";
 import { TopographyMap } from "@/components/hydronetwork/TopographyMap";
 import { PerfilLongitudinal } from "@/components/hydronetwork/PerfilLongitudinal";
-import { RDOHydroModule } from "@/components/hydronetwork/RDOHydroModule";
-import { PlanningModule } from "@/components/hydronetwork/PlanningModule";
 import type { QuantRow, QuantityParams } from "@/components/hydronetwork/modules/QuantitiesModule";
 import { downloadDXF } from "@/lib/dxfExporter";
 // Lazy-loaded modules for code splitting — only loaded when navigated to
+const RDOHydroModule = lazy(() => import("@/components/hydronetwork/RDOHydroModule").then(m => ({ default: m.RDOHydroModule })));
+const PlanningModule = lazy(() => import("@/components/hydronetwork/PlanningModule").then(m => ({ default: m.PlanningModule })));
 const SewerModule = lazy(() => import("@/components/hydronetwork/modules/SewerModule").then(m => ({ default: m.SewerModule })));
 const WaterModule = lazy(() => import("@/components/hydronetwork/modules/WaterModule").then(m => ({ default: m.WaterModule })));
 const DrainageModule = lazy(() => import("@/components/hydronetwork/modules/DrainageModule").then(m => ({ default: m.DrainageModule })));
@@ -53,6 +54,10 @@ const RecalqueModule = lazy(() => import("@/components/hydronetwork/modules/Reca
 const TransientModule = lazy(() => import("@/components/hydronetwork/modules/TransientModule").then(m => ({ default: m.TransientModule })));
 const CAESBModule = lazy(() => import("@/components/hydronetwork/modules/CAESBModule").then(m => ({ default: m.CAESBModule })));
 const CAESBPreProjectModule = lazy(() => import("@/components/hydronetwork/modules/CAESBPreProjectModule").then(m => ({ default: m.CAESBPreProjectModule })));
+const TrechoEditModule = lazy(() => import("@/components/hydronetwork/modules/TrechoEditModule").then(m => ({ default: m.TrechoEditModule })));
+const EconomyPanelModule = lazy(() => import("@/components/hydronetwork/modules/EconomyPanelModule").then(m => ({ default: m.EconomyPanelModule })));
+const RDOHydroHistoryModule = lazy(() => import("@/components/hydronetwork/modules/RDOHydroHistoryModule").then(m => ({ default: m.RDOHydroHistoryModule })));
+const FotosValidacaoModule = lazy(() => import("@/components/hydronetwork/modules/FotosValidacaoModule").then(m => ({ default: m.FotosValidacaoModule })));
 import { QEsgWaterPanel } from "@/components/hydronetwork/panels/QEsgWaterPanel";
 import { getRasterGrid } from "@/engine/rasterStore";
 import { extractContours, type ContourExtractionResult } from "@/engine/contourExtractor";
@@ -77,12 +82,15 @@ const useHydroState = () => {
   const [rdos, setRdos] = useState<RDO[]>(loadRDOs());
   const [quantityRows, setQuantityRows] = useState<QuantRow[]>([]);
   const [quantityParams, setQuantityParams] = useState<QuantityParams | null>(null);
+  const [reviewErrorsCount, setReviewErrorsCount] = useState(0);
+  const [reviewWarningsCount, setReviewWarningsCount] = useState(0);
 
   return {
     pontos, setPontos, trechos, setTrechos, networkSummary, setNetworkSummary,
     costBase, setCostBase, budgetRows, setBudgetRows, budgetSummary, setBudgetSummary,
     diametroMm, setDiametroMm, material, setMaterial, scheduleResult, setScheduleResult,
     rdos, setRdos, quantityRows, setQuantityRows, quantityParams, setQuantityParams,
+    reviewErrorsCount, setReviewErrorsCount, reviewWarningsCount, setReviewWarningsCount,
   };
 };
 
@@ -97,6 +105,7 @@ const HydroNetwork = () => {
     costBase, setCostBase, budgetRows, setBudgetRows, budgetSummary, setBudgetSummary,
     diametroMm, setDiametroMm, material, setMaterial, scheduleResult, setScheduleResult,
     rdos, setRdos, quantityRows, setQuantityRows, quantityParams, setQuantityParams,
+    reviewErrorsCount, setReviewErrorsCount, reviewWarningsCount, setReviewWarningsCount,
   } = state;
 
   // ══════════════════════════════════════════════
@@ -297,11 +306,15 @@ const HydroNetwork = () => {
       case "qgis":
         return <QgisModule pontos={pontos} trechos={trechos} />;
       case "revisao":
-        return <PeerReviewModule pontos={pontos} trechos={trechos} />;
+        return <PeerReviewModule pontos={pontos} trechos={trechos} onReviewComplete={(errors, warnings) => { setReviewErrorsCount(errors); setReviewWarningsCount(warnings); }} />;
       case "rdo":
         return <RDOHydroModule pontos={pontos} trechos={trechos} rdos={rdos} setRdos={setRdos} onPontosChange={setPontos} onTrechosChange={setTrechos} />;
       case "rdo-planejamento":
         return <RDOPlanningModule pontos={pontos} trechos={trechos} rdos={rdos} scheduleResult={scheduleResult} />;
+      case "rdo-historico":
+        return <RDOHydroHistoryModule rdos={rdos} />;
+      case "fotos-validacao":
+        return <FotosValidacaoModule rdos={rdos} />;
       case "lps":
         return <LPSModule pontos={pontos} trechos={trechos} />;
       case "qesg-qwater":
@@ -316,12 +329,16 @@ const HydroNetwork = () => {
         return <CAESBModule />;
       case "caesb-preprojeto":
         return <CAESBPreProjectModule />;
+      case "edicao-trecho":
+        return <TrechoEditModule trechos={trechos} pontos={pontos} quantityRows={quantityRows} quantityParams={quantityParams ?? undefined} onTrechosChange={setTrechos} />;
       case "perfil":
         return <PerfilLongitudinal pontos={pontos} trechos={trechos} />;
       case "mapa":
         return <MapaInterativoModule />;
       case "exportacao":
         return <ExportacaoGISModule />;
+      case "economia":
+        return <EconomyPanelModule trechos={trechos} quantityRows={quantityRows} scheduleResult={scheduleResult} budgetTotal={budgetSummary?.totalCost} reviewErrorsCount={reviewErrorsCount} reviewWarningsCount={reviewWarningsCount} />;
       default:
         return <TopografiaModule />;
     }
@@ -371,6 +388,8 @@ const HydroNetwork = () => {
                   </>
                 )}
               </div>
+
+            <PullDataPanel currentModule="hydronetwork" />
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -829,13 +848,18 @@ const HydroNetwork = () => {
     drenagem: "Drenagem Pluvial", quantitativos: "Quantitativos", orcamento: "Orcamento e Custos",
     bdi: "BDI - Beneficios e Despesas Indiretas", planejamento: "Planejamento", epanet: "EPANET", "epanet-pro": "EPANET PRO",
     swmm: "SWMM", openproject: "OpenProject", projectlibre: "ProjectLibre", qgis: "QGIS",
-    revisao: "Revisao por Pares", rdo: "RDO", "rdo-planejamento": "RDO Ã-- Planejamento",
+    revisao: "Revisao por Pares", rdo: "RDO", "rdo-planejamento": "RDO x Planejamento",
+    "rdo-historico": "Historico de RDO Hydro", "fotos-validacao": "Fotos de Validacao",
     perfil: "Perfil Longitudinal", mapa: "Mapa Interativo", exportacao: "Exportacao GIS",
     lps: "LPS — Last Planner System",
     "qesg-qwater": "QEsg / QWater — Dimensionamento Hidráulico",
     elevatoria: "Orçamento de Elevatória",
     recalque: "Recalque / Booster — Linhas de Recalque",
     transientes: "Transientes Hidráulicos — Golpe de Aríete",
+    "edicao-trecho": "Edição por Trechos",
+    caesb: "Aprovações de Projetos",
+    "caesb-preprojeto": "Projetos Básicos",
+    economia: "Economia Comprovada",
   };
 
   return (

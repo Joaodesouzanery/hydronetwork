@@ -850,6 +850,7 @@ async function main() {
       link: item.link,
       data_publicacao: item.data_publicacao,
       fonte: item.fonte,
+      imagem: item.imagem || "",
     })));
     const noticiasOrdenadas = ordenarPorData(noticias).slice(0, 50);
 

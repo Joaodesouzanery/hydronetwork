@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Building2, Download, Filter, TrendingUp, Users, FileText, Eye, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', 'hsl(var(--destructive))'];
 
@@ -181,6 +182,8 @@ const Production = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        <PullDataPanel currentModule="production" />
+
         {/* Cards de Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>

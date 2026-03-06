@@ -9,6 +9,7 @@ import { BudgetsTable } from "@/components/budgets/BudgetsTable";
 import { CreateBudgetDialog } from "@/components/budgets/CreateBudgetDialog";
 import { SpreadsheetUploadDialog } from "@/components/budgets/SpreadsheetUploadDialog";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   Select,
   SelectContent,
@@ -65,6 +66,8 @@ const Budgets = () => {
             <h1 className="text-3xl font-bold font-mono text-foreground">Orçamentos</h1>
             <p className="text-muted-foreground">Gerencie seus orçamentos e propostas</p>
           </div>
+
+        <PullDataPanel currentModule="orcamento" />
         </div>
           <div className="flex gap-2">
             <PageTutorialButton pageKey="budgets" />

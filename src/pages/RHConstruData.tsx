@@ -8,7 +8,8 @@ import { Funcionarios } from "@/components/rh/Funcionarios";
 import { Unidades } from "@/components/rh/Unidades";
 import { DashboardPrimeCost } from "@/components/rh/DashboardPrimeCost";
 import { FeriodosFaltas } from "@/components/rh/FeriodosFaltas";
-import { 
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
+import {
   LayoutDashboard, 
   Calendar, 
   Users, 
@@ -34,6 +35,8 @@ const RHConstruData = () => {
                 Gestão de recursos humanos, escalas CLT e controle de custos
               </p>
             </div>
+
+            <PullDataPanel currentModule="funcionarios" />
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
               {/* Mobile-friendly tabs with horizontal scroll */}

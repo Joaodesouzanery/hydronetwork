@@ -1895,7 +1895,7 @@ export const CAESBPreProjectModule = () => {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <KanbanSquare className="w-5 h-5 text-[#FF6B2C]" />
-            Pre-Projeto CAESB — Kanban de Demandas
+            Projetos Básicos — Kanban de Demandas
           </CardTitle>
           <CardDescription>
             Gestao de solicitacoes de pre-projeto para a CAESB. Acompanhe o fluxo desde o pedido inicial ate a aprovacao.
@@ -2142,5 +2142,3 @@ export const CAESBPreProjectModule = () => {
     </div>
   );
 };
-
-export default CAESBPreProjectModule;
