@@ -19,12 +19,5 @@
       ]
     }
   ],
-  "redirects": [
-    {
-      "source": "/",
-      "has": [{ "type": "host", "value": "www.construdata.software" }],
-      "destination": "https://construdata.software",
-      "permanent": true
-    }
-  ]
+  "redirects": []
 }
