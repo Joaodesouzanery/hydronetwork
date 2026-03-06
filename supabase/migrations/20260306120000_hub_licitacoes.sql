@@ -34,6 +34,11 @@ CREATE INDEX IF NOT EXISTS idx_hub_licitacoes_valor ON public.hub_licitacoes(val
 -- RLS: leitura pública, escrita via service_role (Edge Function)
 ALTER TABLE public.hub_licitacoes ENABLE ROW LEVEL SECURITY;
 
+-- Drop policies first to make migration idempotent (PostgreSQL has no CREATE POLICY IF NOT EXISTS)
+DROP POLICY IF EXISTS "hub_licitacoes_read_all" ON public.hub_licitacoes;
+DROP POLICY IF EXISTS "hub_licitacoes_insert_service" ON public.hub_licitacoes;
+DROP POLICY IF EXISTS "hub_licitacoes_update_service" ON public.hub_licitacoes;
+
 CREATE POLICY "hub_licitacoes_read_all"
   ON public.hub_licitacoes FOR SELECT
   USING (true);
@@ -60,6 +65,10 @@ CREATE TABLE IF NOT EXISTS public.hub_coleta_meta (
 );
 
 ALTER TABLE public.hub_coleta_meta ENABLE ROW LEVEL SECURITY;
+
+-- Drop policies first to make migration idempotent
+DROP POLICY IF EXISTS "hub_coleta_meta_read_all" ON public.hub_coleta_meta;
+DROP POLICY IF EXISTS "hub_coleta_meta_insert_service" ON public.hub_coleta_meta;
 
 CREATE POLICY "hub_coleta_meta_read_all"
   ON public.hub_coleta_meta FOR SELECT
