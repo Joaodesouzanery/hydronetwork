@@ -414,7 +414,9 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
     toast.success(editingPlanId ? `Planejamento "${name}" atualizado!` : `Planejamento "${name}" salvo!`);
   }, [editingPlanId, savedPlans, numEquipes, teamConfig, metrosDia, dataInicio, dataTermino, horasTrabalho, workDays, holidays, productivity, trechoOverrides, serviceNotes, trechos, scheduleResult]);
 
-  const handleLoadPlan = useCallback((plan: SavedPlanning) => {
+  const handleLoadPlan = useCallback((plan: SavedPlanning | SavedPlan) => {
+    // Support both SavedPlanning (local) and SavedPlan (from SavedPlansDialog)
+    const planName = 'nome' in plan ? plan.nome : plan.name;
     setNumEquipes(plan.numEquipes);
     setTeamConfig({ ...plan.teamConfig });
     setMetrosDia(plan.metrosDia);
@@ -422,14 +424,22 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
     setDataTermino(plan.dataTermino);
     setHorasTrabalho(plan.horasTrabalho);
     setWorkDays(plan.workDays);
-    setHolidays([...plan.holidays]);
-    setProductivity([...plan.productivity]);
-    setTrechoOverrides({ ...plan.trechoOverrides });
-    setServiceNotes([...plan.serviceNotes]);
+    setHolidays([...(plan.holidays || [])]);
+    setProductivity([...(plan.productivity || [])]);
+    if ('trechoOverrides' in plan) {
+      setTrechoOverrides({ ...plan.trechoOverrides });
+    }
+    if ('serviceNotes' in plan) {
+      setServiceNotes([...plan.serviceNotes]);
+    }
+    if ('trechoMetadata' in plan && Array.isArray(plan.trechoMetadata)) {
+      setTrechoMetadata([...plan.trechoMetadata]);
+    }
     setEditingPlanId(plan.id);
+    setCurrentPlanName(planName);
     setDataLoaded(true);
     setShowSavedPlans(false);
-    toast.success(`Planejamento "${plan.nome}" carregado!`);
+    toast.success(`Planejamento "${planName}" carregado!`);
   }, []);
 
   const handleDuplicatePlan = useCallback((plan: SavedPlanning) => {
@@ -670,7 +680,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
     const schedData = scheduleResult.allSegments.map(seg => ({
       "Trecho": seg.trechoId,
       "Dia": seg.day,
-      "Equipe": seg.teamId,
+      "Equipe": seg.team,
       "Metros": Math.round(seg.meters * 100) / 100,
       "Custo (R$)": Math.round(seg.custoTotal * 100) / 100,
     }));
@@ -783,8 +793,14 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
         <Button variant="outline" size="sm" onClick={() => setShowSavedPlans(!showSavedPlans)}>
           <FolderOpen className="h-4 w-4 mr-1" /> Planejamentos Salvos
         </Button>
-        <Button variant="outline" size="sm" onClick={handleSavePlan}>
-          <Save className="h-4 w-4 mr-1" /> {currentPlanId ? "Salvar" : "Salvar Como"}
+        <Button variant="outline" size="sm" onClick={() => {
+          if (currentPlanName) {
+            handleSavePlan(currentPlanName);
+          } else {
+            setShowSaveDialog(true);
+          }
+        }}>
+          <Save className="h-4 w-4 mr-1" /> {editingPlanId ? "Salvar" : "Salvar Como"}
         </Button>
         {currentPlanName && (
           <div className="flex items-center gap-2">
