@@ -5,8 +5,10 @@ import {
   Newspaper, FileText, Link2, ExternalLink, Calendar,
   MapPin, DollarSign, AlertTriangle, RefreshCw, ArrowLeft,
   Construction, Search, Filter, Shield, ArrowRightLeft,
+  Download, Database, Clock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface Noticia {
@@ -67,14 +69,14 @@ const isRecent = (dateStr: string, hoursThreshold = 48) => {
 
 const RISCO_COLORS: Record<string, { bg: string; text: string; label: string }> = {
   alto: { bg: "bg-red-500/15", text: "text-red-400", label: "Alto" },
-  medio: { bg: "bg-orange-500/15", text: "text-orange-400", label: "Medio" },
+  medio: { bg: "bg-orange-500/15", text: "text-orange-400", label: "Médio" },
   baixo: { bg: "bg-yellow-500/15", text: "text-yellow-400", label: "Baixo" },
 };
 
 const VINCULO_LABELS: Record<string, string> = {
-  socio_comum: "Socio Comum",
+  socio_comum: "Sócio Comum",
   parentesco: "Parentesco",
-  diretor_multiplo: "Diretor Multiplo",
+  diretor_multiplo: "Diretor Múltiplo",
 };
 
 export default function HubNoticias() {
@@ -93,33 +95,138 @@ export default function HubNoticias() {
   const [licSearchTerm, setLicSearchTerm] = useState("");
   const [selectedCategoria, setSelectedCategoria] = useState<string>("");
   const [selectedEstado, setSelectedEstado] = useState<string>("");
+  const [coletando, setColetando] = useState(false);
+  const [ultimaColeta, setUltimaColeta] = useState<string | null>(null);
+  const [totalNaBase, setTotalNaBase] = useState(0);
+
+  const fetchLicitacoesSupabase = async (): Promise<Licitacao[]> => {
+    const { data, error } = await supabase
+      .from("hub_licitacoes")
+      .select("*")
+      .order("data_abertura", { ascending: false })
+      .limit(500);
+
+    if (error) throw error;
+    if (!data || data.length === 0) return [];
+
+    return data.map((item: Record<string, unknown>, idx: number) => ({
+      id: String(item.id || idx + 1),
+      titulo: String(item.titulo || ""),
+      orgao: String(item.orgao || ""),
+      estado: String(item.estado || "BR"),
+      categoria: String(item.categoria || "Engenharia"),
+      data_abertura: String(item.data_abertura || ""),
+      valor_estimado: Number(item.valor_estimado) || 0,
+      valor_estimado_fmt: String(item.valor_estimado_fmt || ""),
+      link: String(item.link || ""),
+      modalidade: String(item.modalidade || ""),
+      numero_controle: String(item.numero_controle || ""),
+      verificado: Boolean(item.verificado),
+    }));
+  };
+
+  const fetchUltimaColeta = async () => {
+    const { data } = await supabase
+      .from("hub_coleta_meta")
+      .select("*")
+      .eq("tipo", "licitacoes")
+      .eq("status", "ok")
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (data && data.length > 0) {
+      setUltimaColeta(data[0].ultima_coleta);
+    }
+
+    const { count } = await supabase
+      .from("hub_licitacoes")
+      .select("*", { count: "exact", head: true });
+    setTotalNaBase(count || 0);
+  };
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [notRes, licRes, vincRes] = await Promise.all([
+      // Fetch notícias e vínculos via JSON estático
+      const [notRes, vincRes] = await Promise.all([
         fetch("/hub/noticias.json"),
-        fetch("/hub/licitacoes.json"),
         fetch("/hub/vinculos.json"),
       ]);
-      if (!notRes.ok || !licRes.ok || !vincRes.ok) {
-        throw new Error("Falha ao carregar dados do hub");
-      }
-      const notData = await notRes.json();
-      const licData = await licRes.json();
-      const vincData = await vincRes.json();
 
-      setNoticias(notData.noticias || []);
-      setLicitacoes(licData.licitacoes || []);
-      setEmpresas(vincData.empresas_monitoradas || []);
-      setVinculos(vincData.vinculos_verificados || []);
-      if (notData._meta) setMeta(notData._meta);
-      if (licData._meta) setMeta(prev => prev || licData._meta);
+      if (notRes.ok) {
+        const notData = await notRes.json();
+        setNoticias(notData.noticias || []);
+        if (notData._meta) setMeta(notData._meta);
+      }
+
+      if (vincRes.ok) {
+        const vincData = await vincRes.json();
+        setEmpresas(vincData.empresas_monitoradas || []);
+        setVinculos(vincData.vinculos_verificados || []);
+      }
+
+      // Licitações: tentar Supabase primeiro, fallback para JSON
+      try {
+        const licSupabase = await fetchLicitacoesSupabase();
+        if (licSupabase.length > 0) {
+          setLicitacoes(licSupabase);
+          setMeta(prev => prev ? { ...prev, fonte_dados: "supabase" } : { fonte_dados: "supabase", gerado_em: new Date().toISOString(), total: licSupabase.length });
+          await fetchUltimaColeta();
+        } else {
+          // Fallback: JSON estático
+          const licRes = await fetch("/hub/licitacoes.json");
+          if (licRes.ok) {
+            const licData = await licRes.json();
+            setLicitacoes(licData.licitacoes || []);
+            if (licData._meta) setMeta(prev => prev || licData._meta);
+          }
+        }
+      } catch {
+        // Supabase falhou, usar JSON estático
+        const licRes = await fetch("/hub/licitacoes.json");
+        if (licRes.ok) {
+          const licData = await licRes.json();
+          setLicitacoes(licData.licitacoes || []);
+          if (licData._meta) setMeta(prev => prev || licData._meta);
+        }
+      }
     } catch (err) {
       console.error("Erro ao carregar dados do hub:", err);
-      toast.error("Erro ao carregar dados do hub. Verifique sua conexao.");
+      toast.error("Erro ao carregar dados do hub. Verifique sua conexão.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleColetarLicitacoes = async (dias = 15) => {
+    setColetando(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        toast.error("Você precisa estar logado para coletar licitações.");
+        return;
+      }
+
+      toast.info(`Coletando licitações dos últimos ${dias} dias do PNCP...`);
+
+      const { data, error } = await supabase.functions.invoke(
+        "hub-coletar-licitacoes",
+        { body: { dias } }
+      );
+
+      if (error) throw error;
+
+      toast.success(
+        `Coleta concluída! ${data.total_unicos} licitações processadas (${data.total_na_base} total na base)`
+      );
+
+      // Recarregar dados
+      await fetchData();
+    } catch (err) {
+      console.error("Erro na coleta:", err);
+      toast.error("Erro ao coletar licitações. Tente novamente.");
+    } finally {
+      setColetando(false);
     }
   };
 
@@ -193,10 +300,10 @@ export default function HubNoticias() {
             </NavLink>
             <div className="min-w-0">
               <h1 className="text-base sm:text-lg font-bold font-mono text-white tracking-tight truncate">
-                Hub de Noticias
+                Hub de Notícias
               </h1>
               <p className="text-[10px] sm:text-xs font-mono text-[#64748B] hidden sm:block">
-                Inteligencia para engenharia e saneamento
+                Inteligência para engenharia e saneamento
               </p>
             </div>
           </div>
@@ -237,10 +344,10 @@ export default function HubNoticias() {
             <Construction className="w-4 h-4 sm:w-5 sm:h-5 text-[#F59E0B] flex-shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-xs sm:text-sm font-mono font-semibold text-[#F59E0B]">
-                Modulo em Desenvolvimento
+                Módulo em Desenvolvimento
               </p>
               <p className="text-[10px] sm:text-xs font-mono text-[#F59E0B]/70 mt-0.5 leading-relaxed">
-                Este hub esta sendo construido. Dados e funcionalidades podem mudar a qualquer momento.
+                Este hub está sendo construído. Dados e funcionalidades podem mudar a qualquer momento.
               </p>
             </div>
           </div>
@@ -263,7 +370,7 @@ export default function HubNoticias() {
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <Newspaper className="w-5 h-5 text-[#FF6B2C]" />
-                    <h2 className="text-xl font-bold font-mono text-white">Noticias do Setor</h2>
+                    <h2 className="text-xl font-bold font-mono text-white">Notícias do Setor</h2>
                     <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
                       {filteredNoticias.length}/{noticias.length} itens
                     </span>
@@ -275,7 +382,7 @@ export default function HubNoticias() {
                       <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" />
                       <input
                         type="text"
-                        placeholder="Buscar noticias..."
+                        placeholder="Buscar notícias..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                         className="w-full pl-9 pr-3 py-2 text-xs font-mono bg-[#162044] border border-[#1E3A6E] text-white placeholder-[#64748B] focus:border-[#FF6B2C]/50 outline-none"
@@ -350,7 +457,7 @@ export default function HubNoticias() {
                     ))}
                     {filteredNoticias.length === 0 && (
                       <div className="text-center py-12 text-sm font-mono text-[#64748B]">
-                        Nenhuma noticia encontrada para os filtros selecionados.
+                        Nenhuma notícia encontrada para os filtros selecionados.
                       </div>
                     )}
                   </div>
@@ -360,12 +467,63 @@ export default function HubNoticias() {
               {/* Tab: Licitações */}
               {tab === "licitacoes" && (
                 <div>
-                  <div className="flex items-center gap-2 mb-4">
+                  <div className="flex items-center gap-2 mb-4 flex-wrap">
                     <FileText className="w-5 h-5 text-[#FF6B2C]" />
-                    <h2 className="text-xl font-bold font-mono text-white">Licitacoes</h2>
+                    <h2 className="text-xl font-bold font-mono text-white">Licitações</h2>
                     <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
                       {filteredLicitacoes.length}/{licitacoes.length} itens
                     </span>
+                    {totalNaBase > 0 && (
+                      <span className="text-xs font-mono text-[#22C55E] bg-[#22C55E]/10 px-2 py-0.5 flex items-center gap-1">
+                        <Database className="w-3 h-3" />
+                        {totalNaBase} na base
+                      </span>
+                    )}
+                    {meta?.fonte_dados === "supabase" && (
+                      <span className="text-xs font-mono text-[#3B82F6] bg-[#3B82F6]/10 px-2 py-0.5">
+                        Dados ao vivo
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Painel de Coleta */}
+                  <div
+                    className="flex flex-wrap items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 border border-[#3B82F6]/30 mb-4"
+                    style={{ background: "rgba(59, 130, 246, 0.06)" }}
+                  >
+                    <Download className="w-4 h-4 text-[#3B82F6] flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs sm:text-sm font-mono font-semibold text-[#3B82F6]">
+                        Coletor PNCP
+                      </p>
+                      {ultimaColeta && (
+                        <p className="text-[10px] font-mono text-[#3B82F6]/60 flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5" />
+                          Última coleta: {new Date(ultimaColeta).toLocaleString("pt-BR")}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleColetarLicitacoes(7)}
+                      disabled={coletando}
+                      className="text-[10px] sm:text-xs font-mono px-2 sm:px-3 py-1.5 bg-[#3B82F6]/20 text-[#3B82F6] hover:bg-[#3B82F6]/30 border border-[#3B82F6]/30 transition-colors disabled:opacity-50"
+                    >
+                      {coletando ? "Coletando..." : "7 dias"}
+                    </button>
+                    <button
+                      onClick={() => handleColetarLicitacoes(15)}
+                      disabled={coletando}
+                      className="text-[10px] sm:text-xs font-mono px-2 sm:px-3 py-1.5 bg-[#3B82F6]/20 text-[#3B82F6] hover:bg-[#3B82F6]/30 border border-[#3B82F6]/30 transition-colors disabled:opacity-50"
+                    >
+                      {coletando ? "Coletando..." : "15 dias"}
+                    </button>
+                    <button
+                      onClick={() => handleColetarLicitacoes(30)}
+                      disabled={coletando}
+                      className="text-[10px] sm:text-xs font-mono px-2 sm:px-3 py-1.5 bg-[#FF6B2C]/20 text-[#FF6B2C] hover:bg-[#FF6B2C]/30 border border-[#FF6B2C]/30 transition-colors disabled:opacity-50"
+                    >
+                      {coletando ? "Coletando..." : "30 dias"}
+                    </button>
                   </div>
 
                   {/* Filtros de Licitações */}
@@ -374,7 +532,7 @@ export default function HubNoticias() {
                       <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" />
                       <input
                         type="text"
-                        placeholder="Buscar licitacoes por titulo ou orgao..."
+                        placeholder="Buscar licitações por título ou órgão..."
                         value={licSearchTerm}
                         onChange={e => setLicSearchTerm(e.target.value)}
                         className="w-full pl-9 pr-3 py-2 text-xs font-mono bg-[#162044] border border-[#1E3A6E] text-white placeholder-[#64748B] focus:border-[#FF6B2C]/50 outline-none"
@@ -453,7 +611,7 @@ export default function HubNoticias() {
                     ))}
                     {filteredLicitacoes.length === 0 && (
                       <div className="text-center py-12 text-sm font-mono text-[#64748B]">
-                        Nenhuma licitacao encontrada para os filtros selecionados.
+                        Nenhuma licitação encontrada para os filtros selecionados.
                       </div>
                     )}
                   </div>
@@ -465,12 +623,12 @@ export default function HubNoticias() {
                 <div>
                   <div className="flex items-center gap-2 mb-6">
                     <Link2 className="w-5 h-5 text-[#FF6B2C]" />
-                    <h2 className="text-xl font-bold font-mono text-white">Grafo de Vinculos</h2>
+                    <h2 className="text-xl font-bold font-mono text-white">Grafo de Vínculos</h2>
                     <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
                       {empresas.length} empresas
                     </span>
                     <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
-                      {vinculos.length} vinculos verificados
+                      {vinculos.length} vínculos verificados
                     </span>
                   </div>
 
@@ -479,7 +637,7 @@ export default function HubNoticias() {
                     <div className="mb-6">
                       <div className="flex items-center gap-2 mb-3">
                         <ArrowRightLeft className="w-4 h-4 text-[#FF6B2C]" />
-                        <h3 className="text-sm font-bold font-mono text-white">Vinculos Verificados</h3>
+                        <h3 className="text-sm font-bold font-mono text-white">Vínculos Verificados</h3>
                       </div>
                       <div className="grid gap-3 md:grid-cols-2">
                         {vinculos.map((vinculo, idx) => {
@@ -600,8 +758,10 @@ export default function HubNoticias() {
                     </div>
                     <div className="border border-[#1E3A6E] p-4" style={{ background: "#162044" }}>
                       <p className="text-xs font-mono text-[#64748B] uppercase tracking-wider">Licitações</p>
-                      <p className="text-3xl font-bold font-mono text-[#3B82F6] mt-1">{licitacoes.length}</p>
-                      <p className="text-[10px] font-mono text-[#64748B] mt-1">do PNCP</p>
+                      <p className="text-3xl font-bold font-mono text-[#3B82F6] mt-1">{totalNaBase || licitacoes.length}</p>
+                      <p className="text-[10px] font-mono text-[#64748B] mt-1">
+                        {meta?.fonte_dados === "supabase" ? "Supabase (ao vivo)" : "do PNCP"}
+                      </p>
                     </div>
                     <div className="border border-[#1E3A6E] p-4" style={{ background: "#162044" }}>
                       <p className="text-xs font-mono text-[#64748B] uppercase tracking-wider">Empresas</p>

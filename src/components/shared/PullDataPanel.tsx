@@ -34,60 +34,60 @@ interface ModuleSource {
 const MODULE_SOURCES: ModuleSource[] = [
   // ── Menu Principal ──
   { key: "projetos", label: "Projetos", description: "Obras e projetos cadastrados", icon: Building2, section: "Menu Principal", table: "obras" },
-  { key: "dashboard_custom", label: "Dashboard Personalizado", description: "Dashboards criados pelo usuario", icon: Palette, section: "Menu Principal", table: "custom_dashboards" },
+  { key: "dashboard_custom", label: "Dashboard Personalizado", description: "Dashboards criados pelo usuário", icon: Palette, section: "Menu Principal", table: "custom_dashboards" },
 
   // ── Monitoramento ──
-  { key: "alertas", label: "Alertas", description: "Alertas e notificacoes ativas", icon: Bell, section: "Monitoramento", table: "alertas_config" },
-  { key: "atrasos", label: "Atrasos de Projeto", description: "Analise de atrasos e desvios", icon: Clock, section: "Monitoramento", table: "project_delays" },
-  { key: "lps_lean", label: "LPS / Lean", description: "Restricoes e planejamento Lean", icon: ClipboardCheck, section: "Monitoramento", table: "lean_constraints" },
-  { key: "aprovacao", label: "Controle de Aprovacao", description: "Fluxo de aprovacao de documentos", icon: FileCheck2, section: "Monitoramento", table: "pending_actions" },
+  { key: "alertas", label: "Alertas", description: "Alertas e notificações ativas", icon: Bell, section: "Monitoramento", table: "alertas_config" },
+  { key: "atrasos", label: "Atrasos de Projeto", description: "Análise de atrasos e desvios", icon: Clock, section: "Monitoramento", table: "project_delays" },
+  { key: "lps_lean", label: "LPS / Lean", description: "Restrições e planejamento Lean", icon: ClipboardCheck, section: "Monitoramento", table: "lean_constraints" },
+  { key: "aprovacao", label: "Controle de Aprovação", description: "Fluxo de aprovação de documentos", icon: FileCheck2, section: "Monitoramento", table: "pending_actions" },
   { key: "economia", label: "Economia Comprovada", description: "Economia gerada pela plataforma", icon: DollarSign, section: "Monitoramento", table: "economy_records" },
-  { key: "aprovacoes_projetos", label: "Aprovacoes de Projetos", description: "Status de aprovacao de projetos", icon: Shield, section: "Monitoramento", table: "project_approvals" },
-  { key: "projetos_basicos", label: "Projetos Basicos", description: "Pre-projetos e projetos basicos", icon: ClipboardCheck, section: "Monitoramento", table: "basic_projects" },
+  { key: "aprovacoes_projetos", label: "Aprovações de Projetos", description: "Status de aprovação de projetos", icon: Shield, section: "Monitoramento", table: "project_approvals" },
+  { key: "projetos_basicos", label: "Projetos Básicos", description: "Pré-projetos e projetos básicos", icon: ClipboardCheck, section: "Monitoramento", table: "basic_projects" },
 
   // ── HydroNetwork ──
-  { key: "topografia", label: "Topografia", description: "Pontos topograficos e coordenadas", icon: Upload, section: "HydroNetwork", table: "topographic_points" },
-  { key: "esgoto", label: "Esgoto", description: "Rede de esgotamento sanitario", icon: Waves, section: "HydroNetwork", table: "sewer_networks" },
-  { key: "agua", label: "Agua", description: "Rede de abastecimento de agua", icon: Droplets, section: "HydroNetwork", table: "water_networks" },
+  { key: "topografia", label: "Topografia", description: "Pontos topográficos e coordenadas", icon: Upload, section: "HydroNetwork", table: "topographic_points" },
+  { key: "esgoto", label: "Esgoto", description: "Rede de esgotamento sanitário", icon: Waves, section: "HydroNetwork", table: "sewer_networks" },
+  { key: "agua", label: "Água", description: "Rede de abastecimento de água", icon: Droplets, section: "HydroNetwork", table: "water_networks" },
   { key: "drenagem", label: "Drenagem", description: "Rede de drenagem pluvial", icon: CloudRain, section: "HydroNetwork", table: "drainage_networks" },
   { key: "quantitativos", label: "Quantitativos", description: "Quantitativos calculados da rede", icon: FileSpreadsheet, section: "HydroNetwork", table: "quantity_rows" },
-  { key: "edicao_trecho", label: "Edicao por Trechos", description: "Dados editados de trechos", icon: Edit3, section: "HydroNetwork", table: "trecho_edits" },
-  { key: "orcamento", label: "Orcamento", description: "Orcamento detalhado por servico", icon: Calculator, section: "HydroNetwork", table: "budgets" },
-  { key: "bdi", label: "BDI", description: "Bonificacao e despesas indiretas", icon: DollarSign, section: "HydroNetwork", table: "bdi_configs" },
+  { key: "edicao_trecho", label: "Edição por Trechos", description: "Dados editados de trechos", icon: Edit3, section: "HydroNetwork", table: "trecho_edits" },
+  { key: "orcamento", label: "Orçamento", description: "Orçamento detalhado por serviço", icon: Calculator, section: "HydroNetwork", table: "budgets" },
+  { key: "bdi", label: "BDI", description: "Bonificação e despesas indiretas", icon: DollarSign, section: "HydroNetwork", table: "bdi_configs" },
   { key: "planejamento", label: "Planejamento", description: "Cronograma e planejamento de obras", icon: Calendar, section: "HydroNetwork", table: "planning_schedules" },
-  { key: "epanet", label: "EPANET", description: "Simulacao hidraulica de agua", icon: Beaker, section: "HydroNetwork", table: "epanet_results" },
-  { key: "swmm", label: "SWMM", description: "Simulacao hidrologica de drenagem", icon: Waves, section: "HydroNetwork", table: "swmm_results" },
-  { key: "openproject", label: "OpenProject", description: "Integracao com OpenProject", icon: Layers, section: "HydroNetwork", table: "openproject_tasks" },
+  { key: "epanet", label: "EPANET", description: "Simulação hidráulica de água", icon: Beaker, section: "HydroNetwork", table: "epanet_results" },
+  { key: "swmm", label: "SWMM", description: "Simulação hidrológica de drenagem", icon: Waves, section: "HydroNetwork", table: "swmm_results" },
+  { key: "openproject", label: "OpenProject", description: "Integração com OpenProject", icon: Layers, section: "HydroNetwork", table: "openproject_tasks" },
   { key: "qgis", label: "QGIS", description: "Dados geoespaciais e camadas GIS", icon: Map, section: "HydroNetwork", table: "gis_layers" },
-  { key: "revisao_pares", label: "Revisao por Pares", description: "Revisoes tecnicas e pareceres", icon: Shield, section: "HydroNetwork", table: "peer_reviews" },
+  { key: "revisao_pares", label: "Revisão por Pares", description: "Revisões técnicas e pareceres", icon: Shield, section: "HydroNetwork", table: "peer_reviews" },
   { key: "perfil_longitudinal", label: "Perfil Longitudinal", description: "Perfis de rede calculados", icon: Activity, section: "HydroNetwork", table: "longitudinal_profiles" },
 
-  // ── Diario de Obra ──
-  { key: "rdo_hydro", label: "RDO Hydro", description: "Diarios de obra Hydro", icon: ClipboardList, section: "Diario de Obra", table: "rdos" },
-  { key: "rdo_planejamento", label: "RDO x Planejamento", description: "Comparativo RDO vs planejado", icon: BarChart3, section: "Diario de Obra", table: "rdos" },
-  { key: "rdo_historico", label: "Historico RDO Hydro", description: "Historico completo de RDOs", icon: History, section: "Diario de Obra", table: "rdos" },
-  { key: "fotos_validacao", label: "Fotos de Validacao", description: "Fotos de progresso e validacao", icon: Image, section: "Diario de Obra", table: "rdo_photos" },
-  { key: "rdo_novo", label: "Novo RDO", description: "Registros diarios de obra", icon: Plus, section: "Diario de Obra", table: "rdos" },
-  { key: "producao", label: "Controle de Producao", description: "Metas e medicoes de producao", icon: ClipboardList, section: "Diario de Obra", table: "producao_metas" },
-  { key: "ligacoes", label: "Relatorio de Ligacoes", description: "Ligacoes prediais executadas", icon: FileText, section: "Diario de Obra", table: "connection_reports" },
-  { key: "ocorrencias", label: "Ocorrencias", description: "Registros de ocorrencias em campo", icon: AlertCircle, section: "Diario de Obra", table: "ocorrencias" },
+  // ── Diário de Obra ──
+  { key: "rdo_hydro", label: "RDO Hydro", description: "Diários de obra Hydro", icon: ClipboardList, section: "Diário de Obra", table: "rdos" },
+  { key: "rdo_planejamento", label: "RDO x Planejamento", description: "Comparativo RDO vs planejado", icon: BarChart3, section: "Diário de Obra", table: "rdos" },
+  { key: "rdo_historico", label: "Histórico RDO Hydro", description: "Histórico completo de RDOs", icon: History, section: "Diário de Obra", table: "rdos" },
+  { key: "fotos_validacao", label: "Fotos de Validação", description: "Fotos de progresso e validação", icon: Image, section: "Diário de Obra", table: "rdo_photos" },
+  { key: "rdo_novo", label: "Novo RDO", description: "Registros diários de obra", icon: Plus, section: "Diário de Obra", table: "rdos" },
+  { key: "producao", label: "Controle de Produção", description: "Metas e medições de produção", icon: ClipboardList, section: "Diário de Obra", table: "producao_metas" },
+  { key: "ligacoes", label: "Relatório de Ligações", description: "Ligações prediais executadas", icon: FileText, section: "Diário de Obra", table: "connection_reports" },
+  { key: "ocorrencias", label: "Ocorrências", description: "Registros de ocorrências em campo", icon: AlertCircle, section: "Diário de Obra", table: "ocorrencias" },
 
   // ── Módulos de Dados (páginas extras) ──
-  { key: "materiais", label: "Materiais / Almoxarifado", description: "Estoque e movimentacao de materiais", icon: Package, section: "Materiais e Insumos", table: "materiais" },
-  { key: "inventario", label: "Inventario", description: "Controle de estoque e movimentacoes", icon: Warehouse, section: "Materiais e Insumos", table: "inventory_items" },
-  { key: "consumo", label: "Controle de Consumo", description: "Consumo de agua e energia nas obras", icon: TrendingUp, section: "Materiais e Insumos", table: "consumption_records" },
-  { key: "funcionarios", label: "Funcionarios / Equipes", description: "Dados de funcionarios e equipes", icon: Users, section: "Equipes e RH", table: "funcionarios" },
-  { key: "mao_de_obra", label: "Apontamento de Mao de Obra", description: "Horas e alocacao de equipes", icon: HardHat, section: "Equipes e RH", table: "labor_tracking" },
+  { key: "materiais", label: "Materiais / Almoxarifado", description: "Estoque e movimentação de materiais", icon: Package, section: "Materiais e Insumos", table: "materiais" },
+  { key: "inventario", label: "Inventário", description: "Controle de estoque e movimentações", icon: Warehouse, section: "Materiais e Insumos", table: "inventory_items" },
+  { key: "consumo", label: "Controle de Consumo", description: "Consumo de água e energia nas obras", icon: TrendingUp, section: "Materiais e Insumos", table: "consumption_records" },
+  { key: "funcionarios", label: "Funcionários / Equipes", description: "Dados de funcionários e equipes", icon: Users, section: "Equipes e RH", table: "funcionarios" },
+  { key: "mao_de_obra", label: "Apontamento de Mão de Obra", description: "Horas e alocação de equipes", icon: HardHat, section: "Equipes e RH", table: "labor_tracking" },
   { key: "crm", label: "CRM - Clientes", description: "Contatos, contas e pipeline comercial", icon: Users, section: "Comercial", table: "crm_contacts" },
-  { key: "checklists", label: "Checklists de Verificacao", description: "Checklists e verificacoes de qualidade", icon: CheckSquare, section: "Qualidade", table: "checklists" },
-  { key: "manutencao", label: "Manutencao Predial", description: "Solicitacoes e tarefas de manutencao", icon: Wrench, section: "Operacional", table: "maintenance_requests" },
-  { key: "predial", label: "Laudos Prediais", description: "Relatorios de vistoria e laudos", icon: FileText, section: "Operacional", table: "facility_reports" },
-  { key: "pesquisa", label: "Pesquisa de Satisfacao", description: "Feedback e NPS de usuarios", icon: MessageSquare, section: "Qualidade", table: "satisfaction_surveys" },
-  { key: "sentimento", label: "Analise de Sentimento", description: "Analise de sentimento dos registros", icon: Smile, section: "Sistema", table: "sentiment_records" },
+  { key: "checklists", label: "Checklists de Verificação", description: "Checklists e verificações de qualidade", icon: CheckSquare, section: "Qualidade", table: "checklists" },
+  { key: "manutencao", label: "Manutenção Predial", description: "Solicitações e tarefas de manutenção", icon: Wrench, section: "Operacional", table: "maintenance_requests" },
+  { key: "predial", label: "Laudos Prediais", description: "Relatórios de vistoria e laudos", icon: FileText, section: "Operacional", table: "facility_reports" },
+  { key: "pesquisa", label: "Pesquisa de Satisfação", description: "Feedback e NPS de usuários", icon: MessageSquare, section: "Qualidade", table: "satisfaction_surveys" },
+  { key: "sentimento", label: "Análise de Sentimento", description: "Análise de sentimento dos registros", icon: Smile, section: "Sistema", table: "sentiment_records" },
 
-  // ── Hub de Noticias ──
+  // ── Hub de Notícias ──
   {
-    key: "licitacoes", label: "Licitacoes (Hub)", description: "Licitacoes do PNCP coletadas pelo Hub", icon: FileText, section: "Hub",
+    key: "licitacoes", label: "Licitações (Hub)", description: "Licitações do PNCP coletadas pelo Hub", icon: FileText, section: "Hub",
     fetchFn: async () => {
       const res = await fetch("/hub/licitacoes.json");
       const data = await res.json();
@@ -95,7 +95,7 @@ const MODULE_SOURCES: ModuleSource[] = [
     },
   },
   {
-    key: "noticias", label: "Noticias do Setor (Hub)", description: "Noticias de engenharia e saneamento", icon: Newspaper, section: "Hub",
+    key: "noticias", label: "Notícias do Setor (Hub)", description: "Notícias de engenharia e saneamento", icon: Newspaper, section: "Hub",
     fetchFn: async () => {
       const res = await fetch("/hub/noticias.json");
       const data = await res.json();
@@ -103,7 +103,7 @@ const MODULE_SOURCES: ModuleSource[] = [
     },
   },
   {
-    key: "vinculos", label: "Dossies / Vinculos (Hub)", description: "Empresas monitoradas e vinculos", icon: Layers, section: "Hub",
+    key: "vinculos", label: "Dossiês / Vínculos (Hub)", description: "Empresas monitoradas e vínculos", icon: Layers, section: "Hub",
     fetchFn: async () => {
       const res = await fetch("/hub/vinculos.json");
       const data = await res.json();
@@ -407,7 +407,7 @@ export function PullDataPanel({ currentModule, onDataPulled, excludeModules = []
           {pulledData.length > 0 && (
             <div className="px-4 py-3 border-t border-[#1E3A6E]/30 bg-[#0A1530]/50">
               <p className="text-[10px] font-mono text-[#94A3B8] mb-2 uppercase tracking-[1.5px] font-bold">
-                Dados importados nesta sessao
+                Dados importados nesta sessão
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {pulledData.map((p) => (

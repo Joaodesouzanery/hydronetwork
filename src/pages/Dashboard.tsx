@@ -497,7 +497,7 @@ const Dashboard = () => {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <Newspaper className="w-4 h-4 text-orange-500" />
-                      Hub de Noticias
+                      Hub de Notícias
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -508,10 +508,10 @@ const Dashboard = () => {
                             {n.titulo}
                           </p>
                         ))}
-                        <p className="text-[10px] text-orange-500 mt-1">{hubNoticias.length}+ noticias</p>
+                        <p className="text-[10px] text-orange-500 mt-1">{hubNoticias.length}+ notícias</p>
                       </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground">Nenhuma noticia carregada</p>
+                      <p className="text-xs text-muted-foreground">Nenhuma notícia carregada</p>
                     )}
                   </CardContent>
                 </Card>
@@ -521,7 +521,7 @@ const Dashboard = () => {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <FileText className="w-4 h-4 text-blue-500" />
-                      Licitacoes
+                      Licitações
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -532,10 +532,10 @@ const Dashboard = () => {
                             {l.titulo}
                           </p>
                         ))}
-                        <p className="text-[10px] text-blue-500 mt-1">{hubLicitacoes.length}+ licitacoes monitoradas</p>
+                        <p className="text-[10px] text-blue-500 mt-1">{hubLicitacoes.length}+ licitações monitoradas</p>
                       </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground">Nenhuma licitacao carregada</p>
+                      <p className="text-xs text-muted-foreground">Nenhuma licitação carregada</p>
                     )}
                   </CardContent>
                 </Card>

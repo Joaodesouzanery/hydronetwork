@@ -20,8 +20,8 @@ interface TestResult {
 }
 
 const initialTests: TestResult[] = [
-  { name: "Conexao Supabase", icon: <Database className="h-4 w-4" />, status: "pending" },
-  { name: "Autenticacao (Sessao)", icon: <User className="h-4 w-4" />, status: "pending" },
+  { name: "Conexão Supabase", icon: <Database className="h-4 w-4" />, status: "pending" },
+  { name: "Autenticação (Sessão)", icon: <User className="h-4 w-4" />, status: "pending" },
   { name: "CRUD: Saved Plans (hydro_saved_plans)", icon: <FolderOpen className="h-4 w-4" />, status: "pending" },
   { name: "CRUD: RDO (hydro_rdos)", icon: <ClipboardList className="h-4 w-4" />, status: "pending" },
   { name: "CRUD: Equipment (hydro_equipments)", icon: <Wrench className="h-4 w-4" />, status: "pending" },
@@ -354,7 +354,7 @@ export default function QADiagnostics() {
             <div>
               <h1 className="text-2xl font-bold font-mono">QA Diagnostics</h1>
               <p className="text-muted-foreground text-sm">
-                Verifica conexao Supabase, autenticacao e CRUD em todas as tabelas
+                Verifica conexão Supabase, autenticação e CRUD em todas as tabelas
               </p>
             </div>
 
