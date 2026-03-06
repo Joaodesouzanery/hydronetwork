@@ -90,6 +90,9 @@ export default function HubNoticias() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedFonte, setSelectedFonte] = useState<string>("");
+  const [licSearchTerm, setLicSearchTerm] = useState("");
+  const [selectedCategoria, setSelectedCategoria] = useState<string>("");
+  const [selectedEstado, setSelectedEstado] = useState<string>("");
 
   const fetchData = async () => {
     setLoading(true);
@@ -99,6 +102,9 @@ export default function HubNoticias() {
         fetch("/hub/licitacoes.json"),
         fetch("/hub/vinculos.json"),
       ]);
+      if (!notRes.ok || !licRes.ok || !vincRes.ok) {
+        throw new Error("Falha ao carregar dados do hub");
+      }
       const notData = await notRes.json();
       const licData = await licRes.json();
       const vincData = await vincRes.json();
@@ -108,8 +114,10 @@ export default function HubNoticias() {
       setEmpresas(vincData.empresas_monitoradas || []);
       setVinculos(vincData.vinculos_verificados || []);
       if (notData._meta) setMeta(notData._meta);
+      if (licData._meta) setMeta(prev => prev || licData._meta);
     } catch (err) {
       console.error("Erro ao carregar dados do hub:", err);
+      toast.error("Erro ao carregar dados do hub. Verifique sua conexao.");
     } finally {
       setLoading(false);
     }
@@ -130,11 +138,20 @@ export default function HubNoticias() {
   };
 
   const fontes = [...new Set(noticias.map(n => n.fonte))];
+  const categorias = [...new Set(licitacoes.map(l => l.categoria))].sort();
+  const estados = [...new Set(licitacoes.map(l => l.estado))].sort();
 
   const filteredNoticias = noticias.filter(n => {
     const matchSearch = !searchTerm || n.titulo.toLowerCase().includes(searchTerm.toLowerCase());
     const matchFonte = !selectedFonte || n.fonte === selectedFonte;
     return matchSearch && matchFonte;
+  });
+
+  const filteredLicitacoes = licitacoes.filter(l => {
+    const matchSearch = !licSearchTerm || l.titulo.toLowerCase().includes(licSearchTerm.toLowerCase()) || l.orgao.toLowerCase().includes(licSearchTerm.toLowerCase());
+    const matchCategoria = !selectedCategoria || l.categoria === selectedCategoria;
+    const matchEstado = !selectedEstado || l.estado === selectedEstado;
+    return matchSearch && matchCategoria && matchEstado;
   });
 
   const formatDate = (dateStr: string) => {
@@ -343,15 +360,54 @@ export default function HubNoticias() {
               {/* Tab: Licitações */}
               {tab === "licitacoes" && (
                 <div>
-                  <div className="flex items-center gap-2 mb-6">
+                  <div className="flex items-center gap-2 mb-4">
                     <FileText className="w-5 h-5 text-[#FF6B2C]" />
-                    <h2 className="text-xl font-bold font-mono text-white">Licitações</h2>
+                    <h2 className="text-xl font-bold font-mono text-white">Licitacoes</h2>
                     <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
-                      {licitacoes.length} itens
+                      {filteredLicitacoes.length}/{licitacoes.length} itens
                     </span>
                   </div>
+
+                  {/* Filtros de Licitações */}
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <div className="relative flex-1 min-w-[200px] max-w-md">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" />
+                      <input
+                        type="text"
+                        placeholder="Buscar licitacoes por titulo ou orgao..."
+                        value={licSearchTerm}
+                        onChange={e => setLicSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2 text-xs font-mono bg-[#162044] border border-[#1E3A6E] text-white placeholder-[#64748B] focus:border-[#FF6B2C]/50 outline-none"
+                      />
+                    </div>
+                    <select
+                      value={selectedCategoria}
+                      onChange={e => setSelectedCategoria(e.target.value)}
+                      className="text-xs font-mono bg-[#162044] border border-[#1E3A6E] text-white px-3 py-2 focus:border-[#FF6B2C]/50 outline-none"
+                    >
+                      <option value="">Todas as categorias</option>
+                      {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select
+                      value={selectedEstado}
+                      onChange={e => setSelectedEstado(e.target.value)}
+                      className="text-xs font-mono bg-[#162044] border border-[#1E3A6E] text-white px-3 py-2 focus:border-[#FF6B2C]/50 outline-none"
+                    >
+                      <option value="">Todos os estados</option>
+                      {estados.map(e => <option key={e} value={e}>{e}</option>)}
+                    </select>
+                    {(licSearchTerm || selectedCategoria || selectedEstado) && (
+                      <button
+                        onClick={() => { setLicSearchTerm(""); setSelectedCategoria(""); setSelectedEstado(""); }}
+                        className="text-[10px] font-mono text-[#FF6B2C] hover:text-[#FF6B2C]/80 px-2 py-2"
+                      >
+                        Limpar filtros
+                      </button>
+                    )}
+                  </div>
+
                   <div className="grid gap-3">
-                    {licitacoes.map((lic) => (
+                    {filteredLicitacoes.map((lic) => (
                       <a
                         key={lic.id}
                         href={lic.link}
@@ -384,12 +440,22 @@ export default function HubNoticias() {
                               <span className="text-[#3B82F6] bg-[#3B82F6]/10 px-1.5 py-0.5">
                                 {lic.categoria}
                               </span>
+                              {lic.verificado && (
+                                <span className="text-[#22C55E] bg-[#22C55E]/10 px-1.5 py-0.5">
+                                  Verificado
+                                </span>
+                              )}
                             </div>
                           </div>
                           <ExternalLink className="w-4 h-4 text-[#64748B] group-hover:text-[#FF6B2C] flex-shrink-0 mt-1 transition-colors" />
                         </div>
                       </a>
                     ))}
+                    {filteredLicitacoes.length === 0 && (
+                      <div className="text-center py-12 text-sm font-mono text-[#64748B]">
+                        Nenhuma licitacao encontrada para os filtros selecionados.
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
