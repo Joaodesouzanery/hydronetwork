@@ -13,6 +13,7 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 import { useWeatherData } from "@/hooks/useWeatherData";
 import { AddProjectDialog } from "@/components/rdo/AddProjectDialog";
 import { PullDataPanel } from "@/components/shared/PullDataPanel";
+import { RDOScheduleConfig } from "@/components/rdo/RDOScheduleConfig";
 
 const RDO = () => {
   const navigate = useNavigate();
@@ -144,6 +145,13 @@ const RDO = () => {
 
       <main className="container mx-auto px-4 py-8">
         <PullDataPanel currentModule="rdo" />
+
+        {/* Controle de Agenda de RDO */}
+        {selectedObra && (
+          <div className="mb-6">
+            <RDOScheduleConfig obraId={selectedObra} />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Formulário Principal */}

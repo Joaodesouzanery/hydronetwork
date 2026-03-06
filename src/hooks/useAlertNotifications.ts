@@ -16,10 +16,24 @@ export const useAlertNotifications = () => {
         },
         (payload) => {
           const alert = payload.new;
-          toast.warning(alert.mensagem, {
-            description: `Alerta registrado em ${new Date(alert.enviado_em).toLocaleString('pt-BR')}`,
-            duration: 8000,
-          });
+          const tipoAlerta = alert.tipo_alerta || '';
+
+          if (tipoAlerta === 'rdo_ausente') {
+            toast.error(alert.mensagem, {
+              description: 'RDO ausente - escalado ao superior',
+              duration: 15000,
+            });
+          } else if (tipoAlerta === 'rdo_pendente') {
+            toast.warning(alert.mensagem, {
+              description: 'Preencha o RDO antes do prazo',
+              duration: 10000,
+            });
+          } else {
+            toast.warning(alert.mensagem, {
+              description: `Alerta registrado em ${new Date(alert.enviado_em || alert.created_at).toLocaleString('pt-BR')}`,
+              duration: 8000,
+            });
+          }
         }
       )
       .subscribe();
