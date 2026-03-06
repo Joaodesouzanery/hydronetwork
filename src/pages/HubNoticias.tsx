@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useSearchParams, NavLink } from "react-router-dom";
-import Sidebar from "@/components/ui/sidebar-with-submenu";
+import { AppSidebar } from "@/components/AppSidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import {
   Newspaper, FileText, Link2, ExternalLink, Calendar,
   MapPin, DollarSign, AlertTriangle, RefreshCw, ArrowLeft,
-  Construction, Search, Filter, Shield, ArrowRightLeft,
-  Download, Database, Clock,
+  Search, Shield, ArrowRightLeft,
+  Download, Database, Clock, BarChart3, Building2,
+  TrendingUp, BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface Noticia {
   titulo: string;
@@ -55,13 +56,7 @@ interface VinculoVerificado {
   descricao: string;
 }
 
-interface MetaInfo {
-  fonte_dados: string;
-  gerado_em: string;
-  total: number;
-}
-
-const isRecent = (dateStr: string, hoursThreshold = 48) => {
+const isRecent = (dateStr: string, hoursThreshold = 72) => {
   try {
     return (Date.now() - new Date(dateStr).getTime()) < hoursThreshold * 3600000;
   } catch { return false; }
@@ -79,15 +74,21 @@ const VINCULO_LABELS: Record<string, string> = {
   diretor_multiplo: "Diretor Múltiplo",
 };
 
+const TABS = [
+  { id: "noticias", label: "Notícias", icon: Newspaper },
+  { id: "licitacoes", label: "Licitações", icon: FileText },
+  { id: "vinculos", label: "Vínculos", icon: Link2 },
+  { id: "indicadores", label: "Indicadores", icon: BarChart3 },
+] as const;
+
 export default function HubNoticias() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get("tab") || "noticias";
 
   const [noticias, setNoticias] = useState<Noticia[]>([]);
   const [licitacoes, setLicitacoes] = useState<Licitacao[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [vinculos, setVinculos] = useState<VinculoVerificado[]>([]);
-  const [meta, setMeta] = useState<MetaInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -98,6 +99,12 @@ export default function HubNoticias() {
   const [coletando, setColetando] = useState(false);
   const [ultimaColeta, setUltimaColeta] = useState<string | null>(null);
   const [totalNaBase, setTotalNaBase] = useState(0);
+  const [dataSource, setDataSource] = useState<"placeholder" | "supabase" | "json">("placeholder");
+  const [empresaSearch, setEmpresaSearch] = useState("");
+
+  const switchTab = (newTab: string) => {
+    setSearchParams({ tab: newTab });
+  };
 
   const fetchLicitacoesSupabase = async (): Promise<Licitacao[]> => {
     const { data, error } = await supabase
@@ -147,7 +154,6 @@ export default function HubNoticias() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch notícias e vínculos via JSON estático
       const [notRes, vincRes] = await Promise.all([
         fetch("/hub/noticias.json"),
         fetch("/hub/vinculos.json"),
@@ -156,7 +162,6 @@ export default function HubNoticias() {
       if (notRes.ok) {
         const notData = await notRes.json();
         setNoticias(notData.noticias || []);
-        if (notData._meta) setMeta(notData._meta);
       }
 
       if (vincRes.ok) {
@@ -165,34 +170,31 @@ export default function HubNoticias() {
         setVinculos(vincData.vinculos_verificados || []);
       }
 
-      // Licitações: tentar Supabase primeiro, fallback para JSON
       try {
         const licSupabase = await fetchLicitacoesSupabase();
         if (licSupabase.length > 0) {
           setLicitacoes(licSupabase);
-          setMeta(prev => prev ? { ...prev, fonte_dados: "supabase" } : { fonte_dados: "supabase", gerado_em: new Date().toISOString(), total: licSupabase.length });
+          setDataSource("supabase");
           await fetchUltimaColeta();
         } else {
-          // Fallback: JSON estático
           const licRes = await fetch("/hub/licitacoes.json");
           if (licRes.ok) {
             const licData = await licRes.json();
             setLicitacoes(licData.licitacoes || []);
-            if (licData._meta) setMeta(prev => prev || licData._meta);
+            setDataSource(licData._meta?.fonte_dados === "placeholder" ? "placeholder" : "json");
           }
         }
       } catch {
-        // Supabase falhou, usar JSON estático
         const licRes = await fetch("/hub/licitacoes.json");
         if (licRes.ok) {
           const licData = await licRes.json();
           setLicitacoes(licData.licitacoes || []);
-          if (licData._meta) setMeta(prev => prev || licData._meta);
+          setDataSource("json");
         }
       }
     } catch (err) {
       console.error("Erro ao carregar dados do hub:", err);
-      toast.error("Erro ao carregar dados do hub. Verifique sua conexão.");
+      toast.error("Erro ao carregar dados do hub.");
     } finally {
       setLoading(false);
     }
@@ -220,7 +222,6 @@ export default function HubNoticias() {
         `Coleta concluída! ${data.total_unicos} licitações processadas (${data.total_na_base} total na base)`
       );
 
-      // Recarregar dados
       await fetchData();
     } catch (err) {
       console.error("Erro na coleta:", err);
@@ -236,7 +237,7 @@ export default function HubNoticias() {
     setRefreshing(true);
     try {
       await fetchData();
-      toast.success("Dados do Hub atualizados!");
+      toast.success("Dados atualizados!");
     } catch {
       toast.error("Erro ao atualizar dados");
     } finally {
@@ -244,22 +245,33 @@ export default function HubNoticias() {
     }
   };
 
-  const fontes = [...new Set(noticias.map(n => n.fonte))];
-  const categorias = [...new Set(licitacoes.map(l => l.categoria))].sort();
-  const estados = [...new Set(licitacoes.map(l => l.estado))].sort();
+  const fontes = useMemo(() => [...new Set(noticias.map(n => n.fonte))], [noticias]);
+  const categorias = useMemo(() => [...new Set(licitacoes.map(l => l.categoria))].sort(), [licitacoes]);
+  const estados = useMemo(() => [...new Set(licitacoes.map(l => l.estado))].sort(), [licitacoes]);
 
-  const filteredNoticias = noticias.filter(n => {
+  const filteredNoticias = useMemo(() => noticias.filter(n => {
     const matchSearch = !searchTerm || n.titulo.toLowerCase().includes(searchTerm.toLowerCase());
     const matchFonte = !selectedFonte || n.fonte === selectedFonte;
     return matchSearch && matchFonte;
-  });
+  }), [noticias, searchTerm, selectedFonte]);
 
-  const filteredLicitacoes = licitacoes.filter(l => {
+  const filteredLicitacoes = useMemo(() => licitacoes.filter(l => {
     const matchSearch = !licSearchTerm || l.titulo.toLowerCase().includes(licSearchTerm.toLowerCase()) || l.orgao.toLowerCase().includes(licSearchTerm.toLowerCase());
     const matchCategoria = !selectedCategoria || l.categoria === selectedCategoria;
     const matchEstado = !selectedEstado || l.estado === selectedEstado;
     return matchSearch && matchCategoria && matchEstado;
-  });
+  }), [licitacoes, licSearchTerm, selectedCategoria, selectedEstado]);
+
+  const filteredEmpresas = useMemo(() => empresas.filter(e => {
+    if (!empresaSearch) return true;
+    const q = empresaSearch.toLowerCase();
+    return e.nome.toLowerCase().includes(q) || e.setor.toLowerCase().includes(q) || e.uf.toLowerCase().includes(q);
+  }), [empresas, empresaSearch]);
+
+  const totalValorLicitacoes = useMemo(
+    () => licitacoes.reduce((sum, l) => sum + (l.valor_estimado || 0), 0),
+    [licitacoes]
+  );
 
   const formatDate = (dateStr: string) => {
     try {
@@ -274,29 +286,47 @@ export default function HubNoticias() {
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(value);
+    if (value >= 1_000_000) {
+      return `R$ ${(value / 1_000_000).toFixed(1)}M`;
+    }
+    if (value >= 1_000) {
+      return `R$ ${(value / 1_000).toFixed(0)}K`;
+    }
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
   };
 
-  return (
-    <div className="min-h-screen" style={{ background: "#0E1B3D" }}>
-      {/* Sidebar */}
-      <Sidebar />
+  const formatCurrencyFull = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  };
 
-      {/* Main content area - offset for sidebar */}
-      <main className="sm:ml-72 min-h-screen">
+  // Skeleton loader
+  const SkeletonCard = () => (
+    <div className="border border-[#1E3A6E] p-4 animate-pulse" style={{ background: "#162044" }}>
+      <div className="h-4 bg-[#1E3A6E] rounded w-3/4 mb-3" />
+      <div className="h-3 bg-[#1E3A6E] rounded w-1/2 mb-2" />
+      <div className="h-3 bg-[#1E3A6E] rounded w-1/3" />
+    </div>
+  );
+
+  return (
+    <SidebarProvider>
+    <div className="min-h-screen flex w-full" style={{ background: "#0E1B3D" }}>
+      <AppSidebar />
+
+      <main className="flex-1 min-h-screen min-w-0">
         {/* Top bar */}
-        <div className="sticky top-0 z-30 border-b border-[#1E3A6E] px-3 sm:px-6 py-3 flex items-center justify-between gap-2"
-          style={{ background: "rgba(14, 27, 61, 0.95)", backdropFilter: "blur(8px)" }}>
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div
+          className="sticky top-0 z-30 border-b border-[#1E3A6E] px-3 sm:px-6 py-3 flex items-center justify-between gap-2"
+          style={{ background: "rgba(14, 27, 61, 0.95)", backdropFilter: "blur(8px)" }}
+        >
+          <div className="flex items-center gap-1 sm:gap-3 min-w-0">
+            <SidebarTrigger className="text-[#64748B] hover:text-[#FF6B2C] md:hidden" />
             <NavLink
               to="/dashboard"
-              className="p-2 hover:bg-[#FF6B2C]/10 rounded transition-colors text-[#64748B] hover:text-[#FF6B2C] flex-shrink-0"
+              className="p-1.5 sm:p-2 hover:bg-[#FF6B2C]/10 rounded transition-colors text-[#64748B] hover:text-[#FF6B2C] flex-shrink-0"
               title="Voltar ao Dashboard"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </NavLink>
             <div className="min-w-0">
               <h1 className="text-base sm:text-lg font-bold font-mono text-white tracking-tight truncate">
@@ -308,20 +338,14 @@ export default function HubNoticias() {
             </div>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-            {meta && (
-              <span className={`text-[10px] sm:text-xs font-mono px-1.5 sm:px-2 py-1 hidden sm:inline-flex items-center ${
-                meta.fonte_dados === "placeholder"
-                  ? "text-[#F59E0B] bg-[#F59E0B]/10"
-                  : "text-[#22C55E] bg-[#22C55E]/10"
-              }`}>
-                {meta.fonte_dados === "placeholder" ? (
-                  <>
-                    <AlertTriangle className="w-3 h-3 inline mr-1" />
-                    Dados ilustrativos
-                  </>
-                ) : (
-                  <>Atualizado: {formatDate(meta.gerado_em)}</>
-                )}
+            {dataSource === "supabase" && (
+              <span className="text-[10px] sm:text-xs font-mono px-2 py-1 text-[#22C55E] bg-[#22C55E]/10 hidden sm:inline-flex items-center gap-1 rounded">
+                <Database className="w-3 h-3" /> Ao vivo
+              </span>
+            )}
+            {dataSource === "placeholder" && (
+              <span className="text-[10px] sm:text-xs font-mono px-2 py-1 text-[#F59E0B] bg-[#F59E0B]/10 hidden sm:inline-flex items-center gap-1 rounded">
+                <AlertTriangle className="w-3 h-3" /> Dados ilustrativos
               </span>
             )}
             <button
@@ -335,48 +359,98 @@ export default function HubNoticias() {
           </div>
         </div>
 
-        {/* Development Banner */}
-        <div className="mx-3 sm:mx-6 mt-4">
-          <div
-            className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 border border-[#F59E0B]/30"
-            style={{ background: "rgba(245, 158, 11, 0.08)" }}
-          >
-            <Construction className="w-4 h-4 sm:w-5 sm:h-5 text-[#F59E0B] flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs sm:text-sm font-mono font-semibold text-[#F59E0B]">
-                Módulo em Desenvolvimento
-              </p>
-              <p className="text-[10px] sm:text-xs font-mono text-[#F59E0B]/70 mt-0.5 leading-relaxed">
-                Este hub está sendo construído. Dados e funcionalidades podem mudar a qualquer momento.
-              </p>
-            </div>
-          </div>
+        {/* Tab Navigation */}
+        <div className="sticky top-[57px] z-20 border-b border-[#1E3A6E] px-3 sm:px-6"
+          style={{ background: "rgba(14, 27, 61, 0.95)", backdropFilter: "blur(8px)" }}>
+          <nav className="flex gap-0 overflow-x-auto scrollbar-hide -mb-px">
+            {TABS.map(t => {
+              const Icon = t.icon;
+              const isActive = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => switchTab(t.id)}
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2.5 sm:py-3 text-[11px] sm:text-sm font-mono font-medium border-b-2 transition-all whitespace-nowrap ${
+                    isActive
+                      ? "border-[#FF6B2C] text-[#FF6B2C]"
+                      : "border-transparent text-[#64748B] hover:text-white hover:border-[#1E3A6E]"
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden xs:inline">{t.label}</span>
+                  <span className="xs:hidden">{t.label.slice(0, 3)}</span>
+                  {t.id === "noticias" && noticias.length > 0 && (
+                    <span className={`text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 rounded-full hidden sm:inline ${isActive ? "bg-[#FF6B2C]/20" : "bg-[#1E3A6E]"}`}>
+                      {noticias.length}
+                    </span>
+                  )}
+                  {t.id === "licitacoes" && licitacoes.length > 0 && (
+                    <span className={`text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 rounded-full hidden sm:inline ${isActive ? "bg-[#FF6B2C]/20" : "bg-[#1E3A6E]"}`}>
+                      {totalNaBase || licitacoes.length}
+                    </span>
+                  )}
+                  {t.id === "vinculos" && empresas.length > 0 && (
+                    <span className={`text-[9px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 rounded-full hidden sm:inline ${isActive ? "bg-[#FF6B2C]/20" : "bg-[#1E3A6E]"}`}>
+                      {empresas.length}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
+        {/* Summary Stats Row */}
+        {!loading && (
+          <div className="px-3 sm:px-6 pt-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+              <button onClick={() => switchTab("noticias")} className="border border-[#1E3A6E] hover:border-[#FF6B2C]/30 p-3 transition-colors text-left rounded" style={{ background: "#162044" }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <Newspaper className="w-3.5 h-3.5 text-[#FF6B2C]" />
+                  <span className="text-[10px] font-mono text-[#64748B] uppercase">Notícias</span>
+                </div>
+                <p className="text-xl font-bold font-mono text-white">{noticias.length}</p>
+              </button>
+              <button onClick={() => switchTab("licitacoes")} className="border border-[#1E3A6E] hover:border-[#3B82F6]/30 p-3 transition-colors text-left rounded" style={{ background: "#162044" }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <FileText className="w-3.5 h-3.5 text-[#3B82F6]" />
+                  <span className="text-[10px] font-mono text-[#64748B] uppercase">Licitações</span>
+                </div>
+                <p className="text-xl font-bold font-mono text-white">{totalNaBase || licitacoes.length}</p>
+              </button>
+              <button onClick={() => switchTab("vinculos")} className="border border-[#1E3A6E] hover:border-[#22C55E]/30 p-3 transition-colors text-left rounded" style={{ background: "#162044" }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <Building2 className="w-3.5 h-3.5 text-[#22C55E]" />
+                  <span className="text-[10px] font-mono text-[#64748B] uppercase">Empresas</span>
+                </div>
+                <p className="text-xl font-bold font-mono text-white">{empresas.length}</p>
+              </button>
+              <button onClick={() => switchTab("indicadores")} className="border border-[#1E3A6E] hover:border-[#F59E0B]/30 p-3 transition-colors text-left rounded" style={{ background: "#162044" }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp className="w-3.5 h-3.5 text-[#F59E0B]" />
+                  <span className="text-[10px] font-mono text-[#64748B] uppercase">Valor Total</span>
+                </div>
+                <p className="text-xl font-bold font-mono text-white">{formatCurrency(totalValorLicitacoes)}</p>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Content */}
-        <div className="p-3 sm:p-6">
-          <PullDataPanel currentModule="hub_noticias" />
+        <div className="p-3 sm:p-6 pt-3 sm:pt-4">
           {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <RefreshCw className="w-8 h-8 text-[#FF6B2C] animate-spin mx-auto mb-3" />
-                <p className="text-sm font-mono text-[#64748B]">Carregando dados...</p>
-              </div>
+            <div className="space-y-3">
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
             </div>
           ) : (
             <>
-              {/* Tab: Notícias */}
+              {/* ============ Tab: Notícias ============ */}
               {(tab === "noticias" || !tab) && (
                 <div>
-                  <div className="flex items-center gap-2 mb-4">
-                    <Newspaper className="w-5 h-5 text-[#FF6B2C]" />
-                    <h2 className="text-xl font-bold font-mono text-white">Notícias do Setor</h2>
-                    <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
-                      {filteredNoticias.length}/{noticias.length} itens
-                    </span>
-                  </div>
-
-                  {/* Filtros e busca */}
+                  {/* Filtros */}
                   <div className="flex flex-wrap items-center gap-2 mb-4">
                     <div className="relative flex-1 min-w-[200px] max-w-md">
                       <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" />
@@ -385,13 +459,13 @@ export default function HubNoticias() {
                         placeholder="Buscar notícias..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 text-xs font-mono bg-[#162044] border border-[#1E3A6E] text-white placeholder-[#64748B] focus:border-[#FF6B2C]/50 outline-none"
+                        className="w-full pl-9 pr-3 py-2 text-xs font-mono bg-[#162044] border border-[#1E3A6E] rounded text-white placeholder-[#64748B] focus:border-[#FF6B2C]/50 outline-none transition-colors"
                       />
                     </div>
                     <select
                       value={selectedFonte}
                       onChange={e => setSelectedFonte(e.target.value)}
-                      className="text-xs font-mono bg-[#162044] border border-[#1E3A6E] text-white px-3 py-2 focus:border-[#FF6B2C]/50 outline-none"
+                      className="text-xs font-mono bg-[#162044] border border-[#1E3A6E] rounded text-white px-3 py-2 focus:border-[#FF6B2C]/50 outline-none"
                     >
                       <option value="">Todas as fontes</option>
                       {fontes.map(f => <option key={f} value={f}>{f}</option>)}
@@ -404,6 +478,9 @@ export default function HubNoticias() {
                         Limpar filtros
                       </button>
                     )}
+                    <span className="text-[10px] font-mono text-[#64748B] ml-auto">
+                      {filteredNoticias.length} resultado{filteredNoticias.length !== 1 ? "s" : ""}
+                    </span>
                   </div>
 
                   <div className="grid gap-3">
@@ -413,15 +490,15 @@ export default function HubNoticias() {
                         href={noticia.link}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="block border border-[#1E3A6E] p-4 hover:border-[#FF6B2C]/50 transition-all duration-200 group"
+                        className="block border border-[#1E3A6E] rounded p-4 hover:border-[#FF6B2C]/50 transition-all duration-200 group"
                         style={{ background: "#162044" }}
                       >
-                        <div className="flex items-start gap-4">
+                        <div className="flex items-start gap-3 sm:gap-4">
                           {noticia.imagem && (
                             <img
                               src={noticia.imagem}
                               alt=""
-                              className="w-20 h-20 object-cover rounded flex-shrink-0"
+                              className="w-14 h-14 sm:w-20 sm:h-20 object-cover rounded flex-shrink-0"
                               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                             />
                           )}
@@ -431,7 +508,7 @@ export default function HubNoticias() {
                                 {noticia.titulo}
                               </h3>
                               {isRecent(noticia.data_publicacao) && (
-                                <span className="text-[9px] font-mono font-bold text-[#22C55E] bg-[#22C55E]/15 px-1.5 py-0.5 flex-shrink-0">
+                                <span className="text-[9px] font-mono font-bold text-[#22C55E] bg-[#22C55E]/15 px-1.5 py-0.5 rounded flex-shrink-0">
                                   Nova
                                 </span>
                               )}
@@ -442,12 +519,12 @@ export default function HubNoticias() {
                                 <Calendar className="w-3 h-3" />
                                 {formatDate(noticia.data_publicacao)}
                               </span>
-                              <span className="text-[#FF6B2C]/60">
+                              <span className="text-[#FF6B2C]/70 bg-[#FF6B2C]/5 px-1.5 py-0.5 rounded">
                                 {noticia.fonte}
                               </span>
                               {noticia.verificado && (
-                                <span className="text-[#22C55E] bg-[#22C55E]/10 px-1.5 py-0.5">
-                                  Verificado
+                                <span className="text-[#22C55E] bg-[#22C55E]/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                  <Shield className="w-2.5 h-2.5" /> Verificado
                                 </span>
                               )}
                             </div>
@@ -456,39 +533,23 @@ export default function HubNoticias() {
                       </a>
                     ))}
                     {filteredNoticias.length === 0 && (
-                      <div className="text-center py-12 text-sm font-mono text-[#64748B]">
-                        Nenhuma notícia encontrada para os filtros selecionados.
+                      <div className="text-center py-16">
+                        <Search className="w-10 h-10 text-[#1E3A6E] mx-auto mb-3" />
+                        <p className="text-sm font-mono text-[#64748B]">
+                          Nenhuma notícia encontrada para os filtros selecionados.
+                        </p>
                       </div>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Tab: Licitações */}
+              {/* ============ Tab: Licitações ============ */}
               {tab === "licitacoes" && (
                 <div>
-                  <div className="flex items-center gap-2 mb-4 flex-wrap">
-                    <FileText className="w-5 h-5 text-[#FF6B2C]" />
-                    <h2 className="text-xl font-bold font-mono text-white">Licitações</h2>
-                    <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
-                      {filteredLicitacoes.length}/{licitacoes.length} itens
-                    </span>
-                    {totalNaBase > 0 && (
-                      <span className="text-xs font-mono text-[#22C55E] bg-[#22C55E]/10 px-2 py-0.5 flex items-center gap-1">
-                        <Database className="w-3 h-3" />
-                        {totalNaBase} na base
-                      </span>
-                    )}
-                    {meta?.fonte_dados === "supabase" && (
-                      <span className="text-xs font-mono text-[#3B82F6] bg-[#3B82F6]/10 px-2 py-0.5">
-                        Dados ao vivo
-                      </span>
-                    )}
-                  </div>
-
                   {/* Painel de Coleta */}
                   <div
-                    className="flex flex-wrap items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 border border-[#3B82F6]/30 mb-4"
+                    className="flex flex-wrap items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 border border-[#3B82F6]/30 rounded mb-4"
                     style={{ background: "rgba(59, 130, 246, 0.06)" }}
                   >
                     <Download className="w-4 h-4 text-[#3B82F6] flex-shrink-0" />
@@ -497,61 +558,54 @@ export default function HubNoticias() {
                         Coletor PNCP
                       </p>
                       {ultimaColeta && (
-                        <p className="text-[10px] font-mono text-[#3B82F6]/60 flex items-center gap-1">
+                        <p className="text-[10px] font-mono text-[#3B82F6]/60 flex items-center gap-1 mt-0.5">
                           <Clock className="w-2.5 h-2.5" />
                           Última coleta: {new Date(ultimaColeta).toLocaleString("pt-BR")}
                         </p>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleColetarLicitacoes(7)}
-                      disabled={coletando}
-                      className="text-[10px] sm:text-xs font-mono px-2 sm:px-3 py-1.5 bg-[#3B82F6]/20 text-[#3B82F6] hover:bg-[#3B82F6]/30 border border-[#3B82F6]/30 transition-colors disabled:opacity-50"
-                    >
-                      {coletando ? "Coletando..." : "7 dias"}
-                    </button>
-                    <button
-                      onClick={() => handleColetarLicitacoes(15)}
-                      disabled={coletando}
-                      className="text-[10px] sm:text-xs font-mono px-2 sm:px-3 py-1.5 bg-[#3B82F6]/20 text-[#3B82F6] hover:bg-[#3B82F6]/30 border border-[#3B82F6]/30 transition-colors disabled:opacity-50"
-                    >
-                      {coletando ? "Coletando..." : "15 dias"}
-                    </button>
-                    <button
-                      onClick={() => handleColetarLicitacoes(30)}
-                      disabled={coletando}
-                      className="text-[10px] sm:text-xs font-mono px-2 sm:px-3 py-1.5 bg-[#FF6B2C]/20 text-[#FF6B2C] hover:bg-[#FF6B2C]/30 border border-[#FF6B2C]/30 transition-colors disabled:opacity-50"
-                    >
-                      {coletando ? "Coletando..." : "30 dias"}
-                    </button>
+                    {[7, 15, 30].map(dias => (
+                      <button
+                        key={dias}
+                        onClick={() => handleColetarLicitacoes(dias)}
+                        disabled={coletando}
+                        className={`text-[10px] sm:text-xs font-mono px-2.5 sm:px-3 py-1.5 rounded border transition-colors disabled:opacity-50 ${
+                          dias === 30
+                            ? "bg-[#FF6B2C]/20 text-[#FF6B2C] hover:bg-[#FF6B2C]/30 border-[#FF6B2C]/30"
+                            : "bg-[#3B82F6]/20 text-[#3B82F6] hover:bg-[#3B82F6]/30 border-[#3B82F6]/30"
+                        }`}
+                      >
+                        {coletando ? "..." : `${dias} dias`}
+                      </button>
+                    ))}
                   </div>
 
-                  {/* Filtros de Licitações */}
+                  {/* Filtros */}
                   <div className="flex flex-wrap items-center gap-2 mb-4">
                     <div className="relative flex-1 min-w-[200px] max-w-md">
                       <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]" />
                       <input
                         type="text"
-                        placeholder="Buscar licitações por título ou órgão..."
+                        placeholder="Buscar por título ou órgão..."
                         value={licSearchTerm}
                         onChange={e => setLicSearchTerm(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 text-xs font-mono bg-[#162044] border border-[#1E3A6E] text-white placeholder-[#64748B] focus:border-[#FF6B2C]/50 outline-none"
+                        className="w-full pl-9 pr-3 py-2 text-xs font-mono bg-[#162044] border border-[#1E3A6E] rounded text-white placeholder-[#64748B] focus:border-[#FF6B2C]/50 outline-none transition-colors"
                       />
                     </div>
                     <select
                       value={selectedCategoria}
                       onChange={e => setSelectedCategoria(e.target.value)}
-                      className="text-xs font-mono bg-[#162044] border border-[#1E3A6E] text-white px-3 py-2 focus:border-[#FF6B2C]/50 outline-none"
+                      className="text-xs font-mono bg-[#162044] border border-[#1E3A6E] rounded text-white px-3 py-2 focus:border-[#FF6B2C]/50 outline-none"
                     >
-                      <option value="">Todas as categorias</option>
+                      <option value="">Todas categorias</option>
                       {categorias.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                     <select
                       value={selectedEstado}
                       onChange={e => setSelectedEstado(e.target.value)}
-                      className="text-xs font-mono bg-[#162044] border border-[#1E3A6E] text-white px-3 py-2 focus:border-[#FF6B2C]/50 outline-none"
+                      className="text-xs font-mono bg-[#162044] border border-[#1E3A6E] rounded text-white px-3 py-2 focus:border-[#FF6B2C]/50 outline-none"
                     >
-                      <option value="">Todos os estados</option>
+                      <option value="">Todos UFs</option>
                       {estados.map(e => <option key={e} value={e}>{e}</option>)}
                     </select>
                     {(licSearchTerm || selectedCategoria || selectedEstado) && (
@@ -559,9 +613,12 @@ export default function HubNoticias() {
                         onClick={() => { setLicSearchTerm(""); setSelectedCategoria(""); setSelectedEstado(""); }}
                         className="text-[10px] font-mono text-[#FF6B2C] hover:text-[#FF6B2C]/80 px-2 py-2"
                       >
-                        Limpar filtros
+                        Limpar
                       </button>
                     )}
+                    <span className="text-[10px] font-mono text-[#64748B] ml-auto">
+                      {filteredLicitacoes.length} resultado{filteredLicitacoes.length !== 1 ? "s" : ""}
+                    </span>
                   </div>
 
                   <div className="grid gap-3">
@@ -571,36 +628,41 @@ export default function HubNoticias() {
                         href={lic.link}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="block border border-[#1E3A6E] p-4 hover:border-[#FF6B2C]/50 transition-all duration-200 group"
+                        className="block border border-[#1E3A6E] rounded p-4 hover:border-[#FF6B2C]/50 transition-all duration-200 group"
                         style={{ background: "#162044" }}
                       >
-                        <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
-                            <h3 className="text-sm font-mono font-semibold text-[#F8FAFC] group-hover:text-[#FF6B2C] transition-colors leading-relaxed">
+                            <h3 className="text-sm font-mono font-semibold text-[#F8FAFC] group-hover:text-[#FF6B2C] transition-colors leading-relaxed line-clamp-2">
                               {lic.titulo}
                             </h3>
-                            <div className="flex flex-wrap items-center gap-3 mt-2 text-xs font-mono text-[#64748B]">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2.5 text-xs font-mono text-[#64748B]">
                               <span className="flex items-center gap-1">
-                                <MapPin className="w-3 h-3" />
-                                {lic.orgao} — {lic.estado}
+                                <MapPin className="w-3 h-3 text-[#3B82F6]" />
+                                {lic.orgao}
+                              </span>
+                              <span className="text-[#94A3B8] bg-white/5 px-1.5 py-0.5 rounded">
+                                {lic.estado}
                               </span>
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />
                                 {formatDate(lic.data_abertura)}
                               </span>
-                              <span className="flex items-center gap-1 text-[#22C55E]">
+                              <span className="flex items-center gap-1 text-[#22C55E] font-semibold">
                                 <DollarSign className="w-3 h-3" />
-                                {lic.valor_estimado_fmt || formatCurrency(lic.valor_estimado)}
+                                {lic.valor_estimado_fmt || formatCurrencyFull(lic.valor_estimado)}
                               </span>
-                              <span className="text-[#FF6B2C]/60">
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="text-[10px] font-mono text-[#FF6B2C]/70 bg-[#FF6B2C]/10 px-1.5 py-0.5 rounded">
                                 {lic.modalidade}
                               </span>
-                              <span className="text-[#3B82F6] bg-[#3B82F6]/10 px-1.5 py-0.5">
+                              <span className="text-[10px] font-mono text-[#3B82F6] bg-[#3B82F6]/10 px-1.5 py-0.5 rounded">
                                 {lic.categoria}
                               </span>
                               {lic.verificado && (
-                                <span className="text-[#22C55E] bg-[#22C55E]/10 px-1.5 py-0.5">
-                                  Verificado
+                                <span className="text-[10px] font-mono text-[#22C55E] bg-[#22C55E]/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                  <Shield className="w-2.5 h-2.5" /> Verificado
                                 </span>
                               )}
                             </div>
@@ -610,34 +672,29 @@ export default function HubNoticias() {
                       </a>
                     ))}
                     {filteredLicitacoes.length === 0 && (
-                      <div className="text-center py-12 text-sm font-mono text-[#64748B]">
-                        Nenhuma licitação encontrada para os filtros selecionados.
+                      <div className="text-center py-16">
+                        <FileText className="w-10 h-10 text-[#1E3A6E] mx-auto mb-3" />
+                        <p className="text-sm font-mono text-[#64748B]">
+                          Nenhuma licitação encontrada.
+                        </p>
                       </div>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Tab: Vínculos */}
+              {/* ============ Tab: Vínculos ============ */}
               {tab === "vinculos" && (
                 <div>
-                  <div className="flex items-center gap-2 mb-6">
-                    <Link2 className="w-5 h-5 text-[#FF6B2C]" />
-                    <h2 className="text-xl font-bold font-mono text-white">Grafo de Vínculos</h2>
-                    <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
-                      {empresas.length} empresas
-                    </span>
-                    <span className="text-xs font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5">
-                      {vinculos.length} vínculos verificados
-                    </span>
-                  </div>
-
                   {/* Vínculos Verificados */}
                   {vinculos.length > 0 && (
                     <div className="mb-6">
                       <div className="flex items-center gap-2 mb-3">
                         <ArrowRightLeft className="w-4 h-4 text-[#FF6B2C]" />
                         <h3 className="text-sm font-bold font-mono text-white">Vínculos Verificados</h3>
+                        <span className="text-[10px] font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5 rounded">
+                          {vinculos.length}
+                        </span>
                       </div>
                       <div className="grid gap-3 md:grid-cols-2">
                         {vinculos.map((vinculo, idx) => {
@@ -645,7 +702,7 @@ export default function HubNoticias() {
                           return (
                             <div
                               key={idx}
-                              className={`border p-4 transition-all duration-200 ${
+                              className={`border rounded p-4 transition-all duration-200 ${
                                 vinculo.risco === "alto"
                                   ? "border-red-500/30 hover:border-red-500/60"
                                   : "border-[#1E3A6E] hover:border-[#FF6B2C]/50"
@@ -653,12 +710,12 @@ export default function HubNoticias() {
                               style={{ background: "#162044" }}
                             >
                               <div className="flex items-start justify-between gap-2 mb-2">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span className="text-sm font-mono font-bold text-[#F8FAFC] truncate">{vinculo.empresa_a}</span>
+                                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                                  <span className="text-sm font-mono font-bold text-[#F8FAFC]">{vinculo.empresa_a}</span>
                                   <ArrowRightLeft className="w-3 h-3 text-[#64748B] flex-shrink-0" />
-                                  <span className="text-sm font-mono font-bold text-[#F8FAFC] truncate">{vinculo.empresa_b}</span>
+                                  <span className="text-sm font-mono font-bold text-[#F8FAFC]">{vinculo.empresa_b}</span>
                                 </div>
-                                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 flex-shrink-0 ${risco.bg} ${risco.text}`}>
+                                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${risco.bg} ${risco.text}`}>
                                   Risco {risco.label}
                                 </span>
                               </div>
@@ -666,14 +723,14 @@ export default function HubNoticias() {
                                 {vinculo.descricao}
                               </p>
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[10px] font-mono text-[#3B82F6] bg-[#3B82F6]/10 px-1.5 py-0.5">
+                                <span className="text-[10px] font-mono text-[#3B82F6] bg-[#3B82F6]/10 px-1.5 py-0.5 rounded">
                                   {VINCULO_LABELS[vinculo.tipo] || vinculo.tipo}
                                 </span>
                                 <span className="text-[10px] font-mono text-[#64748B]">
                                   Fonte: {vinculo.fonte}
                                 </span>
                                 {vinculo.verificado && (
-                                  <span className="text-[10px] font-mono text-[#22C55E] bg-[#22C55E]/10 px-1.5 py-0.5 flex items-center gap-1">
+                                  <span className="text-[10px] font-mono text-[#22C55E] bg-[#22C55E]/10 px-1.5 py-0.5 rounded flex items-center gap-1">
                                     <Shield className="w-2.5 h-2.5" /> Verificado
                                   </span>
                                 )}
@@ -686,14 +743,28 @@ export default function HubNoticias() {
                   )}
 
                   {/* Empresas Monitoradas */}
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-2 mb-3 flex-wrap">
+                    <Building2 className="w-4 h-4 text-[#22C55E]" />
                     <h3 className="text-sm font-bold font-mono text-white">Empresas Monitoradas</h3>
+                    <span className="text-[10px] font-mono text-[#64748B] bg-[#1E3A6E] px-2 py-0.5 rounded">
+                      {filteredEmpresas.length}/{empresas.length}
+                    </span>
+                    <div className="relative flex-1 min-w-[180px] max-w-xs ml-auto">
+                      <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#64748B]" />
+                      <input
+                        type="text"
+                        placeholder="Buscar empresa..."
+                        value={empresaSearch}
+                        onChange={e => setEmpresaSearch(e.target.value)}
+                        className="w-full pl-7 pr-3 py-1.5 text-[10px] font-mono bg-[#162044] border border-[#1E3A6E] rounded text-white placeholder-[#64748B] focus:border-[#FF6B2C]/50 outline-none"
+                      />
+                    </div>
                   </div>
                   <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                    {empresas.map((empresa, idx) => (
+                    {filteredEmpresas.map((empresa, idx) => (
                       <div
                         key={idx}
-                        className="border border-[#1E3A6E] p-4 hover:border-[#FF6B2C]/50 transition-all duration-200"
+                        className="border border-[#1E3A6E] rounded p-4 hover:border-[#FF6B2C]/50 transition-all duration-200"
                         style={{ background: "#162044" }}
                       >
                         <div className="flex items-start justify-between">
@@ -701,7 +772,7 @@ export default function HubNoticias() {
                             {empresa.nome}
                           </h3>
                           {empresa.b3 && (
-                            <span className="text-[10px] font-mono text-[#FF6B2C] bg-[#FF6B2C]/10 px-1.5 py-0.5">
+                            <span className="text-[10px] font-mono text-[#FF6B2C] bg-[#FF6B2C]/10 px-1.5 py-0.5 rounded">
                               {empresa.b3}
                             </span>
                           )}
@@ -713,10 +784,10 @@ export default function HubNoticias() {
                           )}
                         </p>
                         <div className="flex items-center gap-2 mt-2">
-                          <span className="text-[10px] font-mono text-[#3B82F6] bg-[#3B82F6]/10 px-1.5 py-0.5">
+                          <span className="text-[10px] font-mono text-[#3B82F6] bg-[#3B82F6]/10 px-1.5 py-0.5 rounded">
                             {empresa.setor}
                           </span>
-                          <span className="text-[10px] font-mono text-[#94A3B8] bg-white/5 px-1.5 py-0.5">
+                          <span className="text-[10px] font-mono text-[#94A3B8] bg-white/5 px-1.5 py-0.5 rounded">
                             {empresa.uf}
                           </span>
                           <span className="text-[10px] font-mono text-[#94A3B8]">
@@ -729,62 +800,128 @@ export default function HubNoticias() {
                 </div>
               )}
 
-              {/* Tab: Artigos (empty state) */}
-              {tab === "artigos" && (
-                <div className="flex flex-col items-center justify-center h-64 text-center">
-                  <Newspaper className="w-12 h-12 text-[#FF6B2C]/30 mb-4" />
-                  <h3 className="text-lg font-bold font-mono text-white mb-2">
-                    Artigos em breve
-                  </h3>
-                  <p className="text-sm font-mono text-[#64748B] max-w-md">
-                    Os artigos técnicos serão coletados automaticamente.
-                    Execute <code className="text-[#FF6B2C] bg-[#FF6B2C]/10 px-1">npm run hub:coletar</code> para buscar dados.
-                  </p>
-                </div>
-              )}
-
-              {/* Tab: Indicadores */}
+              {/* ============ Tab: Indicadores ============ */}
               {tab === "indicadores" && (
                 <div>
-                  <div className="flex items-center gap-2 mb-6">
-                    <DollarSign className="w-5 h-5 text-[#FF6B2C]" />
-                    <h2 className="text-xl font-bold font-mono text-white">Indicadores</h2>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <div className="border border-[#1E3A6E] p-4" style={{ background: "#162044" }}>
-                      <p className="text-xs font-mono text-[#64748B] uppercase tracking-wider">Notícias</p>
-                      <p className="text-3xl font-bold font-mono text-[#FF6B2C] mt-1">{noticias.length}</p>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+                    <div className="border border-[#1E3A6E] rounded p-4" style={{ background: "#162044" }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Newspaper className="w-4 h-4 text-[#FF6B2C]" />
+                        <p className="text-xs font-mono text-[#64748B] uppercase tracking-wider">Notícias</p>
+                      </div>
+                      <p className="text-3xl font-bold font-mono text-[#FF6B2C]">{noticias.length}</p>
                       <p className="text-[10px] font-mono text-[#64748B] mt-1">itens coletados</p>
                     </div>
-                    <div className="border border-[#1E3A6E] p-4" style={{ background: "#162044" }}>
-                      <p className="text-xs font-mono text-[#64748B] uppercase tracking-wider">Licitações</p>
-                      <p className="text-3xl font-bold font-mono text-[#3B82F6] mt-1">{totalNaBase || licitacoes.length}</p>
+                    <div className="border border-[#1E3A6E] rounded p-4" style={{ background: "#162044" }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileText className="w-4 h-4 text-[#3B82F6]" />
+                        <p className="text-xs font-mono text-[#64748B] uppercase tracking-wider">Licitações</p>
+                      </div>
+                      <p className="text-3xl font-bold font-mono text-[#3B82F6]">{totalNaBase || licitacoes.length}</p>
                       <p className="text-[10px] font-mono text-[#64748B] mt-1">
-                        {meta?.fonte_dados === "supabase" ? "Supabase (ao vivo)" : "do PNCP"}
+                        {dataSource === "supabase" ? "Supabase (ao vivo)" : "do PNCP"}
                       </p>
                     </div>
-                    <div className="border border-[#1E3A6E] p-4" style={{ background: "#162044" }}>
-                      <p className="text-xs font-mono text-[#64748B] uppercase tracking-wider">Empresas</p>
-                      <p className="text-3xl font-bold font-mono text-[#22C55E] mt-1">{empresas.length}</p>
+                    <div className="border border-[#1E3A6E] rounded p-4" style={{ background: "#162044" }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Building2 className="w-4 h-4 text-[#22C55E]" />
+                        <p className="text-xs font-mono text-[#64748B] uppercase tracking-wider">Empresas</p>
+                      </div>
+                      <p className="text-3xl font-bold font-mono text-[#22C55E]">{empresas.length}</p>
                       <p className="text-[10px] font-mono text-[#64748B] mt-1">monitoradas</p>
                     </div>
-                    <div className="border border-[#1E3A6E] p-4" style={{ background: "#162044" }}>
-                      <p className="text-xs font-mono text-[#64748B] uppercase tracking-wider">Fontes RSS</p>
-                      <p className="text-3xl font-bold font-mono text-[#F59E0B] mt-1">11</p>
-                      <p className="text-[10px] font-mono text-[#64748B] mt-1">configuradas</p>
+                    <div className="border border-[#1E3A6E] rounded p-4" style={{ background: "#162044" }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Link2 className="w-4 h-4 text-[#F59E0B]" />
+                        <p className="text-xs font-mono text-[#64748B] uppercase tracking-wider">Vínculos</p>
+                      </div>
+                      <p className="text-3xl font-bold font-mono text-[#F59E0B]">{vinculos.length}</p>
+                      <p className="text-[10px] font-mono text-[#64748B] mt-1">verificados</p>
                     </div>
                   </div>
+
+                  {/* Valor Total */}
                   {licitacoes.length > 0 && (
-                    <div className="mt-6 border border-[#1E3A6E] p-4" style={{ background: "#162044" }}>
-                      <h3 className="text-sm font-bold font-mono text-white mb-3">
+                    <div className="border border-[#1E3A6E] rounded p-5 mb-6" style={{ background: "#162044" }}>
+                      <h3 className="text-sm font-bold font-mono text-white mb-2 flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-[#22C55E]" />
                         Valor Total Estimado em Licitações
                       </h3>
-                      <p className="text-2xl font-bold font-mono text-[#22C55E]">
-                        {formatCurrency(licitacoes.reduce((sum, l) => sum + (l.valor_estimado || 0), 0))}
+                      <p className="text-3xl font-bold font-mono text-[#22C55E]">
+                        {formatCurrencyFull(totalValorLicitacoes)}
                       </p>
                       <p className="text-[10px] font-mono text-[#64748B] mt-1">
                         soma de {licitacoes.length} licitações monitoradas
                       </p>
+                    </div>
+                  )}
+
+                  {/* Categorias breakdown */}
+                  {categorias.length > 0 && (
+                    <div className="border border-[#1E3A6E] rounded p-5 mb-6" style={{ background: "#162044" }}>
+                      <h3 className="text-sm font-bold font-mono text-white mb-3 flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-[#3B82F6]" />
+                        Licitações por Categoria
+                      </h3>
+                      <div className="space-y-2">
+                        {categorias.map(cat => {
+                          const count = licitacoes.filter(l => l.categoria === cat).length;
+                          const pct = Math.round((count / licitacoes.length) * 100);
+                          return (
+                            <div key={cat} className="flex items-center gap-3">
+                              <span className="text-xs font-mono text-[#94A3B8] w-32 truncate">{cat}</span>
+                              <div className="flex-1 h-2 bg-[#0E1B3D] rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-[#3B82F6] to-[#FF6B2C] rounded-full transition-all"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <span className="text-[10px] font-mono text-[#64748B] w-12 text-right">{count} ({pct}%)</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Estados breakdown */}
+                  {estados.length > 0 && (
+                    <div className="border border-[#1E3A6E] rounded p-5" style={{ background: "#162044" }}>
+                      <h3 className="text-sm font-bold font-mono text-white mb-3 flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-[#22C55E]" />
+                        Licitações por Estado
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {estados.map(uf => {
+                          const count = licitacoes.filter(l => l.estado === uf).length;
+                          return (
+                            <div key={uf} className="border border-[#1E3A6E] rounded px-3 py-2 text-center" style={{ background: "#0E1B3D" }}>
+                              <p className="text-sm font-bold font-mono text-white">{uf}</p>
+                              <p className="text-[10px] font-mono text-[#64748B]">{count}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fontes RSS */}
+                  {fontes.length > 0 && (
+                    <div className="border border-[#1E3A6E] rounded p-5 mt-6" style={{ background: "#162044" }}>
+                      <h3 className="text-sm font-bold font-mono text-white mb-3 flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-[#F59E0B]" />
+                        Fontes de Notícias Configuradas
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {fontes.map(fonte => {
+                          const count = noticias.filter(n => n.fonte === fonte).length;
+                          return (
+                            <span key={fonte} className="text-[10px] font-mono text-[#94A3B8] bg-[#0E1B3D] border border-[#1E3A6E] rounded px-2.5 py-1.5">
+                              {fonte} <span className="text-[#FF6B2C] ml-1">{count}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -794,5 +931,6 @@ export default function HubNoticias() {
         </div>
       </main>
     </div>
+    </SidebarProvider>
   );
 }
