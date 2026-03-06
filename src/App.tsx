@@ -47,6 +47,8 @@ const LeanDashboard = lazy(() => import("./pages/LeanDashboard"));
 const QADiagnostics = lazy(() => import("./pages/QADiagnostics"));
 const ApprovalControl = lazy(() => import("./pages/ApprovalControl"));
 const Tutorials = lazy(() => import("./pages/Tutorials"));
+const Licitacoes = lazy(() => import("./pages/Licitacoes"));
+const HubNoticias = lazy(() => import("./pages/HubNoticias"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -113,6 +115,8 @@ const AppContent = () => {
           <Route path="/qa" element={<ProtectedRoute><QADiagnostics /></ProtectedRoute>} />
           <Route path="/approval-control" element={<ProtectedRoute><ApprovalControl /></ProtectedRoute>} />
           <Route path="/tutorials" element={<ProtectedRoute><Tutorials /></ProtectedRoute>} />
+          <Route path="/licitacoes" element={<ProtectedRoute><Licitacoes /></ProtectedRoute>} />
+          <Route path="/hub-noticias" element={<ProtectedRoute><HubNoticias /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

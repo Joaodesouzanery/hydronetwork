@@ -5,7 +5,7 @@ import {
   Plus, History, Image, AlertCircle, Archive, HeadphonesIcon, Settings,
   BarChart3, ClipboardCheck, Activity, DollarSign, Building2, Bell, Clock,
   BookOpen, Smile, Mail, Linkedin, FileCheck2, GraduationCap, HelpCircle,
-  ChevronDown, EyeOff, Eye, Compass, Edit3
+  ChevronDown, EyeOff, Eye, Compass, Edit3, Newspaper, Search, Globe
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
@@ -94,6 +94,14 @@ const sections: SidebarSection[] = [
       { title: "Controle de Produção", url: "/production-control", icon: ClipboardList },
       { title: "Relatório de Ligações", url: "/connection-reports", icon: FileText },
       { title: "Ocorrências", url: "/occurrences", icon: AlertCircle },
+    ],
+  },
+  {
+    key: "hub",
+    label: "Hub Inteligência",
+    items: [
+      { title: "Licitações", url: "/licitacoes", icon: Globe },
+      { title: "Hub de Notícias", url: "/hub-noticias", icon: Newspaper },
     ],
   },
   {
