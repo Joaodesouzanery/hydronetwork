@@ -1642,7 +1642,430 @@ O plano original dizia "nao construa ERP financeiro". A nova estrategia e **cons
 
 ---
 
-*Documento estrategico — Marco/2026 (Revisao 2.0)*
+## PARTE XII — O QUE VOCE NAO ESTA OLHANDO (Pontos Cegos Criticos)
+
+> Esta secao existe para evitar que voce morra por algo que nem sabia que era perigoso. Cada item aqui ja matou startups com produtos melhores que o seu.
+
+---
+
+### 12.1 JURIDICO E SOCIETARIO — A Fundacao Invisivel
+
+```
+╔════════════════════════════════════════════════════════════════════╗
+║  SE A EMPRESA NAO EXISTE JURIDICAMENTE CERTA,                    ║
+║  NADA DO RESTO IMPORTA.                                          ║
+║                                                                    ║
+║  Sem CNPJ correto → nao emite nota → nao recebe de empresa       ║
+║  Sem contrato social → socio futuro pode tomar tudo              ║
+║  Sem LGPD → multa de 2% do faturamento                          ║
+║  Sem registro de marca → alguem registra "ConstruData"           ║
+║  antes de voce e voce perde o nome.                               ║
+╚════════════════════════════════════════════════════════════════════╝
+```
+
+**Acoes URGENTES (antes de vender para qualquer cliente):**
+
+| Item | Status | Urgencia | Custo estimado |
+|------|--------|----------|---------------|
+| **CNPJ aberto como LTDA** | Verificar | CRITICA | R$ 500-1.500 (contador) |
+| **Regime tributario correto** | Definir | CRITICA | Incluso na contabilidade |
+| **Registro de marca INPI** | FAZER AGORA | CRITICA | R$ 355 (taxa INPI) + R$ 1.000 (advogado) |
+| **Termos de Uso da plataforma** | FAZER AGORA | CRITICA | R$ 1.500-3.000 (advogado) |
+| **Politica de Privacidade (LGPD)** | FAZER AGORA | CRITICA | R$ 1.500-3.000 (advogado) |
+| **Contrato de licenciamento SaaS** | FAZER AGORA | CRITICA | R$ 2.000-4.000 (advogado) |
+| **LGPD compliance basico** | Implementar | ALTA | R$ 3.000-5.000 |
+| **Contrato social com clausula de vesting** | Se houver socio | ALTA | R$ 2.000-3.000 |
+
+**Tipo societario recomendado:**
+- **Fase 1 (sozinho):** SLU (Sociedade Limitada Unipessoal) — protege patrimonio pessoal, sem socio
+- **Fase 2 (com socio/investidor):** LTDA com contrato social detalhado, vesting de 4 anos, cliff de 1 ano
+- **Fase 3 (investimento):** Conversao para S.A. quando necessario
+
+**CNAE correto para SaaS:**
+- 6201-5/01 — Desenvolvimento de programas de computador sob encomenda
+- 6202-3/00 — Desenvolvimento e licenciamento de programas de computador customizaveis
+- 6203-1/00 — Desenvolvimento e licenciamento de programas de computador nao-customizaveis
+
+---
+
+### 12.2 REFORMA TRIBUTARIA — A Bomba-Relogio de 2027
+
+```
+╔════════════════════════════════════════════════════════════════════╗
+║  ALERTA VERMELHO:                                                 ║
+║                                                                    ║
+║  Hoje voce paga ISS de 2-5% sobre servicos de software.           ║
+║  Com a reforma tributaria (IBS + CBS), a aliquota cheia            ║
+║  sera de ~27-28%.                                                  ║
+║                                                                    ║
+║  SaaS tem poucos insumos tributaveis = pouco credito.             ║
+║  Isso pode significar aumento de carga de 300-500%.               ║
+║                                                                    ║
+║  2026: Fase de teste (1% — compensavel)                           ║
+║  2027: CBS entra em vigor (8.8%)                                  ║
+║  2029-2032: Transicao gradual                                     ║
+║  2033: Aliquota cheia (~27-28%)                                   ║
+║                                                                    ║
+║  SE VOCE NAO PLANEJAR ISSO NO PRICING, VAI QUEBRAR.              ║
+╚════════════════════════════════════════════════════════════════════╝
+```
+
+**O que fazer:**
+1. **Simular carga tributaria futura** no pricing atual (sua margem aguenta 28%?)
+2. **Consultar contador especialista em SaaS** sobre regime mais vantajoso
+3. **Considerar Simples Nacional** ate faturamento de R$ 4.8M/ano (protege parcialmente)
+4. **Reavaliar pricing em 2027** quando CBS entrar em vigor
+5. **Split payment** vai mudar fluxo de caixa — planejar capital de giro
+
+**Impacto no pricing atual:**
+
+| Cenario | ISS atual (5%) | IVA futuro (~28%) | Diferenca |
+|---------|---------------|-------------------|-----------|
+| Plano R$ 997 | R$ 50 de imposto | R$ 279 de imposto | +R$ 229/mes |
+| Plano R$ 2.997 | R$ 150 de imposto | R$ 839 de imposto | +R$ 689/mes |
+| Plano R$ 3.997 | R$ 200 de imposto | R$ 1.119 de imposto | +R$ 919/mes |
+
+**Mitigacao:** Se estiver no Simples Nacional com faturamento ate R$ 4.8M, a aliquota efetiva fica entre 6-15%, muito mais favoravel. Planejo ficar no Simples o maximo possivel.
+
+---
+
+### 12.3 PRODUCT-MARKET FIT — O Risco #1 de Morte
+
+```
+90% das startups SaaS morrem nos primeiros 3 anos.
+34% morrem especificamente por falta de product-market fit.
+
+Voce TEM um produto incrivel.
+Mas voce AINDA NAO SABE se alguem paga por ele.
+
+A pergunta nao e "o produto e bom?"
+A pergunta e "alguem tira o cartao de credito e paga R$ 997/mes por isso?"
+
+Ate que 10 clientes paguem, voce nao tem product-market fit.
+Voce tem uma hipotese.
+```
+
+**Sinais de product-market fit (Sean Ellis Test):**
+- Se > 40% dos usuarios dizem que ficariam "muito desapontados" se o produto sumisse → voce tem PMF
+- Se < 40% → voce NAO tem PMF, precisa iterar
+
+**O que fazer ANTES de construir mais features:**
+1. Conseguir 5 clientes pagantes (nem que seja com 50% de desconto)
+2. Fazer 10 entrevistas de 30 min com engenheiros sanitaristas
+3. Perguntar: "Quanto voce pagaria por isso?" e "O que falta para voce comprar?"
+4. Se a resposta for "esta bom, mas..." — o "mas" e o produto que voce precisa construir
+5. NAO construir mais modulos ate validar que os existentes vendem
+
+---
+
+### 12.4 CHURN — O Assassino Silencioso
+
+```
+SE VOCE ADQUIRE 5 CLIENTES POR MES
+MAS PERDE 3 POR MES
+VOCE NAO TEM UM NEGOCIO. TEM UMA PENEIRA.
+
+MRR = Novos clientes - Churn
+Se churn > aquisicao, voce morre.
+
+Churn aceitavel em SaaS B2B: 3-5%/mes no inicio, < 2%/mes estabilizado.
+Churn > 10%/mes = produto nao resolve a dor.
+```
+
+**Causas de churn mais comuns em SaaS de construcao:**
+
+| Causa | Probabilidade na ConstruData | Prevencao |
+|-------|------------------------------|-----------|
+| **Obra acabou** | ALTA (saneamento tem inicio e fim) | Pricing por empresa, nao por obra |
+| **Dificil de usar** | MEDIA | Onboarding impecavel, UX simples |
+| **Nao viu valor** | ALTA no inicio | Wow moment rapido (dimensionamento em 15 min) |
+| **Suporte ruim** | BAIXA (se fizer certo) | Responder em < 4h SEMPRE |
+| **Concorrente melhor** | BAIXA (nicho) | Inovacao continua |
+| **Crise financeira do cliente** | MEDIA | Plano menor em vez de cancelar |
+| **Nunca usou direito** | ALTA | Health score do cliente, contato proativo |
+
+**Metrica critica:** Medir "tempo ate primeiro valor" — quantos dias ate o cliente importar SUA topografia e dimensionar SUA rede? Se > 7 dias, voce esta perdendo clientes.
+
+---
+
+### 12.5 FOUNDER BURNOUT — O Risco que Ninguem Fala
+
+```
+VOCE E 1 PESSOA FAZENDO:
+- Desenvolvimento (fullstack)
+- Design (UI/UX)
+- Marketing (LinkedIn, conteudo)
+- Vendas (demos, propostas)
+- Suporte (WhatsApp, email)
+- Financeiro (notas, cobranças)
+- Estrategia (este documento)
+
+ISSO E INSUSTENTAVEL.
+
+Nao importa quao bom e o produto se voce queimar
+antes de ter receita para contratar.
+```
+
+**Sinais de alerta:**
+- Trabalhando 14h+ por dia, 7 dias por semana
+- Priorizando features em vez de vender
+- Construindo modulos que ninguem pediu (feature creep)
+- Nao dormindo o suficiente
+- Evitando cold calls/emails porque "precisa terminar o codigo"
+
+**Regra de sobrevivencia:**
+- **50% do tempo em VENDER** (LinkedIn, cold email, demos, networking)
+- **40% do tempo em PRODUTO** (bugs, features pedidas por clientes)
+- **10% do tempo em ADMIN** (financeiro, juridico, organizacao)
+- Se nao esta vendendo, nao esta trabalhando no negocio
+
+**Automacao para sobreviver sozinho:**
+
+| Tarefa | Automatizar com |
+|--------|----------------|
+| Email marketing | Resend + sequencias automaticas |
+| Cobranca | Stripe (automatico) |
+| Onboarding | Tour guiado na plataforma (ja existe) |
+| Suporte basico | Central de ajuda + FAQ (ja existe) |
+| Social media | Buffer/Hootsuite (agendar posts) |
+| CRM | HubSpot Free (pipeline automatico) |
+| Contratos | Clicksign (assinatura digital) |
+
+---
+
+### 12.6 SEGURANCA E INFRAESTRUTURA — O que Derruba de Madrugada
+
+| Risco | Probabilidade | Impacto | Prevencao |
+|-------|---------------|---------|-----------|
+| **Dados do cliente vazam** | BAIXA (Supabase RLS) | CATASTROFICO | Audit de seguranca, RLS rigoroso, pentest |
+| **Plataforma fora do ar** | MEDIA | ALTO | Monitoramento (UptimeRobot gratis), alertas |
+| **Perda de dados** | BAIXA | CATASTROFICO | Backup automatico Supabase, teste de restore |
+| **Supabase muda pricing** | MEDIA | ALTO | Plano de contingencia (migrar para self-hosted) |
+| **Vercel/deploy quebra** | BAIXA | MEDIO | CI/CD com testes, rollback automatico |
+| **Ataque DDoS** | BAIXA | MEDIO | Cloudflare (gratis), rate limiting |
+| **Cliente perde projeto** | MEDIA | ALTO | Versionamento automatico, export facil |
+| **Credenciais comprometidas** | BAIXA | CATASTROFICO | 2FA obrigatorio admin, rotacao de secrets |
+
+**Checklist de seguranca ANTES do primeiro cliente:**
+- [ ] Row Level Security (RLS) ativo em TODAS as tabelas do Supabase
+- [ ] Teste: usuario A NAO consegue ver dados do usuario B
+- [ ] Backup automatico configurado e TESTADO (restore funciona?)
+- [ ] HTTPS em todo lugar (Vercel ja faz)
+- [ ] Secrets/API keys fora do codigo (env vars)
+- [ ] Rate limiting em Edge Functions
+- [ ] Monitoramento de uptime configurado (UptimeRobot)
+- [ ] Plano de incidentes documentado (o que fazer se cair?)
+
+---
+
+### 12.7 DEPENDENCIA DE PLATAFORMA — O Risco Silencioso
+
+```
+SUA STACK INTEIRA DEPENDE DE:
+
+1. SUPABASE — Banco, auth, storage, realtime, edge functions
+2. VERCEL — Hosting, deploy, CDN
+3. STRIPE — Pagamentos
+
+Se qualquer um deles mudar o pricing, sair do ar,
+ou descontinuar, voce esta em apuros.
+```
+
+**Mitigacoes:**
+
+| Dependencia | Risco | Plano B |
+|-------------|-------|---------|
+| **Supabase** | Pricing sobe, limites mudam | Self-hosted Supabase (Docker), ou migrar para PostgreSQL puro + Auth0 |
+| **Vercel** | Limites de serverless, pricing | Migrar para Coolify, Railway, ou VPS com Docker |
+| **Stripe** | Bloqueio de conta, taxas sobem | Backup com PagSeguro/Mercado Pago para mercado BR |
+| **epanet-js** | Biblioteca WASM para de ser mantida | Fork proprio, ou EPANET compilado direto |
+| **OpenWeather** | API muda, pricing sobe | INMET API (gratis, governo BR) |
+| **Resend** | Email delivery issues | Fallback com SendGrid ou Amazon SES |
+
+**Regra:** Nunca dependa 100% de algo que voce nao controla. Tenha sempre um Plano B documentado.
+
+---
+
+### 12.8 FINANCEIRO PESSOAL — O Elefante na Sala
+
+```
+PERGUNTAS BRUTAIS:
+
+1. Quanto tempo voce aguenta SEM receita?
+   _____ meses de reserva pessoal
+
+2. Qual seu custo de vida mensal?
+   R$ ________/mes
+
+3. Quando precisa comecar a ganhar dinheiro com isso?
+   _____ meses a partir de hoje
+
+4. Tem outra fonte de renda enquanto isso?
+   [ ] Sim  [ ] Nao
+
+SE A RESPOSTA #1 E MENOS DE 6 MESES
+E A RESPOSTA #4 E "NAO",
+VOCE PRECISA DE UM CLIENTE PAGANTE EM 60 DIAS.
+
+NAO EM 6 MESES. EM 60 DIAS.
+```
+
+**Cenarios de pista de decolagem (runway):**
+
+| Reserva | Custo de vida | Runway | Urgencia |
+|---------|---------------|--------|----------|
+| R$ 10.000 | R$ 3.000/mes | 3 meses | EMERGENCIA — venda AGORA |
+| R$ 30.000 | R$ 3.000/mes | 10 meses | ALERTA — venda em 60 dias |
+| R$ 60.000 | R$ 3.000/mes | 20 meses | CONFORTAVEL — foco em PMF |
+| R$ 100.000+ | R$ 3.000/mes | 33+ meses | IDEAL — bootstrap tranquilo |
+| Renda paralela | Qualquer | Ilimitado | MELHOR cenario |
+
+**Recomendacao:** Se nao tem 12+ meses de reserva, considere manter um trabalho paralelo (CLT ou freelance de engenharia) enquanto valida o produto. Nao ha vergonha nisso — a maioria dos fundadores de sucesso comecou assim.
+
+---
+
+### 12.9 COMPETIDORES QUE VOCE NAO ESTA VENDO
+
+O Sienge e o grande inimigo. Mas nao e o unico.
+
+| Competidor | Ameaca | Nicho | O que fazer |
+|------------|--------|-------|-------------|
+| **Prevision (agora Sienge)** | ALTA | Lean Construction — eles sao os originais | Nosso LPS precisa ser MELHOR e MAIS BARATO |
+| **eCustos (agora Sienge)** | MEDIA | Orcamento com IA parametrica | Nosso orcamento SINAPI + dimensionamento auto e superior |
+| **EVOP** | MEDIA | Gestao de obra simples | Eles sao baratos e faceis — nao subestimar |
+| **Obra Prima** | MEDIA | ERP simples para construtoras | Eles crescem rapido no mercado de pequenas |
+| **UFGSanea** | BAIXA | Dimensionamento de esgoto gratis | Gratuito, academico — alunos usam antes de nos |
+| **SANCAD** | BAIXA | Desktop, licenca cara | Moribundo, mas ainda tem clientes fieis |
+| **Excel** | ALTISSIMA | TUDO — o maior concorrente e a planilha | O inimigo real. Nao e o Sienge. E o Excel. |
+| **AutoCAD + EPANET desktop** | ALTA | Combo que todo engenheiro ja conhece | Nosso fluxo precisa ser mais rapido que abrir 3 softwares |
+| **Startups que voce nao conhece** | DESCONHECIDA | Alguem pode estar construindo o mesmo agora | Velocidade e a unica defesa |
+
+```
+O MAIOR INIMIGO NAO E O SIENGE.
+
+E O EXCEL.
+
+60% dos engenheiros dimensionam redes no Excel.
+20% usam SANCAD ou UFGSanea.
+15% usam combinacao de softwares desktop.
+5% usam algo online.
+
+Voce nao precisa derrotar o Sienge primeiro.
+Precisa derrotar o EXCEL primeiro.
+
+E pra derrotar o Excel, voce precisa ser:
+1. Mais rapido (15 min vs 3 dias — CHECK)
+2. Mais confiavel (normas automaticas — CHECK)
+3. Tao facil quanto (... isso precisa trabalhar)
+4. Sem instalacao (100% web — CHECK)
+5. Preco aceitavel (R$ 997 vs gratis — precisa justificar)
+```
+
+---
+
+### 12.10 O QUE FALTA NO PRODUTO PARA VENDER (Honestidade Brutal)
+
+Antes de adicionar ERP, financeiro, qualidade — essas coisas estao funcionando?
+
+| Funcionalidade | Status real | Pode vender sem isso? |
+|----------------|------------|----------------------|
+| Importar CSV de topografia → dimensionar automaticamente | Funciona? | NAO — e o core |
+| Orcamento SINAPI gerado automaticamente | Funciona? | NAO — e o segundo wow moment |
+| Gantt/Curva S funcional | Funciona? | SIM (nice-to-have no inicio) |
+| RDO com fotos | Funciona? | SIM (mas ajuda muito na retencao) |
+| Export PDF profissional | Funciona? | NAO — cliente precisa entregar para concessionaria |
+| Demo carregavel sem cadastro | Funciona? | NAO — fricção mata conversao |
+| Deploy estavel em producao | Funciona? | NAO — sem isso, nada funciona |
+| Onboarding guiado | Funciona? | SIM (mas reduz churn drasticamente) |
+
+**Regra:** Nao venda o que nao funciona. Melhor ter 5 modulos impecaveis que 30 modulos mediocres.
+
+---
+
+### 12.11 PROPRIEDADE INTELECTUAL — Proteja ANTES que Seja Tarde
+
+| Acao | Urgencia | Status | Custo |
+|------|----------|--------|-------|
+| Registrar marca "ConstruData" no INPI | CRITICA | Fazer HOJE | R$ 355 (online) |
+| Registrar marca "HydroNetwork" no INPI | ALTA | Fazer HOJE | R$ 355 (online) |
+| Registrar dominio construdata.com.br | CRITICA | Verificar | R$ 40/ano |
+| Registrar dominio construdata.software | CRITICA | Verificar | R$ 30/ano |
+| Copyright no codigo | AUTOMATICO | Ja protegido | R$ 0 |
+| Contrato de cessao de IP (se tiver dev) | ALTA | Quando contratar | R$ 1.500 |
+
+**ATENCAO:** O registro de marca no INPI leva 12-18 meses para ser concedido, mas a prioridade vale a partir da data do pedido. Se alguem registrar "ConstruData" antes de voce, voce pode perder o direito de usar o nome.
+
+---
+
+### 12.12 CHECKLIST COMPLETO — "ESTOU PRONTO PARA VENDER?"
+
+```
+ANTES DO PRIMEIRO CLIENTE PAGANTE:
+
+JURIDICO
+[ ] CNPJ ativo (LTDA ou SLU)
+[ ] Regime tributario definido (Simples Nacional recomendado)
+[ ] Marca registrada no INPI (pedido feito)
+[ ] Termos de Uso publicados na plataforma
+[ ] Politica de Privacidade (LGPD) publicada
+[ ] Contrato SaaS pronto para envio
+
+PRODUTO
+[ ] Fluxo core funciona sem bugs: Topografia → Dimensionamento → Orcamento → Export
+[ ] Projeto demo carregado e impecavel
+[ ] Deploy em producao estavel (dominio proprio, HTTPS)
+[ ] Backup automatico configurado E testado
+[ ] RLS testado (usuario A nao ve dados de usuario B)
+
+COMERCIAL
+[ ] Pagina de precos no site
+[ ] Stripe configurado com produtos/planos
+[ ] Email de boas-vindas automatico
+[ ] Processo de onboarding documentado
+[ ] 1 video de demonstracao gravado (< 5 min)
+
+SUPORTE
+[ ] Central de ajuda com FAQ basico
+[ ] Canal de suporte definido (email + WhatsApp)
+[ ] Tempo de resposta definido e cumprivel
+
+FINANCEIRO PESSOAL
+[ ] Reserva de emergencia de 6+ meses
+[ ] Ou renda paralela garantida
+[ ] Contador contratado
+[ ] Conta bancaria PJ separada
+```
+
+---
+
+### 12.13 RESUMO: AS 5 COISAS QUE PODEM TE MATAR
+
+```
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║  #1  NINGUEM COMPRA                                         ║
+║      → Valide PMF com 5 clientes pagantes em 90 dias        ║
+║                                                              ║
+║  #2  DINHEIRO ACABA                                         ║
+║      → Calcule runway. Tenha 12+ meses ou renda paralela.   ║
+║                                                              ║
+║  #3  VOCE QUEIMA                                            ║
+║      → 50% vendendo, 40% codando, 10% admin. Nao inverta.   ║
+║                                                              ║
+║  #4  JURIDICO ERRADO                                        ║
+║      → CNPJ, marca, LGPD, contrato. Antes do 1o cliente.    ║
+║                                                              ║
+║  #5  PRODUTO QUEBRA EM PRODUCAO                             ║
+║      → Deploy estavel, backup testado, RLS verificado.       ║
+║      → Se o sistema cai no dia da demo, voce perdeu.        ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+```
+
+---
+
+*Documento estrategico — Marco/2026 (Revisao 3.0)*
 *Classificacao: Confidencial*
 *Revisao: A cada 90 dias com base em dados reais de mercado*
 *"Toda guerra e vencida ou perdida antes de ser travada." — Sun Tzu*
+*"O maior risco nao e o concorrente. E voce nao saber o que nao sabe." — Adicionado na Rev. 3.0*
