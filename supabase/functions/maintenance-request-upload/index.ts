@@ -1,9 +1,5 @@
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 // Rate limiting configuration – 24h window, 10 requests max per IP or per QR Code
 const RATE_LIMIT_WINDOW_HOURS = 24;
@@ -131,7 +127,7 @@ async function generateSignedUploadUrl(
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: getCorsHeaders(req) });
   }
 
   try {
@@ -154,7 +150,7 @@ Deno.serve(async (req) => {
       if (!qr_code_id) {
         return new Response(
           JSON.stringify({ error: 'QR Code ID é obrigatório' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
@@ -163,7 +159,7 @@ Deno.serve(async (req) => {
       if (!isValidQrCode) {
         return new Response(
           JSON.stringify({ error: 'QR Code inválido ou inativo' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
@@ -172,7 +168,7 @@ Deno.serve(async (req) => {
       if (!rateLimitResult.allowed) {
         return new Response(
           JSON.stringify({ error: rateLimitResult.reason }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 429, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
@@ -182,7 +178,7 @@ Deno.serve(async (req) => {
         if (!file_name) {
           return new Response(
             JSON.stringify({ error: 'Nome do arquivo é obrigatório' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -190,7 +186,7 @@ Deno.serve(async (req) => {
         if (!signedUrl) {
           return new Response(
             JSON.stringify({ error: 'Falha ao gerar URL de upload' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -199,7 +195,7 @@ Deno.serve(async (req) => {
             signed_url: signedUrl,
             expires_in: SIGNED_URL_EXPIRY_SECONDS
           }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
@@ -208,7 +204,7 @@ Deno.serve(async (req) => {
         if (!maintenance_request) {
           return new Response(
             JSON.stringify({ error: 'Dados da solicitação são obrigatórios' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -217,7 +213,7 @@ Deno.serve(async (req) => {
         if (!requester_name || !issue_description) {
           return new Response(
             JSON.stringify({ error: 'Nome do solicitante e descrição do problema são obrigatórios' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -246,7 +242,7 @@ Deno.serve(async (req) => {
           console.error('Error creating maintenance request:', insertError);
           return new Response(
             JSON.stringify({ error: 'Falha ao criar solicitação de manutenção' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
           );
         }
 
@@ -261,26 +257,26 @@ Deno.serve(async (req) => {
             message: 'Solicitação de manutenção criada com sucesso',
             request_id: (newRequest as any).id
           }),
-          { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 201, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
       }
 
       return new Response(
         JSON.stringify({ error: 'Ação inválida' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
       );
     }
 
     return new Response(
       JSON.stringify({ error: 'Método não permitido' }),
-      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 405, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('Error in maintenance-request-upload:', error);
     return new Response(
       JSON.stringify({ error: 'Erro interno do servidor' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
     );
   }
 });

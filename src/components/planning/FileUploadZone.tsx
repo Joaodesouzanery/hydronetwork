@@ -16,16 +16,26 @@ interface FileUploadZoneProps {
 export function FileUploadZone({ label, accept, file, onFileChange, preview, errors, validCount }: FileUploadZoneProps) {
   const [dragOver, setDragOver] = useState(false);
 
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+  const validateAndSet = useCallback((f: File | undefined) => {
+    if (!f) return;
+    if (f.size > MAX_FILE_SIZE) {
+      onFileChange(null);
+      alert("Arquivo excede o limite de 10MB.");
+      return;
+    }
+    onFileChange(f);
+  }, [onFileChange]);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const f = e.dataTransfer.files[0];
-    if (f) onFileChange(f);
-  }, [onFileChange]);
+    validateAndSet(e.dataTransfer.files[0]);
+  }, [validateAndSet]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) onFileChange(f);
+    validateAndSet(e.target.files?.[0]);
   };
 
   if (file && errors.length === 0) {

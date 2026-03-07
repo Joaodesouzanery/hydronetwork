@@ -2,11 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders } from '../_shared/cors.ts'
 
 const MAX_PDF_BYTES = 5 * 1024 * 1024;
 const MAX_PDF_BASE64_LENGTH = Math.ceil((MAX_PDF_BYTES / 3) * 4) + 16;
@@ -138,7 +134,7 @@ const dedupeItems = (items: Array<ReturnType<typeof normalizeItem>>) => {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: getCorsHeaders(req) });
   }
 
   class HttpError extends Error {
@@ -155,7 +151,7 @@ serve(async (req) => {
       console.error("Missing authorization header");
       return new Response(JSON.stringify({ error: "Unauthorized - Missing authorization header" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -175,7 +171,7 @@ serve(async (req) => {
       console.error("Authentication failed:", authError?.message || "No user found");
       return new Response(JSON.stringify({ error: "Unauthorized - Invalid token" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -194,13 +190,13 @@ serve(async (req) => {
       if (!(file instanceof File)) {
         return new Response(JSON.stringify({ error: "Invalid input: missing file field" }), {
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
       if (file.size > MAX_PDF_BYTES) {
         return new Response(JSON.stringify({ error: "PDF file is too large. Maximum size is 5MB." }), {
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
       pdfBytes = new Uint8Array(await file.arrayBuffer());
@@ -214,7 +210,7 @@ serve(async (req) => {
         if (maybeText.length > MAX_PDF_TEXT_CHARS) {
           return new Response(
             JSON.stringify({ error: `PDF text is too large. Max ${MAX_PDF_TEXT_CHARS} characters.` }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            { status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } },
           );
         }
         pdfText = maybeText;
@@ -222,7 +218,7 @@ serve(async (req) => {
         if (base64.length > MAX_PDF_BASE64_LENGTH) {
           return new Response(JSON.stringify({ error: "PDF file is too large. Maximum size is 5MB." }), {
             status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
           });
         }
         try {
@@ -233,13 +229,13 @@ serve(async (req) => {
         } catch {
           return new Response(JSON.stringify({ error: "Invalid PDF format: not valid base64 encoding" }), {
             status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
           });
         }
       } else {
         return new Response(JSON.stringify({ error: "Invalid input: pdfText or pdfBase64 is required" }), {
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
     } else {
@@ -247,7 +243,7 @@ serve(async (req) => {
       if (bytes.byteLength === 0) {
         return new Response(JSON.stringify({ error: "Invalid input: empty request body" }), {
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
       if (!contentType.includes("application/octet-stream") && !isPdfHeader(bytes)) {
@@ -255,14 +251,14 @@ serve(async (req) => {
           JSON.stringify({ error: "Unsupported content-type. Send PDF bytes, multipart/form-data, or JSON." }),
           {
             status: 415,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
           },
         );
       }
       if (bytes.byteLength > MAX_PDF_BYTES) {
         return new Response(JSON.stringify({ error: "PDF file is too large. Maximum size is 5MB." }), {
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
       pdfBytes = bytes;
@@ -273,14 +269,14 @@ serve(async (req) => {
       if (!pdfBytes) {
         return new Response(JSON.stringify({ error: "Invalid input: PDF bytes missing" }), {
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
 
       if (!isPdfHeader(pdfBytes)) {
         return new Response(JSON.stringify({ error: "Invalid input: body does not look like a PDF" }), {
           status: 415,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
     }
@@ -435,13 +431,13 @@ serve(async (req) => {
       if (items.length === 0) {
         return new Response(JSON.stringify({ error: "Nenhum item válido encontrado no texto do PDF." }), {
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
       }
 
       console.log(`Successfully parsed ${items.length} items from PDF text for user: ${user.id}`);
       return new Response(JSON.stringify({ items }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
@@ -579,20 +575,20 @@ REGRAS CRÍTICAS:
     console.log(`Successfully extracted ${items.length} items (${rawItemsAll.length} before dedupe) for user: ${user.id}`);
 
     return new Response(JSON.stringify({ items }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   } catch (error) {
     if (error instanceof HttpError) {
       return new Response(JSON.stringify({ error: error.message }), {
         status: error.status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
 
     console.error("Error in extract-pdf-data function:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error occurred" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } },
     );
   }
 });
