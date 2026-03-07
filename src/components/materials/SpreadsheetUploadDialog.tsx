@@ -32,9 +32,16 @@ export const SpreadsheetUploadDialog = ({ open, onOpenChange }: SpreadsheetUploa
     }
   });
 
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      if (selectedFile.size > MAX_FILE_SIZE) {
+        toast({ title: "Erro", description: "Arquivo muito grande. Tamanho máximo: 10MB.", variant: "destructive" });
+        e.target.value = '';
+        return;
+      }
       setFile(selectedFile);
     }
   };
