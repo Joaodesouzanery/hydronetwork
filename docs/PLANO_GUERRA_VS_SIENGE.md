@@ -858,7 +858,791 @@ REQUISITO: R$ 30-50M em capital + time de 100+ pessoas
 
 ---
 
-*Documento estrategico — Marco/2026*
+## PARTE IX — CONSTRUDATA ADMINISTRATIVO: O ERP QUE DERROTA O SIENGE
+
+### 9.1 Visao Estrategica
+
+```
+╔════════════════════════════════════════════════════════════════════════╗
+║                                                                        ║
+║  O SIENGE E UM ERP SEM ENGENHARIA.                                    ║
+║  A CONSTRUDATA E UMA ENGENHARIA SEM ERP.                              ║
+║                                                                        ║
+║  A JOGADA: CONSTRUIR O ERP.                                           ║
+║                                                                        ║
+║  Quando a ConstruData tiver ENGENHARIA + ERP + GESTAO + QUALIDADE,    ║
+║  o Sienge se torna o "ERP caro que nao calcula nada".                 ║
+║                                                                        ║
+║  ConstruData = Sienge + EPANET + Manning + Lean + Normas NBR          ║
+║  Por metade do preco.                                                  ║
+║                                                                        ║
+╚════════════════════════════════════════════════════════════════════════╝
+```
+
+### 9.2 Mapa Comparativo: Sienge vs ConstruData (Atual vs Futuro)
+
+```
+                SIENGE                          CONSTRUDATA
+          ┌──────────────────┐            ┌──────────────────┐
+          │  ENGENHARIA      │            │  ENGENHARIA      │
+          │  ☑ Orcamento     │            │  ☑ Orcamento     │
+          │  ☑ Cronograma    │            │  ☑ Cronograma    │
+          │  ☑ Diario Obra   │            │  ☑ RDO Digital   │
+          │  ☑ Medicao       │            │  ☑ Medicao       │
+          │  ☐ Dimensionam.  │ ◄── BRECHA │  ☑ Dimensionam.  │
+          │  ☐ EPANET        │            │  ☑ EPANET        │
+          │  ☐ Normas NBR    │            │  ☑ Normas NBR    │
+          │  ☐ Simulacao     │            │  ☑ Simulacao     │
+          │  ☐ Lean LPS      │            │  ☑ Lean LPS      │
+          ├──────────────────┤            ├──────────────────┤
+          │  ADMINISTRATIVO  │            │  ADMINISTRATIVO  │
+          │  ☑ Financeiro    │            │  ☐ Financeiro    │ ◄── CONSTRUIR
+          │  ☑ Suprimentos   │            │  ◐ Suprimentos   │ ◄── EXPANDIR
+          │  ☑ Contabil      │            │  ☐ Contabil      │ ◄── CONSTRUIR
+          │  ☑ Fiscal (NF-e) │            │  ☐ Fiscal        │ ◄── CONSTRUIR
+          │  ☑ Comercial     │            │  ◐ CRM          │ ◄── JA EXISTE
+          │  ☑ Qualidade     │            │  ◐ Qualidade     │ ◄── EXPANDIR
+          │  ☑ RH            │            │  ◐ RH           │ ◄── JA EXISTE
+          │  ☑ Ativos        │            │  ◐ Manutencao    │ ◄── EXPANDIR
+          │  ☑ BI/Decisao    │            │  ◐ Dashboards    │ ◄── JA EXISTE
+          └──────────────────┘            └──────────────────┘
+
+     ☑ = Completo   ◐ = Parcial (ja existe base)   ☐ = Nao existe
+```
+
+### 9.3 O Que JA EXISTE na ConstruData (Base para o ERP)
+
+A ConstruData ja tem uma base significativa de modulos administrativos. Nao estamos partindo do zero.
+
+| Area | O que ja existe | Maturidade | Gap vs Sienge |
+|------|----------------|------------|---------------|
+| **Materiais** | Catalogo, import, edicao, preco historico, deduplicacao, comparacao, 17 componentes | ALTA | Falta cotacao automatizada com fornecedores |
+| **Inventario** | Movimentacao, alertas de estoque, controle | MEDIA | Falta integracao com compras e NF-e |
+| **Orcamento** | SINAPI, BDI TCU, composicoes, quantitativos automaticos | ALTA | Falta comparativo orcado vs realizado financeiro |
+| **Producao** | Dashboard, graficos, metas, comparativo servicos, relatorios | ALTA | Quase completo |
+| **RDO** | Digital com fotos, equipes, clima, servicos, aprovacoes | ALTA | Completo — melhor que Sienge |
+| **Planejamento** | Gantt, Curva S, equipes, produtividade, LPS, restricoes | ALTA | Completo — melhor que Sienge |
+| **Funcionarios** | Cadastro, import em massa, gestao | MEDIA | Falta folha, ferias, ponto |
+| **RH** | Funcionarios, escalas CLT, ferias/faltas, unidades, prime cost, dashboard | MEDIA | Falta integracao eSocial e folha |
+| **CRM** | Dashboard, contatos, contas, pipeline, atividades, calendario, relatorios | ALTA | Quase completo |
+| **Manutencao** | Solicitacoes, tarefas, QR codes | MEDIA | Falta plano preventivo, historico ativo |
+| **Aprovacoes** | Workflow de aprovacao, controle | MEDIA | Funcional |
+| **Checklists** | Checklists de projeto e conformidade | MEDIA | Falta FVS (PBQP-H) |
+| **Alertas** | Inteligentes, historico, configuracao | ALTA | Completo |
+| **Dashboards** | Custom, 360, Lean, Operacional, Sentimento | ALTA | Completo |
+| **Licitacoes** | Busca PNCP, filtros, coleta automatica | ALTA | Diferencial unico |
+| **Medicao** | Import planilha, mapeamento trechos, custo/margem | MEDIA | Expandir para medicao contratual |
+
+### 9.4 MODULOS DO CONSTRUDATA ADMINISTRATIVO — Catalogo Completo
+
+#### BLOCO 1: FINANCEIRO (Prioridade CRITICA — Fase 2028)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              MODULO FINANCEIRO CONSTRUDATA               │
+│                                                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │ CONTAS A     │  │ CONTAS A     │  │ FLUXO DE     │  │
+│  │ PAGAR        │  │ RECEBER      │  │ CAIXA        │  │
+│  │              │  │              │  │              │  │
+│  │ • Lancamento │  │ • Faturas    │  │ • Por obra   │  │
+│  │ • Vencimento │  │ • Medicoes   │  │ • Consolidado│  │
+│  │ • Aprovacao  │  │ • Recebiveis │  │ • Projecao   │  │
+│  │ • Pagamento  │  │ • Cobranca   │  │ • Realizado  │  │
+│  │ • Baixa auto │  │ • Baixa auto │  │ • Previsto   │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│                                                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │ DRE          │  │ CENTROS DE   │  │ CONCILIACAO  │  │
+│  │ GERENCIAL    │  │ CUSTO        │  │ BANCARIA     │  │
+│  │              │  │              │  │              │  │
+│  │ • Por obra   │  │ • Por obra   │  │ • Import OFX │  │
+│  │ • Por period │  │ • Por depto  │  │ • Matching   │  │
+│  │ • Consolidado│  │ • Rateio     │  │ • Auto-conc. │  │
+│  │ • Comparativo│  │ • Alocacao   │  │ • Pendencias │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Sub-modulos detalhados:**
+
+| Sub-modulo | Funcionalidades | Integracoes |
+|------------|-----------------|-------------|
+| **Contas a Pagar** | Lancamento manual/automatico, agendamento, aprovacao em niveis, pagamento via boleto/PIX, baixa automatica, relatorio por fornecedor/periodo/obra | Suprimentos (pedidos → contas), Medicao (medicoes → pagamento) |
+| **Contas a Receber** | Faturamento por medicao, geracao de faturas, controle de recebiveis, cobranca automatica (email/WhatsApp), relatorio de inadimplencia | Medicao (medicao aprovada → fatura), CRM (contratos → recebiveis) |
+| **Fluxo de Caixa** | Visao por obra e consolidada, projecao de 30/60/90 dias, fluxo realizado vs previsto, alertas de descasamento, graficos interativos | Contas a Pagar + Receber (alimentacao automatica) |
+| **DRE Gerencial** | DRE por obra, por periodo, consolidado, regime de competencia e caixa, margem por servico, comparativo orcado vs realizado | Orcamento (orcado), Producao (realizado), Financeiro (caixa) |
+| **Centros de Custo** | Abertura por obra, departamento, frente de servico, rateio de custos indiretos, alocacao de overhead | Todos os modulos financeiros |
+| **Conciliacao Bancaria** | Importacao OFX/CSV, matching automatico, conciliacao manual, pendencias, relatorio de diferenca | Contas a Pagar/Receber |
+
+**Diferencial vs Sienge:** No Sienge, usuarios reclamam que "nao existe forma das informacoes financeiras da engenharia conversarem com o financeiro". Na ConstruData, o financeiro NASCE integrado com a engenharia — medicao gera fatura automaticamente, orcamento vira centro de custo, RDO alimenta producao que alimenta DRE.
+
+---
+
+#### BLOCO 2: SUPRIMENTOS E COMPRAS (Prioridade ALTA — Fase 2027-2028)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│            MODULO SUPRIMENTOS CONSTRUDATA                │
+│                                                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │ COTACAO      │  │ PEDIDO DE    │  │ RECEBIMENTO  │  │
+│  │              │  │ COMPRA       │  │              │  │
+│  │ • Criar cot. │  │ • Gerar PO   │  │ • Conferencia│  │
+│  │ • Fornecedor │  │ • Aprovacao  │  │ • NF entrada │  │
+│  │ • Comparar   │  │ • Rastrear   │  │ • Estoque    │  │
+│  │ • Selecionar │  │ • Historico  │  │ • Devolucao  │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│                                                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │ CONTRATOS    │  │ FORNECEDORES │  │ PANORAMA     │  │
+│  │ FORNECIMENTO │  │              │  │ COMPRAS      │  │
+│  │              │  │ • Cadastro   │  │              │  │
+│  │ • Medicao    │  │ • Avaliacao  │  │ • Orcado vs  │  │
+│  │ • Retencao   │  │ • Historico  │  │   Comprado   │  │
+│  │ • Reajuste   │  │ • Docs       │  │ • Curva ABC  │  │
+│  │ • Aditivo    │  │ • Rating     │  │ • Alertas    │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+**O que ja existe e o que falta:**
+
+| Funcionalidade | Status | Acao |
+|----------------|--------|------|
+| Catalogo de materiais | ☑ EXISTE (17 componentes) | Manter |
+| Controle de estoque | ☑ EXISTE (Inventory.tsx) | Manter |
+| Preco historico | ☑ EXISTE (PriceHistoryDialog) | Manter |
+| Import inteligente | ☑ EXISTE (IntelligentSpreadsheetDialog) | Manter |
+| Deduplicacao | ☑ EXISTE (DuplicateMaterialsReport) | Manter |
+| Solicitacao de material | ☑ EXISTE (MaterialRequests.tsx) | Expandir |
+| Cotacao com fornecedores | ☐ CONSTRUIR | Envio automatico por email |
+| Mapa de cotacao (comparativo) | ☐ CONSTRUIR | Tabela comparativa de precos |
+| Pedido de compra formal | ☐ CONSTRUIR | PO com aprovacao em niveis |
+| Recebimento e conferencia | ☐ CONSTRUIR | Check contra PO |
+| Portal do fornecedor | ☐ CONSTRUIR (Fase 3) | Fornecedor responde cotacao online |
+| Curva ABC de insumos | ☐ CONSTRUIR | Analise Pareto de gastos |
+
+---
+
+#### BLOCO 3: GESTAO DA QUALIDADE (Prioridade ALTA — Fase 2027)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│          MODULO GESTAO DA QUALIDADE CONSTRUDATA          │
+│                                                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │ FVS          │  │ FVM          │  │ NAO-         │  │
+│  │ (Verificacao │  │ (Verificacao │  │ CONFORMIDADE │  │
+│  │  Servico)    │  │  Material)   │  │              │  │
+│  │              │  │              │  │ • Registro   │  │
+│  │ • Templates  │  │ • Ensaios    │  │ • Acao corr. │  │
+│  │ • Inspecao   │  │ • Laudo      │  │ • Prazo      │  │
+│  │ • Foto+GPS   │  │ • Aprovacao  │  │ • Verificac. │  │
+│  │ • Score      │  │ • Rastreab.  │  │ • 5 Porques  │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│                                                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │ PBQP-H       │  │ AUDITORIA    │  │ INDICADORES  │  │
+│  │              │  │ INTERNA      │  │ QUALIDADE    │  │
+│  │ • SiAC       │  │              │  │              │  │
+│  │ • Requisitos │  │ • Planejar   │  │ • IQS        │  │
+│  │ • Evidencias │  │ • Executar   │  │ • Retrabalho │  │
+│  │ • Compliance │  │ • Relatar    │  │ • Patologias │  │
+│  │ • Cert. CAIXA│  │ • Follow-up  │  │ • Tendencias │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Sub-modulos detalhados:**
+
+| Sub-modulo | Descricao | Diferencial vs Sienge |
+|------------|-----------|----------------------|
+| **FVS (Ficha de Verificacao de Servico)** | Templates por tipo de servico (escavacao, assentamento tubo, reaterro, pavimentacao), inspecao com foto geotagged, scoring automatico, vinculada ao trecho/RDO | Integrado ao dimensionamento — FVS sabe o diametro, profundidade e material do trecho |
+| **FVM (Ficha de Verificacao de Material)** | Controle de recebimento de materiais (tubos, conexoes, bombas), rastreabilidade de lote, laudo de ensaio, aprovacao tecnica | Integrado ao catalogo de materiais ja existente |
+| **Nao-Conformidade** | Registro de NC com foto, classificacao (menor/maior/critica), acao corretiva, prazo, verificacao de eficacia, analise 5 Porques | Integrado ao LPS — NC gera restricao automaticamente |
+| **PBQP-H** | Templates SiAC (Sistema de Avaliacao da Conformidade), checklist de requisitos, upload de evidencias, dashboard de compliance, geracao de relatorio para auditoria CAIXA | Diferencial ENORME: certificacao PBQP-H e pre-requisito para financiamento CAIXA |
+| **Auditoria Interna** | Plano anual, checklist por norma (ISO 9001 / PBQP-H), relatorio de auditoria, follow-up de acoes | Integrado a todo o sistema — auditor ve dados reais |
+| **Indicadores de Qualidade** | IQS (Indice de Qualidade do Servico), taxa de retrabalho, incidencia de patologias, tendencias por tipo de servico | Dashboard em tempo real com dados do RDO e FVS |
+
+**Por que isso e estrategico:**
+- CAIXA exige PBQP-H para financiamento habitacional (Minha Casa Minha Vida)
+- Concessionarias exigem SGQ para contratos de obra
+- Licitacoes pontuam empresas certificadas
+- O Sienge TEM qualidade, mas nao integrada a engenharia real
+- Nossa FVS sabe que o tubo e DN 150 PVC porque o SISTEMA dimensionou
+
+---
+
+#### BLOCO 4: FISCAL E CONTABIL (Prioridade MEDIA — Fase 2028-2029)
+
+| Sub-modulo | Funcionalidades | Complexidade |
+|------------|-----------------|-------------|
+| **NF-e (Emissao)** | Emissao de NF de servico (NFSe), integracao com prefeituras via API, cancelamento, carta de correcao | ALTA |
+| **NF-e (Recebimento)** | Manifestacao de destinatario, XML automatico, vinculacao a pedido de compra | MEDIA |
+| **Retencoes** | ISS, INSS, IRRF, CSLL, PIS/COFINS — calculo e controle automatico | ALTA |
+| **REINF** | Eventos R-2010 (servicos tomados), R-2020 (servicos prestados), R-4010/4020 (pagamentos) | ALTA |
+| **Contabilidade basica** | Plano de contas, lancamentos, razao, balancete, integracao com contador (export) | MEDIA |
+| **Apuracao de impostos** | Simples Nacional, Lucro Presumido, Lucro Real — calculo basico | ALTA |
+
+**Estrategia:** NAO tentar ser um sistema contabil completo. Oferecer o basico para obra (NF-e + retencoes + REINF) e integrar com contabilidade do cliente via export (CSV/Excel para importar no sistema contabil). Isso cobre 80% da necessidade com 20% do esforco.
+
+**Alternativa inteligente:** Integrar com Omie, Conta Azul ou TOTVS via API para quem ja tem sistema contabil. Oferecer como add-on.
+
+---
+
+#### BLOCO 5: GESTAO DE ATIVOS E EQUIPAMENTOS (Prioridade MEDIA — Fase 2028)
+
+| Sub-modulo | Funcionalidades | Base existente |
+|------------|-----------------|----------------|
+| **Patrimonio** | Cadastro de bens, depreciacao, movimentacao, inventario, baixa | Parcial (AssetsCatalog.tsx) |
+| **Frota** | Veiculos, manutencao preventiva, abastecimento, km rodado, custo/km | Novo |
+| **Equipamentos de obra** | Retroescavadeira, compactador, bomba, etc. — horas trabalhadas, custo/hora, locacao vs proprio | Parcial (RDO ja registra equipamentos) |
+| **QR Code tracking** | Leitura de QR para registro de uso, localizacao, manutencao | ☑ JA EXISTE (MaintenanceQRCodes) |
+| **Manutencao preventiva** | Plano de manutencao, ordens de servico, historico, custo de manutencao | Parcial (MaintenanceTasks) |
+
+---
+
+#### BLOCO 6: RH INTEGRADO (Prioridade MEDIA — Fase 2028)
+
+| Sub-modulo | Funcionalidades | Base existente |
+|------------|-----------------|----------------|
+| **Cadastro completo** | Dados pessoais, documentos, ASO, treinamentos, certificacoes | ☑ Parcial (Employees) |
+| **Escalas e turnos** | Escalas 5x2, 6x1, 12x36, turnos, banco de horas | ☑ JA EXISTE (EscalasCLT) |
+| **Ferias e faltas** | Controle de ferias, faltas, atestados, afastamentos | ☑ JA EXISTE (FeriodosFaltas) |
+| **Ponto eletronico** | App mobile para batida de ponto, geolocalizacao, foto | Novo |
+| **EPI** | Controle de entrega de EPI, ficha de EPI, CA validade | Novo |
+| **Treinamentos** | Registro de treinamentos, validade, reciclagem automatica | Novo |
+| **Custo de mao de obra** | Encargos CLT, custo real por hora, alocacao por obra | ☑ Parcial (DashboardPrimeCost) |
+| **eSocial** | Eventos de admissao, demissao, folha (integracao basica) | Novo (Fase 3) |
+
+---
+
+#### BLOCO 7: COMERCIAL E CONTRATOS (Prioridade MEDIA — Fase 2028)
+
+| Sub-modulo | Funcionalidades | Base existente |
+|------------|-----------------|----------------|
+| **Gestao de contratos** | Cadastro, valores, aditivos, reajuste, vigencia, alertas | Novo |
+| **Medicao contratual** | Boletim de medicao, aprovacao, retencao, liberacao | Parcial (Medicao engine) |
+| **CRM** | Pipeline de vendas, contatos, atividades, calendario | ☑ JA EXISTE (7 componentes) |
+| **Propostas comerciais** | Geracao de propostas a partir do orcamento, template PDF | Novo |
+| **Licitacoes** | Busca PNCP, filtros, coleta automatica | ☑ JA EXISTE (diferencial unico) |
+
+---
+
+#### BLOCO 8: BUSINESS INTELLIGENCE (Prioridade MEDIA — Fase 2027-2028)
+
+| Sub-modulo | Funcionalidades | Base existente |
+|------------|-----------------|----------------|
+| **Dashboard Executivo** | KPIs consolidados multi-obra, semaforo de alertas | ☑ Parcial (Dashboard360, Custom) |
+| **Viabilidade Economica** | TIR, VPL, payback, sensibilidade, cenarios | Novo |
+| **Orcado vs Realizado** | Comparativo detalhado por servico, por trecho, por periodo | Parcial (Producao) |
+| **Curva ABC** | Insumos, servicos, fornecedores — analise Pareto | Novo |
+| **Relatorios gerenciais** | PDF automaticos para diretoria, por obra, consolidado | Parcial (relatorios existentes) |
+| **Export Power BI** | Conector ou export para Power BI/Looker/Metabase | Novo (Fase 3) |
+
+---
+
+### 9.5 Roadmap de Construcao do ERP
+
+```
+2026 (JA EXISTE — POLIR)
+│
+├── Materiais e Inventario ──────── ☑ 17 componentes
+├── Orcamento SINAPI + BDI ──────── ☑ Engines completas
+├── Producao e Controle ─────────── ☑ 5 componentes
+├── RDO Digital ─────────────────── ☑ 10+ componentes
+├── Planejamento + LPS ──────────── ☑ Engines + UI
+├── CRM ─────────────────────────── ☑ 7 componentes
+├── RH basico ───────────────────── ☑ 6 componentes
+├── Manutencao (QR + Tarefas) ───── ☑ Componentes
+├── Alertas Inteligentes ────────── ☑ Completo
+├── Dashboards (Custom, 360) ────── ☑ 8 componentes
+├── Licitacoes PNCP ─────────────── ☑ Completo
+└── Aprovacoes + Checklists ─────── ☑ Funcional
+
+2027 S1 — QUALIDADE + SUPRIMENTOS BASICO
+│
+├── FVS (Ficha Verificacao Servico)
+├── FVM (Ficha Verificacao Material)
+├── Nao-Conformidades com 5 Porques
+├── Cotacao basica (envio por email)
+├── Mapa de cotacao (comparativo)
+└── Panorama de compras (orcado vs comprado)
+
+2027 S2 — SUPRIMENTOS COMPLETO
+│
+├── Pedido de compra formal com aprovacao
+├── Recebimento e conferencia
+├── PBQP-H (templates + compliance)
+├── Indicadores de qualidade (IQS)
+└── Curva ABC de insumos
+
+2028 S1 — FINANCEIRO BASICO
+│
+├── Contas a Pagar
+├── Contas a Receber
+├── Fluxo de Caixa (por obra + consolidado)
+├── DRE Gerencial (por obra + consolidado)
+├── Centros de Custo por obra
+└── Medicao contratual (boletim + aprovacao)
+
+2028 S2 — FINANCEIRO + ATIVOS + RH
+│
+├── Conciliacao bancaria (OFX)
+├── Gestao de contratos
+├── Patrimonio e equipamentos
+├── Frota (basico)
+├── Ponto eletronico (app)
+├── EPI + Treinamentos
+└── Viabilidade economica (TIR/VPL)
+
+2029 — FISCAL + CONTABIL + PORTAL
+│
+├── NF-e emissao/recebimento
+├── Retencoes automaticas
+├── REINF (eventos R-2010, R-2020)
+├── Contabilidade basica (export)
+├── Portal do Fornecedor
+├── eSocial (eventos basicos)
+└── Conector Power BI
+```
+
+### 9.6 Esforco Estimado de Desenvolvimento
+
+| Bloco | Modulos | Meses-dev estimados | Prioridade |
+|-------|---------|--------------------|-----------:|
+| Qualidade (FVS, FVM, NC, PBQP-H) | 6 sub-modulos | 3-4 meses | ALTA |
+| Suprimentos (Cotacao, PO, Recebimento) | 6 sub-modulos | 3-4 meses | ALTA |
+| Financeiro (CP, CR, FC, DRE) | 6 sub-modulos | 4-6 meses | CRITICA |
+| Ativos (Patrimonio, Frota, Equip.) | 5 sub-modulos | 2-3 meses | MEDIA |
+| RH expandido (Ponto, EPI, eSocial) | 6 sub-modulos | 3-4 meses | MEDIA |
+| Fiscal (NF-e, Retencoes, REINF) | 5 sub-modulos | 4-5 meses | MEDIA |
+| Comercial (Contratos, Medicao, Propostas) | 4 sub-modulos | 2-3 meses | MEDIA |
+| BI (Viabilidade, Curva ABC, Power BI) | 5 sub-modulos | 2-3 meses | MEDIA |
+| **TOTAL** | **43 sub-modulos** | **23-32 meses** | — |
+
+**Com time de 3 devs:** ~8-11 meses para ter tudo
+**Com time de 1 dev:** ~24-32 meses (priorizando por impacto)
+
+---
+
+## PARTE X — PRECIFICACAO COMPLETA CONSTRUDATA
+
+### 10.1 Filosofia de Pricing
+
+```
+╔════════════════════════════════════════════════════════════════════╗
+║                                                                    ║
+║  REGRAS DE OURO:                                                  ║
+║                                                                    ║
+║  1. TRANSPARENTE — Preco no site. Sem "fale com vendedor".        ║
+║  2. PREVISIVEL — Cliente sabe exatamente o que vai pagar.         ║
+║  3. PROGRESSIVO — Comeca barato, cresce com o uso.                ║
+║  4. JUSTO — Paga pelo que usa. Sem modulo inutil.                 ║
+║  5. COMPETITIVO — 50-70% mais barato que Sienge para mesmas       ║
+║     funcionalidades. Mas com ENGENHARIA que ele nao tem.          ║
+║                                                                    ║
+╚════════════════════════════════════════════════════════════════════╝
+```
+
+### 10.2 Arquitetura de Produtos
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CONSTRUDATA PLATFORM                          │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │              HYDRONETWORK (Engenharia)                   │    │
+│  │                                                         │    │
+│  │  Dimensionamento │ EPANET │ Orcamento │ Planejamento   │    │
+│  │  Simulacao │ Lean LPS │ RDO │ Topografia │ Normas NBR  │    │
+│  │                                                         │    │
+│  │  4 PLANOS: Essencial → Pro → Business → Enterprise      │    │
+│  │  R$ 997 ─────────────────────────────────── R$ 3.997    │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │              CONSTRUDATA GESTAO (Administrativo)         │    │
+│  │                                                         │    │
+│  │  Financeiro │ Suprimentos │ Qualidade │ RH │ Contratos  │    │
+│  │  Ativos │ Fiscal │ BI │ Portal Fornecedor               │    │
+│  │                                                         │    │
+│  │  ADD-ON por bloco ou pacote completo                     │    │
+│  │  R$ 497/bloco ──────────────────── R$ 1.997 (completo)  │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │              SERVICOS PROFISSIONAIS                       │    │
+│  │                                                         │    │
+│  │  Implantacao │ Treinamento │ Consultoria Lean │ Suporte │    │
+│  │  Evolucao Tecnologica │ Customizacao                    │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 10.3 PLANOS HYDRONETWORK (Core — R$ 997 a R$ 3.997)
+
+#### Tabela Completa de Planos
+
+| | ESSENCIAL | PRO | BUSINESS | ENTERPRISE |
+|---|-----------|-----|----------|------------|
+| **Preco mensal** | **R$ 997** | **R$ 1.997** | **R$ 2.997** | **R$ 3.997** |
+| **Preco anual** (paga 10, usa 12) | R$ 9.970/ano | R$ 19.970/ano | R$ 29.970/ano | R$ 39.970/ano |
+| **Preco mensal efetivo (anual)** | R$ 831 | R$ 1.664 | R$ 2.498 | R$ 3.331 |
+| | | | | |
+| **LIMITES** | | | | |
+| Projetos/obras ativos | 1 | 3 | 8 | Ilimitado |
+| Usuarios | 3 | 8 | 20 | Ilimitado |
+| Armazenamento | 5 GB | 25 GB | 100 GB | Ilimitado |
+| | | | | |
+| **ENGENHARIA** | | | | |
+| Dimensionamento esgoto (NBR 9649) | ☑ | ☑ | ☑ | ☑ |
+| Dimensionamento agua (NBR 12218) | ☑ | ☑ | ☑ | ☑ |
+| Dimensionamento drenagem | — | ☑ | ☑ | ☑ |
+| Importacao topografia (CSV/DXF/SHP) | ☑ | ☑ | ☑ | ☑ |
+| Perfil longitudinal | ☑ | ☑ | ☑ | ☑ |
+| Mapa interativo (GIS) | ☑ | ☑ | ☑ | ☑ |
+| EPANET (simulacao basica) | ☑ | ☑ | ☑ | ☑ |
+| EPANET PRO (avancado) | — | ☑ | ☑ | ☑ |
+| SWMM (drenagem avancada) | — | — | ☑ | ☑ |
+| Transientes (golpe de ariete) | — | — | ☑ | ☑ |
+| Estacao elevatoria | — | ☑ | ☑ | ☑ |
+| Recalque | — | ☑ | ☑ | ☑ |
+| CAESB/SABESP (conformidade) | — | — | ☑ | ☑ |
+| | | | | |
+| **ORCAMENTO E CUSTOS** | | | | |
+| Quantitativos automaticos | ☑ | ☑ | ☑ | ☑ |
+| Orcamento SINAPI | ☑ | ☑ | ☑ | ☑ |
+| BDI TCU (Acordao 2622/2013) | — | ☑ | ☑ | ☑ |
+| Custo por trecho | — | ☑ | ☑ | ☑ |
+| Orcamento customizado (base propria) | — | — | ☑ | ☑ |
+| SICRO | — | — | ☑ | ☑ |
+| | | | | |
+| **PLANEJAMENTO** | | | | |
+| Gantt interativo | ☑ | ☑ | ☑ | ☑ |
+| Curva S (fisico-financeira) | ☑ | ☑ | ☑ | ☑ |
+| Equipes e produtividade | ☑ | ☑ | ☑ | ☑ |
+| LPS — Last Planner System | — | ☑ | ☑ | ☑ |
+| Restricoes Lean (9 categorias) | — | ☑ | ☑ | ☑ |
+| PPC (Percent Plan Complete) | — | ☑ | ☑ | ☑ |
+| Export ProjectLibre/OpenProject | — | — | ☑ | ☑ |
+| | | | | |
+| **RDO E PRODUCAO** | | | | |
+| RDO Digital (servicos, equipes, clima) | ☑ | ☑ | ☑ | ☑ |
+| Fotos geolocalizadas | — | ☑ | ☑ | ☑ |
+| Aprovacao de RDO (workflow) | — | ☑ | ☑ | ☑ |
+| Dashboard de producao | ☑ | ☑ | ☑ | ☑ |
+| Controle de producao avancado | — | — | ☑ | ☑ |
+| Historico de RDO (tendencias) | — | ☑ | ☑ | ☑ |
+| | | | | |
+| **EXPORTACAO** | | | | |
+| CSV | ☑ | ☑ | ☑ | ☑ |
+| Excel (XLSX) | ☑ | ☑ | ☑ | ☑ |
+| PDF (relatorios) | — | ☑ | ☑ | ☑ |
+| DXF | — | ☑ | ☑ | ☑ |
+| GeoJSON | — | — | ☑ | ☑ |
+| SHP (Shapefile) | — | — | ☑ | ☑ |
+| Export QGIS | — | — | ☑ | ☑ |
+| Projeto ZIP (backup completo) | — | — | ☑ | ☑ |
+| | | | | |
+| **INTEGRACAO** | | | | |
+| Import INP/DXF/DWG/SHP/GeoJSON | ☑ | ☑ | ☑ | ☑ |
+| Import IFC (BIM) | — | — | ☑ | ☑ |
+| Import GeoTIFF | — | — | ☑ | ☑ |
+| API REST publica | — | — | — | ☑ |
+| Webhook de eventos | — | — | — | ☑ |
+| | | | | |
+| **SUPORTE** | | | | |
+| Central de ajuda (FAQ + tutoriais) | ☑ | ☑ | ☑ | ☑ |
+| Email (72h) | ☑ | — | — | — |
+| Email (24h) + WhatsApp | — | ☑ | ☑ | — |
+| Suporte dedicado (4h) | — | — | — | ☑ |
+| Treinamento incluso | — | 2h | 6h | 12h + consultoria |
+| Peer Review tecnico | — | — | ☑ | ☑ |
+| Gerente de conta | — | — | — | ☑ |
+| | | | | |
+| **SEGURANCA** | | | | |
+| Backup diario | — | ☑ | ☑ | ☑ |
+| Versionamento de projeto | — | — | ☑ | ☑ |
+| Controle de acesso (perfis) | — | ☑ | ☑ | ☑ |
+| Log de auditoria | — | — | — | ☑ |
+| SLA de disponibilidade | 99% | 99.5% | 99.5% | 99.9% |
+
+### 10.4 ADD-ONS CONSTRUDATA GESTAO (Administrativo)
+
+Modulos administrativos vendidos como add-ons ao HydroNetwork. Disponivel para planos Pro e acima.
+
+| Add-on | Preco mensal | O que inclui |
+|--------|-------------|-------------|
+| **Gestao da Qualidade** | R$ 497/mes | FVS, FVM, Nao-Conformidade, PBQP-H, Auditoria, Indicadores |
+| **Suprimentos e Compras** | R$ 497/mes | Cotacao, Pedido de Compra, Recebimento, Mapa Cotacao, Panorama, Curva ABC |
+| **Financeiro** | R$ 697/mes | Contas Pagar/Receber, Fluxo Caixa, DRE, Centros Custo, Conciliacao |
+| **RH Completo** | R$ 397/mes | Ponto, EPI, Treinamentos, Custo MO, escalas completas |
+| **Ativos e Equipamentos** | R$ 297/mes | Patrimonio, Frota, Equipamentos, Manutencao preventiva, QR Code |
+| **Contratos e Medicao** | R$ 397/mes | Gestao contratos, Medicao contratual, Propostas, Aditivos |
+| **Fiscal Basico** | R$ 497/mes | NF-e emissao/recebimento, Retencoes, REINF |
+| | | |
+| **PACOTE GESTAO COMPLETO** | **R$ 1.997/mes** | Todos os add-ons acima (economia de R$ 1.282/mes vs individual) |
+
+### 10.5 TABELA DE SETUP (Implantacao)
+
+| Porte | Obras | Usuarios | Setup HydroNetwork | Setup Gestao | Setup Completo |
+|-------|-------|----------|-------------------|-------------|---------------|
+| **Micro** | 1 | 1-3 | R$ 1.500 | — | R$ 1.500 |
+| **Pequeno** | 1-3 | 3-8 | R$ 3.500 | R$ 2.500 | R$ 5.000 |
+| **Medio** | 3-8 | 8-20 | R$ 7.500 | R$ 5.000 | R$ 10.000 |
+| **Grande** | 8+ | 20+ | R$ 15.000 | R$ 10.000 | R$ 20.000 |
+| **Concessionaria** | 50+ | 100+ | Sob consulta | Sob consulta | R$ 50.000-150.000 |
+
+**O que o setup inclui:**
+- Configuracao do ambiente
+- Migracao de dados (topografia, projetos existentes, base de precos)
+- Treinamento da equipe (horas conforme plano)
+- Acompanhamento na primeira semana (go-live)
+- 30 dias de suporte prioritario pos-implantacao
+
+### 10.6 SERVICOS PROFISSIONAIS
+
+| Servico | Preco | Modelo |
+|---------|-------|--------|
+| **Treinamento avulso** | R$ 500/hora | Por modulo, online ao vivo |
+| **Consultoria Lean Construction** | R$ 3.500/mes | 4 visitas + acompanhamento semanal |
+| **Evolucao Tecnologica** | R$ 5.000/mes | Desenvolvimento prioritario de features |
+| **Customizacao** | R$ 150/hora | Relatorios, integrações, dashboards sob medida |
+| **Suporte dedicado** | R$ 2.500/mes | Gerente de conta + SLA 4h + reuniao semanal |
+| **Auditoria PBQP-H** | R$ 8.000 (unico) | Preparacao completa para certificacao |
+
+### 10.7 PLANO ACADEMICO
+
+| | ACADEMICO |
+|---|-----------|
+| **Preco** | **GRATUITO** |
+| Requisito | Universidade com CNPJ + curso de Engenharia |
+| Projetos | 2 (para aulas) |
+| Usuarios | 30 (alunos + professor) |
+| Modulos | Todos do plano PRO |
+| Validade | Renovacao anual |
+| Suporte | Email (72h) + FAQ |
+| Restricao | Uso academico apenas, sem projetos comerciais |
+
+### 10.8 COMPARATIVO DE RECEITA POR CLIENTE
+
+```
+CENARIO 1: Consultoria pequena (3 engenheiros, 1 obra)
+┌──────────────────────────────────────────────┐
+│ HydroNetwork Essencial:    R$    997/mes     │
+│ Setup:                     R$  1.500 (unico) │
+│ ─────────────────────────────────────────    │
+│ Receita Ano 1:             R$ 13.464         │
+│ Receita anual recorrente:  R$ 11.964         │
+└──────────────────────────────────────────────┘
+
+CENARIO 2: Construtora media (8 engenheiros, 5 obras)
+┌──────────────────────────────────────────────┐
+│ HydroNetwork Business:     R$  2.997/mes     │
+│ Add-on Qualidade:          R$    497/mes     │
+│ Add-on Suprimentos:        R$    497/mes     │
+│ Subtotal mensal:           R$  3.991/mes     │
+│ Setup:                     R$ 10.000 (unico) │
+│ ─────────────────────────────────────────    │
+│ Receita Ano 1:             R$ 57.892         │
+│ Receita anual recorrente:  R$ 47.892         │
+└──────────────────────────────────────────────┘
+
+CENARIO 3: Construtora grande (20+ engenheiros, 10+ obras)
+┌──────────────────────────────────────────────┐
+│ HydroNetwork Enterprise:   R$  3.997/mes     │
+│ Pacote Gestao Completo:    R$  1.997/mes     │
+│ Consultoria Lean:          R$  3.500/mes     │
+│ Subtotal mensal:           R$  9.494/mes     │
+│ Setup:                     R$ 20.000 (unico) │
+│ ─────────────────────────────────────────    │
+│ Receita Ano 1:             R$133.928         │
+│ Receita anual recorrente:  R$113.928         │
+└──────────────────────────────────────────────┘
+
+CENARIO 4: Concessionaria (100+ usuarios, 50+ obras)
+┌──────────────────────────────────────────────┐
+│ HydroNetwork Enterprise:   R$  3.997/mes     │
+│ x 5 unidades regionais:    R$ 19.985/mes     │
+│ Pacote Gestao Completo x5: R$  9.985/mes     │
+│ Suporte Dedicado:          R$  2.500/mes     │
+│ Subtotal mensal:           R$ 32.470/mes     │
+│ Setup:                     R$150.000 (unico) │
+│ Consultoria Lean:          R$  3.500/mes     │
+│ ─────────────────────────────────────────    │
+│ Receita Ano 1:             R$581.640         │
+│ Receita anual recorrente:  R$431.640         │
+└──────────────────────────────────────────────┘
+```
+
+### 10.9 PROJECAO DE MIX DE CLIENTES (Ano 2 — Meta 120 Clientes)
+
+| Perfil | % Mix | Qtd | Plano tipico | ARPU mensal | MRR parcial |
+|--------|-------|-----|-------------|-------------|-------------|
+| Consultorias pequenas | 40% | 48 | Essencial | R$ 997 | R$ 47.856 |
+| Consultorias medias | 25% | 30 | Pro | R$ 1.997 | R$ 59.910 |
+| Construtoras medias | 20% | 24 | Business + Qualidade | R$ 3.494 | R$ 83.856 |
+| Construtoras grandes | 10% | 12 | Enterprise + Gestao | R$ 5.994 | R$ 71.928 |
+| Concessionarias | 5% | 6 | Enterprise + Gestao + Servicos | R$ 15.000 | R$ 90.000 |
+| **TOTAL** | **100%** | **120** | — | **R$ 2.946** | **R$ 353.550** |
+
+**ARR projetado com 120 clientes: R$ 4.242.600/ano**
+
+### 10.10 COMPARATIVO DIRETO: CONSTRUDATA vs SIENGE (Preco)
+
+```
+PARA UMA CONSTRUTORA MEDIA (5 obras, 10 usuarios):
+
+SIENGE (estimado):
+├── Modulo Engenharia:       ~R$ 1.500/mes
+├── Modulo Suprimentos:      ~R$ 1.200/mes
+├── Modulo Financeiro:       ~R$ 1.500/mes
+├── Modulo Qualidade:        ~R$   800/mes
+├── Setup/Implantacao:       ~R$ 25.000
+├── Treinamento (NPU):       ~R$  8.000
+├── TOTAL mensal:            ~R$ 5.000/mes
+├── TOTAL Ano 1:             ~R$ 93.000
+│
+├── SEM dimensionamento de redes
+├── SEM EPANET
+├── SEM Lean LPS nativo
+├── SEM normas NBR automaticas
+└── SEM simulacao hidraulica
+
+CONSTRUDATA:
+├── HydroNetwork Business:     R$ 2.997/mes
+├── Add-on Qualidade:          R$   497/mes
+├── Add-on Suprimentos:        R$   497/mes
+├── Setup (inclui treinamento): R$ 10.000
+├── Treinamento extra:         R$     0 (incluso)
+├── TOTAL mensal:              R$ 3.991/mes
+├── TOTAL Ano 1:               R$ 57.892
+│
+├── COM dimensionamento automatico
+├── COM EPANET no navegador
+├── COM Lean LPS nativo
+├── COM normas NBR automaticas
+├── COM simulacao hidraulica
+└── COM suporte que responde em 24h
+
+ECONOMIA: R$ 35.108/ano (38% mais barato)
+COM MAIS FUNCIONALIDADES de engenharia.
+```
+
+### 10.11 Estrategia de Upsell Natural
+
+```
+JORNADA DO CLIENTE:
+
+MES 1: Contrata Essencial (R$ 997)
+       "So preciso dimensionar uma rede"
+           │
+MES 3: Upgrade para Pro (R$ 1.997)
+       "Quero EPANET PRO e LPS para a equipe"
+           │
+MES 6: Adiciona Qualidade (+ R$ 497)
+       "Preciso do PBQP-H para licitacao da CAIXA"
+           │
+MES 9: Upgrade para Business (R$ 2.997)
+       "Agora temos 5 obras simultaneas"
+           │
+MES 12: Adiciona Gestao Completo (+ R$ 1.997)
+        "Quero tudo integrado — financeiro, compras, contratos"
+           │
+MES 18: Enterprise + Consultoria Lean
+        "Somos referencia. Queremos suporte dedicado."
+
+ARPU EVOLUI: R$ 997 → R$ 2.494 → R$ 2.991 → R$ 4.994 → R$ 9.494
+```
+
+### 10.12 Desconto e Promocoes
+
+| Tipo | Desconto | Condicao |
+|------|---------|----------|
+| **Anual** | 16,7% (paga 10, usa 12) | Contrato de 12 meses |
+| **Early Adopter** | 20% no primeiro ano | Primeiros 50 clientes |
+| **Referral** | 10% para quem indica + 10% para indicado | Primeiro ano do indicado |
+| **Switch (ex-Sienge)** | 30% no primeiro ano | Comprovar uso anterior do Sienge |
+| **Academico** | 100% (gratuito) | Universidade com CNPJ |
+| **Startup** | 50% no primeiro ano | Empresa com < 2 anos e < 10 funcionarios |
+| **Multi-obra** | 15% no add-on a partir da 10a obra | Enterprise |
+
+---
+
+## PARTE XI — PLANO ATUALIZADO: COMO O ERP MUDA A GUERRA
+
+### 11.1 Nova Estrategia Com o ERP
+
+O plano original dizia "nao construa ERP financeiro". A nova estrategia e **construir o ERP de forma progressiva**, porque:
+
+1. **Aumenta ARPU** — Add-ons de gestao dobram a receita por cliente
+2. **Reduz churn** — Cliente que usa financeiro + engenharia nao sai
+3. **Ataca territorio Sienge** — Deixa de ser "software de engenharia" e vira "plataforma completa"
+4. **Aumenta valuation** — Plataforma completa vale mais que ferramenta de nicho
+
+### 11.2 Cronograma Atualizado
+
+```
+2026: HYDRONETWORK PURO (Engenharia)
+      Meta: 20 clientes, R$ 30K MRR
+      Foco: Polir dimensionamento + orcamento + planejamento + RDO
+      Pricing: R$ 997-3.997
+
+2027: + QUALIDADE + SUPRIMENTOS
+      Meta: 120 clientes, R$ 200K MRR
+      Foco: FVS/PBQP-H + Cotacao/Compras
+      Pricing: + add-ons R$ 497-697
+
+2028: + FINANCEIRO + ATIVOS + RH
+      Meta: 400 clientes, R$ 800K MRR
+      Foco: Contas Pagar/Receber + DRE + Patrimonio
+      Pricing: + add-on Financeiro R$ 697
+
+2029: + FISCAL + PORTAL + API
+      Meta: 800 clientes, R$ 2M MRR
+      Foco: NF-e + REINF + Portal Fornecedor + API
+      Pricing: + add-on Fiscal R$ 497
+
+2030+: PLATAFORMA COMPLETA
+       Meta: 2.000+ clientes, R$ 5M+ MRR
+       CONSTRUDATA = SIENGE + ENGENHARIA + LEAN
+       Por metade do preco.
+```
+
+### 11.3 O Momento da Virada
+
+```
+╔════════════════════════════════════════════════════════════════════╗
+║                                                                    ║
+║  QUANDO TEREMOS:                                                  ║
+║  ☑ Dimensionamento automatico (Manning, HW, EPANET)              ║
+║  ☑ Orcamento SINAPI + BDI TCU                                    ║
+║  ☑ Planejamento Lean (LPS + Gantt + Curva S)                     ║
+║  ☑ RDO Digital com fotos                                         ║
+║  ☑ Qualidade (FVS + PBQP-H)                                     ║
+║  ☑ Suprimentos (Cotacao + Compras)                               ║
+║  ☑ Financeiro (CP + CR + Fluxo Caixa + DRE)                     ║
+║  ☑ RH (Ponto + EPI + Custo MO)                                  ║
+║  ☑ Normas brasileiras nativas                                    ║
+║  ☑ Simulacao hidraulica no navegador                             ║
+║                                                                    ║
+║  ...O SIENGE SE TORNA DISPENSAVEL.                                ║
+║                                                                    ║
+║  Ele so tem gestao. Nos temos gestao + engenharia.                ║
+║  Ele custa R$ 5.000+/mes. Nos custamos R$ 3.991/mes.             ║
+║  Ele tem suporte de 16 dias. Nos respondemos em 4h.              ║
+║  Ele tem 30 anos de legado. Nos temos stack moderna.              ║
+║                                                                    ║
+║  CHECKMATE.                                                       ║
+║                                                                    ║
+╚════════════════════════════════════════════════════════════════════╝
+```
+
+---
+
+*Documento estrategico — Marco/2026 (Revisao 2.0)*
 *Classificacao: Confidencial*
 *Revisao: A cada 90 dias com base em dados reais de mercado*
 *"Toda guerra e vencida ou perdida antes de ser travada." — Sun Tzu*
