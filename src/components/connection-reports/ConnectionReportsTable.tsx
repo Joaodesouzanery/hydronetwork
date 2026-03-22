@@ -138,7 +138,7 @@ export function ConnectionReportsTable({ reports }: ConnectionReportsTableProps)
   return (
     <div className="space-y-4">
       {/* Exportar Consolidado */}
-      <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg border">
+      <div className="flex items-center gap-3 p-4 bg-muted/50 border">
         <FileStack className="h-5 w-5 text-muted-foreground" />
         <div className="flex-1">
           <p className="text-sm font-medium">Exportar Relatório Consolidado</p>
@@ -153,7 +153,7 @@ export function ConnectionReportsTable({ reports }: ConnectionReportsTableProps)
         </Button>
       </div>
 
-      <div className="border rounded-lg">
+      <div className="border">
       <Table>
         <TableHeader>
           <TableRow>

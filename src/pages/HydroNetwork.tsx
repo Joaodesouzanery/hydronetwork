@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   Download, MapPin, Droplets, Calculator,
   AlertTriangle, Settings2, X, Map
@@ -27,10 +28,11 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from "recharts";
 import { TopographyMap } from "@/components/hydronetwork/TopographyMap";
 import { PerfilLongitudinal } from "@/components/hydronetwork/PerfilLongitudinal";
-import { RDOHydroModule } from "@/components/hydronetwork/RDOHydroModule";
-import { PlanningModule } from "@/components/hydronetwork/PlanningModule";
+import type { QuantRow, QuantityParams } from "@/components/hydronetwork/modules/QuantitiesModule";
 import { downloadDXF } from "@/lib/dxfExporter";
 // Lazy-loaded modules for code splitting — only loaded when navigated to
+const RDOHydroModule = lazy(() => import("@/components/hydronetwork/RDOHydroModule").then(m => ({ default: m.RDOHydroModule })));
+const PlanningModule = lazy(() => import("@/components/hydronetwork/PlanningModule").then(m => ({ default: m.PlanningModule })));
 const SewerModule = lazy(() => import("@/components/hydronetwork/modules/SewerModule").then(m => ({ default: m.SewerModule })));
 const WaterModule = lazy(() => import("@/components/hydronetwork/modules/WaterModule").then(m => ({ default: m.WaterModule })));
 const DrainageModule = lazy(() => import("@/components/hydronetwork/modules/DrainageModule").then(m => ({ default: m.DrainageModule })));
@@ -48,6 +50,14 @@ const RDOPlanningModule = lazy(() => import("@/components/hydronetwork/modules/R
 const LPSModule = lazy(() => import("@/components/hydronetwork/modules/LPSModule").then(m => ({ default: m.LPSModule })));
 const QEsgWaterModule = lazy(() => import("@/components/hydronetwork/modules/QEsgWaterModule").then(m => ({ default: m.QEsgWaterModule })));
 const ElevatorStationModule = lazy(() => import("@/components/hydronetwork/modules/ElevatorStationModule").then(m => ({ default: m.ElevatorStationModule })));
+const RecalqueModule = lazy(() => import("@/components/hydronetwork/modules/RecalqueModule").then(m => ({ default: m.RecalqueModule })));
+const TransientModule = lazy(() => import("@/components/hydronetwork/modules/TransientModule").then(m => ({ default: m.TransientModule })));
+const CAESBModule = lazy(() => import("@/components/hydronetwork/modules/CAESBModule").then(m => ({ default: m.CAESBModule })));
+const CAESBPreProjectModule = lazy(() => import("@/components/hydronetwork/modules/CAESBPreProjectModule").then(m => ({ default: m.CAESBPreProjectModule })));
+const TrechoEditModule = lazy(() => import("@/components/hydronetwork/modules/TrechoEditModule").then(m => ({ default: m.TrechoEditModule })));
+const EconomyPanelModule = lazy(() => import("@/components/hydronetwork/modules/EconomyPanelModule").then(m => ({ default: m.EconomyPanelModule })));
+const RDOHydroHistoryModule = lazy(() => import("@/components/hydronetwork/modules/RDOHydroHistoryModule").then(m => ({ default: m.RDOHydroHistoryModule })));
+const FotosValidacaoModule = lazy(() => import("@/components/hydronetwork/modules/FotosValidacaoModule").then(m => ({ default: m.FotosValidacaoModule })));
 import { QEsgWaterPanel } from "@/components/hydronetwork/panels/QEsgWaterPanel";
 import { getRasterGrid } from "@/engine/rasterStore";
 import { extractContours, type ContourExtractionResult } from "@/engine/contourExtractor";
@@ -70,12 +80,17 @@ const useHydroState = () => {
   const [material, setMaterial] = useState(DEFAULT_MATERIAL);
   const [scheduleResult, setScheduleResult] = useState<ScheduleResult | null>(null);
   const [rdos, setRdos] = useState<RDO[]>(loadRDOs());
+  const [quantityRows, setQuantityRows] = useState<QuantRow[]>([]);
+  const [quantityParams, setQuantityParams] = useState<QuantityParams | null>(null);
+  const [reviewErrorsCount, setReviewErrorsCount] = useState(0);
+  const [reviewWarningsCount, setReviewWarningsCount] = useState(0);
 
   return {
     pontos, setPontos, trechos, setTrechos, networkSummary, setNetworkSummary,
     costBase, setCostBase, budgetRows, setBudgetRows, budgetSummary, setBudgetSummary,
     diametroMm, setDiametroMm, material, setMaterial, scheduleResult, setScheduleResult,
-    rdos, setRdos,
+    rdos, setRdos, quantityRows, setQuantityRows, quantityParams, setQuantityParams,
+    reviewErrorsCount, setReviewErrorsCount, reviewWarningsCount, setReviewWarningsCount,
   };
 };
 
@@ -89,7 +104,8 @@ const HydroNetwork = () => {
     pontos, setPontos, trechos, setTrechos, networkSummary, setNetworkSummary,
     costBase, setCostBase, budgetRows, setBudgetRows, budgetSummary, setBudgetSummary,
     diametroMm, setDiametroMm, material, setMaterial, scheduleResult, setScheduleResult,
-    rdos, setRdos,
+    rdos, setRdos, quantityRows, setQuantityRows, quantityParams, setQuantityParams,
+    reviewErrorsCount, setReviewErrorsCount, reviewWarningsCount, setReviewWarningsCount,
   } = state;
 
   // ══════════════════════════════════════════════
@@ -270,7 +286,7 @@ const HydroNetwork = () => {
       case "drenagem":
         return <DrainageModule pontos={pontos} />;
       case "quantitativos":
-        return <QuantitiesModule trechos={trechos} pontos={pontos} />;
+        return <QuantitiesModule trechos={trechos} pontos={pontos} onQuantitiesCalculated={(rows, params) => { setQuantityRows(rows); setQuantityParams(params); }} />;
       case "orcamento":
         return <OrcamentoModule />;
       case "planejamento":
@@ -290,23 +306,39 @@ const HydroNetwork = () => {
       case "qgis":
         return <QgisModule pontos={pontos} trechos={trechos} />;
       case "revisao":
-        return <PeerReviewModule pontos={pontos} trechos={trechos} />;
+        return <PeerReviewModule pontos={pontos} trechos={trechos} onReviewComplete={(errors, warnings) => { setReviewErrorsCount(errors); setReviewWarningsCount(warnings); }} />;
       case "rdo":
         return <RDOHydroModule pontos={pontos} trechos={trechos} rdos={rdos} setRdos={setRdos} onPontosChange={setPontos} onTrechosChange={setTrechos} />;
       case "rdo-planejamento":
         return <RDOPlanningModule pontos={pontos} trechos={trechos} rdos={rdos} scheduleResult={scheduleResult} />;
+      case "rdo-historico":
+        return <RDOHydroHistoryModule rdos={rdos} />;
+      case "fotos-validacao":
+        return <FotosValidacaoModule rdos={rdos} />;
       case "lps":
         return <LPSModule pontos={pontos} trechos={trechos} />;
       case "qesg-qwater":
         return <QEsgWaterModule pontos={pontos} trechos={trechos} onTrechosChange={setTrechos} />;
       case "elevatoria":
         return <ElevatorStationModule />;
+      case "recalque":
+        return <RecalqueModule />;
+      case "transientes":
+        return <TransientModule />;
+      case "caesb":
+        return <CAESBModule />;
+      case "caesb-preprojeto":
+        return <CAESBPreProjectModule />;
+      case "edicao-trecho":
+        return <TrechoEditModule trechos={trechos} pontos={pontos} quantityRows={quantityRows} quantityParams={quantityParams ?? undefined} onTrechosChange={setTrechos} />;
       case "perfil":
         return <PerfilLongitudinal pontos={pontos} trechos={trechos} />;
       case "mapa":
         return <MapaInterativoModule />;
       case "exportacao":
         return <ExportacaoGISModule />;
+      case "economia":
+        return <EconomyPanelModule trechos={trechos} quantityRows={quantityRows} scheduleResult={scheduleResult} budgetTotal={budgetSummary?.totalCost} reviewErrorsCount={reviewErrorsCount} reviewWarningsCount={reviewWarningsCount} />;
       default:
         return <TopografiaModule />;
     }
@@ -356,11 +388,13 @@ const HydroNetwork = () => {
                   </>
                 )}
               </div>
+
+            <PullDataPanel currentModule="hydronetwork" />
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {pontos.length > 0 && (
-              <div className="border border-border rounded-lg p-4 bg-card">
+              <div className="border border-border rounded-none p-4 bg-card">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <Badge variant="default" className="bg-green-600">{pontos.length} pontos</Badge>
@@ -393,7 +427,7 @@ const HydroNetwork = () => {
                       { label: "Elevatoria", value: networkSummary.trechosElevatoria, color: "text-orange-600" },
                       { label: "Decliv. Media", value: `${(networkSummary.declividadeMedia * 100).toFixed(2)}%`, color: "text-purple-600" },
                     ].map((item, i) => (
-                      <div key={i} className="bg-muted/50 rounded-lg p-2 text-center">
+                      <div key={i} className="bg-muted/50 rounded-none p-2 text-center">
                         <div className={`text-sm font-bold ${item.color}`}>{item.value}</div>
                         <div className="text-[10px] text-muted-foreground">{item.label}</div>
                       </div>
@@ -496,7 +530,7 @@ const HydroNetwork = () => {
                 {getAllLayers().map(layer => (
                   <div key={layer.id} className="flex items-center justify-between py-1 px-2 rounded hover:bg-muted/50 text-xs">
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: layer.color }} />
+                      <div className="w-3 h-3" style={{ backgroundColor: layer.color }} />
                       <span className="font-medium">{layer.name}</span>
                       <Badge variant="outline" className="text-[10px]">{layer.discipline}</Badge>
                       <Badge variant="outline" className="text-[10px]">{layer.geometryType}</Badge>
@@ -750,7 +784,7 @@ const HydroNetwork = () => {
 
   // â"€â"€ ORÃ‡AMENTO MODULE â"€â"€
   function OrcamentoModule() {
-    return <BudgetCostModule trechos={trechos} pontos={pontos} />;
+    return <BudgetCostModule trechos={trechos} pontos={pontos} quantityRows={quantityRows} quantityParams={quantityParams ?? undefined} />;
   }
 
   // ... keep existing code
@@ -814,25 +848,32 @@ const HydroNetwork = () => {
     drenagem: "Drenagem Pluvial", quantitativos: "Quantitativos", orcamento: "Orcamento e Custos",
     bdi: "BDI - Beneficios e Despesas Indiretas", planejamento: "Planejamento", epanet: "EPANET", "epanet-pro": "EPANET PRO",
     swmm: "SWMM", openproject: "OpenProject", projectlibre: "ProjectLibre", qgis: "QGIS",
-    revisao: "Revisao por Pares", rdo: "RDO", "rdo-planejamento": "RDO Ã-- Planejamento",
+    revisao: "Revisao por Pares", rdo: "RDO", "rdo-planejamento": "RDO x Planejamento",
+    "rdo-historico": "Historico de RDO Hydro", "fotos-validacao": "Fotos de Validacao",
     perfil: "Perfil Longitudinal", mapa: "Mapa Interativo", exportacao: "Exportacao GIS",
     lps: "LPS — Last Planner System",
     "qesg-qwater": "QEsg / QWater — Dimensionamento Hidráulico",
     elevatoria: "Orçamento de Elevatória",
+    recalque: "Recalque / Booster — Linhas de Recalque",
+    transientes: "Transientes Hidráulicos — Golpe de Aríete",
+    "edicao-trecho": "Edição por Trechos",
+    caesb: "Aprovações de Projetos",
+    "caesb-preprojeto": "Projetos Básicos",
+    economia: "Economia Comprovada",
   };
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+      <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <main className="flex-1 p-4 md:p-6 overflow-auto">
           <div className="max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
-                <h1 className="text-3xl font-bold flex items-center gap-2">
-                  <Droplets className="h-8 w-8 text-blue-600" /> HydroNetwork
+                <h1 className="text-2xl font-bold font-mono flex items-center gap-2 text-primary">
+                  <Droplets className="h-7 w-7 text-primary" /> HydroNetwork
                 </h1>
-                <p className="text-muted-foreground mt-1">{moduleNames[activeModule] || "Plataforma de Saneamento"}</p>
+                <p className="text-muted-foreground mt-1 text-sm">{moduleNames[activeModule] || "Plataforma de Saneamento"}</p>
               </div>
               <div className="flex gap-2 items-center">
                 <ProjectSelector
@@ -848,7 +889,7 @@ const HydroNetwork = () => {
               </div>
             </div>
             <ErrorBoundary moduleName={moduleNames[activeModule] || activeModule} key={activeModule}>
-              <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>}>
+              <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="animate-spin h-8 w-8 border-b-2 border-primary" /></div>}>
                 {renderModule()}
               </Suspense>
             </ErrorBoundary>

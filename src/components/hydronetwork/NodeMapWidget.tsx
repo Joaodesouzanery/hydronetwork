@@ -335,8 +335,8 @@ export const NodeMapWidget = ({
       linesRef.current.push(line);
     });
 
-    // Only fitBounds when actual data changes (not selection/mode changes)
-    const dataSig = `${nodes.map(n => n.id).join(",")}|${localConnections.length}`;
+    // Only fitBounds when the set of nodes changes (added/removed), not when connections change
+    const dataSig = nodes.map(n => n.id).join(",");
     if (bounds.length > 0 && dataSig !== lastDataSigRef.current) {
       lastDataSigRef.current = dataSig;
       try {
@@ -533,7 +533,7 @@ export const NodeMapWidget = ({
 
         {/* Add node mode status */}
         {addNodeMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200">
+          <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950/20 border border-green-200">
             <Plus className="h-4 w-4 text-green-600" />
             <span className="text-sm font-medium text-green-700 dark:text-green-400">
               Clique no mapa para adicionar um nó. ESC para sair.
@@ -546,7 +546,7 @@ export const NodeMapWidget = ({
 
         {/* Link mode status */}
         {linkMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-orange-50 dark:bg-orange-950/20 border border-orange-200">
+          <div className="flex items-center gap-2 p-2 bg-orange-50 dark:bg-orange-950/20 border border-orange-200">
             <Link2 className="h-4 w-4 text-orange-600" />
             <span className="text-sm font-medium text-orange-700 dark:text-orange-400">
               {linkOrigin ? `Origem: ${linkOrigin} — clique no destino (encadeamento automático)` : "Clique no ponto de origem"}
@@ -564,7 +564,7 @@ export const NodeMapWidget = ({
 
         {/* Delete mode status */}
         {deleteMode && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200">
+          <div className="flex items-center gap-2 p-2 bg-red-50 dark:bg-red-950/20 border border-red-200">
             <MousePointerClick className="h-4 w-4 text-red-600" />
             <span className="text-sm font-medium text-red-700 dark:text-red-400">
               {deleteMode === "nodes"
@@ -588,7 +588,7 @@ export const NodeMapWidget = ({
         )}
 
         {/* Map - always render the container */}
-        <div ref={containerRef} className="w-full rounded-lg border border-border overflow-hidden" style={{ height }} />
+        <div ref={containerRef} className="w-full border border-border overflow-hidden" style={{ height }} />
 
         {nodes.length === 0 && (
           <div className="text-center text-sm text-muted-foreground py-2">
@@ -598,7 +598,7 @@ export const NodeMapWidget = ({
 
         {/* Selected node editor */}
         {editable && selectedNode && onNodeDemandChange && !linkMode && !deleteMode && (
-          <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
+          <div className="flex items-center gap-2 p-2 bg-muted/50">
             <Edit3 className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">{selectedNode}</span>
             <Label className="text-xs">Demanda (L/s):</Label>
@@ -612,7 +612,7 @@ export const NodeMapWidget = ({
 
         {/* Connections list - editable */}
         {editable && localConnections.length > 0 && (
-          <div className="max-h-32 overflow-auto border border-border rounded-lg p-2">
+          <div className="max-h-32 overflow-auto border border-border p-2">
             <p className="text-xs font-medium mb-1">Conexões ({localConnections.length})</p>
             <div className="space-y-1">
               {localConnections.map((c, i) => (
@@ -629,12 +629,12 @@ export const NodeMapWidget = ({
 
         {/* Legend */}
         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500" /> Início</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-500" /> Fim</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: accentColor }} /> Intermediário</div>
-          <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500" /> Selecionado</div>
-          {linkMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-orange-500" /> Origem (ligação)</div>}
-          {deleteMode && <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-600" /> Selecionado p/ exclusão</div>}
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500" /> Início</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-500" /> Fim</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3" style={{ backgroundColor: accentColor }} /> Intermediário</div>
+          <div className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-500" /> Selecionado</div>
+          {linkMode && <div className="flex items-center gap-1"><div className="w-3 h-3 bg-orange-500" /> Origem (ligação)</div>}
+          {deleteMode && <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-600" /> Selecionado p/ exclusão</div>}
         </div>
       </CardContent>
     </Card>

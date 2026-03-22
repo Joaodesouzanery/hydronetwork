@@ -1,0 +1,10 @@
+# Dev/test artifacts
+*.md
+!README.md
+docs/
+
+# Large unnecessary files
+*.mp4
+*.mov
+*.avi
+preview*.html

@@ -9,7 +9,8 @@ import { CRMPipeline } from "@/components/crm/CRMPipeline";
 import { CRMActivities } from "@/components/crm/CRMActivities";
 import { CRMCalendar } from "@/components/crm/CRMCalendar";
 import { CRMReports } from "@/components/crm/CRMReports";
-import { 
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
+import {
   LayoutDashboard, 
   Users, 
   Building2, 
@@ -29,13 +30,15 @@ const CRM = () => {
         <SidebarInset className="flex-1">
           <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
             <div className="flex flex-col gap-1 sm:gap-2">
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">
-                CRM ConstruData
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold font-mono text-foreground">
+                CRM CONSTRUDATA
               </h1>
               <p className="text-sm sm:text-base text-muted-foreground">
                 Gestão completa de relacionamento com clientes
               </p>
             </div>
+
+            <PullDataPanel currentModule="crm" />
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
               {/* Mobile-friendly tabs with horizontal scroll */}

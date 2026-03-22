@@ -142,7 +142,7 @@ export function SurveyDispatchDialog({ open, onOpenChange }: SurveyDispatchDialo
             onChange={(e) => setSearchTerm(e.target.value)}
           />
 
-          <div className="flex items-center gap-2 p-2 border rounded-lg bg-muted/50">
+          <div className="flex items-center gap-2 p-2 border bg-muted/50">
             <Checkbox
               id="select-all"
               checked={selectAll}
@@ -159,7 +159,7 @@ export function SurveyDispatchDialog({ open, onOpenChange }: SurveyDispatchDialo
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
           ) : (
-            <ScrollArea className="h-[300px] border rounded-lg p-2">
+            <ScrollArea className="h-[300px] border p-2">
               <div className="space-y-2">
                 {filteredUsers.length === 0 ? (
                   <p className="text-center text-muted-foreground py-4">
@@ -171,7 +171,7 @@ export function SurveyDispatchDialog({ open, onOpenChange }: SurveyDispatchDialo
                     return (
                       <div
                         key={user.id}
-                        className={`flex items-center gap-2 p-2 rounded-lg ${
+                        className={`flex items-center gap-2 p-2 ${
                           hasPending ? "bg-muted opacity-60" : "hover:bg-muted/50"
                         }`}
                       >

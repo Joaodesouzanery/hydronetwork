@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { TutorialDialog } from "@/components/shared/TutorialDialog";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 export default function FacilityReports() {
   const navigate = useNavigate();
@@ -170,11 +171,13 @@ export default function FacilityReports() {
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div>
-                  <h1 className="text-3xl font-bold">Relatórios de Gestão Predial</h1>
+                  <h1 className="text-3xl font-bold font-mono">Relatórios de Gestão Predial</h1>
                   <p className="text-muted-foreground">
                     Relatórios automáticos consolidados
                   </p>
                 </div>
+
+              <PullDataPanel currentModule="predial" />
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setShowTutorial(true)}>

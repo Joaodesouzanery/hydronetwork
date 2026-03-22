@@ -10,7 +10,7 @@ const MaintenanceOverlay = () => {
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-sm">
       <div className="max-w-lg mx-4 text-center">
         <div className="mb-6 flex justify-center">
-          <div className="rounded-full bg-orange-500/20 p-6">
+          <div className="bg-orange-500/20 p-6">
             <Shield className="h-16 w-16 text-orange-500 animate-pulse" />
           </div>
         </div>
@@ -24,7 +24,7 @@ const MaintenanceOverlay = () => {
           Logo mais, voltaremos.
         </p>
         
-        <div className="bg-white/10 rounded-lg p-6 mb-6">
+        <div className="bg-white/10 p-6 mb-6">
           <p className="text-gray-200 mb-4">
             Entre em contato no nosso WhatsApp para qualquer dúvida.
           </p>
@@ -33,7 +33,7 @@ const MaintenanceOverlay = () => {
               href="https://wa.me/5500000000000" 
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-lg transition-colors font-medium"
+              className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-6 py-3 transition-colors font-medium"
             >
               <MessageCircle className="h-5 w-5" />
               WhatsApp

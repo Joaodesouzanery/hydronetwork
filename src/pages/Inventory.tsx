@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { AddInventoryItemDialog } from "@/components/inventory/AddInventoryItemDialog";
 import { InventoryMovementDialog } from "@/components/inventory/InventoryMovementDialog";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -404,18 +405,20 @@ const Inventory = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <Package className="w-12 h-12 mx-auto text-primary animate-pulse mb-4" />
           <p className="text-muted-foreground">Carregando...</p>
         </div>
+
+      <PullDataPanel currentModule="inventario" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+    <div className="min-h-screen bg-background">
+      <header className="border-b bg-card/50 sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -424,9 +427,9 @@ const Inventory = () => {
               </Button>
               <Button variant="ghost" onClick={() => navigate('/dashboard')}>
                 <Building2 className="w-6 h-6 mr-2" />
-                <span className="font-bold">ConstruData</span>
+                <span className="font-bold font-mono">CONSTRUDATA</span>
               </Button>
-              <h1 className="text-3xl font-bold">Almoxarifado</h1>
+              <h1 className="text-3xl font-bold font-mono">Almoxarifado</h1>
             </div>
             <div className="flex gap-2">
               <PageTutorialButton pageKey="inventory" />
@@ -582,7 +585,7 @@ const Inventory = () => {
                             Selecionar todas
                           </Button>
                         </div>
-                        <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
+                        <div className="space-y-2 max-h-32 overflow-y-auto border rounded-none p-2">
                           {categories.length === 0 ? (
                             <p className="text-xs text-muted-foreground text-center py-2">Nenhuma categoria</p>
                           ) : (
@@ -614,7 +617,7 @@ const Inventory = () => {
                             Selecionar todas
                           </Button>
                         </div>
-                        <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
+                        <div className="space-y-2 max-h-32 overflow-y-auto border rounded-none p-2">
                           {units.length === 0 ? (
                             <p className="text-xs text-muted-foreground text-center py-2">Nenhuma unidade</p>
                           ) : (
@@ -646,7 +649,7 @@ const Inventory = () => {
                             Selecionar todas
                           </Button>
                         </div>
-                        <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
+                        <div className="space-y-2 max-h-32 overflow-y-auto border rounded-none p-2">
                           {locations.length === 0 ? (
                             <p className="text-xs text-muted-foreground text-center py-2">Nenhuma localização</p>
                           ) : (
@@ -678,7 +681,7 @@ const Inventory = () => {
                             Selecionar todos
                           </Button>
                         </div>
-                        <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
+                        <div className="space-y-2 max-h-32 overflow-y-auto border rounded-none p-2">
                           {projects.length === 0 ? (
                             <p className="text-xs text-muted-foreground text-center py-2">Nenhum projeto</p>
                           ) : (
@@ -710,7 +713,7 @@ const Inventory = () => {
                             Selecionar todos
                           </Button>
                         </div>
-                        <div className="space-y-2 border rounded-md p-2">
+                        <div className="space-y-2 border rounded-none p-2">
                           <div className="flex items-center space-x-2">
                             <Checkbox
                               id="status-low"
@@ -856,7 +859,7 @@ const Inventory = () => {
             {filteredItems.length === 0 ? (
               <div className="text-center py-12">
                 <Package className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Nenhum material encontrado</h3>
+                <h3 className="text-lg font-semibold font-mono mb-2">Nenhum material encontrado</h3>
                 <p className="text-muted-foreground mb-4">
                   Comece adicionando materiais ao almoxarifado
                 </p>

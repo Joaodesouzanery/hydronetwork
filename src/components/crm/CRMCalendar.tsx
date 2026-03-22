@@ -141,7 +141,7 @@ export const CRMCalendar = () => {
           >
             <div className={`
               text-sm font-medium mb-1
-              ${isToday(day) ? "bg-primary text-primary-foreground w-6 h-6 rounded-full flex items-center justify-center" : ""}
+              ${isToday(day) ? "bg-primary text-primary-foreground w-6 h-6 flex items-center justify-center" : ""}
             `}>
               {format(day, "d")}
             </div>
@@ -185,7 +185,7 @@ export const CRMCalendar = () => {
             key={day.toISOString()}
             onClick={() => setSelectedDate(day)}
             className={`
-              border rounded-lg p-3 min-h-[300px] cursor-pointer transition-colors
+              border p-3 min-h-[300px] cursor-pointer transition-colors
               ${isToday(day) ? "border-primary bg-primary/5" : ""}
               ${isSelected ? "ring-2 ring-primary" : ""}
               hover:bg-muted/50
@@ -197,7 +197,7 @@ export const CRMCalendar = () => {
               </div>
               <div className={`
                 text-lg font-semibold
-                ${isToday(day) ? "bg-primary text-primary-foreground w-8 h-8 rounded-full flex items-center justify-center mx-auto" : ""}
+                ${isToday(day) ? "bg-primary text-primary-foreground w-8 h-8 flex items-center justify-center mx-auto" : ""}
               `}>
                 {format(day, "d")}
               </div>

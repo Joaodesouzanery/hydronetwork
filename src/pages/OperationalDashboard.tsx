@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   TrendingUp,
   Clock,
@@ -92,11 +93,13 @@ export default function OperationalDashboard() {
         <AppSidebar />
         <main className="flex-1 p-6">
           <div className="mb-6">
-            <h1 className="text-3xl font-bold">Dashboard Operacional</h1>
+            <h1 className="text-3xl font-bold font-mono">Dashboard Operacional</h1>
             <p className="text-muted-foreground">
               Visão consolidada do status das obras
             </p>
           </div>
+
+          <PullDataPanel currentModule="dashboard_operacional" />
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
             <Card>

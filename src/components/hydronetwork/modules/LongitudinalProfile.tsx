@@ -390,7 +390,7 @@ function ProfileTooltip({ active, payload, label }: any) {
   if (!data) return null;
 
   return (
-    <div className="bg-background border rounded-lg p-2 shadow-lg text-xs space-y-1">
+    <div className="bg-background border p-2 shadow-lg text-xs space-y-1">
       <p className="font-medium">{data.nodeId} — {data.distancia.toFixed(1)} m</p>
       <p>Terreno: <span className="font-mono">{data.cotaTerreno.toFixed(2)} m</span></p>
       <p>Coletor: <span className="font-mono">{data.cotaColetor.toFixed(2)} m</span></p>

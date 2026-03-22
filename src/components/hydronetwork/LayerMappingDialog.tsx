@@ -242,7 +242,7 @@ export const LayerMappingDialog = ({
                           {CATEGORY_OPTIONS.map(opt => (
                             <SelectItem key={opt.value} value={opt.value}>
                               <span className="flex items-center gap-1">
-                                <span className={`w-2 h-2 rounded-full ${opt.color}`} />
+                                <span className={`w-2 h-2 ${opt.color}`} />
                                 {opt.label}
                               </span>
                             </SelectItem>
@@ -328,7 +328,7 @@ export const LayerMappingDialog = ({
           </TableBody>
         </Table>
 
-        <div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground">
+        <div className="bg-muted/50 p-3 text-xs text-muted-foreground">
           <p><strong>Dica:</strong> Clique no nome da camada para expandir e mapear campos X, Y e Z. Camadas sem elevação serão importadas com cota = 0.</p>
         </div>
 

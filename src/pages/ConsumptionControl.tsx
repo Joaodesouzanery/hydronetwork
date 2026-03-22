@@ -18,6 +18,7 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { toast } from "sonner";
 import { TutorialDialog } from "@/components/shared/TutorialDialog";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 export default function ConsumptionControl() {
   const navigate = useNavigate();
@@ -142,11 +143,13 @@ export default function ConsumptionControl() {
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div>
-                  <h1 className="text-3xl font-bold">Controle de Consumo</h1>
+                  <h1 className="text-3xl font-bold font-mono">Controle de Consumo</h1>
                   <p className="text-muted-foreground">
                     Registre leituras e acompanhe o consumo diário
                   </p>
                 </div>
+
+              <PullDataPanel currentModule="consumo" />
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setShowTutorial(true)}>

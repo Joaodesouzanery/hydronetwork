@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AddTaskDialog } from "@/components/facility/AddTaskDialog";
 import { TaskKanbanBoard } from "@/components/facility/TaskKanbanBoard";
 import { TutorialDialog } from "@/components/shared/TutorialDialog";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface Task {
   id: string;
@@ -102,11 +103,13 @@ const MaintenanceTasks = () => {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold">Painel de Tarefas</h1>
+              <h1 className="text-3xl font-bold font-mono">Painel de Tarefas</h1>
               <p className="text-muted-foreground">
                 Gerencie manutenções preventivas e corretivas
               </p>
             </div>
+
+          <PullDataPanel currentModule="manutencao" />
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setShowTutorial(true)}>

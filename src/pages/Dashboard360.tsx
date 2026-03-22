@@ -4,6 +4,7 @@ import { ArrowLeft, TrendingUp, AlertCircle, Calendar, DollarSign } from "lucide
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const Dashboard360 = () => {
   const navigate = useNavigate();
@@ -55,9 +56,11 @@ const Dashboard360 = () => {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Dashboard 360º</h1>
+            <h1 className="text-3xl font-bold font-mono text-foreground">Dashboard 360º</h1>
             <p className="text-muted-foreground">Visão completa do seu negócio</p>
           </div>
+
+        <PullDataPanel currentModule="dashboard360" />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -65,9 +68,9 @@ const Dashboard360 = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Projetos Ativos</p>
-                <h3 className="text-3xl font-bold text-foreground mt-2">{activeProjects}</h3>
+                <h3 className="text-3xl font-bold font-mono text-foreground mt-2">{activeProjects}</h3>
               </div>
-              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <div className="h-12 w-12 bg-primary/10 flex items-center justify-center">
                 <TrendingUp className="h-6 w-6 text-primary" />
               </div>
             </div>
@@ -77,9 +80,9 @@ const Dashboard360 = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Orçamentos</p>
-                <h3 className="text-3xl font-bold text-foreground mt-2">{totalBudgets}</h3>
+                <h3 className="text-3xl font-bold font-mono text-foreground mt-2">{totalBudgets}</h3>
               </div>
-              <div className="h-12 w-12 rounded-full bg-secondary/10 flex items-center justify-center">
+              <div className="h-12 w-12 bg-secondary/10 flex items-center justify-center">
                 <Calendar className="h-6 w-6 text-secondary" />
               </div>
             </div>
@@ -89,9 +92,9 @@ const Dashboard360 = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Alertas Pendentes</p>
-                <h3 className="text-3xl font-bold text-foreground mt-2">{pendingAlerts}</h3>
+                <h3 className="text-3xl font-bold font-mono text-foreground mt-2">{pendingAlerts}</h3>
               </div>
-              <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center">
+              <div className="h-12 w-12 bg-destructive/10 flex items-center justify-center">
                 <AlertCircle className="h-6 w-6 text-destructive" />
               </div>
             </div>
@@ -101,11 +104,11 @@ const Dashboard360 = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Valor Total</p>
-                <h3 className="text-3xl font-bold text-foreground mt-2">
+                <h3 className="text-3xl font-bold font-mono text-foreground mt-2">
                   R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </h3>
               </div>
-              <div className="h-12 w-12 rounded-full bg-accent/10 flex items-center justify-center">
+              <div className="h-12 w-12 bg-accent/10 flex items-center justify-center">
                 <DollarSign className="h-6 w-6 text-accent" />
               </div>
             </div>
@@ -114,15 +117,15 @@ const Dashboard360 = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="p-6">
-            <h3 className="text-xl font-semibold mb-4">Projetos Recentes</h3>
+            <h3 className="text-xl font-semibold font-mono mb-4">Projetos Recentes</h3>
             <div className="space-y-3">
               {projects?.slice(0, 5).map(project => (
-                <div key={project.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <div key={project.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-none">
                   <div>
                     <p className="font-medium">{project.name}</p>
                     <p className="text-sm text-muted-foreground">{project.address}</p>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  <span className={`px-3 py-1 text-xs font-medium ${
                     project.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                   }`}>
                     {project.status}
@@ -136,10 +139,10 @@ const Dashboard360 = () => {
           </Card>
 
           <Card className="p-6">
-            <h3 className="text-xl font-semibold mb-4">Últimos Orçamentos</h3>
+            <h3 className="text-xl font-semibold font-mono mb-4">Últimos Orçamentos</h3>
             <div className="space-y-3">
               {budgets?.slice(0, 5).map(budget => (
-                <div key={budget.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <div key={budget.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-none">
                   <div>
                     <p className="font-medium">{budget.name}</p>
                     <p className="text-sm text-muted-foreground">{budget.client_name}</p>
@@ -148,7 +151,7 @@ const Dashboard360 = () => {
                     <p className="font-medium">
                       R$ {(budget.total_amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    <span className={`px-3 py-1 text-xs font-medium ${
                       budget.status === 'approved' ? 'bg-green-100 text-green-800' : 
                       budget.status === 'draft' ? 'bg-yellow-100 text-yellow-800' : 
                       'bg-gray-100 text-gray-800'

@@ -441,7 +441,7 @@ export const DuplicateMaterialsReport = () => {
                   open={expandedGroups.has(group.id)}
                   onOpenChange={() => toggleGroup(group.id)}
                 >
-                  <div className="border rounded-lg overflow-hidden">
+                  <div className="border overflow-hidden">
                     <CollapsibleTrigger asChild>
                       <div className="flex items-center gap-3 p-4 cursor-pointer hover:bg-muted/50 transition-colors">
                         <Checkbox
@@ -583,7 +583,7 @@ export const DuplicateMaterialsReport = () => {
               <div className="space-y-2 max-h-[400px] overflow-y-auto">
                 {/* Material principal */}
                 <div
-                  className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                  className={`p-4 border cursor-pointer transition-colors ${
                     keepMaterialId === mergingGroup.primaryMaterial.id
                       ? 'border-primary bg-primary/5'
                       : 'hover:bg-muted/50'
@@ -612,7 +612,7 @@ export const DuplicateMaterialsReport = () => {
                 {mergingGroup.duplicates.map((dup) => (
                   <div
                     key={dup.id}
-                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                    className={`p-4 border cursor-pointer transition-colors ${
                       keepMaterialId === dup.id
                         ? 'border-primary bg-primary/5'
                         : 'hover:bg-muted/50'
@@ -680,21 +680,21 @@ export const DuplicateMaterialsReport = () => {
                   onValueChange={(v) => handleStrategyChange(v as typeof mergeStrategy)}
                   className="grid grid-cols-2 gap-4 mt-3"
                 >
-                  <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-muted/50">
+                  <div className="flex items-center space-x-2 p-3 border hover:bg-muted/50">
                     <RadioGroupItem value="best_price" id="best_price" />
                     <Label htmlFor="best_price" className="cursor-pointer flex-1">
                       <span className="font-medium">Melhor Preço</span>
                       <span className="block text-xs text-muted-foreground">Mantém o maior preço cadastrado</span>
                     </Label>
                   </div>
-                  <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-muted/50">
+                  <div className="flex items-center space-x-2 p-3 border hover:bg-muted/50">
                     <RadioGroupItem value="lowest_price" id="lowest_price" />
                     <Label htmlFor="lowest_price" className="cursor-pointer flex-1">
                       <span className="font-medium">Menor Preço</span>
                       <span className="block text-xs text-muted-foreground">Mantém o menor preço cadastrado</span>
                     </Label>
                   </div>
-                  <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-muted/50">
+                  <div className="flex items-center space-x-2 p-3 border hover:bg-muted/50">
                     <RadioGroupItem value="most_keywords" id="most_keywords" />
                     <Label htmlFor="most_keywords" className="cursor-pointer flex-1">
                       <span className="font-medium">Mais Completo</span>
@@ -704,7 +704,7 @@ export const DuplicateMaterialsReport = () => {
                 </RadioGroup>
               </div>
 
-              <div className="border rounded-lg p-4 bg-muted/30">
+              <div className="border p-4 bg-muted/30">
                 <h4 className="font-medium mb-3 flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-green-500" />
                   Resultado do Merge
@@ -760,7 +760,7 @@ export const DuplicateMaterialsReport = () => {
                 </div>
               </div>
 
-              <div className="text-sm text-muted-foreground bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+              <div className="text-sm text-muted-foreground bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3">
                 <strong>Ação:</strong> O material "{mergingGroup.primaryMaterial.name}" será atualizado com os dados acima e {mergingGroup.duplicates.length} duplicado(s) será(ão) removido(s).
               </div>
             </div>

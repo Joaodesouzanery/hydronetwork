@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/lib/supabase";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   CheckCircle, XCircle, Loader2, Play, Database, User, Shield,
   FileText, Wrench, FolderOpen, ArrowLeft, ClipboardList,
@@ -19,8 +20,8 @@ interface TestResult {
 }
 
 const initialTests: TestResult[] = [
-  { name: "Conexao Supabase", icon: <Database className="h-4 w-4" />, status: "pending" },
-  { name: "Autenticacao (Sessao)", icon: <User className="h-4 w-4" />, status: "pending" },
+  { name: "Conexão Supabase", icon: <Database className="h-4 w-4" />, status: "pending" },
+  { name: "Autenticação (Sessão)", icon: <User className="h-4 w-4" />, status: "pending" },
   { name: "CRUD: Saved Plans (hydro_saved_plans)", icon: <FolderOpen className="h-4 w-4" />, status: "pending" },
   { name: "CRUD: RDO (hydro_rdos)", icon: <ClipboardList className="h-4 w-4" />, status: "pending" },
   { name: "CRUD: Equipment (hydro_equipments)", icon: <Wrench className="h-4 w-4" />, status: "pending" },
@@ -351,11 +352,13 @@ export default function QADiagnostics() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold">QA Diagnostics</h1>
+              <h1 className="text-2xl font-bold font-mono">QA Diagnostics</h1>
               <p className="text-muted-foreground text-sm">
-                Verifica conexao Supabase, autenticacao e CRUD em todas as tabelas
+                Verifica conexão Supabase, autenticação e CRUD em todas as tabelas
               </p>
             </div>
+
+          <PullDataPanel currentModule="qa" />
           </div>
           <Button onClick={runAllTests} disabled={running} size="lg">
             {running ? (
@@ -399,7 +402,7 @@ export default function QADiagnostics() {
                 <div className="flex items-center gap-3">
                   {/* Status icon */}
                   <div className="shrink-0">
-                    {test.status === "pending" && <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30" />}
+                    {test.status === "pending" && <div className="h-5 w-5 border-2 border-muted-foreground/30" />}
                     {test.status === "running" && <Loader2 className="h-5 w-5 animate-spin text-blue-500" />}
                     {test.status === "passed" && <CheckCircle className="h-5 w-5 text-green-500" />}
                     {test.status === "failed" && <XCircle className="h-5 w-5 text-red-500" />}
@@ -441,7 +444,7 @@ export default function QADiagnostics() {
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {Object.entries(tableCounts).map(([table, count]) => (
-                  <div key={table} className="text-center p-3 bg-muted/50 rounded-lg">
+                  <div key={table} className="text-center p-3 bg-muted/50 rounded-none">
                     <div className="text-2xl font-bold">{count}</div>
                     <div className="text-xs text-muted-foreground mt-1">
                       {table.replace("hydro_", "").replace("_", " ")}

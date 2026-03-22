@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { AddEmployeeDialog } from "@/components/employees/AddEmployeeDialog";
 import { ImportEmployeesDialog } from "@/components/employees/ImportEmployeesDialog";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface Employee {
   id: string;
@@ -124,7 +125,7 @@ export default function Employees() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted p-3 sm:p-6">
+    <div className="min-h-screen bg-background p-3 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -136,9 +137,11 @@ export default function Employees() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold">Funcionários</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold font-mono">Funcionários</h1>
               <p className="text-sm text-muted-foreground">Gerencie todos os funcionários do sistema</p>
             </div>
+
+          <PullDataPanel currentModule="funcionarios" />
           </div>
           <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <PageTutorialButton pageKey="employees" />
@@ -197,7 +200,7 @@ export default function Employees() {
                 Nenhum funcionário encontrado
               </div>
             ) : (
-              <div className="rounded-md border overflow-x-auto">
+              <div className="rounded-none border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>

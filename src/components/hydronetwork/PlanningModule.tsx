@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import {
   Line, ComposedChart
 } from "recharts";
 import { PontoTopografico } from "@/engine/reader";
+import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
 import { Trecho, NetworkSummary } from "@/engine/domain";
 import {
@@ -413,7 +414,9 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
     toast.success(editingPlanId ? `Planejamento "${name}" atualizado!` : `Planejamento "${name}" salvo!`);
   }, [editingPlanId, savedPlans, numEquipes, teamConfig, metrosDia, dataInicio, dataTermino, horasTrabalho, workDays, holidays, productivity, trechoOverrides, serviceNotes, trechos, scheduleResult]);
 
-  const handleLoadPlan = useCallback((plan: SavedPlanning) => {
+  const handleLoadPlan = useCallback((plan: SavedPlanning | SavedPlan) => {
+    // Support both SavedPlanning (local) and SavedPlan (from SavedPlansDialog)
+    const planName = 'nome' in plan ? plan.nome : plan.name;
     setNumEquipes(plan.numEquipes);
     setTeamConfig({ ...plan.teamConfig });
     setMetrosDia(plan.metrosDia);
@@ -421,14 +424,22 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
     setDataTermino(plan.dataTermino);
     setHorasTrabalho(plan.horasTrabalho);
     setWorkDays(plan.workDays);
-    setHolidays([...plan.holidays]);
-    setProductivity([...plan.productivity]);
-    setTrechoOverrides({ ...plan.trechoOverrides });
-    setServiceNotes([...plan.serviceNotes]);
+    setHolidays([...(plan.holidays || [])]);
+    setProductivity([...(plan.productivity || [])]);
+    if ('trechoOverrides' in plan) {
+      setTrechoOverrides({ ...plan.trechoOverrides });
+    }
+    if ('serviceNotes' in plan) {
+      setServiceNotes([...plan.serviceNotes]);
+    }
+    if ('trechoMetadata' in plan && Array.isArray(plan.trechoMetadata)) {
+      setTrechoMetadata([...plan.trechoMetadata]);
+    }
     setEditingPlanId(plan.id);
+    setCurrentPlanName(planName);
     setDataLoaded(true);
     setShowSavedPlans(false);
-    toast.success(`Planejamento "${plan.nome}" carregado!`);
+    toast.success(`Planejamento "${planName}" carregado!`);
   }, []);
 
   const handleDuplicatePlan = useCallback((plan: SavedPlanning) => {
@@ -636,6 +647,136 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
     }
   }, [inverseMode, dataInicio, inverseDataTermino, holidays, workDays, totalMetros, trechos, numEquipes, metrosDia, inverseFixedField]);
 
+  // ── Spreadsheet Export / Import ──
+  const importFileRef = useRef<HTMLInputElement>(null);
+
+  const handleExportPlanningExcel = useCallback(() => {
+    if (!scheduleResult) { toast.error("Gere o planejamento primeiro."); return; }
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Trechos + Custos
+    const trechoData = trechos.map((t, idx) => {
+      const ov = trechoOverrides[`${t.idInicio}-${t.idFim}`] || {};
+      const segs = scheduleResult.allSegments.filter(s => s.trechoId === `${t.idInicio}-${t.idFim}`);
+      const custo = segs.reduce((s, seg) => s + seg.custoTotal, 0);
+      return {
+        "#": idx + 1,
+        "Trecho": ov.nome || t.nomeTrecho || `${t.idInicio} → ${t.idFim}`,
+        "ID Início": t.idInicio,
+        "ID Fim": t.idFim,
+        "Comprimento (m)": Math.round((ov.comprimento ?? t.comprimento) * 100) / 100,
+        "Profundidade (m)": Math.round((ov.profundidade ?? (Math.abs(t.cotaInicio - t.cotaFim) || 1.5)) * 100) / 100,
+        "Diâmetro (mm)": ov.diametroMm ?? t.diametroMm,
+        "Tipo Rede": t.tipoRedeManual || t.tipoRede || "",
+        "Material": t.material,
+        "Custo Total (R$)": Math.round(custo * 100) / 100,
+        "Produtividade (m/dia)": ov.produtividadeDia ?? metrosDia,
+        "Prioridade": ov.prioridade ?? 0,
+      };
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trechoData), "Trechos e Custos");
+
+    // Sheet 2: Cronograma
+    const schedData = scheduleResult.allSegments.map(seg => ({
+      "Trecho": seg.trechoId,
+      "Dia": seg.day,
+      "Equipe": seg.team,
+      "Metros": Math.round(seg.meters * 100) / 100,
+      "Custo (R$)": Math.round(seg.custoTotal * 100) / 100,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(schedData), "Cronograma");
+
+    // Sheet 3: Resumo
+    const resumo = [
+      { "Indicador": "Total de Trechos", "Valor": trechos.length },
+      { "Indicador": "Comprimento Total (m)", "Valor": Math.round(totalMetros * 100) / 100 },
+      { "Indicador": "Custo Total (R$)", "Valor": Math.round(totalCost * 100) / 100 },
+      { "Indicador": "Total de Dias", "Valor": scheduleResult.totalDays },
+      { "Indicador": "Equipes", "Valor": numEquipes },
+      { "Indicador": "Metros/dia", "Valor": metrosDia },
+      { "Indicador": "Data Início", "Valor": dataInicio },
+      { "Indicador": "Data Término", "Valor": dataTermino },
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumo), "Resumo");
+
+    // Sheet 4: Produtividades
+    const prodData = productivity.map(p => ({
+      "Serviço": p.servico,
+      "Unidade": p.unidade,
+      "Produtividade": p.produtividade,
+      "Fonte": p.fonte,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(prodData), "Produtividades");
+
+    XLSX.writeFile(wb, `planejamento_${dataInicio || "export"}.xlsx`);
+    toast.success("Planilha de planejamento exportada!");
+  }, [scheduleResult, trechos, trechoOverrides, metrosDia, totalMetros, totalCost, numEquipes, dataInicio, dataTermino, productivity]);
+
+  const handleImportPlanningExcel = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: "array" });
+
+      // Try to read "Trechos e Custos" sheet
+      const trechoSheet = wb.Sheets["Trechos e Custos"] || wb.Sheets[wb.SheetNames[0]];
+      if (!trechoSheet) { toast.error("Planilha sem aba de trechos."); return; }
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(trechoSheet);
+      if (rows.length === 0) { toast.error("Planilha vazia."); return; }
+
+      // Apply overrides from imported spreadsheet
+      const newOverrides: Record<string, TrechoOverride> = { ...trechoOverrides };
+      let applied = 0;
+      for (const row of rows) {
+        const idInicio = String(row["ID Início"] || row["ID Inicio"] || "").trim();
+        const idFim = String(row["ID Fim"] || "").trim();
+        if (!idInicio || !idFim) continue;
+        const key = `${idInicio}-${idFim}`;
+        const trecho = trechos.find(t => t.idInicio === idInicio && t.idFim === idFim);
+        if (!trecho) continue;
+
+        const ov: TrechoOverride = newOverrides[key] || {};
+        const nome = row["Trecho"] ? String(row["Trecho"]) : undefined;
+        const comp = row["Comprimento (m)"] ? Number(String(row["Comprimento (m)"]).replace(",", ".")) : undefined;
+        const prof = row["Profundidade (m)"] ? Number(String(row["Profundidade (m)"]).replace(",", ".")) : undefined;
+        const dn = row["Diâmetro (mm)"] || row["Diametro (mm)"] ? Number(String(row["Diâmetro (mm)"] || row["Diametro (mm)"]).replace(",", ".")) : undefined;
+        const prod = row["Produtividade (m/dia)"] ? Number(String(row["Produtividade (m/dia)"]).replace(",", ".")) : undefined;
+        const prio = row["Prioridade"] != null ? Number(row["Prioridade"]) : undefined;
+
+        if (nome) ov.nome = nome;
+        if (comp && comp > 0) ov.comprimento = comp;
+        if (prof && prof > 0) ov.profundidade = prof;
+        if (dn && dn > 0) ov.diametroMm = dn;
+        if (prod && prod > 0) ov.produtividadeDia = prod;
+        if (prio != null && !isNaN(prio)) ov.prioridade = prio;
+        newOverrides[key] = ov;
+        applied++;
+      }
+
+      // Also try to import productivities
+      const prodSheet = wb.Sheets["Produtividades"];
+      if (prodSheet) {
+        const prodRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(prodSheet);
+        if (prodRows.length > 0) {
+          const importedProd: ProductivityEntry[] = prodRows.map(r => ({
+            servico: String(r["Serviço"] || r["Servico"] || ""),
+            unidade: String(r["Unidade"] || "m"),
+            produtividade: Number(String(r["Produtividade"] || "0").replace(",", ".")) || 0,
+            fonte: String(r["Fonte"] || "Importado"),
+          })).filter(p => p.servico && p.produtividade > 0);
+          if (importedProd.length > 0) setProductivity(importedProd);
+        }
+      }
+
+      setTrechoOverrides(newOverrides);
+      toast.success(`${applied} trechos atualizados a partir da planilha importada.`);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao importar planilha.");
+    }
+    if (importFileRef.current) importFileRef.current.value = "";
+  }, [trechos, trechoOverrides]);
+
   // ── Technical Rules ──
   const technicalRules = [
     "Método de escavação vs profundidade",
@@ -652,8 +793,14 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
         <Button variant="outline" size="sm" onClick={() => setShowSavedPlans(!showSavedPlans)}>
           <FolderOpen className="h-4 w-4 mr-1" /> Planejamentos Salvos
         </Button>
-        <Button variant="outline" size="sm" onClick={handleSavePlan}>
-          <Save className="h-4 w-4 mr-1" /> {currentPlanId ? "Salvar" : "Salvar Como"}
+        <Button variant="outline" size="sm" onClick={() => {
+          if (currentPlanName) {
+            handleSavePlan(currentPlanName);
+          } else {
+            setShowSaveDialog(true);
+          }
+        }}>
+          <Save className="h-4 w-4 mr-1" /> {editingPlanId ? "Salvar" : "Salvar Como"}
         </Button>
         {currentPlanName && (
           <div className="flex items-center gap-2">
@@ -733,7 +880,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">Carregue os dados da própria plataforma ou importe de arquivo externo.</p>
-            <div className="border-2 border-primary/20 rounded-lg p-4 bg-primary/5">
+            <div className="border-2 border-primary/20 p-4 bg-primary/5">
               <h4 className="font-semibold text-sm mb-1">Usar Dados da Plataforma</h4>
               <p className="text-xs text-muted-foreground mb-3">Importa automaticamente os trechos e quantitativos já calculados nas outras abas.</p>
               <Button variant="outline" className="w-full" onClick={handleLoadPlatformData}>
@@ -1087,7 +1234,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
               </Table>
             </div>
             {showAddServiceForm ? (
-              <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
+              <div className="border p-3 space-y-2 bg-muted/30">
                 <p className="text-sm font-semibold">Novo Serviço</p>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -1182,7 +1329,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
                   { label: "Término", value: scheduleResult.endDate.toLocaleDateString("pt-BR"), color: "text-purple-600" },
                   { label: "Custo Total", value: fmtCurrency(totalCost), color: "text-orange-600" },
                 ].map((c, i) => (
-                  <div key={i} className="bg-muted/50 rounded-lg p-3 text-center">
+                  <div key={i} className="bg-muted/50 p-3 text-center">
                     <div className={`text-lg font-bold ${c.color}`}>{c.value}</div>
                     <div className="text-xs text-muted-foreground">{c.label}</div>
                   </div>
@@ -1387,7 +1534,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
                     { label: "Total HH", value: fmt(histStats.totalHH, 0), color: "text-green-600" },
                     { label: "Equip. x Dias", value: histStats.equipDays, color: "text-purple-600" },
                   ].map((s, i) => (
-                    <div key={i} className="bg-muted/50 rounded-lg p-3 text-center">
+                    <div key={i} className="bg-muted/50 p-3 text-center">
                       <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
                       <div className="text-xs text-muted-foreground">{s.label}</div>
                     </div>
@@ -1641,11 +1788,18 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
           <FolderOpen className="h-4 w-4 mr-2" /> Planejamentos Salvos
           {savedPlans.length > 0 && <Badge className="ml-2 bg-primary">{savedPlans.length}</Badge>}
         </Button>
-        <Button size="lg" variant="outline" onClick={() => {
-          if (!scheduleResult) { toast.error("Gere o planejamento primeiro."); return; }
-          toast.info("Exportação em desenvolvimento.");
-        }}>
-          <Download className="h-4 w-4 mr-2" /> Exportar Planejamento
+        <Button size="lg" variant="outline" onClick={handleExportPlanningExcel}>
+          <Download className="h-4 w-4 mr-2" /> Exportar XLSX
+        </Button>
+        <input
+          ref={importFileRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          onChange={handleImportPlanningExcel}
+        />
+        <Button size="lg" variant="outline" onClick={() => importFileRef.current?.click()}>
+          <Upload className="h-4 w-4 mr-2" /> Importar XLSX
         </Button>
       </div>
 

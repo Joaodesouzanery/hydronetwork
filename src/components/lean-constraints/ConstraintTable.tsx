@@ -114,7 +114,7 @@ export function ConstraintTable({ constraints, loading, onEdit, onResolve, onDel
   if (constraints.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-        <div className="h-16 w-16 rounded-full bg-indigo-50 flex items-center justify-center">
+        <div className="h-16 w-16 bg-indigo-50 flex items-center justify-center">
           <Shield className="h-8 w-8 text-indigo-400" />
         </div>
         <p className="font-medium text-foreground">Nenhuma restrição cadastrada</p>

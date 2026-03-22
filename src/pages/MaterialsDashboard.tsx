@@ -5,6 +5,7 @@ import { ArrowLeft, TrendingUp, TrendingDown, Package, AlertTriangle } from "luc
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const MaterialsDashboard = () => {
   const navigate = useNavigate();
@@ -68,9 +69,11 @@ const MaterialsDashboard = () => {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Dashboard de Materiais</h1>
+            <h1 className="text-3xl font-bold font-mono text-foreground">Dashboard de Materiais</h1>
             <p className="text-muted-foreground">Visão geral do seu estoque</p>
           </div>
+
+        <PullDataPanel currentModule="materiais" />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

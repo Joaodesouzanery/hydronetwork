@@ -727,7 +727,7 @@ export const ImportRDODialog = ({ open, onOpenChange, projectId, onSuccess }: Im
   const renderUpload = () => (
     <div className="space-y-4">
       <div
-        className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
+        className="border-2 border-dashed p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
         onClick={() => fileInputRef.current?.click()}
       >
         <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />

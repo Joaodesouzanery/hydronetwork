@@ -575,10 +575,15 @@ export function parseGeoJSONContent(content: string, fileName: string): ParseRes
         edges.push({ id, type: 'LineString', coordinates: coords, isClosed: false, layer, sourceFile: fileName, properties: { ...props, vertexCount: coords.length, length: calculateEdgeLength(coords) } });
       }
       if (geom.type === 'Polygon') {
-        geom.coordinates.forEach((ring: number[][], ri: number) => {
-          const coords = ring.map((c: number[]) => [c[0], c[1], c[2] || 0]);
-          edges.push({ id: `${id}_ring${ri}`, type: 'Polygon', coordinates: coords, isClosed: true, layer, sourceFile: fileName, properties: { ...props, vertexCount: coords.length, length: calculateEdgeLength(coords) } });
-        });
+        // Polygons are area features (parcels, zones), NOT network segments.
+        // Import centroid as a point for reference only.
+        const ring = geom.coordinates[0];
+        if (ring && ring.length >= 3) {
+          let cx = 0, cy = 0;
+          for (const c of ring) { cx += c[0]; cy += c[1]; }
+          cx /= ring.length; cy /= ring.length;
+          points.push({ id: `${id}_centroid`, x: cx, y: cy, z: 0, layer, sourceFile: fileName, properties: { ...props, _geometryType: 'Polygon' } });
+        }
       }
       if (geom.type === 'MultiLineString') {
         geom.coordinates.forEach((line: number[][], li: number) => {
@@ -587,11 +592,15 @@ export function parseGeoJSONContent(content: string, fileName: string): ParseRes
         });
       }
       if (geom.type === 'MultiPolygon') {
+        // MultiPolygons are area features, NOT network segments.
         geom.coordinates.forEach((poly: number[][][], pi: number) => {
-          poly.forEach((ring: number[][], ri: number) => {
-            const coords = ring.map((c: number[]) => [c[0], c[1], c[2] || 0]);
-            edges.push({ id: `${id}_poly${pi}_ring${ri}`, type: 'MultiPolygon', coordinates: coords, isClosed: true, layer, sourceFile: fileName, properties: { ...props, vertexCount: coords.length, length: calculateEdgeLength(coords) } });
-          });
+          const ring = poly[0];
+          if (ring && ring.length >= 3) {
+            let cx = 0, cy = 0;
+            for (const c of ring) { cx += c[0]; cy += c[1]; }
+            cx /= ring.length; cy /= ring.length;
+            points.push({ id: `${id}_poly${pi}_centroid`, x: cx, y: cy, z: 0, layer, sourceFile: fileName, properties: { ...props, _geometryType: 'MultiPolygon' } });
+          }
         });
       }
     });

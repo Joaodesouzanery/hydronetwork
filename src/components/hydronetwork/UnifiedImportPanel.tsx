@@ -220,25 +220,33 @@ async function parseSHPContentAsync(buffer: ArrayBuffer, fileName: string): Prom
           break;
         }
         case 'Polygon': {
+          // Polygons are area features (parcels, zones), NOT network segments.
+          // Import centroid as a point for reference only.
           if (feature.geometry.coordinates?.[0]?.length >= 2) {
             const ring = feature.geometry.coordinates[0];
-            edges.push({
-              id: `SHP_E${edges.length}`,
-              type: 'Polygon', coordinates: ring.map((c: number[]) => [c[0], c[1], c[2] || 0]),
-              isClosed: true, layer, sourceFile: fileName,
-              properties: { ...props, geometryType: 'Polygon', length: calculateEdgeLength(ring) },
+            let cx = 0, cy = 0;
+            for (const c of ring) { cx += c[0]; cy += c[1]; }
+            cx /= ring.length; cy /= ring.length;
+            points.push({
+              id: `SHP_P${points.length}`, x: cx, y: cy, z: props.cota || props.COTA || props.Z || 0,
+              layer, sourceFile: fileName,
+              properties: { ...props, geometryType: 'Polygon' },
             });
           }
           break;
         }
         case 'MultiPolygon': {
+          // MultiPolygons are area features, NOT network segments.
           for (const poly of feature.geometry.coordinates) {
             if (poly[0]?.length >= 2) {
-              edges.push({
-                id: `SHP_E${edges.length}`,
-                type: 'Polygon', coordinates: poly[0].map((c: number[]) => [c[0], c[1], c[2] || 0]),
-                isClosed: true, layer, sourceFile: fileName,
-                properties: { ...props, geometryType: 'MultiPolygon', length: calculateEdgeLength(poly[0]) },
+              const ring = poly[0];
+              let cx = 0, cy = 0;
+              for (const c of ring) { cx += c[0]; cy += c[1]; }
+              cx /= ring.length; cy /= ring.length;
+              points.push({
+                id: `SHP_P${points.length}`, x: cx, y: cy, z: props.cota || props.COTA || props.Z || 0,
+                layer, sourceFile: fileName,
+                properties: { ...props, geometryType: 'MultiPolygon' },
               });
             }
           }
@@ -926,7 +934,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
     <div className="space-y-3">
       {/* Enhanced Drop Zone */}
       <div
-        className={`border-2 border-dashed rounded-lg p-6 text-center transition-all duration-300 cursor-pointer relative overflow-hidden
+        className={`border-2 border-dashed p-6 text-center transition-all duration-300 cursor-pointer relative overflow-hidden
           ${isDragging
             ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30 scale-[1.02] shadow-lg shadow-blue-500/20'
             : 'border-border hover:border-primary/50 hover:bg-muted/30'
@@ -979,7 +987,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
 
       {/* Import History */}
       {showHistory && importHistory.length > 0 && (
-        <div className="border border-border rounded-lg overflow-hidden">
+        <div className="border border-border overflow-hidden">
           <div className="px-3 py-2 bg-muted/50 text-xs font-medium">Historico de Importacoes</div>
           <div className="max-h-[120px] overflow-auto divide-y divide-border">
             {importHistory.slice(0, 10).map((h, i) => (
@@ -997,7 +1005,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
 
       {/* File Queue */}
       {fileQueue.length > 0 && (
-        <div className="border border-border rounded-lg overflow-hidden">
+        <div className="border border-border overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
             <span className="text-xs font-medium">Fila de Arquivos ({fileQueue.length})</span>
             <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={clearQueue}><Trash2 className="h-3 w-3 mr-1" />Limpar</Button>
@@ -1045,7 +1053,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
               { label: 'Layers', value: allLayers.length, color: 'text-purple-600' },
               { label: 'Selecionados', value: selectedEntities.size, color: 'text-blue-600' },
             ].map(s => (
-              <div key={s.label} className="bg-muted/50 rounded-lg p-2 text-center">
+              <div key={s.label} className="bg-muted/50 p-2 text-center">
                 <div className={`text-lg font-bold ${s.color}`}>{s.value}</div>
                 <div className="text-[10px] text-muted-foreground">{s.label}</div>
               </div>
@@ -1069,7 +1077,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
 
           {/* Campos do Arquivo */}
           {allFieldInfo.length > 0 && (
-            <div className="border border-border rounded-lg overflow-hidden">
+            <div className="border border-border overflow-hidden">
               <button
                 className="flex items-center justify-between w-full px-3 py-2 bg-muted/50 text-xs font-medium hover:bg-muted/70 transition-colors"
                 onClick={() => setShowFields(!showFields)}
@@ -1123,7 +1131,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
           </div>
 
           {/* Entity Table */}
-          <div className="border border-border rounded-lg overflow-hidden">
+          <div className="border border-border overflow-hidden">
             <div className="max-h-[250px] overflow-auto">
               <table className="w-full text-xs">
                 <thead className="bg-muted/50 sticky top-0">
@@ -1154,7 +1162,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
                             <td className="px-2 py-1 text-center"><input type="checkbox" checked={selectedEntities.has(p.id)} readOnly /></td>
                             <td className="px-2 py-1 font-mono">{p.id}</td>
                             <td className="px-2 py-1">
-                              {p.properties.color !== undefined && <span className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ backgroundColor: getDxfColor(p.properties.color) }} />}
+                              {p.properties.color !== undefined && <span className="inline-block w-2 h-2 mr-1 align-middle" style={{ backgroundColor: getDxfColor(p.properties.color) }} />}
                               <Badge variant="outline" className="text-[10px]">{p.properties.entityType || 'POINT'}</Badge>
                             </td>
                             <td className="px-2 py-1 text-center font-mono">{p.x.toFixed(1)}, {p.y.toFixed(1)}</td>
@@ -1193,7 +1201,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
                             <td className="px-2 py-1 text-center"><input type="checkbox" checked={selectedEntities.has(e.id)} readOnly /></td>
                             <td className="px-2 py-1 font-mono">{e.id}</td>
                             <td className="px-2 py-1">
-                              {e.properties.color !== undefined && <span className="inline-block w-2 h-2 rounded-full mr-1 align-middle" style={{ backgroundColor: getDxfColor(e.properties.color) }} />}
+                              {e.properties.color !== undefined && <span className="inline-block w-2 h-2 mr-1 align-middle" style={{ backgroundColor: getDxfColor(e.properties.color) }} />}
                               <Badge variant="outline" className="text-[10px]">{e.type}</Badge>
                             </td>
                             <td className="px-2 py-1 text-center">{e.coordinates.length} vertices</td>
@@ -1265,7 +1273,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
 
           {/* Trecho preview count */}
           {allEdges.filter(e => selectedEntities.has(e.id)).length > 0 && (
-            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-2 text-xs text-blue-700 dark:text-blue-300">
+            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-2 text-xs text-blue-700 dark:text-blue-300">
               {(() => {
                 const selEdges = allEdges.filter(e => selectedEntities.has(e.id));
                 const trechoCount = selEdges.reduce((acc, e) => {
@@ -1287,7 +1295,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
           />
 
           {/* Import Templates */}
-          <div className="border border-border rounded-lg overflow-hidden">
+          <div className="border border-border overflow-hidden">
             <button
               className="flex items-center justify-between w-full px-3 py-2 bg-muted/50 text-xs font-medium hover:bg-muted/70 transition-colors"
               onClick={() => setShowTemplates(!showTemplates)}
@@ -1359,7 +1367,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
 
           {/* Validation Report */}
           {validationIssues.length > 0 && (
-            <div className="border border-border rounded-lg overflow-hidden">
+            <div className="border border-border overflow-hidden">
               <button
                 className="flex items-center justify-between w-full px-3 py-2 bg-muted/50 text-xs font-medium hover:bg-muted/70 transition-colors"
                 onClick={() => setShowValidation(!showValidation)}
@@ -1402,7 +1410,7 @@ export const UnifiedImportPanel: React.FC<UnifiedImportPanelProps> = ({ onImport
             const invalidPts = allPoints.slice(0, 50).filter(p => !validateUTMRange(p.x, p.y).valid);
             if (invalidPts.length === 0) return null;
             return (
-              <div className="flex items-start gap-2 border border-amber-500 bg-amber-50 dark:bg-amber-950/30 rounded-lg p-2 text-xs text-amber-700 dark:text-amber-300">
+              <div className="flex items-start gap-2 border border-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 text-xs text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                 <span>
                   {invalidPts.length} ponto(s) fora da faixa UTM esperada (X: 100.000-900.000, Y: 1.000.000-10.000.000).

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Upload, Download, Calculator, MapPin, Droplets, ArrowDown, ArrowUp, FileSpreadsheet, Settings2, Users } from "lucide-react";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   parseTopographyFile,
   validateTopographySequence,
@@ -147,7 +148,7 @@ const SanitationEngine = () => {
         <main className="flex-1 p-4 md:p-6 overflow-auto">
           <div className="max-w-7xl mx-auto space-y-6">
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
+              <h1 className="text-3xl font-bold font-mono flex items-center gap-2">
                 <Droplets className="h-8 w-8 text-blue-600" />
                 Engine Rede - Saneamento
               </h1>
@@ -155,6 +156,8 @@ const SanitationEngine = () => {
                 Pré-dimensionamento e orçamento de redes de saneamento
               </p>
             </div>
+
+            <PullDataPanel currentModule="saneamento" />
 
             <Tabs defaultValue="topography" className="space-y-4">
               <TabsList className="grid grid-cols-4 w-full max-w-2xl">
@@ -230,19 +233,19 @@ const SanitationEngine = () => {
                       </CardHeader>
                       <CardContent>
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-muted/50 rounded-lg p-3 text-center">
+                          <div className="bg-muted/50 rounded-none p-3 text-center">
                             <div className="text-2xl font-bold">{networkSummary.totalTrechos}</div>
                             <div className="text-xs text-muted-foreground">Trechos</div>
                           </div>
-                          <div className="bg-muted/50 rounded-lg p-3 text-center">
+                          <div className="bg-muted/50 rounded-none p-3 text-center">
                             <div className="text-2xl font-bold">{formatNumber(networkSummary.comprimentoTotal, 1)}</div>
                             <div className="text-xs text-muted-foreground">Comprimento (m)</div>
                           </div>
-                          <div className="bg-muted/50 rounded-lg p-3 text-center">
+                          <div className="bg-muted/50 rounded-none p-3 text-center">
                             <div className="text-2xl font-bold text-green-600">{networkSummary.trechosGravidade}</div>
                             <div className="text-xs text-muted-foreground">Gravidade</div>
                           </div>
-                          <div className="bg-muted/50 rounded-lg p-3 text-center">
+                          <div className="bg-muted/50 rounded-none p-3 text-center">
                             <div className="text-2xl font-bold text-orange-600">{networkSummary.trechosElevatoria}</div>
                             <div className="text-xs text-muted-foreground">Elevatória</div>
                           </div>
@@ -379,23 +382,23 @@ const SanitationEngine = () => {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
-                          <div className="bg-primary/10 rounded-lg p-4 text-center">
+                          <div className="bg-primary/10 rounded-none p-4 text-center">
                             <div className="text-3xl font-bold text-primary">
                               {formatCurrency(budgetSummary.totalCost)}
                             </div>
                             <div className="text-sm text-muted-foreground">Custo Total</div>
                           </div>
                           <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-muted/50 rounded-lg p-3 text-center">
+                            <div className="bg-muted/50 rounded-none p-3 text-center">
                               <div className="text-lg font-semibold">{budgetSummary.totalSegments}</div>
                               <div className="text-xs text-muted-foreground">Trechos</div>
                             </div>
-                            <div className="bg-muted/50 rounded-lg p-3 text-center">
+                            <div className="bg-muted/50 rounded-none p-3 text-center">
                               <div className="text-lg font-semibold">{formatNumber(budgetSummary.totalLengthM, 1)} m</div>
                               <div className="text-xs text-muted-foreground">Extensão</div>
                             </div>
                           </div>
-                          <div className="bg-muted/50 rounded-lg p-3 text-center">
+                          <div className="bg-muted/50 rounded-none p-3 text-center">
                             <div className="text-lg font-semibold">
                               {formatCurrency(budgetSummary.averageCostPerMeter)}/m
                             </div>
@@ -594,15 +597,15 @@ const SanitationEngine = () => {
                         </CardHeader>
                         <CardContent>
                           <div className="grid grid-cols-3 gap-2 text-center">
-                            <div className="bg-primary/10 rounded-lg p-3">
+                            <div className="bg-primary/10 rounded-none p-3">
                               <div className="text-2xl font-bold">{execParams.equipe.totalEquipe}</div>
                               <div className="text-xs text-muted-foreground">Total</div>
                             </div>
-                            <div className="bg-muted/50 rounded-lg p-3">
+                            <div className="bg-muted/50 rounded-none p-3">
                               <div className="text-xl font-semibold">{execParams.equipe.totalProfissionais}</div>
                               <div className="text-xs text-muted-foreground">Profissionais</div>
                             </div>
-                            <div className="bg-muted/50 rounded-lg p-3">
+                            <div className="bg-muted/50 rounded-none p-3">
                               <div className="text-xl font-semibold">{execParams.equipe.totalAjudantes}</div>
                               <div className="text-xs text-muted-foreground">Ajudantes</div>
                             </div>
@@ -639,19 +642,19 @@ const SanitationEngine = () => {
                         </CardHeader>
                         <CardContent>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-muted/50 rounded-lg p-4 text-center">
+                            <div className="bg-muted/50 rounded-none p-4 text-center">
                               <div className="text-2xl font-bold">{networkSummary.totalTrechos}</div>
                               <div className="text-sm text-muted-foreground">Trechos</div>
                             </div>
-                            <div className="bg-muted/50 rounded-lg p-4 text-center">
+                            <div className="bg-muted/50 rounded-none p-4 text-center">
                               <div className="text-2xl font-bold">{formatNumber(networkSummary.comprimentoTotal, 1)} m</div>
                               <div className="text-sm text-muted-foreground">Extensão Total</div>
                             </div>
-                            <div className="bg-green-100 rounded-lg p-4 text-center">
+                            <div className="bg-green-100 rounded-none p-4 text-center">
                               <div className="text-2xl font-bold text-green-700">{networkSummary.trechosGravidade}</div>
                               <div className="text-sm text-green-600">Gravidade</div>
                             </div>
-                            <div className="bg-orange-100 rounded-lg p-4 text-center">
+                            <div className="bg-orange-100 rounded-none p-4 text-center">
                               <div className="text-2xl font-bold text-orange-700">{networkSummary.trechosElevatoria}</div>
                               <div className="text-sm text-orange-600">Elevatória</div>
                             </div>
@@ -669,7 +672,7 @@ const SanitationEngine = () => {
                           </Button>
                         </CardHeader>
                         <CardContent>
-                          <div className="bg-primary/10 rounded-lg p-6 text-center mb-4">
+                          <div className="bg-primary/10 rounded-none p-6 text-center mb-4">
                             <div className="text-4xl font-bold text-primary">
                               {formatCurrency(budgetSummary.totalCost)}
                             </div>

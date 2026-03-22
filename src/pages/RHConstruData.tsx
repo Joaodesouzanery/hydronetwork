@@ -8,7 +8,8 @@ import { Funcionarios } from "@/components/rh/Funcionarios";
 import { Unidades } from "@/components/rh/Unidades";
 import { DashboardPrimeCost } from "@/components/rh/DashboardPrimeCost";
 import { FeriodosFaltas } from "@/components/rh/FeriodosFaltas";
-import { 
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
+import {
   LayoutDashboard, 
   Calendar, 
   Users, 
@@ -27,13 +28,15 @@ const RHConstruData = () => {
         <SidebarInset className="flex-1">
           <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
             <div className="flex flex-col gap-1 sm:gap-2">
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">
-                RH ConstruData
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold font-mono text-foreground">
+                RH CONSTRUDATA
               </h1>
               <p className="text-sm sm:text-base text-muted-foreground">
                 Gestão de recursos humanos, escalas CLT e controle de custos
               </p>
             </div>
+
+            <PullDataPanel currentModule="funcionarios" />
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
               {/* Mobile-friendly tabs with horizontal scroll */}

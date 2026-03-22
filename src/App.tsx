@@ -46,21 +46,28 @@ const LeanConstraints = lazy(() => import("./pages/LeanConstraints"));
 const LeanDashboard = lazy(() => import("./pages/LeanDashboard"));
 const QADiagnostics = lazy(() => import("./pages/QADiagnostics"));
 const ApprovalControl = lazy(() => import("./pages/ApprovalControl"));
+const Tutorials = lazy(() => import("./pages/Tutorials"));
+const Licitacoes = lazy(() => import("./pages/Licitacoes"));
+const HubNoticias = lazy(() => import("./pages/HubNoticias"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 2 * 60 * 1000, // 2 minutes before data is considered stale
-      gcTime: 10 * 60 * 1000,   // 10 minutes before unused data is garbage collected
+      staleTime: 5 * 60 * 1000, // 5 minutes before data is considered stale
+      gcTime: 15 * 60 * 1000,   // 15 minutes before unused data is garbage collected
       retry: 1,
       refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     },
   },
 });
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-screen">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    <div className="text-center">
+      <img src="/logo.svg" alt="ConstruData" className="h-10 mx-auto animate-pulse mb-3" />
+      <p className="text-sm font-mono text-muted-foreground">Carregando...</p>
+    </div>
   </div>
 );
 
@@ -107,6 +114,9 @@ const AppContent = () => {
           <Route path="/modules" element={<ProtectedRoute><ModulesCatalog /></ProtectedRoute>} />
           <Route path="/qa" element={<ProtectedRoute><QADiagnostics /></ProtectedRoute>} />
           <Route path="/approval-control" element={<ProtectedRoute><ApprovalControl /></ProtectedRoute>} />
+          <Route path="/tutorials" element={<ProtectedRoute><Tutorials /></ProtectedRoute>} />
+          <Route path="/licitacoes" element={<ProtectedRoute><Licitacoes /></ProtectedRoute>} />
+          <Route path="/hub-noticias" element={<ProtectedRoute><HubNoticias /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>

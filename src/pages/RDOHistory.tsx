@@ -8,6 +8,7 @@ import { Building2, LogOut, ArrowLeft, History } from "lucide-react";
 import { toast } from "sonner";
 import { RDOHistoryView } from "@/components/rdo/RDOHistoryView";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const RDOHistory = () => {
   const navigate = useNavigate();
@@ -73,19 +74,21 @@ const RDOHistory = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <Building2 className="w-12 h-12 mx-auto text-primary animate-pulse mb-4" />
           <p className="text-muted-foreground">Carregando...</p>
         </div>
+
+      <PullDataPanel currentModule="rdo" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+      <header className="border-b bg-card/50 sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')}>
@@ -93,7 +96,7 @@ const RDOHistory = () => {
             </Button>
             <div className="flex items-center gap-2 text-primary">
               <History className="w-8 h-8" />
-              <span className="text-2xl font-bold">Histórico de RDOs</span>
+              <span className="text-2xl font-bold font-mono">Histórico de RDOs</span>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -115,7 +118,7 @@ const RDOHistory = () => {
             <CardContent className="pt-6">
               <div className="text-center py-12">
                 <Building2 className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-                <h2 className="text-2xl font-semibold mb-2">Nenhum projeto encontrado</h2>
+                <h2 className="text-2xl font-semibold font-mono mb-2">Nenhum projeto encontrado</h2>
                 <p className="text-muted-foreground mb-6">
                   Você precisa criar um projeto antes de visualizar o histórico de RDOs.
                 </p>

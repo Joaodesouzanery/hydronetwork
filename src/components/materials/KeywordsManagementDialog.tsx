@@ -199,7 +199,7 @@ export const KeywordsManagementDialog = ({ open, onOpenChange }: KeywordsManagem
         </DialogHeader>
 
         <div className="space-y-6">
-          <div className="border rounded-lg p-4 space-y-4">
+          <div className="border p-4 space-y-4">
             <h3 className="font-semibold">Adicionar Nova Palavra-chave</h3>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
@@ -278,7 +278,7 @@ export const KeywordsManagementDialog = ({ open, onOpenChange }: KeywordsManagem
           ) : (
             <div className="space-y-6">
               {Object.entries(keywordsByType || {}).map(([type, items]: [string, any]) => (
-                <div key={type} className="border rounded-lg p-4">
+                <div key={type} className="border p-4">
                   <h3 className="font-semibold mb-3 capitalize">
                     {type === 'material' ? 'Materiais (Sinônimos)' :
                      type === 'brand' ? 'Marcas' :

@@ -131,7 +131,7 @@ export function NetworkMapView<TResult extends SegmentResultBase>({
         <CardDescription className="text-xs">{description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <div ref={mapRef} className="rounded-lg border" style={{ height }} />
+        <div ref={mapRef} className="border" style={{ height }} />
       </CardContent>
     </Card>
   );

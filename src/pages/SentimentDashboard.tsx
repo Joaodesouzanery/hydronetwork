@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Smile, Frown, Meh, TrendingUp, MessageSquare, Star, Users, FileText } from "lucide-react";
 import { format, subDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const emojiMap: Record<string, { emoji: string; value: number; label: string }> = {
   very_happy: { emoji: "🤩", value: 5, label: "Muito Satisfeito" },
@@ -65,16 +66,18 @@ const SentimentDashboard = () => {
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <div className="flex-1">
-          <div className="flex items-center gap-2 border-b px-4 py-3 bg-background/95 backdrop-blur sticky top-0 z-10">
+          <div className="flex items-center gap-2 border-b px-4 py-3 bg-background/95 sticky top-0 z-10">
             <SidebarTrigger />
-            <h1 className="text-xl font-semibold">Dashboard de Sentimento</h1>
+            <h1 className="text-xl font-semibold font-mono">Dashboard de Sentimento</h1>
             <div className="ml-auto flex gap-2">
               {[7, 14, 30].map(d => (
-                <button key={d} onClick={() => setDays(d)} className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${days === d ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
+                <button key={d} onClick={() => setDays(d)} className={`px-3 py-1 rounded-none text-xs font-medium transition-colors ${days === d ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
                   {d}d
                 </button>
               ))}
             </div>
+
+          <PullDataPanel currentModule="sentimento" />
           </div>
 
           <main className="flex-1 p-6">
@@ -83,7 +86,7 @@ const SentimentDashboard = () => {
               <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card>
                   <CardContent className="p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-none bg-primary/10 flex items-center justify-center">
                       <Smile className="w-5 h-5 text-primary" />
                     </div>
                     <div>
@@ -94,7 +97,7 @@ const SentimentDashboard = () => {
                 </Card>
                 <Card>
                   <CardContent className="p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-none bg-emerald-500/10 flex items-center justify-center">
                       <TrendingUp className="w-5 h-5 text-emerald-500" />
                     </div>
                     <div>
@@ -105,7 +108,7 @@ const SentimentDashboard = () => {
                 </Card>
                 <Card>
                   <CardContent className="p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-none bg-destructive/10 flex items-center justify-center">
                       <Frown className="w-5 h-5 text-destructive" />
                     </div>
                     <div>
@@ -116,7 +119,7 @@ const SentimentDashboard = () => {
                 </Card>
                 <Card>
                   <CardContent className="p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-none bg-amber-500/10 flex items-center justify-center">
                       <MessageSquare className="w-5 h-5 text-amber-500" />
                     </div>
                     <div>
@@ -142,8 +145,8 @@ const SentimentDashboard = () => {
                           <div key={key} className="flex items-center gap-3">
                             <span className="text-xl w-8">{emoji}</span>
                             <span className="text-xs w-32 text-muted-foreground">{label}</span>
-                            <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden">
-                              <div className="h-full bg-primary/60 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                            <div className="flex-1 h-6 bg-muted overflow-hidden">
+                              <div className="h-full bg-primary/60 transition-all" style={{ width: `${pct}%` }} />
                             </div>
                             <span className="text-xs font-bold w-10 text-right">{count}</span>
                           </div>
@@ -165,7 +168,7 @@ const SentimentDashboard = () => {
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {stats.topWords.map(([word, count]) => (
-                          <span key={word} className="px-3 py-1.5 rounded-full bg-muted text-sm font-medium">
+                          <span key={word} className="px-3 py-1.5 bg-muted text-sm font-medium">
                             {word} <span className="text-xs text-muted-foreground ml-1">({count})</span>
                           </span>
                         ))}
@@ -186,7 +189,7 @@ const SentimentDashboard = () => {
                   ) : (
                     <div className="space-y-3 max-h-96 overflow-y-auto">
                       {feedback.slice(0, 50).map((f) => (
-                        <div key={f.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border border-border/50">
+                        <div key={f.id} className="flex items-start gap-3 p-3 rounded-none bg-muted/30 border border-border/50">
                           <span className="text-xl">
                             {f.emoji_rating ? emojiMap[f.emoji_rating]?.emoji || <FileText className="h-5 w-5 inline-block" /> : <FileText className="h-5 w-5 inline-block" />}
                           </span>

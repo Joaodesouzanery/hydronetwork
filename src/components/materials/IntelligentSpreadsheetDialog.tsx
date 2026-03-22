@@ -246,7 +246,7 @@ export const IntelligentSpreadsheetDialog = ({ open, onOpenChange }: Intelligent
               </p>
             </div>
 
-            <div className="bg-muted p-4 rounded-lg">
+            <div className="bg-muted p-4">
               <h4 className="font-semibold mb-2">Como funciona:</h4>
               <ol className="list-decimal list-inside space-y-1 text-sm">
                 <li>Faça upload da planilha com descrições de materiais</li>
@@ -287,7 +287,7 @@ export const IntelligentSpreadsheetDialog = ({ open, onOpenChange }: Intelligent
               <p className="font-semibold">{processedMaterials.length} materiais identificados</p>
             </div>
 
-            <div className="border rounded-lg max-h-[400px] overflow-auto">
+            <div className="border max-h-[400px] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>

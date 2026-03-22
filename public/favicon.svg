@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Code symbol </> favicon -->
+  <rect width="64" height="64" rx="12" fill="#10367D"/>
+  <!-- < symbol -->
+  <path d="M18 32L28 22M18 32L28 42" stroke="#FF6B2C" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- / symbol -->
+  <path d="M29 44L35 20" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- > symbol -->
+  <path d="M46 32L36 22M46 32L36 42" stroke="#FF6B2C" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

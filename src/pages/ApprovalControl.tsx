@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   Plus, ClipboardCheck, Clock, CheckCircle, XCircle, AlertTriangle,
   Search, Trash2, Edit, RotateCcw, Send, FileText, Calendar
@@ -236,12 +237,14 @@ const ApprovalControl = () => {
           <div className="flex items-center gap-3">
             <SidebarTrigger />
             <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
+              <h1 className="text-2xl font-bold font-mono flex items-center gap-2">
                 <ClipboardCheck className="h-6 w-6 text-primary" />
                 Controle de Aprovação de Projetos
               </h1>
               <p className="text-sm text-muted-foreground">Gerencie submissões, prazos e aprovações de documentos</p>
             </div>
+
+          <PullDataPanel currentModule="aprovacoes" />
           </div>
 
           {/* Stats Cards */}

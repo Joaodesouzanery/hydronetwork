@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Building2, Download, Filter, TrendingUp, Users, FileText, Eye, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', 'hsl(var(--destructive))'];
 
@@ -129,7 +130,7 @@ const Production = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <Building2 className="w-12 h-12 mx-auto text-primary animate-pulse mb-4" />
           <p className="text-muted-foreground">Carregando dados...</p>
@@ -143,9 +144,9 @@ const Production = () => {
   const metasComparison = getMetasComparison();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+      <header className="border-b bg-card/50 sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -154,9 +155,9 @@ const Production = () => {
               </Button>
               <Button variant="ghost" onClick={() => navigate('/dashboard')}>
                 <Building2 className="w-6 h-6 mr-2" />
-                <span className="font-bold">ConstruData</span>
+                <span className="font-bold font-mono">CONSTRUDATA</span>
               </Button>
-              <h1 className="text-xl font-semibold">Controle de Produção</h1>
+              <h1 className="text-xl font-semibold font-mono">Controle de Produção</h1>
             </div>
             <div className="flex items-center gap-2">
               <Select value={selectedObra} onValueChange={setSelectedObra}>
@@ -181,6 +182,8 @@ const Production = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        <PullDataPanel currentModule="production" />
+
         {/* Cards de Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>
@@ -337,9 +340,9 @@ const Production = () => {
                     <div key={idx} className="flex items-center justify-between">
                       <span className="font-medium">{item.frente}</span>
                       <div className="flex items-center gap-2">
-                        <div className="w-32 bg-secondary rounded-full h-2">
+                        <div className="w-32 bg-secondary h-2">
                           <div
-                            className="bg-primary h-2 rounded-full transition-all"
+                            className="bg-primary h-2 transition-all"
                             style={{ width: `${Math.min(Number(item.percentual), 100)}%` }}
                           />
                         </div>

@@ -156,14 +156,35 @@ export function shpFeaturesToInternal(features: ShpFeature[]): {
         }
         break;
       case "Polygon":
+        // Polygons are area features (e.g. parcels, zones), NOT network segments.
+        // Store them as point features at their centroid for reference only.
         if (geom.coordinates && geom.coordinates[0]) {
-          addLineString(geom.coordinates[0], { ...props, id: undefined, _geometryType: "Polygon" });
+          const ring = geom.coordinates[0];
+          let cx = 0, cy = 0;
+          for (const c of ring) { cx += c[0]; cy += c[1]; }
+          cx /= ring.length; cy /= ring.length;
+          const id = props.id || props.ID || `SHP_N${++nodeCounter}`;
+          nodes.push({
+            id, x: cx, y: cy, z: props.cota || props.COTA || props.Z || 0,
+            tipo: "generic",
+            properties: { ...props, _source: "SHP", _geometryType: "Polygon" },
+          });
         }
         break;
       case "MultiPolygon":
+        // MultiPolygons are area features, NOT network segments.
         for (const poly of geom.coordinates) {
           if (poly[0]) {
-            addLineString(poly[0], { ...props, id: undefined, _geometryType: "MultiPolygon" });
+            const ring = poly[0];
+            let cx = 0, cy = 0;
+            for (const c of ring) { cx += c[0]; cy += c[1]; }
+            cx /= ring.length; cy /= ring.length;
+            const id = `SHP_N${++nodeCounter}`;
+            nodes.push({
+              id, x: cx, y: cy, z: props.cota || props.COTA || props.Z || 0,
+              tipo: "generic",
+              properties: { ...props, _source: "SHP", _geometryType: "MultiPolygon" },
+            });
           }
         }
         break;

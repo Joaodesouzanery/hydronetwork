@@ -597,7 +597,7 @@ export const CRMAccounts = () => {
 
           <div className="space-y-2 max-h-60 overflow-y-auto">
             {duplicates.map((dup) => (
-              <div key={dup.id} className="p-3 bg-muted rounded-lg">
+              <div key={dup.id} className="p-3 bg-muted">
                 <p className="font-medium">{dup.name}</p>
                 {dup.cnpj && <p className="text-sm text-muted-foreground">CNPJ: {dup.cnpj}</p>}
                 {dup.city && <p className="text-sm text-muted-foreground">{dup.city}/{dup.state}</p>}
@@ -633,7 +633,7 @@ export const CRMAccounts = () => {
               </p>
             ) : (
               history.map((h: any) => (
-                <div key={h.id} className="p-3 bg-muted rounded-lg">
+                <div key={h.id} className="p-3 bg-muted">
                   <div className="flex justify-between items-start">
                     <Badge variant="outline">{h.action}</Badge>
                     <span className="text-xs text-muted-foreground">

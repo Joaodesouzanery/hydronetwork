@@ -533,7 +533,7 @@ export const SpreadsheetUploadDialog = ({ open, onOpenChange, budgetId }: Spread
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+            <div className="flex items-center justify-between p-4 bg-muted">
               <div className="space-y-1">
                 <p className="text-sm font-medium">
                   {matchedCount} de {processedItems.length} itens precificados
@@ -549,7 +549,7 @@ export const SpreadsheetUploadDialog = ({ open, onOpenChange, budgetId }: Spread
               </div>
             </div>
 
-            <div className="border rounded-lg">
+            <div className="border">
               <Table>
                 <TableHeader>
                   <TableRow>

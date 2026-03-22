@@ -9,6 +9,7 @@ import { Plus, Users, Clock, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { AddLaborTrackingDialog } from "@/components/labor/AddLaborTrackingDialog";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   Table,
   TableBody,
@@ -90,11 +91,13 @@ export default function LaborTracking() {
         <main className="flex-1 p-6">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold">Apontamento de Mão de Obra</h1>
+              <h1 className="text-3xl font-bold font-mono">Apontamento de Mão de Obra</h1>
               <p className="text-muted-foreground">
                 Controle de horas trabalhadas e custos de mão de obra
               </p>
             </div>
+
+            <PullDataPanel currentModule="mao_de_obra" />
             <div className="flex gap-2">
               <PageTutorialButton pageKey="labor-tracking" />
               <Button onClick={() => setIsAddDialogOpen(true)}>

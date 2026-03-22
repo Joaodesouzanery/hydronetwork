@@ -22,6 +22,7 @@ import { WidgetCard } from '@/components/custom-dashboard/WidgetCard';
 import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 export default function CustomDashboard() {
   const navigate = useNavigate();
@@ -130,7 +131,7 @@ export default function CustomDashboard() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
+              <h1 className="text-2xl font-bold font-mono flex items-center gap-2">
                 <LayoutDashboard className="h-6 w-6 text-primary" />
                 Dashboard Personalizado
               </h1>
@@ -138,6 +139,8 @@ export default function CustomDashboard() {
                 Monte seu próprio painel de controle
               </p>
             </div>
+
+            <PullDataPanel currentModule="dashboard_custom" />
 
             <div className="flex items-center gap-2 flex-wrap">
               {/* Dashboard Selector */}
@@ -244,7 +247,7 @@ export default function CustomDashboard() {
           {!currentDashboard && dashboards.length === 0 ? (
             <Card className="p-12 text-center">
               <LayoutDashboard className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Crie seu primeiro dashboard</h2>
+              <h2 className="text-xl font-semibold font-mono mb-2">Crie seu primeiro dashboard</h2>
               <p className="text-muted-foreground mb-4">
                 Personalize sua visão de dados com widgets interativos
               </p>

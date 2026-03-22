@@ -19,6 +19,7 @@ import { IntelligentSpreadsheetDialog } from "@/components/materials/Intelligent
 import { DuplicateMaterialsReport } from "@/components/materials/DuplicateMaterialsReport";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageTutorialButton } from "@/components/shared/PageTutorialButton";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const Materials = () => {
   const { toast } = useToast();
@@ -146,7 +147,7 @@ const Materials = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Precificação de Materiais e Serviços</h1>
+              <h1 className="text-3xl font-bold font-mono text-foreground">Precificação de Materiais e Serviços</h1>
               <p className="text-muted-foreground">Gerencie seu catálogo de materiais e serviços</p>
             </div>
           </div>
@@ -184,6 +185,8 @@ const Materials = () => {
             </Button>
           </div>
         </div>
+        <PullDataPanel currentModule="materials" />
+
         <Tabs defaultValue="catalog" className="w-full">
           <TabsList>
             <TabsTrigger value="catalog">Catálogo</TabsTrigger>

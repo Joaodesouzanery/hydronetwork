@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, Package, Edit, Trash2, ArrowLeft, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   Table,
   TableBody,
@@ -194,11 +195,13 @@ const AssetsCatalog = () => {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold">Catálogo de Ativos</h1>
+              <h1 className="text-3xl font-bold font-mono">Catálogo de Ativos</h1>
               <p className="text-muted-foreground">
                 Gerencie locais e equipamentos
               </p>
             </div>
+
+          <PullDataPanel currentModule="ativos" />
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setShowTutorial(true)}>
@@ -278,7 +281,7 @@ const AssetsCatalog = () => {
           </Select>
         </div>
 
-        <div className="border rounded-lg">
+        <div className="border rounded-none">
           <Table>
             <TableHeader>
               <TableRow>

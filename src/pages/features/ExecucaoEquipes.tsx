@@ -42,7 +42,7 @@ const ExecucaoEquipes = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-blue-500/5">
+    <div className="min-h-screen bg-background">
       <div className="container px-4 py-12 mx-auto max-w-6xl">
         <Button
           variant="ghost"
@@ -56,10 +56,10 @@ const ExecucaoEquipes = () => {
         <div className="space-y-12">
           {/* Hero Section */}
           <div className="text-center space-y-6">
-            <div className="w-20 h-20 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 mx-auto">
+            <div className="w-20 h-20 bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 mx-auto">
               <Users className="w-10 h-10" />
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold">Execução & Equipes</h1>
+            <h1 className="text-4xl md:text-5xl font-bold font-mono">Execução & Equipes</h1>
             <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
               Gerencie funcionários, atribua tarefas e registre a execução de serviços com evidências completas e rastreabilidade.
             </p>
@@ -70,20 +70,20 @@ const ExecucaoEquipes = () => {
             {features.map((feature, index) => (
               <div 
                 key={index}
-                className="p-6 rounded-xl border bg-card hover:shadow-lg transition-all duration-300 hover:border-blue-500/30"
+                className="p-6 rounded-none border bg-card hover:border-foreground/20 transition-all duration-300 hover:border-blue-500/30"
               >
-                <div className="w-12 h-12 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center mb-4">
+                <div className="w-12 h-12 rounded-none bg-blue-500/10 text-blue-500 flex items-center justify-center mb-4">
                   {feature.icon}
                 </div>
-                <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+                <h3 className="text-lg font-semibold font-mono mb-2">{feature.title}</h3>
                 <p className="text-muted-foreground text-sm">{feature.description}</p>
               </div>
             ))}
           </div>
 
           {/* Benefits Section */}
-          <div className="bg-card rounded-xl border p-8 md:p-12">
-            <h2 className="text-2xl font-bold mb-8 text-center">Benefícios para sua Equipe</h2>
+          <div className="bg-card rounded-none border p-8 md:p-12">
+            <h2 className="text-2xl font-bold font-mono mb-8 text-center">Benefícios para sua Equipe</h2>
             <div className="grid md:grid-cols-2 gap-4">
               {benefits.map((benefit, index) => (
                 <div key={index} className="flex items-start gap-3">

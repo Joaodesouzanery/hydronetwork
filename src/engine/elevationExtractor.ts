@@ -94,6 +94,33 @@ export function sampleElevation(x: number, y: number): number | null {
 // ══════════════════════════════════════
 
 /**
+ * Get the raster extent (bounding box) in raster coordinates.
+ * Useful for diagnosing CRS mismatches.
+ */
+export function getRasterExtent(): {
+  minX: number; maxX: number; minY: number; maxY: number;
+} | null {
+  const rasterInfo = getRasterGrid();
+  if (!rasterInfo) return null;
+
+  const { grid, meta } = rasterInfo;
+  const { origin, pixelSize } = grid;
+  const { width, height } = meta;
+
+  const x1 = origin[0];
+  const x2 = origin[0] + width * pixelSize[0];
+  const y1 = origin[1];
+  const y2 = origin[1] + height * pixelSize[1];
+
+  return {
+    minX: Math.min(x1, x2),
+    maxX: Math.max(x1, x2),
+    minY: Math.min(y1, y2),
+    maxY: Math.max(y1, y2),
+  };
+}
+
+/**
  * Fill terrain elevation (z) for spatial nodes by sampling the loaded raster.
  *
  * If `nodeIds` is provided, only those nodes are updated. Otherwise all nodes
@@ -102,12 +129,13 @@ export function sampleElevation(x: number, y: number): number | null {
  * For nodes that have a `cotaFundo` (invert elevation), the `profundidade`
  * (depth) is recalculated as z - cotaFundo.
  *
- * @returns Counts of updated/skipped nodes and a noRaster flag.
+ * @returns Counts of updated/skipped nodes, noRaster flag, and diagnostic info.
  */
 export function fillNodeElevations(nodeIds?: string[]): {
   updated: number;
   skipped: number;
   noRaster: boolean;
+  diagnostic?: string;
 } {
   const rasterInfo = getRasterGrid();
   if (!rasterInfo) {
@@ -125,6 +153,10 @@ export function fillNodeElevations(nodeIds?: string[]): {
         .filter((n): n is SpatialNode => n !== undefined)
     : Array.from(project.nodes.values());
 
+  if (targetNodes.length === 0) {
+    return { updated: 0, skipped: 0, noRaster: false, diagnostic: "Nenhum nó encontrado no projeto." };
+  }
+
   for (const node of targetNodes) {
     const elevation = sampleElevation(node.x, node.y);
     if (elevation !== null) {
@@ -141,7 +173,20 @@ export function fillNodeElevations(nodeIds?: string[]): {
     }
   }
 
-  return { updated, skipped, noRaster: false };
+  // Generate diagnostic if all nodes were skipped (likely CRS mismatch)
+  let diagnostic: string | undefined;
+  if (updated === 0 && skipped > 0) {
+    const extent = getRasterExtent();
+    if (extent && targetNodes.length > 0) {
+      const sampleNode = targetNodes[0];
+      diagnostic = `Nenhum nó dentro do raster. ` +
+        `Nó exemplo: X=${sampleNode.x.toFixed(2)}, Y=${sampleNode.y.toFixed(2)}. ` +
+        `Raster: X=[${extent.minX.toFixed(2)}..${extent.maxX.toFixed(2)}], Y=[${extent.minY.toFixed(2)}..${extent.maxY.toFixed(2)}]. ` +
+        `Verifique se o CRS dos nós é o mesmo do raster MDT.`;
+    }
+  }
+
+  return { updated, skipped, noRaster: false, diagnostic };
 }
 
 // ══════════════════════════════════════

@@ -94,10 +94,10 @@ export const RDOProgressMap = ({ pontos, trechos, rdos }: RDOProgressMapProps) =
         if (statusFilter === "nao_iniciado" && seg.status !== "Não Iniciado") return;
       }
 
-      let color = "#ef4444";
+      let color = "#EF4444";
       let weight = 2;
-      if (seg.status === "Concluído") { color = "#22c55e"; weight = 6; }
-      else if (seg.status === "Em Execução") { color = "#f59e0b"; weight = 4; }
+      if (seg.status === "Concluído") { color = "#22C55E"; weight = 6; }
+      else if (seg.status === "Em Execução") { color = "#3B82F6"; weight = 4; }
 
       const polyline = L.polyline([coordsInicio, coordsFim], {
         color,
@@ -182,7 +182,7 @@ export const RDOProgressMap = ({ pontos, trechos, rdos }: RDOProgressMapProps) =
       <CardContent className="space-y-3">
         <div
           ref={mapContainerRef}
-          className="w-full rounded-lg border border-border overflow-hidden"
+          className="w-full border border-border overflow-hidden"
           style={{ height: 400 }}
         />
         <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">

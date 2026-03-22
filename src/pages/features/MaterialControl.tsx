@@ -51,10 +51,10 @@ const MaterialControlFeature = () => {
 
         <div className="space-y-8">
           <div className="text-center space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-orange-600 flex items-center justify-center text-white mx-auto">
+            <div className="w-16 h-16 bg-orange-600 flex items-center justify-center text-white mx-auto">
               <TrendingUp className="w-8 h-8" />
             </div>
-            <h1 className="text-4xl font-bold text-white">Controle de Material</h1>
+            <h1 className="text-4xl font-bold font-mono text-white">Controle de Material</h1>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
               Compare requisições vs consumo real por frente de serviço
             </p>
@@ -63,17 +63,17 @@ const MaterialControlFeature = () => {
           {/* Features Grid */}
           <div className="grid md:grid-cols-2 gap-6">
             {features.map((feature, index) => (
-              <div key={index} className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-6">
+              <div key={index} className="bg-white/5 rounded-none border border-white/10 p-6">
                 <feature.icon className="w-10 h-10 text-orange-500 mb-4" />
-                <h3 className="text-lg font-semibold text-white mb-2">{feature.title}</h3>
+                <h3 className="text-lg font-semibold font-mono text-white mb-2">{feature.title}</h3>
                 <p className="text-gray-400">{feature.description}</p>
               </div>
             ))}
           </div>
 
           {/* Benefits */}
-          <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-8">
-            <h2 className="text-2xl font-semibold text-white mb-6">Benefícios</h2>
+          <div className="bg-white/5 rounded-none border border-white/10 p-8">
+            <h2 className="text-2xl font-semibold font-mono text-white mb-6">Benefícios</h2>
             <div className="grid md:grid-cols-2 gap-4">
               {benefits.map((benefit, index) => (
                 <div key={index} className="flex items-center gap-3">

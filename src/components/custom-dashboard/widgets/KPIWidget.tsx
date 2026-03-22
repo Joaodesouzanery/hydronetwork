@@ -74,7 +74,7 @@ export function KPIWidget({
         <CardTitle className="text-sm font-medium text-muted-foreground">
           {title}
         </CardTitle>
-        <div className={cn("p-2 rounded-lg", iconColors[icon])}>
+        <div className={cn("p-2", iconColors[icon])}>
           <Icon className="h-4 w-4" />
         </div>
       </CardHeader>

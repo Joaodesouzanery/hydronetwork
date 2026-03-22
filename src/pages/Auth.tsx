@@ -7,9 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
-import { Building2, Calendar, Eye, EyeOff, CheckCircle2, ArrowLeft } from "lucide-react";
+import { Building2, Calendar, Eye, EyeOff, CheckCircle2, ArrowLeft, ShieldCheck, Loader2 } from "lucide-react";
 import { z } from "zod";
 import { PasswordStrengthIndicator } from "@/components/auth/PasswordStrengthIndicator";
+import { LogoText } from "@/components/shared/Logo";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 const signInSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -54,6 +56,12 @@ const Auth = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
+  // MFA state
+  const [showMfaVerify, setShowMfaVerify] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [isMfaVerifying, setIsMfaVerifying] = useState(false);
+
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -81,7 +89,7 @@ const Auth = () => {
         return;
       }
 
-      if (session && !showResetPassword) {
+      if (session && !showResetPassword && !showMfaVerify) {
         const { data: profile } = await supabase
           .from('user_profiles')
           .select('onboarding_completed')
@@ -97,7 +105,7 @@ const Auth = () => {
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate, showResetPassword]);
+  }, [navigate, showResetPassword, showMfaVerify]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,7 +124,7 @@ const Auth = () => {
         return;
       }
 
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: loginEmail.trim(),
         password: loginPassword,
       });
@@ -129,6 +137,19 @@ const Auth = () => {
         } else {
           toast.error(error.message);
         }
+        return;
+      }
+
+      // Check if user has MFA enabled
+      const { data: factorsData } = await supabase.auth.mfa.listFactors();
+      const verifiedFactors = factorsData?.totp?.filter(
+        (f: any) => f.status === "verified"
+      ) || [];
+
+      if (verifiedFactors.length > 0) {
+        // User has MFA - show verification screen
+        setMfaFactorId(verifiedFactors[0].id);
+        setShowMfaVerify(true);
         return;
       }
 
@@ -264,6 +285,38 @@ const Auth = () => {
     }
   };
 
+  const handleMfaVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (mfaCode.length !== 6) {
+      toast.error("Digite o código de 6 dígitos");
+      return;
+    }
+
+    setIsMfaVerifying(true);
+    try {
+      const { data: challengeData, error: challengeError } =
+        await supabase.auth.mfa.challenge({ factorId: mfaFactorId });
+
+      if (challengeError) throw challengeError;
+
+      const { error: verifyError } = await supabase.auth.mfa.verify({
+        factorId: mfaFactorId,
+        challengeId: challengeData.id,
+        code: mfaCode,
+      });
+
+      if (verifyError) throw verifyError;
+
+      toast.success("Login realizado com sucesso!");
+      // Navigation will happen via onAuthStateChange
+    } catch (error: any) {
+      toast.error("Código inválido. Tente novamente.");
+      setMfaCode("");
+    } finally {
+      setIsMfaVerifying(false);
+    }
+  };
+
   const benefits = [
     "30 dias de teste grátis",
     "Acesso a todos os 26 módulos",
@@ -271,15 +324,92 @@ const Auth = () => {
     "Suporte técnico incluso",
   ];
 
+  // MFA verification form
+  if (showMfaVerify) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-3 sm:p-4 font-mono">
+        <Card className="w-full max-w-md border border-border">
+          <CardHeader className="space-y-3 sm:space-y-4">
+            <div className="flex items-center justify-center gap-2">
+              <img src="/logo.svg" alt="ConstruData" className="h-8 sm:h-10" />
+              <LogoText className="text-xl sm:text-2xl" />
+            </div>
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <ShieldCheck className="w-5 h-5 text-primary" />
+                <CardTitle className="text-lg sm:text-xl">Verificação 2FA</CardTitle>
+              </div>
+              <CardDescription className="text-sm">
+                Digite o código do seu aplicativo autenticador
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleMfaVerify} className="space-y-6">
+              <div className="flex justify-center">
+                <InputOTP
+                  maxLength={6}
+                  value={mfaCode}
+                  onChange={setMfaCode}
+                  autoFocus
+                >
+                  <InputOTPGroup>
+                    <InputOTPSlot index={0} />
+                    <InputOTPSlot index={1} />
+                    <InputOTPSlot index={2} />
+                    <InputOTPSlot index={3} />
+                    <InputOTPSlot index={4} />
+                    <InputOTPSlot index={5} />
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Abra seu app autenticador (Google Authenticator, Authy, etc.)
+                e insira o código de 6 dígitos
+              </p>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isMfaVerifying || mfaCode.length !== 6}
+              >
+                {isMfaVerifying ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Verificando...
+                  </>
+                ) : (
+                  "Verificar"
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full gap-2"
+                onClick={() => {
+                  setShowMfaVerify(false);
+                  setMfaCode("");
+                  supabase.auth.signOut();
+                }}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Voltar ao login
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // Reset password form (after clicking email link)
   if (showResetPassword) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-3 sm:p-4">
-        <Card className="w-full max-w-md shadow-card">
+      <div className="min-h-screen flex items-center justify-center bg-background p-3 sm:p-4 font-mono">
+        <Card className="w-full max-w-md border border-border">
           <CardHeader className="space-y-3 sm:space-y-4">
-            <div className="flex items-center justify-center gap-2 text-primary">
-              <Building2 className="w-7 h-7 sm:w-8 sm:h-8" />
-              <span className="text-xl sm:text-2xl font-bold">ConstruData</span>
+            <div className="flex items-center justify-center gap-2">
+              <img src="/logo.svg" alt="ConstruData" className="h-8 sm:h-10" />
+              <LogoText className="text-xl sm:text-2xl" />
             </div>
             <div className="text-center">
               <CardTitle className="text-lg sm:text-xl">Redefinir Senha</CardTitle>
@@ -339,12 +469,12 @@ const Auth = () => {
   // Forgot password form
   if (showForgotPassword) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-3 sm:p-4">
-        <Card className="w-full max-w-md shadow-card">
+      <div className="min-h-screen flex items-center justify-center bg-background p-3 sm:p-4 font-mono">
+        <Card className="w-full max-w-md border border-border">
           <CardHeader className="space-y-3 sm:space-y-4">
-            <div className="flex items-center justify-center gap-2 text-primary">
-              <Building2 className="w-7 h-7 sm:w-8 sm:h-8" />
-              <span className="text-xl sm:text-2xl font-bold">ConstruData</span>
+            <div className="flex items-center justify-center gap-2">
+              <img src="/logo.svg" alt="ConstruData" className="h-8 sm:h-10" />
+              <LogoText className="text-xl sm:text-2xl" />
             </div>
             <div className="text-center">
               <CardTitle className="text-lg sm:text-xl">Esqueci minha senha</CardTitle>
@@ -387,18 +517,18 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-3 sm:p-4">
-      <Card className="w-full max-w-md shadow-card">
+    <div className="min-h-screen flex items-center justify-center bg-background p-3 sm:p-4 font-mono">
+      <Card className="w-full max-w-md border border-border">
         <CardHeader className="space-y-3 sm:space-y-4">
-          <div className="flex items-center justify-center gap-2 text-primary">
-            <Building2 className="w-7 h-7 sm:w-8 sm:h-8" />
-            <span className="text-xl sm:text-2xl font-bold">ConstruData</span>
+          <div className="flex items-center justify-center gap-2">
+            <img src="/logo.svg" alt="ConstruData" className="h-8 sm:h-10" />
+            <LogoText className="text-xl sm:text-2xl" />
           </div>
           <div className="text-center">
-            <CardTitle className="text-lg sm:text-xl">
+            <CardTitle className="text-lg sm:text-xl font-mono">
               {activeTab === "login" ? "Bem-vindo de volta" : "Comece seu Teste Grátis"}
             </CardTitle>
-            <CardDescription className="text-sm">
+            <CardDescription className="text-sm font-mono">
               {activeTab === "login" ? "Faça login para continuar" : "30 dias de acesso completo"}
             </CardDescription>
           </div>
@@ -529,7 +659,7 @@ const Auth = () => {
                   />
                 </div>
 
-                <div className="bg-muted/50 rounded-lg p-3 space-y-1.5">
+                <div className="bg-muted/50 p-3 space-y-1.5 border border-border">
                   {benefits.map((benefit, i) => (
                     <div key={i} className="flex items-center gap-2 text-sm">
                       <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />

@@ -196,7 +196,7 @@ export const PerfilLongitudinal = ({ pontos, trechos }: PerfilLongitudinalProps)
       a.click();
       toast.success("Perfil exportado como PNG");
     };
-    img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+    img.src = "data:image/svg+xml;base64," + btoa(new TextEncoder().encode(svgData).reduce((s, b) => s + String.fromCharCode(b), ""));
   }, []);
 
   const fmt = (n: number, d = 2) => n.toFixed(d);
@@ -246,7 +246,7 @@ export const PerfilLongitudinal = ({ pontos, trechos }: PerfilLongitudinalProps)
           </div>
 
           {/* SVG Profile */}
-          <div className="overflow-x-auto border border-border rounded-lg bg-white dark:bg-card">
+          <div className="overflow-x-auto border border-border bg-white dark:bg-card">
             <svg ref={svgRef} viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full" style={{ minWidth: 700, minHeight: 350 }}>
               {/* Grid lines */}
               {yTicks.map(v => (

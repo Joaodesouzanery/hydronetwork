@@ -121,7 +121,7 @@ export const CRSSelector: React.FC<CRSSelectorProps> = ({
   }
 
   return (
-    <div className="space-y-3 border border-border rounded-lg p-3 bg-card">
+    <div className="space-y-3 border border-border p-3 bg-card">
       <div className="flex items-center gap-2">
         <Globe className="h-4 w-4 text-primary" />
         <span className="font-semibold text-sm">Sistema de Coordenadas (CRS)</span>

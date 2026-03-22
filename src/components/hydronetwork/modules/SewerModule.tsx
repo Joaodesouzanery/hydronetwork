@@ -1068,6 +1068,16 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
           }));
           handleGisTrechosChange(updatedTrechos);
 
+          // BUG FIX: Also update gisPontos with renamed IDs so MDT and
+          // subsequent steps can match nodes correctly
+          if (nodeIdMap.size > 0) {
+            const updatedPontos = activePontos.map(p => ({
+              ...p,
+              id: nodeIdMap.get(p.id) ?? p.id,
+            }));
+            handleGisPontosChange(updatedPontos);
+          }
+
           const msg = `Rede numerada: ${result.edges.length} trechos, ${nodes.length} nós (PV-001...PV-${String(nodes.length).padStart(3, "0")})`;
           setStepMessage(prev => ({ ...prev, s02: msg }));
           toast.success(msg);
@@ -1239,7 +1249,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                 </div>
 
                 {sewerNodeAttrs.length > 0 && (
-                  <div className="border rounded-lg overflow-auto max-h-48">
+                  <div className="border overflow-auto max-h-48">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1466,8 +1476,8 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
           }
 
           // Also update SpatialCore
-          const { updated: spatialUpdated } = fillNodeElevations();
-          if (spatialUpdated > 0) fillEdgeElevations();
+          const spatialResult = fillNodeElevations();
+          if (spatialResult.updated > 0) fillEdgeElevations();
           spatial.refresh();
 
           // Update GIS points
@@ -1478,10 +1488,25 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
 
           setMdtProgress(100);
 
-          const msg = `MDT: ${nodesUpdated} nós atualizados, ${nodesSkipped} fora do raster, ${edgesUpdated} trechos CTM/CTJ atualizados`;
-          setStepMessage(prev => ({ ...prev, s04: msg }));
-          toast.success(msg);
-          markDone("s04");
+          if (nodesUpdated === 0 && nodesSkipped > 0) {
+            // All nodes fell outside the raster — likely CRS mismatch
+            const { getRasterExtent } = await import("@/engine/elevationExtractor");
+            const extent = getRasterExtent();
+            let diagnostic = "Nenhum nó dentro do raster MDT.";
+            if (extent && allNodes.length > 0) {
+              const sn = allNodes[0];
+              diagnostic += ` Nó exemplo: X=${sn.x.toFixed(2)}, Y=${sn.y.toFixed(2)}.` +
+                ` Raster: X=[${extent.minX.toFixed(0)}..${extent.maxX.toFixed(0)}], Y=[${extent.minY.toFixed(0)}..${extent.maxY.toFixed(0)}].` +
+                ` Verifique se o CRS dos nós é compatível com o raster (ex: ambos em UTM ou ambos em lat/lng).`;
+            }
+            setStepMessage(prev => ({ ...prev, s04: diagnostic }));
+            toast.error(diagnostic);
+          } else {
+            const msg = `MDT: ${nodesUpdated} nós atualizados, ${nodesSkipped} fora do raster, ${edgesUpdated} trechos CTM/CTJ atualizados`;
+            setStepMessage(prev => ({ ...prev, s04: msg }));
+            toast.success(msg);
+            markDone("s04");
+          }
 
           // Clear progress after 2s
           setTimeout(() => setMdtProgress(null), 2000);
@@ -1522,7 +1547,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
 
               {/* Direct TIF import + manual fallback */}
               {!getRasterGrid() && (
-                <div className="border border-amber-500/30 bg-amber-50 dark:bg-amber-950/10 rounded-lg p-3 space-y-2">
+                <div className="border border-amber-500/30 bg-amber-50 dark:bg-amber-950/10 p-3 space-y-2">
                   <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
                     Nenhum MDT carregado. Opções:
                   </p>
@@ -1785,7 +1810,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                 )}
 
                 {sewerResults.length > 0 && (
-                  <div className="border rounded-lg overflow-auto max-h-80">
+                  <div className="border overflow-auto max-h-80">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1838,7 +1863,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
                 )}
 
                 {!canDimension && (
-                  <div className="flex items-center gap-2 p-3 bg-muted rounded-lg text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 p-3 bg-muted text-sm text-muted-foreground">
                     <AlertTriangle className="h-4 w-4" /> Importe dados no "Mapa" ou preencha a "Rede".
                   </div>
                 )}
@@ -1870,14 +1895,40 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
           const nodes: SewerNetworkNode[] = sewerNodeAttrs.length > 0
             ? sewerNodeAttrs.map(n => ({ id: n.id, x: n.x, y: n.y, cotaTerreno: n.cotaTerreno, cotaFundo: n.cotaFundo }))
             : activePontos.map(p => ({ id: p.id, x: p.x, y: p.y, cotaTerreno: p.cota, cotaFundo: p.cota - 1.5 }));
-          const edges: SewerNetworkEdge[] = sewerEdgeAttrs.length > 0
-            ? sewerEdgeAttrs.map(e => ({
-                key: e.key, dcId: e.dcId, idInicio: e.idInicio, idFim: e.idFim,
-                comprimento: e.comprimento, cotaTerrenoM: e.cotaTerrenoM, cotaTerrenoJ: e.cotaTerrenoJ,
-                cotaColetorM: e.cotaColetorM, cotaColetorJ: e.cotaColetorJ,
-                manning: e.manning, diametro: e.diametro, declividade: e.declividade,
-              }))
-            : [];
+          // BUG FIX: Build edges from sewerEdgeAttrs or fall back to sewerTrechos + results
+          let edges: SewerNetworkEdge[];
+          if (sewerEdgeAttrs.length > 0) {
+            edges = sewerEdgeAttrs.map(e => ({
+              key: e.key, dcId: e.dcId, idInicio: e.idInicio, idFim: e.idFim,
+              comprimento: e.comprimento, cotaTerrenoM: e.cotaTerrenoM, cotaTerrenoJ: e.cotaTerrenoJ,
+              cotaColetorM: e.cotaColetorM, cotaColetorJ: e.cotaColetorJ,
+              manning: e.manning, diametro: e.diametro, declividade: e.declividade,
+            }));
+          } else if (sewerTrechos.length > 0 && sewerResults.length > 0) {
+            const resultMap = new Map(sewerResults.map(r => [r.id, r]));
+            edges = sewerTrechos.map(t => {
+              const key = `${t.idInicio}-${t.idFim}`;
+              const r = resultMap.get(key);
+              const dn = r?.diametroMm ?? t.diametroMm ?? 150;
+              const dnM = dn / 1000;
+              return {
+                key,
+                dcId: t.nomeTrecho || key,
+                idInicio: t.idInicio,
+                idFim: t.idFim,
+                comprimento: t.comprimento,
+                cotaTerrenoM: t.cotaInicio,
+                cotaTerrenoJ: t.cotaFim,
+                cotaColetorM: t.cotaInicio - 1.5,
+                cotaColetorJ: t.cotaFim - (1.5 + t.comprimento * (t.declividade || 0.005)),
+                manning,
+                diametro: dn,
+                declividade: t.declividade,
+              };
+            });
+          } else {
+            edges = [];
+          }
           if (edges.length === 0 || sewerResults.length === 0) {
             toast.error("Execute o dimensionamento (07) primeiro.");
             return;
@@ -1908,7 +1959,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
               </Button>
 
               {minCoverAlerts.length > 0 && (
-                <div className="border rounded-lg overflow-auto max-h-60">
+                <div className="border overflow-auto max-h-60">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -2020,7 +2071,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
               </div>
 
               {diameterSummary.length > 0 && (
-                <div className="border rounded-lg overflow-auto">
+                <div className="border overflow-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -2193,7 +2244,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
               </div>
 
               {sewerEdgeAttrs.length > 0 && (
-                <div className="border rounded-lg overflow-auto max-h-60">
+                <div className="border overflow-auto max-h-60">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -2623,7 +2674,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
   return (
     <div className="space-y-4">
       {/* Primary toolbar — Sequential steps 00-08 */}
-      <div className="flex flex-wrap gap-1 p-2 bg-muted rounded-lg items-center">
+      <div className="flex flex-wrap gap-1 p-2 bg-muted items-center">
         <Button variant={activeStep === "mapa" ? "default" : "ghost"} size="sm" onClick={() => handleStepChange("mapa")}>
           <MapIcon className="h-3.5 w-3.5 mr-1" />Mapa
         </Button>
@@ -2653,7 +2704,7 @@ export const SewerModule = ({ pontos, trechos, onPontosChange, onTrechosChange }
       </div>
 
       {/* Secondary toolbar — Utilities (matches QEsg plugin menu) */}
-      <div className="flex flex-wrap gap-1 p-1.5 bg-muted/50 rounded-lg items-center border">
+      <div className="flex flex-wrap gap-1 p-1.5 bg-muted/50 items-center border">
         {secondaryItems.map(item => (
           <Button key={item.id} variant={activeStep === item.id ? "default" : "ghost"} size="sm"
             onClick={() => handleStepChange(item.id)}

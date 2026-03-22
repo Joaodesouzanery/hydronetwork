@@ -29,6 +29,9 @@ import { RDOProgressMap } from "./RDOProgressMap";
 import { RDOFormComplete } from "./RDOFormComplete";
 import { downloadRDODXF } from "@/lib/rdoDxfExporter";
 import { downloadDXF } from "@/lib/dxfExporter";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
+import * as XLSX from "xlsx";
 
 interface RDOHydroModuleProps {
   pontos: PontoTopografico[];
@@ -42,38 +45,37 @@ interface RDOHydroModuleProps {
 const fmt = (n: number, d = 1) => n.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const fmtCurrency = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-// Mock financial entries
+// Financial entries stored in localStorage
 interface FinancialEntry {
   id: string;
   date: string;
   category: string;
-  categoryIcon: ReactNode;
   description: string;
   value: number;
   type: "despesa" | "receita";
 }
 
-const MOCK_FINANCIALS: FinancialEntry[] = [
-  { id: "1", date: "2024-01-15", category: "Mão de Obra", categoryIcon: <Users className="h-4 w-4 inline-block" />, description: "Mão de obra janeiro", value: -45000, type: "despesa" },
-  { id: "2", date: "2024-01-20", category: "Materiais", categoryIcon: <Package className="h-4 w-4 inline-block" />, description: "Tubulação PVC DN150", value: -28500, type: "despesa" },
-  { id: "3", date: "2024-01-25", category: "Equipamentos", categoryIcon: <Truck className="h-4 w-4 inline-block" />, description: "Aluguel retroescavadeira", value: -12000, type: "despesa" },
-  { id: "4", date: "2024-02-01", category: "Mão de Obra", categoryIcon: <Users className="h-4 w-4 inline-block" />, description: "Mão de obra fevereiro", value: -48000, type: "despesa" },
-  { id: "5", date: "2024-02-10", category: "Materiais", categoryIcon: <Package className="h-4 w-4 inline-block" />, description: "PVs concreto armado", value: -35000, type: "despesa" },
-  { id: "6", date: "2024-02-15", category: "Transporte", categoryIcon: <Truck className="h-4 w-4 inline-block" />, description: "Transporte materiais", value: -8500, type: "despesa" },
-  { id: "7", date: "2024-02-20", category: "Equipamentos", categoryIcon: <Truck className="h-4 w-4 inline-block" />, description: "Compactador de solo", value: -6500, type: "despesa" },
-  { id: "8", date: "2024-03-01", category: "Mão de Obra", categoryIcon: <Users className="h-4 w-4 inline-block" />, description: "Mão de obra março", value: -52000, type: "despesa" },
-  { id: "9", date: "2024-03-05", category: "Materiais", categoryIcon: <Package className="h-4 w-4 inline-block" />, description: "Conexões e peças", value: -18500, type: "despesa" },
-  { id: "10", date: "2024-03-10", category: "Administrativo", categoryIcon: <ClipboardList className="h-4 w-4 inline-block" />, description: "Custos administrativos", value: -15000, type: "despesa" },
-];
+const FINANCIAL_STORAGE_KEY = "hydronetwork_rdo_financials";
 
-const MOCK_SEGMENTS = [
-  { id: "TRE-001", system: "esgoto" as const, planned: 150, executed: 0 },
-  { id: "TRE-002", system: "esgoto" as const, planned: 200, executed: 50 },
-  { id: "TRE-003", system: "esgoto" as const, planned: 175, executed: 175 },
-  { id: "TRA-001", system: "agua" as const, planned: 120, executed: 80 },
-  { id: "TRA-002", system: "agua" as const, planned: 180, executed: 0 },
-  { id: "TRD-001", system: "drenagem" as const, planned: 250, executed: 100 },
-];
+function loadFinancials(): FinancialEntry[] {
+  try {
+    const raw = localStorage.getItem(FINANCIAL_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveFinancialsToStorage(entries: FinancialEntry[]) {
+  localStorage.setItem(FINANCIAL_STORAGE_KEY, JSON.stringify(entries));
+}
+
+const CATEGORY_ICONS: Record<string, ReactNode> = {
+  "Mão de Obra": <Users className="h-4 w-4 inline-block" />,
+  "Materiais": <Package className="h-4 w-4 inline-block" />,
+  "Equipamentos": <Truck className="h-4 w-4 inline-block" />,
+  "Transporte": <Truck className="h-4 w-4 inline-block" />,
+  "Administrativo": <ClipboardList className="h-4 w-4 inline-block" />,
+  "Outros": <DollarSign className="h-4 w-4 inline-block" />,
+};
 
 // ── Equipment types ──
 interface Equipment {
@@ -148,7 +150,12 @@ async function loadEquipmentsFromSupabase(): Promise<Equipment[]> {
 
 export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange, onTrechosChange }: RDOHydroModuleProps) => {
   const [view, setView] = useState<"dashboard" | "list" | "new" | "map" | "financial" | "equipamentos">("dashboard");
-  const [financials, setFinancials] = useState<FinancialEntry[]>(MOCK_FINANCIALS);
+  const [financials, setFinancials] = useState<FinancialEntry[]>(() => loadFinancials());
+  const [showAddFinancial, setShowAddFinancial] = useState(false);
+  const [newFinancial, setNewFinancial] = useState<Partial<FinancialEntry>>({ category: "Materiais", type: "despesa" });
+  const [budgetBAC, setBudgetBAC] = useState<number>(() => {
+    try { const raw = localStorage.getItem("hydronetwork_rdo_bac"); return raw ? JSON.parse(raw) : 0; } catch { return 0; }
+  });
   const [equipments, setEquipments] = useState<Equipment[]>(loadEquipments());
   const [showAddEquipment, setShowAddEquipment] = useState(false);
 
@@ -195,23 +202,20 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
 
   const metrics = calculateDashboardMetrics(rdos);
 
-  // Build segments from real trechos if available, otherwise use mock
-  const activeSegments = trechos.length > 0
-    ? trechos.map((t, i) => {
-        const allSegs = rdos.flatMap(r => r.segments);
-        const trechoName = t.nomeTrecho || `${t.idInicio}-${t.idFim}`;
-        const matching = allSegs.filter(s =>
-          s.segmentName === trechoName || s.segmentName === `${t.idInicio}-${t.idFim}` || s.segmentName === t.idInicio
-        );
-        const executed = matching.reduce((sum, s) => sum + s.executedBefore + s.executedToday, 0);
-        // Use manual network type from trecho if available, otherwise infer from tipoRede
-        const system: "agua" | "esgoto" | "drenagem" = t.tipoRedeManual === "agua" ? "agua"
-          : t.tipoRedeManual === "drenagem" ? "drenagem"
-          : t.tipoRedeManual === "recalque" ? "agua"
-          : "esgoto";
-        return { id: trechoName, system, planned: t.comprimento, executed, frente: t.frenteServico || "", lote: t.lote || "", rede: t.tipoRedeManual || "" };
-      })
-    : MOCK_SEGMENTS;
+  // Build segments from real trechos data only
+  const activeSegments = trechos.map((t) => {
+    const allSegs = rdos.flatMap(r => r.segments);
+    const trechoName = t.nomeTrecho || `${t.idInicio}-${t.idFim}`;
+    const matching = allSegs.filter(s =>
+      s.segmentName === trechoName || s.segmentName === `${t.idInicio}-${t.idFim}` || s.segmentName === t.idInicio
+    );
+    const executed = matching.reduce((sum, s) => sum + s.executedBefore + s.executedToday, 0);
+    const system: "agua" | "esgoto" | "drenagem" = t.tipoRedeManual === "agua" ? "agua"
+      : t.tipoRedeManual === "drenagem" ? "drenagem"
+      : t.tipoRedeManual === "recalque" ? "agua"
+      : "esgoto";
+    return { id: trechoName, system, planned: t.comprimento, executed, frente: t.frenteServico || "", lote: t.lote || "", rede: t.tipoRedeManual || "" };
+  });
 
   // Calculate totals from segments
   const totalPlanned = activeSegments.reduce((s, seg) => s + seg.planned, 0);
@@ -242,12 +246,7 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
   // Top services: aggregate from real RDOs, fallback to mock if no RDOs
   const topServices = useMemo(() => {
     if (rdos.length === 0) {
-      return [
-        { name: "Escavação mecanizada", qty: 1250, unit: "m³", planned: 0 },
-        { name: "Assentamento DN200", qty: 405, unit: "m", planned: 0 },
-        { name: "Reaterro compactado", qty: 980, unit: "m³", planned: 0 },
-        { name: "Escoramento", qty: 650, unit: "m²", planned: 0 },
-      ];
+      return [];
     }
     // Aggregate services from all RDOs
     const serviceMap = new Map<string, { qty: number; unit: string }>();
@@ -285,46 +284,371 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
       .slice(0, 10);
   }, [rdos]);
 
-  // EVM
-  const BAC = 850000;
-  const EV = 380000;
-  const AC = 365000;
-  const PV = 425000;
-  const CPI = EV / AC;
-  const SPI = EV / PV;
+  // Save financials to localStorage when they change
+  useEffect(() => { saveFinancialsToStorage(financials); }, [financials]);
+  useEffect(() => { localStorage.setItem("hydronetwork_rdo_bac", JSON.stringify(budgetBAC)); }, [budgetBAC]);
+
+  // EVM from real data - AC = total of financial entries (absolute), EV/PV from progress
+  const AC = useMemo(() => financials.reduce((s, f) => s + Math.abs(f.value), 0), [financials]);
+  const BAC = budgetBAC > 0 ? budgetBAC : AC > 0 ? AC * (100 / Math.max(progressPercent, 1)) : 0;
+  const EV = BAC * (progressPercent / 100);
+  const PV = useMemo(() => {
+    if (BAC <= 0) return 0;
+    // PV based on elapsed calendar proportion if we have RDO dates
+    if (rdos.length < 2) return BAC * (progressPercent / 100);
+    const dates = rdos.map(r => new Date(r.date).getTime()).sort((a, b) => a - b);
+    const firstDate = dates[0];
+    const lastDate = dates[dates.length - 1];
+    const elapsed = lastDate - firstDate;
+    if (elapsed <= 0) return BAC * (progressPercent / 100);
+    // Assume linear planning
+    const totalDurationEstimate = elapsed / Math.max(progressPercent / 100, 0.01);
+    const elapsedRatio = elapsed / totalDurationEstimate;
+    return BAC * Math.min(elapsedRatio, 1);
+  }, [BAC, rdos, progressPercent]);
+  const CPI = AC > 0 ? EV / AC : 0;
+  const SPI = PV > 0 ? EV / PV : 0;
   const CV = EV - AC;
   const SV = EV - PV;
-  const EAC = BAC / CPI;
-  const ETC = EAC - AC;
+  const EAC = CPI > 0 ? BAC / CPI : 0;
+  const ETC = EAC > 0 ? EAC - AC : 0;
   const VAC = BAC - EAC;
-  const TCPI = (BAC - EV) / (BAC - AC);
+  const TCPI = (BAC - AC) > 0 ? (BAC - EV) / (BAC - AC) : 0;
 
-  // Curva S data
-  const curvaSData = [
-    { month: "Jan", pv: 5, ev: 4.5, ac: 4.2 },
-    { month: "Fev", pv: 15, ev: 13, ac: 14 },
-    { month: "Mar", pv: 30, ev: 25, ac: 27 },
-    { month: "Abr", pv: 50, ev: 44.7, ac: 42.9 },
-    { month: "Mai", pv: 70, ev: null, ac: null },
-    { month: "Jun", pv: 85, ev: null, ac: null },
-    { month: "Jul", pv: 95, ev: null, ac: null },
-    { month: "Ago", pv: 100, ev: null, ac: null },
-  ];
+  // Curva S data from real financial entries by month
+  const curvaSData = useMemo(() => {
+    if (financials.length === 0 && rdos.length === 0) return [];
+    // Build monthly data from financials
+    const monthMap = new Map<string, { ac: number; ev: number }>();
+    for (const f of financials) {
+      const m = f.date.slice(0, 7); // YYYY-MM
+      const entry = monthMap.get(m) || { ac: 0, ev: 0 };
+      entry.ac += Math.abs(f.value);
+      monthMap.set(m, entry);
+    }
+    // Build monthly execution from RDOs
+    for (const rdo of rdos) {
+      const m = rdo.date.slice(0, 7);
+      const execThisRDO = rdo.segments.reduce((s, seg) => s + seg.executedToday, 0);
+      const entry = monthMap.get(m) || { ac: 0, ev: 0 };
+      entry.ev += execThisRDO;
+      monthMap.set(m, entry);
+    }
+    const months = Array.from(monthMap.keys()).sort();
+    if (months.length === 0) return [];
+    let cumAC = 0;
+    let cumEV = 0;
+    return months.map((m, i) => {
+      const data = monthMap.get(m)!;
+      cumAC += data.ac;
+      cumEV += data.ev;
+      const acPct = BAC > 0 ? (cumAC / BAC) * 100 : 0;
+      const evPct = totalPlanned > 0 ? (cumEV / totalPlanned) * 100 : 0;
+      const pvPct = months.length > 0 ? ((i + 1) / months.length) * 100 : 0;
+      const label = new Date(m + "-01").toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+      return { month: label, pv: Math.min(pvPct, 100), ev: Math.min(evPct, 100), ac: Math.min(acPct, 100) };
+    });
+  }, [financials, rdos, BAC, totalPlanned]);
 
-  // Daily chart
-  const dailyData = Array.from({ length: 30 }, (_, i) => ({
-    day: `D${i + 1}`,
-    executado: Math.min(totalExecuted, Math.round(totalExecuted * ((i + 1) / 30) + Math.random() * 20)),
-  }));
+  // Daily chart from real RDO execution data
+  const dailyData = useMemo(() => {
+    if (rdos.length === 0) return [];
+    const dayMap = new Map<string, number>();
+    for (const rdo of rdos) {
+      const execToday = rdo.segments.reduce((s, seg) => s + seg.executedToday, 0);
+      const svcQty = rdo.services.reduce((s, svc) => s + svc.quantity, 0);
+      const existing = dayMap.get(rdo.date) || 0;
+      dayMap.set(rdo.date, existing + execToday + svcQty);
+    }
+    const days = Array.from(dayMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    let cumulative = 0;
+    return days.map(([date, qty]) => {
+      cumulative += qty;
+      return { day: new Date(date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }), executado: cumulative };
+    });
+  }, [rdos]);
 
-  // Cost by category
-  const costByCategory = [
-    { name: "Mão de Obra", value: 145000, color: "#3b82f6" },
-    { name: "Materiais", value: 82000, color: "#22c55e" },
-    { name: "Equipamentos", value: 18500, color: "#f59e0b" },
-    { name: "Transporte", value: 8500, color: "#8b5cf6" },
-    { name: "Administrativo", value: 15000, color: "#ef4444" },
-  ];
+  // Cost by category from real financial entries
+  const CATEGORY_COLORS: Record<string, string> = { "Mão de Obra": "#3b82f6", "Materiais": "#22c55e", "Equipamentos": "#f59e0b", "Transporte": "#8b5cf6", "Administrativo": "#ef4444", "Outros": "#6b7280" };
+  const costByCategory = useMemo(() => {
+    const catMap = new Map<string, number>();
+    for (const f of financials) {
+      const cat = f.category || "Outros";
+      catMap.set(cat, (catMap.get(cat) || 0) + Math.abs(f.value));
+    }
+    return Array.from(catMap.entries()).map(([name, value]) => ({
+      name, value, color: CATEGORY_COLORS[name] || "#6b7280",
+    }));
+  }, [financials]);
+
+  // ── PDF Export with ALL dashboards ──
+  const handleExportPDF = useCallback(() => {
+    const doc = new jsPDF();
+    const now = new Date().toLocaleDateString("pt-BR");
+    let y = 15;
+
+    // Title
+    doc.setFontSize(18);
+    doc.text("Relatorio Diario de Obra - RDO Hydro", 14, y); y += 8;
+    doc.setFontSize(10);
+    doc.text(`Gerado em: ${now}`, 14, y); y += 10;
+
+    // Summary
+    doc.setFontSize(14);
+    doc.text("Resumo Geral", 14, y); y += 6;
+    (doc as any).autoTable({
+      startY: y,
+      head: [["Indicador", "Valor"]],
+      body: [
+        ["Total de RDOs", String(rdos.length)],
+        ["Progresso Geral", `${fmt(progressPercent)}%`],
+        ["Metros Executados", `${totalExecuted.toFixed(2)} m`],
+        ["Total Planejado", `${totalPlanned.toFixed(2)} m`],
+        ["Restante", `${(totalPlanned - totalExecuted).toFixed(2)} m`],
+      ],
+      theme: "grid",
+      headStyles: { fillColor: [59, 130, 246] },
+    });
+    y = (doc as any).lastAutoTable.finalY + 10;
+
+    // Progress by system
+    doc.setFontSize(14);
+    doc.text("Progresso por Sistema", 14, y); y += 6;
+    (doc as any).autoTable({
+      startY: y,
+      head: [["Sistema", "Planejado (m)", "Executado (m)", "Progresso (%)"]],
+      body: [
+        ["Agua", aguaP.planned.toFixed(2), aguaP.executed.toFixed(2), `${fmt(aguaP.percent)}%`],
+        ["Esgoto", esgotoP.planned.toFixed(2), esgotoP.executed.toFixed(2), `${fmt(esgotoP.percent)}%`],
+        ["Drenagem", drenagemP.planned.toFixed(2), drenagemP.executed.toFixed(2), `${fmt(drenagemP.percent)}%`],
+      ],
+      theme: "grid",
+      headStyles: { fillColor: [34, 197, 94] },
+    });
+    y = (doc as any).lastAutoTable.finalY + 10;
+
+    // Segment detail
+    if (activeSegments.length > 0) {
+      doc.addPage();
+      y = 15;
+      doc.setFontSize(14);
+      doc.text("Detalhamento por Trecho", 14, y); y += 6;
+      (doc as any).autoTable({
+        startY: y,
+        head: [["Trecho", "Sistema", "Planejado (m)", "Executado (m)", "Progresso (%)", "Status"]],
+        body: activeSegments.map(seg => {
+          const pct = seg.planned > 0 ? (seg.executed / seg.planned) * 100 : 0;
+          const status = pct >= 100 ? "Concluido" : pct > 0 ? "Em Execucao" : "Nao Iniciado";
+          return [seg.id, seg.system, seg.planned.toFixed(2), seg.executed.toFixed(2), `${fmt(pct)}%`, status];
+        }),
+        theme: "grid",
+        headStyles: { fillColor: [139, 92, 246] },
+        styles: { fontSize: 8 },
+      });
+      y = (doc as any).lastAutoTable.finalY + 10;
+    }
+
+    // Top services
+    if (topServices.length > 0) {
+      if (y > 220) { doc.addPage(); y = 15; }
+      doc.setFontSize(14);
+      doc.text("Servicos Mais Executados", 14, y); y += 6;
+      (doc as any).autoTable({
+        startY: y,
+        head: [["Servico", "Quantidade", "Unidade"]],
+        body: topServices.map(s => [s.name, s.qty.toFixed(2), s.unit]),
+        theme: "grid",
+        headStyles: { fillColor: [245, 158, 11] },
+      });
+      y = (doc as any).lastAutoTable.finalY + 10;
+    }
+
+    // Financial summary (EVM)
+    if (BAC > 0 || AC > 0) {
+      doc.addPage();
+      y = 15;
+      doc.setFontSize(14);
+      doc.text("Controle Financeiro (EVM)", 14, y); y += 6;
+      (doc as any).autoTable({
+        startY: y,
+        head: [["Indicador", "Valor"]],
+        body: [
+          ["Orcamento Total (BAC)", fmtCurrency(BAC)],
+          ["Valor Agregado (EV)", fmtCurrency(EV)],
+          ["Custo Real (AC)", fmtCurrency(AC)],
+          ["Valor Planejado (PV)", fmtCurrency(PV)],
+          ["CPI (Desempenho Custo)", CPI.toFixed(2)],
+          ["SPI (Desempenho Prazo)", SPI.toFixed(2)],
+          ["Variacao Custo (CV)", fmtCurrency(CV)],
+          ["Variacao Prazo (SV)", fmtCurrency(SV)],
+          ["Estimativa Final (EAC)", fmtCurrency(EAC)],
+          ["Custo Restante (ETC)", fmtCurrency(ETC)],
+        ],
+        theme: "grid",
+        headStyles: { fillColor: [99, 102, 241] },
+      });
+      y = (doc as any).lastAutoTable.finalY + 10;
+    }
+
+    // Financial entries
+    if (financials.length > 0) {
+      if (y > 200) { doc.addPage(); y = 15; }
+      doc.setFontSize(14);
+      doc.text("Lancamentos Financeiros", 14, y); y += 6;
+      (doc as any).autoTable({
+        startY: y,
+        head: [["Data", "Categoria", "Descricao", "Valor"]],
+        body: financials.map(f => [
+          new Date(f.date).toLocaleDateString("pt-BR"),
+          f.category,
+          f.description,
+          fmtCurrency(f.value),
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [239, 68, 68] },
+        styles: { fontSize: 8 },
+      });
+      y = (doc as any).lastAutoTable.finalY + 10;
+    }
+
+    // RDO list
+    if (rdos.length > 0) {
+      doc.addPage();
+      y = 15;
+      doc.setFontSize(14);
+      doc.text("Lista de RDOs", 14, y); y += 6;
+      (doc as any).autoTable({
+        startY: y,
+        head: [["Data", "Projeto", "Status", "Servicos", "Trechos", "Metros Exec."]],
+        body: rdos.map(rdo => {
+          const metros = rdo.segments.reduce((s, seg) => s + seg.executedBefore + seg.executedToday, 0);
+          return [
+            new Date(rdo.date).toLocaleDateString("pt-BR"),
+            rdo.projectName,
+            rdo.status,
+            String(rdo.services.length),
+            String(rdo.segments.length),
+            metros.toFixed(2),
+          ];
+        }),
+        theme: "grid",
+        headStyles: { fillColor: [59, 130, 246] },
+        styles: { fontSize: 8 },
+      });
+
+      // Detail for each RDO
+      for (const rdo of rdos) {
+        doc.addPage();
+        y = 15;
+        doc.setFontSize(14);
+        doc.text(`RDO - ${new Date(rdo.date).toLocaleDateString("pt-BR")} - ${rdo.projectName}`, 14, y); y += 6;
+        doc.setFontSize(10);
+        doc.text(`Status: ${rdo.status} | Obra: ${rdo.obraName || "-"}`, 14, y); y += 5;
+        if (rdo.notes) { doc.text(`Observacoes: ${rdo.notes}`, 14, y); y += 5; }
+        if (rdo.occurrences) { doc.text(`Ocorrencias: ${rdo.occurrences}`, 14, y); y += 5; }
+        y += 3;
+
+        if (rdo.services.length > 0) {
+          doc.text("Servicos Executados:", 14, y); y += 5;
+          (doc as any).autoTable({
+            startY: y,
+            head: [["Servico", "Quantidade", "Unidade", "Equipamento", "Funcionario"]],
+            body: rdo.services.map(s => [s.serviceName, s.quantity.toFixed(2), s.unit, s.equipment || "-", s.employeeName || "-"]),
+            theme: "grid",
+            styles: { fontSize: 8 },
+          });
+          y = (doc as any).lastAutoTable.finalY + 5;
+        }
+
+        if (rdo.segments.length > 0) {
+          doc.text("Avanco por Trecho:", 14, y); y += 5;
+          (doc as any).autoTable({
+            startY: y,
+            head: [["Trecho", "Sistema", "Planejado (m)", "Exec. Anterior (m)", "Exec. Hoje (m)", "Total (m)"]],
+            body: rdo.segments.map(s => [s.segmentName, s.system, s.plannedTotal.toFixed(2), s.executedBefore.toFixed(2), s.executedToday.toFixed(2), (s.executedBefore + s.executedToday).toFixed(2)]),
+            theme: "grid",
+            styles: { fontSize: 8 },
+          });
+        }
+      }
+    }
+
+    // Equipments
+    if (equipments.length > 0) {
+      doc.addPage();
+      y = 15;
+      doc.setFontSize(14);
+      doc.text("Equipamentos", 14, y); y += 6;
+      (doc as any).autoTable({
+        startY: y,
+        head: [["Nome", "Tipo", "Placa", "Proprietario", "Custo/Hora", "Status"]],
+        body: equipments.map(e => [e.nome, e.tipo, e.placa || "-", e.proprietario || "-", e.custoHora > 0 ? fmtCurrency(e.custoHora) : "-", e.status]),
+        theme: "grid",
+        headStyles: { fillColor: [245, 158, 11] },
+        styles: { fontSize: 8 },
+      });
+    }
+
+    doc.save(`rdo-hydro-completo-${new Date().toISOString().split("T")[0]}.pdf`);
+    toast.success("PDF completo exportado com todos os dashboards e informacoes!");
+  }, [rdos, activeSegments, financials, equipments, totalPlanned, totalExecuted, progressPercent, aguaP, esgotoP, drenagemP, topServices, BAC, EV, AC, PV, CPI, SPI, CV, SV, EAC, ETC]);
+
+  // ── Excel Export ──
+  const handleExportExcel = useCallback(() => {
+    const wb = XLSX.utils.book_new();
+
+    // Summary
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([
+      { Indicador: "Total de RDOs", Valor: rdos.length },
+      { Indicador: "Progresso Geral (%)", Valor: progressPercent },
+      { Indicador: "Metros Executados", Valor: totalExecuted },
+      { Indicador: "Total Planejado", Valor: totalPlanned },
+      { Indicador: "BAC (Orcamento)", Valor: BAC },
+      { Indicador: "AC (Custo Real)", Valor: AC },
+      { Indicador: "EV (Valor Agregado)", Valor: EV },
+      { Indicador: "CPI", Valor: CPI },
+      { Indicador: "SPI", Valor: SPI },
+    ]), "Resumo");
+
+    // Segments
+    if (activeSegments.length > 0) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+        activeSegments.map(seg => {
+          const pct = seg.planned > 0 ? (seg.executed / seg.planned) * 100 : 0;
+          return { Trecho: seg.id, Sistema: seg.system, Frente: seg.frente, Lote: seg.lote, "Planejado (m)": seg.planned, "Executado (m)": seg.executed, "Progresso (%)": pct };
+        })
+      ), "Trechos");
+    }
+
+    // RDOs
+    if (rdos.length > 0) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+        rdos.map(rdo => ({
+          Data: rdo.date, Projeto: rdo.projectName, Status: rdo.status,
+          Servicos: rdo.services.length, Trechos: rdo.segments.length,
+          "Metros Exec.": rdo.segments.reduce((s, seg) => s + seg.executedBefore + seg.executedToday, 0),
+          Observacoes: rdo.notes || "",
+        }))
+      ), "RDOs");
+    }
+
+    // Financials
+    if (financials.length > 0) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+        financials.map(f => ({ Data: f.date, Categoria: f.category, Descricao: f.description, Valor: f.value, Tipo: f.type }))
+      ), "Financeiro");
+    }
+
+    // Equipment
+    if (equipments.length > 0) {
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+        equipments.map(e => ({ Nome: e.nome, Tipo: e.tipo, Placa: e.placa, Proprietario: e.proprietario, "Custo Hora": e.custoHora, Status: e.status }))
+      ), "Equipamentos");
+    }
+
+    XLSX.writeFile(wb, `rdo-hydro-completo-${new Date().toISOString().split("T")[0]}.xlsx`);
+    toast.success("Excel exportado!");
+  }, [rdos, activeSegments, financials, equipments, totalPlanned, totalExecuted, progressPercent, BAC, AC, EV, CPI, SPI]);
 
   return (
     <div className="space-y-4">
@@ -358,7 +682,8 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
         ].map(({ key, icon, label }) => (
           <Button key={key} variant={view === key ? "default" : "outline"} size="sm" onClick={() => setView(key as any)}>{icon}{label}</Button>
         ))}
-        <Button variant="outline" size="sm" onClick={() => toast.info("Importar trechos planejados")}><ArrowDownToLine className="h-4 w-4 inline-block mr-1" /> Importar Planejamento</Button>
+        <Button variant="outline" size="sm" onClick={handleExportPDF}><Download className="h-4 w-4 inline-block mr-1" /> Exportar PDF</Button>
+        <Button variant="outline" size="sm" onClick={handleExportExcel}><Download className="h-4 w-4 inline-block mr-1" /> Exportar Excel</Button>
         {onPontosChange && onTrechosChange && (
           <>
             <Button variant="outline" size="sm" onClick={() => topoInputRef.current?.click()}>
@@ -397,9 +722,8 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
               <CardHeader>
                 <CardTitle><TrendingUp className="h-4 w-4 inline-block mr-1" /> Avanço Diário (Acumulado)</CardTitle>
                 <CardDescription className="text-xs">
-                  Fonte: {trechos.length > 0 ? `${activeSegments.length} trechos da topografia carregada` : "dados de exemplo (mock)"} 
+                  {trechos.length > 0 ? `Fonte: ${activeSegments.length} trechos da topografia carregada` : "Importe topografia para visualizar dados reais"}
                   {rdos.length > 0 ? ` + ${rdos.length} RDOs registrados` : ""}.
-                  Valores acumulados calculados a partir dos metros executados por trecho.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -446,8 +770,8 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                     <span className="text-sm font-medium">{sys.icon} {sys.label}</span>
                     <span className="text-sm font-bold">{fmt(sys.data.percent)}%</span>
                   </div>
-                  <div className="w-full h-3 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(sys.data.percent, 100)}%`, backgroundColor: sys.color }} />
+                  <div className="w-full h-3 bg-muted overflow-hidden">
+                    <div className="h-full transition-all" style={{ width: `${Math.min(sys.data.percent, 100)}%`, backgroundColor: sys.color }} />
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">{sys.data.executed} / {sys.data.planned} m</div>
                 </div>
@@ -462,7 +786,7 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
               <CardDescription className="text-xs">
                 {rdos.length > 0
                   ? `Dados agregados de ${rdos.length} RDOs registrados`
-                  : "Dados de exemplo (registre RDOs para dados reais)"}
+                  : "Registre RDOs para visualizar dados reais"}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -476,8 +800,8 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                         <span className="text-sm font-medium">{s.name}</span>
                         <Badge variant="outline">{s.qty.toLocaleString("pt-BR")} {s.unit}</Badge>
                       </div>
-                      <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-                        <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${barWidth}%` }} />
+                      <div className="w-full h-2 bg-muted overflow-hidden">
+                        <div className="h-full bg-blue-500 transition-all" style={{ width: `${barWidth}%` }} />
                       </div>
                       {s.planned > 0 && (
                         <div className="text-xs text-muted-foreground">
@@ -605,8 +929,8 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                         <TableCell>{seg.executed.toFixed(2)}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${Math.min(isManualDone ? 100 : pct, 100)}%`, backgroundColor: effectiveStatus === "Concluido" ? "#22c55e" : pct > 0 ? "#f59e0b" : "#ef4444" }} />
+                            <div className="w-24 h-2 bg-muted overflow-hidden">
+                              <div className="h-full" style={{ width: `${Math.min(isManualDone ? 100 : pct, 100)}%`, backgroundColor: effectiveStatus === "Concluido" ? "#22c55e" : pct > 0 ? "#f59e0b" : "#ef4444" }} />
                             </div>
                             <span className="text-xs">{isManualDone ? "100,0" : fmt(pct)}%</span>
                           </div>
@@ -629,9 +953,77 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
           <Card>
             <CardHeader>
               <CardTitle><DollarSign className="h-4 w-4 inline-block mr-1" /> Controle Financeiro da Obra</CardTitle>
-              <CardDescription>Acompanhe o desempenho financeiro com indicadores EVM (Earned Value Management).</CardDescription>
+              <CardDescription>Acompanhe o desempenho financeiro com indicadores EVM (Earned Value Management). Adicione lancamentos financeiros reais para calculos precisos.</CardDescription>
             </CardHeader>
             <CardContent>
+              {/* BAC input */}
+              <div className="flex items-center gap-3 mb-4 p-3 bg-muted/50 rounded">
+                <Label className="text-xs whitespace-nowrap">Orcamento Total (BAC) R$:</Label>
+                <Input
+                  type="number"
+                  step={0.01}
+                  className="h-8 w-48"
+                  value={budgetBAC || ""}
+                  placeholder="Informe o orcamento total"
+                  onChange={e => setBudgetBAC(Number(e.target.value))}
+                />
+                <span className="text-xs text-muted-foreground">{financials.length === 0 ? "Adicione lancamentos financeiros para ver os indicadores EVM" : `${financials.length} lancamento(s) registrado(s)`}</span>
+              </div>
+
+              {/* Add financial form */}
+              {showAddFinancial && (
+                <Card className="border-primary/30 bg-primary/5 mb-4">
+                  <CardContent className="pt-4 space-y-3">
+                    <p className="font-semibold text-sm">Novo Lancamento Financeiro</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div>
+                        <Label className="text-xs">Data *</Label>
+                        <Input type="date" value={newFinancial.date || ""} onChange={e => setNewFinancial({ ...newFinancial, date: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Categoria</Label>
+                        <Select value={newFinancial.category || "Materiais"} onValueChange={v => setNewFinancial({ ...newFinancial, category: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {["Mão de Obra", "Materiais", "Equipamentos", "Transporte", "Administrativo", "Outros"].map(c => (
+                              <SelectItem key={c} value={c}>{c}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Descricao *</Label>
+                        <Input placeholder="Ex: Tubulacao PVC" value={newFinancial.description || ""} onChange={e => setNewFinancial({ ...newFinancial, description: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Valor (R$) *</Label>
+                        <Input type="number" step={0.01} placeholder="Ex: -15000" value={newFinancial.value || ""} onChange={e => setNewFinancial({ ...newFinancial, value: Number(e.target.value) })} />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => {
+                        if (!newFinancial.date || !newFinancial.description || !newFinancial.value) { toast.error("Preencha data, descricao e valor."); return; }
+                        const entry: FinancialEntry = {
+                          id: crypto.randomUUID(),
+                          date: newFinancial.date,
+                          category: newFinancial.category || "Outros",
+                          description: newFinancial.description,
+                          value: newFinancial.value < 0 ? newFinancial.value : -Math.abs(newFinancial.value),
+                          type: "despesa",
+                        };
+                        setFinancials([...financials, entry]);
+                        setNewFinancial({ category: "Materiais", type: "despesa" });
+                        setShowAddFinancial(false);
+                        toast.success("Lancamento adicionado!");
+                      }}>
+                        <Plus className="h-4 w-4 mr-1" /> Adicionar
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setShowAddFinancial(false)}>Cancelar</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* EVM Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <Card><CardContent className="pt-3 text-center"><span className="text-lg"><ClipboardList className="h-5 w-5 inline-block" /></span><div className="text-xl font-bold">{fmtCurrency(BAC)}</div><div className="text-xs text-muted-foreground">Orçamento Total (BAC)</div></CardContent></Card>
@@ -727,9 +1119,9 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base"><DollarSign className="h-4 w-4 inline-block mr-1" /> Lançamentos Financeiros</CardTitle>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => toast.info("Adicionar lançamento")}><Plus className="h-4 w-4 mr-1" /> Novo Lançamento</Button>
-                      <Button size="sm" variant="outline" onClick={() => toast.info("Importar Excel")}><Upload className="h-4 w-4 mr-1" /> Importar Excel</Button>
-                      <Button size="sm" variant="outline" onClick={() => toast.info("Exportar relatório")}><Download className="h-4 w-4 mr-1" /> Exportar Relatório</Button>
+                      <Button size="sm" variant="outline" onClick={() => setShowAddFinancial(!showAddFinancial)}><Plus className="h-4 w-4 mr-1" /> Novo Lancamento</Button>
+                      <Button size="sm" variant="outline" onClick={handleExportPDF}><Download className="h-4 w-4 mr-1" /> Exportar PDF</Button>
+                      <Button size="sm" variant="outline" onClick={handleExportExcel}><Download className="h-4 w-4 mr-1" /> Exportar Excel</Button>
                     </div>
                   </div>
                 </CardHeader>
@@ -762,7 +1154,7 @@ export const RDOHydroModule = ({ pontos, trechos, rdos, setRdos, onPontosChange,
                         }).map(f => (
                           <TableRow key={f.id}>
                             <TableCell className="text-sm">{new Date(f.date).toLocaleDateString("pt-BR")}</TableCell>
-                            <TableCell><span className="mr-1">{f.categoryIcon}</span>{f.category}</TableCell>
+                            <TableCell><span className="mr-1">{CATEGORY_ICONS[f.category] || CATEGORY_ICONS["Outros"]}</span>{f.category}</TableCell>
                             <TableCell className="text-sm">{f.description}</TableCell>
                             <TableCell className="text-right font-mono text-sm text-red-600">{fmtCurrency(f.value)}</TableCell>
                             <TableCell><Badge variant="outline">Despesa</Badge></TableCell>

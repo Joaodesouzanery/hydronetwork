@@ -313,7 +313,7 @@ function LookaheadTab({ data, trechos, onSave }: { data: LPSData; trechos: Trech
             {weeks.map((week, wi) => {
               const weekTasks = data.lookaheadTasks.filter(t => t.semana === wi + 1);
               return (
-                <div key={week.weekId} className="border rounded-lg p-3">
+                <div key={week.weekId} className="border p-3">
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="font-medium text-sm">{week.label}</h4>
                     <Badge variant="outline" className="text-xs">{weekTasks.length} tarefas</Badge>
@@ -325,7 +325,7 @@ function LookaheadTab({ data, trechos, onSave }: { data: LPSData; trechos: Trech
                       {weekTasks.map(task => (
                         <div key={task.id} className="flex items-center justify-between bg-muted/40 rounded p-2 text-xs">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <div className={`w-2 h-2 rounded-full ${prioridadeColors[task.prioridade]}`} title={`Prioridade: ${task.prioridade}`} />
+                            <div className={`w-2 h-2 ${prioridadeColors[task.prioridade]}`} title={`Prioridade: ${task.prioridade}`} />
                             <span className="font-medium truncate">{task.descricao}</span>
                             <Badge variant="outline" className="text-[10px]">{task.frenteServico}</Badge>
                             <Badge variant="outline" className="text-[10px]">{task.equipe}</Badge>
@@ -555,7 +555,7 @@ function WeeklyTab({ data, trechos, onSave }: { data: LPSData; trechos: Trecho[]
           ) : (
             <div className="space-y-3">
               {/* Week summary */}
-              <div className="flex items-center gap-4 p-3 bg-muted/40 rounded-lg">
+              <div className="flex items-center gap-4 p-3 bg-muted/40">
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-medium">PPC da Semana: {weekPPC}%</span>

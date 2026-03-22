@@ -39,7 +39,7 @@ export function TimelineItem({ record, config, isLast }: TimelineItemProps) {
     <div className="flex gap-4">
       {/* Timeline connector */}
       <div className="flex flex-col items-center">
-        <div className={`w-10 h-10 rounded-full ${config.color} flex items-center justify-center text-white shadow-md`}>
+        <div className={`w-10 h-10 ${config.color} flex items-center justify-center text-white shadow-md`}>
           <Icon className="h-5 w-5" />
         </div>
         {!isLast && <div className="w-0.5 flex-1 bg-border mt-2" />}
@@ -47,7 +47,7 @@ export function TimelineItem({ record, config, isLast }: TimelineItemProps) {
 
       {/* Content */}
       <div className="flex-1 pb-6">
-        <div className="bg-card border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+        <div className="bg-card border p-4 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-start justify-between mb-2">
             <div>
               <Badge variant="secondary" className="mb-2">
@@ -121,7 +121,7 @@ export function TimelineItem({ record, config, isLast }: TimelineItemProps) {
                 <DialogContent className="max-w-2xl max-h-[80vh]">
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                      <div className={`w-8 h-8 rounded-full ${config.color} flex items-center justify-center text-white`}>
+                      <div className={`w-8 h-8 ${config.color} flex items-center justify-center text-white`}>
                         <Icon className="h-4 w-4" />
                       </div>
                       {record.title}
@@ -155,7 +155,7 @@ export function TimelineItem({ record, config, isLast }: TimelineItemProps) {
                       {record.description && (
                         <div>
                           <span className="font-medium text-muted-foreground text-sm">Descrição:</span>
-                          <p className="mt-1 text-sm bg-muted/50 p-3 rounded-lg">{record.description}</p>
+                          <p className="mt-1 text-sm bg-muted/50 p-3">{record.description}</p>
                         </div>
                       )}
 
@@ -169,7 +169,7 @@ export function TimelineItem({ record, config, isLast }: TimelineItemProps) {
                                 <img 
                                   src={url} 
                                   alt={`Foto ${idx + 1}`} 
-                                  className="w-full h-24 object-cover rounded-lg border hover:opacity-80 transition-opacity"
+                                  className="w-full h-24 object-cover border hover:opacity-80 transition-opacity"
                                 />
                               </a>
                             ))}

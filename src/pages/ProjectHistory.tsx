@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { 
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
+import {
   ArrowLeft, 
   Download, 
   Filter, 
@@ -389,9 +390,11 @@ export default function ProjectHistory() {
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
                 <div>
-                  <h1 className="text-2xl font-bold">Histórico da Obra</h1>
+                  <h1 className="text-2xl font-bold font-mono">Histórico da Obra</h1>
                   <p className="text-muted-foreground">{project?.name}</p>
                 </div>
+
+              <PullDataPanel currentModule="obras" />
               </div>
               <div className="flex gap-2">
                 <Button 

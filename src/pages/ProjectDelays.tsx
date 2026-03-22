@@ -15,6 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { calculateProjectDelays, summarizeDelays, getDelayStatusColor, type ProjectDelay } from "@/utils/projectDelays";
 import { DELAY_THRESHOLDS, isValidEmail } from "@/config/defaults";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 import {
   Clock, AlertTriangle, CheckCircle, XCircle, Building2,
   Bell, Mail, TrendingDown, BarChart3, Calendar, ArrowRight
@@ -107,6 +108,8 @@ const ProjectDelays = () => {
             <Clock className="h-12 w-12 animate-pulse text-muted-foreground" />
           </main>
         </div>
+
+      <PullDataPanel currentModule="obras" />
       </SidebarProvider>
     );
   }
@@ -119,7 +122,7 @@ const ProjectDelays = () => {
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Header */}
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
+              <h1 className="text-3xl font-bold font-mono flex items-center gap-2">
                 <Clock className="h-8 w-8 text-red-600" /> Atrasos de Projeto
               </h1>
               <p className="text-muted-foreground mt-1">Monitore desvios entre progresso esperado e real de cada obra</p>

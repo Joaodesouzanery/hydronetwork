@@ -5,13 +5,14 @@
  * Now delegates to SewerModule and WaterModule to avoid code duplication.
  */
 
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Waves, Droplets } from "lucide-react";
 import { PontoTopografico } from "@/engine/reader";
 import { Trecho } from "@/engine/domain";
-import { SewerModule } from "@/components/hydronetwork/modules/SewerModule";
-import { WaterModule } from "@/components/hydronetwork/modules/WaterModule";
+
+const SewerModule = lazy(() => import("@/components/hydronetwork/modules/SewerModule").then(m => ({ default: m.SewerModule })));
+const WaterModule = lazy(() => import("@/components/hydronetwork/modules/WaterModule").then(m => ({ default: m.WaterModule })));
 
 interface QEsgWaterPanelProps {
   pontos?: PontoTopografico[];
@@ -34,11 +35,15 @@ export const QEsgWaterPanel = ({ pontos, trechos, onTrechosChange }: QEsgWaterPa
       </TabsList>
 
       <TabsContent value="qesg">
-        <SewerModule pontos={pontos} trechos={trechos} onTrechosChange={onTrechosChange} />
+        <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-b-2 border-primary" /></div>}>
+          <SewerModule pontos={pontos} trechos={trechos} onTrechosChange={onTrechosChange} />
+        </Suspense>
       </TabsContent>
 
       <TabsContent value="qwater">
-        <WaterModule pontos={pontos} trechos={trechos} onTrechosChange={onTrechosChange} />
+        <Suspense fallback={<div className="flex items-center justify-center py-12"><div className="animate-spin h-6 w-6 border-b-2 border-primary" /></div>}>
+          <WaterModule pontos={pontos} trechos={trechos} onTrechosChange={onTrechosChange} />
+        </Suspense>
       </TabsContent>
     </Tabs>
   );

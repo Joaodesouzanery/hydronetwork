@@ -113,9 +113,9 @@ export function WeeklyReportDialog({ open, onOpenChange, report, projectName = '
                   </Badge>
                 </div>
               </div>
-              <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div className="mt-2 h-2 bg-gray-200 overflow-hidden">
                 <div
-                  className={`h-full rounded-full ${report.ppc >= 75 ? 'bg-success' : report.ppc >= 50 ? 'bg-warning' : 'bg-destructive'}`}
+                  className={`h-full ${report.ppc >= 75 ? 'bg-success' : report.ppc >= 50 ? 'bg-warning' : 'bg-destructive'}`}
                   style={{ width: `${report.ppc}%` }}
                 />
               </div>
@@ -123,7 +123,7 @@ export function WeeklyReportDialog({ open, onOpenChange, report, projectName = '
           </Card>
 
           {/* Fluxo da semana */}
-          <div className="flex items-center justify-center gap-6 p-3 bg-muted rounded-lg">
+          <div className="flex items-center justify-center gap-6 p-3 bg-muted">
             <div className="text-center">
               <p className="text-2xl font-bold text-info">+{report.novasSemana}</p>
               <p className="text-xs text-muted-foreground">Novas</p>

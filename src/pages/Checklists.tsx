@@ -10,6 +10,7 @@ import { Building2, Plus, Trash2, ArrowLeft, CheckCircle2, Circle, XCircle } fro
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 const Checklists = () => {
   const navigate = useNavigate();
@@ -228,8 +229,8 @@ const Checklists = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+    <div className="min-h-screen bg-background">
+      <header className="border-b bg-card/50 sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -238,9 +239,9 @@ const Checklists = () => {
               </Button>
               <Button variant="ghost" onClick={() => navigate('/dashboard')}>
                 <Building2 className="w-6 h-6 mr-2" />
-                <span className="font-bold">ConstruData</span>
+                <span className="font-bold font-mono">CONSTRUDATA</span>
               </Button>
-              <h1 className="text-xl font-semibold">Checklists de Verificação</h1>
+              <h1 className="text-xl font-semibold font-mono">Checklists de Verificação</h1>
             </div>
             <div className="flex gap-2 items-center">
               <Select value={selectedProject} onValueChange={setSelectedProject}>
@@ -270,7 +271,7 @@ const Checklists = () => {
       <main className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {checklists.map(checklist => (
-            <Card key={checklist.id} className="hover:shadow-lg transition-shadow">
+            <Card key={checklist.id} className="hover:border-foreground/20 transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
@@ -308,7 +309,7 @@ const Checklists = () => {
             <Card className="col-span-full">
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Building2 className="w-16 h-16 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Nenhuma checklist cadastrada</h3>
+                <h3 className="text-lg font-semibold font-mono mb-2">Nenhuma checklist cadastrada</h3>
                 <p className="text-muted-foreground mb-4">Crie sua primeira checklist para começar</p>
                 <Button onClick={() => setShowDialog(true)}>
                   <Plus className="w-4 h-4 mr-2" />
@@ -318,6 +319,8 @@ const Checklists = () => {
             </Card>
           )}
         </div>
+
+      <PullDataPanel currentModule="checklists" />
       </main>
 
       {/* Dialog para criar checklist */}
@@ -390,7 +393,7 @@ const Checklists = () => {
             {/* Lista de itens */}
             <div className="space-y-2">
               {checklistItems.map(item => (
-                <div key={item.id} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-accent/5">
+                <div key={item.id} className="flex items-center gap-3 p-3 border rounded-none hover:bg-accent/5">
                   {getStatusIcon(item.status)}
                   <div className="flex-1">
                     <p className="text-sm">{item.description}</p>

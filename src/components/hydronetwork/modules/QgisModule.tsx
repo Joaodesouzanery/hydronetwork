@@ -250,22 +250,22 @@ export const QgisModule = ({ pontos = [], trechos = [] }: QgisModuleProps) => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <div className="border-2 border-blue-200 bg-white dark:bg-card rounded-xl p-4 text-center">
+            <div className="border-2 border-blue-200 bg-white dark:bg-card p-4 text-center">
               <MapPin className="h-8 w-8 mx-auto mb-1 text-red-500" />
               <div className="text-2xl font-bold text-blue-600">{localPontos.length}</div>
               <div className="text-xs text-muted-foreground font-medium">NÓS DA REDE</div>
             </div>
-            <div className="border-2 border-green-200 bg-white dark:bg-card rounded-xl p-4 text-center">
+            <div className="border-2 border-green-200 bg-white dark:bg-card p-4 text-center">
               <GitBranch className="h-8 w-8 mx-auto mb-1 text-green-600" />
               <div className="text-2xl font-bold text-green-600">{localTrechos.length}</div>
               <div className="text-xs text-muted-foreground font-medium">TRECHOS DA REDE</div>
             </div>
-            <div className="border-2 border-orange-200 bg-white dark:bg-card rounded-xl p-4 text-center">
+            <div className="border-2 border-orange-200 bg-white dark:bg-card p-4 text-center">
               <Ruler className="h-8 w-8 mx-auto mb-1 text-orange-500" />
               <div className="text-2xl font-bold text-orange-600">{totalExtension.toFixed(1)}</div>
               <div className="text-xs text-muted-foreground font-medium">EXTENSÃO TOTAL (m)</div>
             </div>
-            <div className="border-2 border-purple-200 bg-white dark:bg-card rounded-xl p-4 text-center">
+            <div className="border-2 border-purple-200 bg-white dark:bg-card p-4 text-center">
               <Layers className="h-8 w-8 mx-auto mb-1 text-purple-500" />
               <div className="text-2xl font-bold text-purple-600">{[layerNodes, layerLinks, layerAreas].filter(Boolean).length}</div>
               <div className="text-xs text-muted-foreground font-medium">CAMADAS ATIVAS</div>
@@ -390,7 +390,7 @@ export const QgisModule = ({ pontos = [], trechos = [] }: QgisModuleProps) => {
           {localPontos.length > 0 && (
             <div className="mt-4">
               <Label className="font-semibold mb-2 block">Prévia dos Dados ({localTrechos.length} trechos)</Label>
-              <div className="max-h-[250px] overflow-auto border rounded-lg">
+              <div className="max-h-[250px] overflow-auto border">
                 <Table>
                   <TableHeader>
                     <TableRow>

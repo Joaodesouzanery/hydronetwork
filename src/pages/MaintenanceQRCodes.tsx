@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { AddQRCodeDialog } from "@/components/maintenance/AddQRCodeDialog";
 import { QRCodeDialog } from "@/components/maintenance/QRCodeDialog";
 import { TutorialDialog } from "@/components/shared/TutorialDialog";
+import { PullDataPanel } from "@/components/shared/PullDataPanel";
 
 interface QRCodeItem {
   id: string;
@@ -112,7 +113,7 @@ export default function MaintenanceQRCodes() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
+              <h1 className="text-3xl font-bold font-mono flex items-center gap-2">
                 <QrCode className="h-8 w-8" />
                 QR Codes de Manutenção
               </h1>
@@ -120,6 +121,8 @@ export default function MaintenanceQRCodes() {
                 Gere QR Codes para locais da obra e receba solicitações de manutenção
               </p>
             </div>
+
+          <PullDataPanel currentModule="manutencao" />
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setShowTutorial(true)}>
