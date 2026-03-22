@@ -100,3 +100,4 @@ CREATE POLICY "Users can delete own maintenance photos"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id = 'maintenance-request-photos');
+n
