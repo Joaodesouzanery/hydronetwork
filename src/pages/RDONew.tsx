@@ -203,7 +203,7 @@ const RDONew = () => {
 
   const checkBelowTarget = (serviceId: string, quantity: number): boolean => {
     const target = productionTargets.find(
-      t => t.service_id === serviceId && new Date(t.target_date).toDateString() === new Date(reportDate).toDateString()
+      t => t.service_id === serviceId && new Date(t.target_date + 'T12:00:00').toDateString() === new Date(reportDate + 'T12:00:00').toDateString()
     );
     
     if (target && quantity < target.target_quantity) {
