@@ -600,7 +600,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
   // ── Histogram stats ──
   const histStats = useMemo(() => {
     if (!scheduleResult) return { peakLabor: 0, avgDaily: 0, totalHH: 0, equipDays: 0 };
-    const hist = scheduleResult.histogram;
+    const hist = scheduleResult.histogram ?? [];
     const peakLabor = hist.length > 0 ? hist.reduce((m, h) => h.labor > m ? h.labor : m, 0) : 0;
     const avgDaily = hist.length > 0 ? hist.reduce((s, h) => s + h.labor, 0) / hist.length : 0;
     const totalHH = hist.reduce((s, h) => s + h.labor * horasTrabalho, 0);
@@ -1326,7 +1326,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
                 {[
                   { label: "Dias Úteis", value: scheduleResult.totalDays, color: "text-blue-600" },
                   { label: "Início", value: new Date(dataInicio).toLocaleDateString("pt-BR"), color: "text-green-600" },
-                  { label: "Término", value: scheduleResult.endDate.toLocaleDateString("pt-BR"), color: "text-purple-600" },
+                  { label: "Término", value: new Date(scheduleResult.endDate).toLocaleDateString("pt-BR"), color: "text-purple-600" },
                   { label: "Custo Total", value: fmtCurrency(totalCost), color: "text-orange-600" },
                 ].map((c, i) => (
                   <div key={i} className="bg-muted/50 p-3 text-center">
@@ -1471,7 +1471,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
               <CardHeader><CardTitle className="text-base"><TrendingUp className="h-4 w-4 inline-block mr-1" /> Curva S</CardTitle></CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={scheduleResult.curveS}>
+                  <AreaChart data={scheduleResult.curveS ?? []}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="day" tickFormatter={d => `D${d}`} fontSize={10} />
                     <YAxis domain={[0, 100]} tickFormatter={v => `${v}%`} fontSize={10} />
@@ -1509,7 +1509,7 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={250}>
-                  <ComposedChart data={scheduleResult.histogram}>
+                  <ComposedChart data={scheduleResult.histogram ?? []}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="day" tickFormatter={d => `D${d}`} fontSize={10} />
                     <YAxis fontSize={10} />
@@ -1563,9 +1563,9 @@ export function PlanningModule({ pontos, trechos, networkSummary, scheduleResult
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {scheduleResult.allSegments.map((seg, i) => {
+                    {(scheduleResult.allSegments ?? []).map((seg, i) => {
                       const trechoLabel = ganttData.find(g => {
-                        const segsForTrecho = scheduleResult.allSegments.filter(s => s.trechoId === seg.trechoId);
+                        const segsForTrecho = (scheduleResult.allSegments ?? []).filter(s => s.trechoId === seg.trechoId);
                         return segsForTrecho.length > 0 && g.meters === Math.round(segsForTrecho.reduce((sum, s) => sum + s.meters, 0));
                       })?.id || `T${String(Array.from(new Set(scheduleResult.allSegments.map(s => s.trechoId))).indexOf(seg.trechoId) + 1).padStart(2, "0")}`;
                       return (
