@@ -11,7 +11,7 @@
  * - Table virtualization via @tanstack/react-virtual (DOM-efficient for 100+ rows)
  */
 
-import { useState, useMemo, useCallback, useRef, memo } from "react";
+import { useState, useMemo, useCallback, useRef, memo, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -67,6 +67,11 @@ import {
 } from "@/engine/gisExport";
 import type { CostRowExport, CustoImportItemExport } from "@/engine/gisExport";
 import { saveModuleData } from "@/engine/moduleExchange";
+import {
+  listAllProjects,
+  loadProjectFromSupabase,
+  type ProjectListItem,
+} from "@/engine/sharedPlanningStore";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -445,6 +450,43 @@ const MemoScheduleRow = memo(function MemoScheduleRow({ row, onFieldChange }: Sc
 // ── Main Component ──
 
 export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams, onTrechosChange }: TrechoEditModuleProps) {
+  // ── Project selection ──
+  const [projectList, setProjectList] = useState<ProjectListItem[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [projectTrechos, setProjectTrechos] = useState<Trecho[] | null>(null);
+  const [loadingProject, setLoadingProject] = useState(false);
+
+  // activeTrechos: usa os do projeto selecionado, ou os passados como prop
+  const activeTrechos = projectTrechos ?? trechos;
+
+  useEffect(() => {
+    listAllProjects().then(setProjectList).catch(() => {});
+  }, []);
+
+  const handleProjectSelect = useCallback(async (projectId: string) => {
+    setSelectedProjectId(projectId);
+    if (!projectId) {
+      setProjectTrechos(null);
+      return;
+    }
+    setLoadingProject(true);
+    try {
+      const result = await loadProjectFromSupabase(projectId);
+      if (result?.data?.trechos?.length) {
+        setProjectTrechos(result.data.trechos);
+        toast.success(`Projeto carregado: ${result.data.trechos.length} trechos disponíveis.`);
+      } else {
+        toast.error("Projeto sem trechos.");
+        setProjectTrechos(null);
+      }
+    } catch {
+      toast.error("Erro ao carregar projeto.");
+      setProjectTrechos(null);
+    } finally {
+      setLoadingProject(false);
+    }
+  }, []);
+
   const [activeTab, setActiveTab] = useState("quantitativos");
   const [searchFilter, setSearchFilter] = useState("");
   const [compMinFilter, setCompMinFilter] = useState("");
@@ -518,14 +560,14 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
   // ── Initialize rows from trechos ──
 
   const initializeRows = useCallback(() => {
-    if (trechos.length === 0) {
-      toast.error("Sem trechos carregados. Importe topografia primeiro.");
+    if (activeTrechos.length === 0) {
+      toast.error("Sem trechos carregados. Selecione um projeto ou importe topografia primeiro.");
       return;
     }
 
     const baseProfMin = 1.20;
 
-    const qRows: EditableQuantRow[] = trechos.map((t, idx) => {
+    const qRows: EditableQuantRow[] = activeTrechos.map((t, idx) => {
       const prof = Math.max(baseProfMin, 1.0 + t.diametroMm / 1000);
       const quant = computeQuantities(t, prof);
 
@@ -574,11 +616,11 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     setScheduleRows(sRows);
 
     // Save to shared module store for inter-module communication
-    saveModuleData("trechos", trechos);
+    saveModuleData("trechos", activeTrechos);
     saveModuleData("quantRows", qRows);
 
-    toast.success(`${trechos.length} trechos carregados para edição.`);
-  }, [trechos, quantityRows]);
+    toast.success(`${activeTrechos.length} trechos carregados para edição.`);
+  }, [activeTrechos, quantityRows]);
 
   // ── Filtering ──
 
@@ -1194,15 +1236,15 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     setColumnMapping(prev => prev ? { ...prev, confirmed: true } : prev);
 
     // Auto-calculate if we have trechos loaded
-    if (trechos.length > 0) {
-      const medTrechos = calcularMedicaoPorTrecho(trechos, quantityRows || [], items);
+    if (activeTrechos.length > 0) {
+      const medTrechos = calcularMedicaoPorTrecho(activeTrechos, quantityRows || [], items);
       setMedicaoTrechos(medTrechos);
       saveMedicaoTrechos(medTrechos);
       saveModuleData("medicaoTrechos", medTrechos);
     }
 
     toast.success(`${items.length} itens de medicao mapeados e importados${extraColumns.length > 0 ? ` com ${extraColumns.length} colunas extras` : ""}.`);
-  }, [columnMapping, trechos, quantityRows]);
+  }, [columnMapping, activeTrechos, quantityRows]);
 
   const cancelColumnMapping = useCallback(() => {
     setColumnMapping(null);
@@ -1311,7 +1353,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
   }, [schedGlobalProdutividade, schedGlobalEquipes, schedGlobalDataInicio]);
 
   const recalcularMedicaoHandler = useCallback(() => {
-    if (trechos.length === 0) {
+    if (activeTrechos.length === 0) {
       toast.error("Sem trechos carregados.");
       return;
     }
@@ -1326,7 +1368,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
       return;
     }
     const medTrechos = calcularMedicaoPorTrecho(
-      trechos,
+      activeTrechos,
       quantityRows || [],
       enabledItems,
     );
@@ -1348,13 +1390,13 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
     saveMedicaoTrechos(updatedMedTrechos);
     saveModuleData("medicaoTrechos", updatedMedTrechos);
     toast.success(`Medição recalculada com ${enabledItems.length} itens ativos.`);
-  }, [trechos, quantityRows, medicaoItems, medicaoEnabled, trechoExecStates]);
+  }, [activeTrechos, quantityRows, medicaoItems, medicaoEnabled, trechoExecStates]);
 
   // Execution tracking handlers
   const updateTrechoExecStatus = useCallback((trechoId: string, status: TrechoExecStatus) => {
     setTrechoExecStates(prev => {
       const current = prev[trechoId] || { status: "pendente", qtdExecutada: 0, dataExecucao: "", observacao: "" };
-      const trecho = trechos.find((_, idx) => `T${String(idx + 1).padStart(2, "0")}` === trechoId);
+      const trecho = activeTrechos.find((_, idx) => `T${String(idx + 1).padStart(2, "0")}` === trechoId);
       const comp = trecho?.comprimento || 0;
 
       const updated = {
@@ -1383,7 +1425,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
 
       return updated;
     });
-  }, [trechos]);
+  }, [activeTrechos]);
 
   const updateTrechoExecQtd = useCallback((trechoId: string, qtd: number) => {
     setTrechoExecStates(prev => {
@@ -1440,19 +1482,19 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
   }, []);
 
   const exportGeoJSONHandler = useCallback(() => {
-    downloadGeoJSON(trechos, quantityRows || [], medicaoTrechos, getCostRowsForExport());
+    downloadGeoJSON(activeTrechos, quantityRows || [], medicaoTrechos, getCostRowsForExport());
     toast.success("GeoJSON exportado com todos os atributos (incluindo custos).");
-  }, [trechos, quantityRows, medicaoTrechos, getCostRowsForExport]);
+  }, [activeTrechos, quantityRows, medicaoTrechos, getCostRowsForExport]);
 
   const exportGISCSVHandler = useCallback(() => {
-    downloadGISCSV(trechos, quantityRows || [], medicaoTrechos, getCostRowsForExport());
+    downloadGISCSV(activeTrechos, quantityRows || [], medicaoTrechos, getCostRowsForExport());
     toast.success("CSV GIS exportado com custos.");
-  }, [trechos, quantityRows, medicaoTrechos, getCostRowsForExport]);
+  }, [activeTrechos, quantityRows, medicaoTrechos, getCostRowsForExport]);
 
   const exportGISExcelHandler = useCallback(() => {
-    exportGISExcel(trechos, quantityRows || [], medicaoTrechos, getCostRowsForExport());
+    exportGISExcel(activeTrechos, quantityRows || [], medicaoTrechos, getCostRowsForExport());
     toast.success("XLSX GIS exportado com custos.");
-  }, [trechos, quantityRows, medicaoTrechos, getCostRowsForExport]);
+  }, [activeTrechos, quantityRows, medicaoTrechos, getCostRowsForExport]);
 
   const exportCustoSpreadsheetHandler = useCallback(() => {
     const cRows = getCostRowsForExport();
@@ -1709,9 +1751,27 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                 Edite quantitativos, valores e cronograma por trecho. Referência SINAPI 01/2026.
               </CardDescription>
             </div>
-            <Button size="sm" onClick={initializeRows} className="flex-shrink-0">
-              <RefreshCw className="h-4 w-4 mr-1" /> Carregar Trechos
-            </Button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Select value={selectedProjectId} onValueChange={handleProjectSelect} disabled={loadingProject}>
+                <SelectTrigger className="w-52 h-8 text-sm">
+                  <SelectValue placeholder={loadingProject ? "Carregando..." : "Selecionar projeto…"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">— Projeto atual —</SelectItem>
+                  {projectList.map(p => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nome}
+                      {p.trechosCount > 0 && (
+                        <span className="ml-1 text-muted-foreground text-xs">({p.trechosCount} trechos)</span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button size="sm" onClick={initializeRows} disabled={loadingProject}>
+                <RefreshCw className="h-4 w-4 mr-1" /> Carregar Trechos
+              </Button>
+            </div>
           </div>
           <div className="flex gap-2 flex-wrap pt-2">
             <Button size="sm" variant="outline" onClick={loadEdits}>
@@ -2807,7 +2867,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
         {/* ── Base Personalizada (Custom Cost) Tab ── */}
         <TabsContent value="base-personalizada">
           <ErrorBoundary moduleName="Base Personalizada">
-            <CustomCostTrechoModule trechos={trechos} />
+            <CustomCostTrechoModule trechos={activeTrechos} />
           </ErrorBoundary>
         </TabsContent>
       </Tabs>

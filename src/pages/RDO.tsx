@@ -21,8 +21,14 @@ const RDO = () => {
   const [selectedObra, setSelectedObra] = useState<string>("");
   const [showAddProject, setShowAddProject] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const getTodayLocalDate = () => {
+    const now = new Date();
+    const tzOffsetMs = now.getTimezoneOffset() * 60 * 1000;
+    return new Date(now.getTime() - tzOffsetMs).toISOString().split('T')[0];
+  };
+
   const [rdoData, setRdoData] = useState({
-    data: new Date().toISOString().split('T')[0],
+    data: getTodayLocalDate(),
     condicao_terreno: "",
     observacoes_gerais: "",
     localizacao_validada: "",
@@ -110,7 +116,7 @@ const RDO = () => {
       
       // Reset form
       setRdoData({
-        data: new Date().toISOString().split('T')[0],
+        data: getTodayLocalDate(),
         condicao_terreno: "",
         observacoes_gerais: "",
         localizacao_validada: "",
