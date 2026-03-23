@@ -1694,7 +1694,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
   }), [costRows]);
 
   const scheduleSummary = useMemo(() => ({
-    totalDias: Math.max(0, ...scheduleRows.map(r => r.diasEstimados)),
+    totalDias: scheduleRows.length > 0 ? Math.max(...scheduleRows.map(r => r.diasEstimados)) : 0,
     totalMetros: scheduleRows.reduce((s, r) => s + r.comp, 0),
   }), [scheduleRows]);
 
@@ -1927,15 +1927,19 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                       {quantPaddingTop > 0 && (
                         <tr><td colSpan={11} style={{ height: quantPaddingTop, padding: 0, border: "none" }} /></tr>
                       )}
-                      {quantVirtualItems.map(vi => (
-                        <MemoQuantRow
-                          key={filteredQuantRows[vi.index].id}
-                          row={filteredQuantRows[vi.index]}
-                          onFieldChange={updateQuantField}
-                          onSubdivide={handleSubdivide}
-                          onReunify={handleReunify}
-                        />
-                      ))}
+                      {quantVirtualItems.map(vi => {
+                        const row = filteredQuantRows[vi.index];
+                        if (!row) return null;
+                        return (
+                          <MemoQuantRow
+                            key={row.id}
+                            row={row}
+                            onFieldChange={updateQuantField}
+                            onSubdivide={handleSubdivide}
+                            onReunify={handleReunify}
+                          />
+                        );
+                      })}
                       {quantPaddingBottom > 0 && (
                         <tr><td colSpan={11} style={{ height: quantPaddingBottom, padding: 0, border: "none" }} /></tr>
                       )}
@@ -2009,13 +2013,17 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                       {costPaddingTop > 0 && (
                         <tr><td colSpan={15} style={{ height: costPaddingTop, padding: 0, border: "none" }} /></tr>
                       )}
-                      {costVirtualItems.map(vi => (
-                        <MemoCostRow
-                          key={filteredCostRows[vi.index].id}
-                          row={filteredCostRows[vi.index]}
-                          onFieldChange={updateCostField}
-                        />
-                      ))}
+                      {costVirtualItems.map(vi => {
+                        const row = filteredCostRows[vi.index];
+                        if (!row) return null;
+                        return (
+                          <MemoCostRow
+                            key={row.id}
+                            row={row}
+                            onFieldChange={updateCostField}
+                          />
+                        );
+                      })}
                       {costPaddingBottom > 0 && (
                         <tr><td colSpan={15} style={{ height: costPaddingBottom, padding: 0, border: "none" }} /></tr>
                       )}
@@ -2650,6 +2658,7 @@ export function TrechoEditModule({ trechos, pontos, quantityRows, quantityParams
                         )}
                         {scheduleVirtualItems.map(vi => {
                           const row = filteredScheduleRows[vi.index];
+                          if (!row) return null;
                           const cRow = costRows.find(c => c.id === row.id);
                           const mRow = medicaoTrechos.find(m => m.trecho_id === row.id);
                           const execState = trechoExecStates[row.id];
