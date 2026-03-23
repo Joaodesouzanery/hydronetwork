@@ -599,3 +599,306 @@ Mão de obra é o maior custo da obra. Controlar é obrigatório.
 ---
 
 > **Dica de publicação (Série 3):** Os Posts 12, 13 e 14 devem ser publicados em sequência (terça, quarta, quinta da mesma semana) para criar narrativa sobre o módulo de orçamentos. Nos 3 posts de orçamento, reforce que o sistema aceita qualquer base de custos — não só SINAPI. Os demais posts podem ser publicados 1 por semana. Use screenshots reais do módulo mencionado em cada post.
+
+---
+
+## Série 4 — Dia da Água + Funcionalidades (Semana de 22/03/2026)
+
+> **Dica de publicação (Série 4):** Posts 22–26 são sobre o Dia Mundial da Água (22/03) — poste hoje ou ao longo da semana referenciando a data. Posts 27–36 são sobre funcionalidades específicas — distribua 2 por dia. CTA padrão: "Comenta aqui ou me manda mensagem no privado para agendarmos uma demonstração."
+
+---
+
+## Post 22 — Dia da Água: reflexão + plataforma
+
+Hoje é o Dia Mundial da Água.
+
+E enquanto comemoramos, o Brasil perde em média **40% da água tratada** antes de chegar nas torneiras.
+
+Não é falta de recurso. É falta de gestão, projeto e acompanhamento de obra.
+
+É exatamente isso que a gente resolve.
+Do dimensionamento hidráulico ao RDO diário de campo — tudo em uma plataforma, para que menos água seja perdida na execução do que na conta de água.
+
+Quer ver como funciona na prática?
+Comenta aqui ou me manda uma mensagem no privado para agendarmos uma demonstração.
+
+#DiaMundialDaÁgua #Saneamento #EngenhariaHidráulica #HydroNetwork
+
+---
+
+## Post 23 — Dia da Água: perdas reais nas redes
+
+22 de março. Dia Mundial da Água.
+
+Sabia que boa parte das perdas de água no Brasil acontece **durante a execução da obra** — não depois?
+
+Projetos mal dimensionados, trechos executados fora de cota, diâmetros errados.
+Cada detalhe errado vira litros perdidos por dia, para sempre.
+
+Nossa plataforma dimensiona a rede, gera os quantitativos por trecho, acompanha a execução no campo via RDO e compara o realizado com o planejado.
+
+Tudo integrado. Tudo rastreável.
+
+Se você trabalha com saneamento, vale a conversa.
+Comenta ou me chama no privado.
+
+#DiaDaÁgua #Saneamento #GestãoDeObra #IRIS
+
+---
+
+## Post 24 — Dia da Água: dimensionamento de redes sem planilha
+
+Hoje, 22 de março, Dia Mundial da Água — um dado que poucos falam:
+
+A maioria dos projetos de rede de água no Brasil ainda é feita em planilha.
+Manualmente. Sem simulação. Sem validação automática.
+
+Na nossa plataforma, você importa a topografia (CSV, DXF, SHP), e o módulo de Água dimensiona automaticamente:
+→ Diâmetros por trecho
+→ Pressões mínimas e máximas
+→ Velocidades
+→ Integração direta com EPANET para simulação hidráulica
+
+Do levantamento de campo ao memorial descritivo — sem planilha.
+
+Quer ver ao vivo? Comenta aqui ou me manda mensagem.
+
+#DiaDaÁgua #RedeDeÁgua #EPANET #EngenhariaHidráulica
+
+---
+
+## Post 25 — Dia da Água: campo conectado ao escritório
+
+Dia Mundial da Água — e eu quero falar de algo que parece simples, mas muda tudo:
+
+**O engenheiro de campo estar conectado ao engenheiro de projeto.**
+
+Hoje, na maioria das obras de saneamento, o campo faz uma coisa, o escritório registra outra, e o gestor descobre o problema tarde demais.
+
+Com nossa plataforma, o RDO é preenchido no campo — com fotos geolocalizadas, serviços executados por trecho e condições climáticas. O gestor acompanha em tempo real, de qualquer dispositivo, na mesma conta.
+
+Isso é gestão de obra de saneamento do século XXI.
+
+Agende uma demonstração: comenta aqui ou me manda no privado.
+
+#DiaDaÁgua #RDO #GestãoDeObra #Saneamento
+
+---
+
+## Post 26 — Dia da Água: o futuro do saneamento
+
+22 de março. Dia Mundial da Água.
+
+O Brasil tem meta de universalizar o saneamento básico até 2033.
+
+São bilhões em contratos, centenas de obras simultâneas, milhares de engenheiros trabalhando.
+
+E a maioria ainda usa PDF, planilha e WhatsApp para gerenciar tudo isso.
+
+Desenvolvemos uma plataforma específica para engenharia de saneamento:
+dimensionamento → orçamento → planejamento → execução → medição.
+
+Tudo em um lugar. Acessível de qualquer computador com a sua conta.
+
+Se você ou sua empresa licitam, projetam ou executam obras de saneamento — vamos conversar.
+
+Comenta aqui ou me manda uma mensagem no privado para agendarmos uma demo.
+
+#DiaMundialDaÁgua #Saneamento #IRIS #HydroNetwork #inovação
+
+---
+
+## Post 27 — RDO × Planejamento
+
+Você sabe exatamente quanto da obra foi executado hoje?
+E quanto deveria ter sido executado?
+
+Essa diferença — que a maioria descobre no final do mês — na nossa plataforma aparece em tempo real.
+
+O módulo **RDO × Planejamento** cruza o que foi registrado no campo com o cronograma planejado, trecho por trecho.
+
+Você enxerga desvio antes de virar atraso.
+Antes de virar multa.
+
+Quer ver como funciona? Comenta ou me manda mensagem para agendar uma demo.
+
+#GestãoDeObra #Planejamento #RDO #Saneamento
+
+---
+
+## Post 28 — Fotos de Validação Geolocalizadas
+
+"A foto foi tirada onde mesmo?"
+"Esse serviço foi executado nesse trecho mesmo?"
+
+Essas perguntas custam caro em fiscalização e litígios.
+
+No módulo de **Fotos de Validação** da nossa plataforma, cada foto registrada no campo carrega:
+→ Geolocalização
+→ Data e hora
+→ Trecho de obra vinculado
+→ Fase do serviço
+
+Nada de foto solta em grupo de WhatsApp.
+Evidência técnica organizada, rastreável, pronta para medição e auditoria.
+
+Comenta ou me chama no privado para ver ao vivo.
+
+#RDO #FiscalizaçãoDeObra #Saneamento #GestãoDeObra
+
+---
+
+## Post 29 — Acesso de qualquer computador
+
+Engenheiro no escritório edita o projeto.
+Gestor em reunião abre pelo notebook.
+Diretor acessa pelo computador de casa.
+
+Tudo na mesma conta. Tudo sincronizado.
+
+Nossa plataforma roda 100% no navegador — sem instalação, sem VPN, sem "manda o arquivo atualizado".
+
+Qualquer pessoa com acesso à conta vê a versão mais recente do projeto em tempo real.
+
+Isso é especialmente crítico em obras de saneamento com múltiplas frentes e equipes distribuídas.
+
+Quer ver? Comenta aqui ou me manda mensagem no privado.
+
+#Saneamento #EngenhariaDigital #HydroNetwork #Colaboração
+
+---
+
+## Post 30 — Alertas Inteligentes
+
+Toda obra tem sinal de problema antes do problema virar problema.
+
+Produção abaixo da meta por 2 dias seguidos.
+Estoque de material chegando no limite.
+Trecho com atraso acumulando.
+
+Na maioria das empresas, esse sinal chega tarde — ou não chega.
+
+Na nossa plataforma, o módulo de **Alertas Inteligentes** monitora esses desvios automaticamente e notifica quem precisa ser notificado, na hora certa.
+
+Sem planilha de controle manual. Sem surpresa no final do mês.
+
+Quer ver funcionando? Comenta ou me manda mensagem.
+
+#GestãoDeObra #Alertas #Saneamento #Produtividade
+
+---
+
+## Post 31 — Módulo de Ocorrências
+
+Toda obra tem imprevistos.
+A diferença é se você os registra — ou os esquece.
+
+Interferência de subsolo.
+Chuva que parou o serviço.
+Material entregue errado.
+
+No módulo de **Ocorrências** da nossa plataforma, cada imprevisto é registrado com descrição, foto, data, trecho vinculado e responsável.
+
+Isso vira histórico.
+Histórico vira argumento em aditivo de prazo.
+Argumento bem documentado vira aditivo aprovado.
+
+Comenta ou me chama no privado para agendarmos uma demonstração.
+
+#GestãoDeObra #Saneamento #Ocorrências #Obras
+
+---
+
+## Post 32 — Relatório de Ligações
+
+Cada ligação de água ou esgoto feita sem documentação é um risco.
+
+Não saber onde foi feita, por quem, com qual material, em qual data — é problema em fiscalização, em manutenção e em litígio.
+
+O módulo de **Relatório de Ligações** organiza cada ligação executada com:
+→ Endereço e matrícula
+→ Fotos do antes e depois
+→ Material utilizado
+→ Data e responsável técnico
+
+Documentação completa, sem burocracia extra.
+
+Quer ver como funciona? Comenta aqui ou me manda mensagem no privado.
+
+#Saneamento #LigaçõesDomiciliares #GestãoDeObra #IRIS
+
+---
+
+## Post 33 — QR Code para Ativos de Campo
+
+Bomba d'água na estação elevatória com problema.
+Compressor parado na frente de obra.
+Gerador sem manutenção há semanas.
+
+Quem registra? Onde está esse histórico?
+
+Com o módulo de **QR Code** da nossa plataforma, cada equipamento tem um QR Code impresso. O operador escaneia, abre o histórico do ativo e registra o problema na hora — com foto e descrição.
+
+O gestor recebe o alerta. O histórico fica salvo.
+
+Sem anotação em papel. Sem informação perdida.
+
+Quer ver? Comenta ou me manda mensagem para agendar uma demo.
+
+#ManutençãoDeObra #Saneamento #GestãoDeAtivos #Obras
+
+---
+
+## Post 34 — Transientes Hidráulicos
+
+Golpe de aríete.
+Esse é o tipo de problema que destrói adutoras, trinca conexões e gera custos altíssimos de reparo — e que a maioria dos projetos de água ainda ignora na fase de concepção.
+
+Nossa plataforma tem módulo de **Análise de Transientes Hidráulicos** integrado.
+
+Você simula o comportamento da rede sob fechamento de válvulas, partida e parada de bombas — antes de executar.
+
+Projeto mais seguro. Menos retrabalho. Menos custo de operação.
+
+Comenta aqui ou me manda mensagem no privado para agendarmos uma demonstração.
+
+#TransientesHidráulicos #RedeDeÁgua #EPANET #EngenhariaHidráulica
+
+---
+
+## Post 35 — Estação de Recalque
+
+Dimensionar uma estação de recalque ainda é processo manual para a maioria dos escritórios.
+
+Cálculo de altura manométrica, seleção de bomba, verificação de NPSH — tudo em planilha separada, sem integração com o projeto da rede.
+
+No módulo de **Recalque** da nossa plataforma, o dimensionamento é integrado:
+→ Importa os dados da rede diretamente
+→ Calcula a curva do sistema
+→ Sugere faixa de operação da bomba
+→ Gera o memorial descritivo automaticamente
+
+Menos tempo. Menos erro. Mais projeto.
+
+Quer ver ao vivo? Comenta ou me chama no privado.
+
+#EstaçãoDeRecalque #Saneamento #EngenhariaHidráulica #IRIS
+
+---
+
+## Post 36 — Edição por Trecho + Orçamento Automático
+
+O que torna um orçamento de saneamento confiável?
+
+Não é a tabela de preços. É a qualidade dos quantitativos por trecho.
+
+Escavação no trecho certo, com a profundidade real, com o diâmetro real.
+Reaterro, bota-fora, berço, escoramento — tudo calculado por trecho, não por estimativa global.
+
+No módulo de **Edição por Trecho** da nossa plataforma você visualiza e edita cada trecho individualmente, e o orçamento SINAPI é atualizado em tempo real.
+
+Sem planilha. Sem copiar e colar. Sem erro de digitação que some R$ 200k do projeto.
+
+Quer ver funcionando? Comenta aqui ou me manda uma mensagem no privado para agendarmos uma demonstração.
+
+#Orçamento #Saneamento #SINAPI #EngenhariaHidráulica #HydroNetwork
